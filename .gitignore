@@ -1,0 +1,7 @@
+﻿*.log
+probe-result.json
+probe-step.log
+update-check.json
+vps-tunnel.log
+.vs/
+src/*.user

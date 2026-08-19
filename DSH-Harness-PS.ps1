@@ -408,7 +408,10 @@ function Update-QuotaUI {
             $dsCard.currency = [string]$script:quotaState.balance.currency
             $dsCard.error = ''
         }
-        $mimoCard = @{ id = 'mimo'; name = '小米 MiMo'; kind = 'balance'; connected = ($script:mimoCookie -ne ''); error = [string]$script:mimoState.error }
+        # 2026-08-19: card counts as connected only when the cookie exists AND the
+        # last balance call succeeded; a 401/session-expired cookie shows as
+        # "未连接" with the reconnect button instead of a bogus "已连接".
+        $mimoCard = @{ id = 'mimo'; name = '小米 MiMo'; kind = 'balance'; connected = (($script:mimoCookie -ne '') -and ($script:mimoState.error -eq '') -and ($null -ne $script:mimoState.balance)); error = [string]$script:mimoState.error }
         if ($script:mimoState.balance -and $script:mimoState.balance.ok) {
             $mimoCard.remaining = [double]$script:mimoState.balance.balance
             $mimoCard.currency = [string]$script:mimoState.balance.currency
@@ -478,11 +481,16 @@ function Fetch-MiMoBalance {
     } catch {
         $resp2 = $_.Exception.Response
         $code = if ($resp2) { [int]$resp2.StatusCode } else { 0 }
-        TraceLog ('mimo api exception: http=' + $code + ' ' + $_.Exception.Message)
-        if ($code -eq 401 -or $code -eq 403) {
+        $errMsg = [string]$_.Exception.Message
+        TraceLog ('mimo api exception: http=' + $code + ' ' + $errMsg)
+        # 401/403 detection must survive the "Response is null on this host" case
+        # (observed 2026-08-19: http=0 with a (401) 未经授权 message -> the session
+        # cookie IS expired but the OLD code never noticed, so no reconnect and the
+        # stale cookie looped forever). Match the message as a fallback.
+        if ($code -eq 401 -or $code -eq 403 -or $errMsg -match '401|403|未经授权|unauthorized') {
             return @{ ok = $false; error = '登录已过期，请重新连接'; loginExpired = $true }
         }
-        return @{ ok = $false; error = [string]$_.Exception.Message }
+        return @{ ok = $false; error = $errMsg }
     }
 }
 
@@ -537,7 +545,8 @@ function Start-GoFetch {
         if ($res -and $res.ok) {
             $script:goState.usage = $res.windows
             $script:goState.error = ''
-            $pct = @($res.windows.GetEnumerator() | ForEach-Object { $_.Key + '=' + [Math]::Round([double]$_.Value.percent * 100) + '%' })
+            # OpenCode Go usage percent is already integral 0-100 (16 = 16%); do NOT scale.
+            $pct = @($res.windows.GetEnumerator() | ForEach-Object { $_.Key + '=' + [Math]::Round([double]$_.Value.percent) + '%' })
             TraceLog ('opencode go usage ok: ' + ($pct -join ' '))
         } else {
             $script:goState.error = [string]$res.error
@@ -546,6 +555,11 @@ function Start-GoFetch {
         Update-QuotaUI
     } catch { TraceLog ('go fetch error: ' + $_.Exception.Message) }
 }
+
+# throttle for MiMo reconnect: never open the login window more than once per
+# interval (the balance timer fires every 20s and a session-expired cookie would
+# otherwise spam the screen with windows until SSO is refreshed).
+$script:mimoReconnectAt = $null
 
 function Start-MiMoFetch {
     try {
@@ -556,12 +570,21 @@ function Start-MiMoFetch {
             $script:mimoState.error = ''
             TraceLog ('mimo balance ok: ' + $res.currency + ' ' + ('{0:F2}' -f $res.balance))
         } elseif ($res) {
-            $script:mimoState.error = $res.error
             if ($res.loginExpired) {
                 $script:mimoState.balance = $null
-                TraceLog ('mimo balance failed: ' + $res.error)
-                Open-MiMoLogin
+                # show a clear action -> the sidebar card becomes "disconnected"
+                $script:mimoState.error = '登录已过期，请重新连接小米账号'
+                TraceLog ('mimo 401: session expired, scheduling reconnect')
+                $now = Get-Date
+                if (-not $script:mimoReconnectAt -or $now -gt $script:mimoReconnectAt) {
+                    $script:mimoReconnectAt = $now.AddSeconds(90)
+                    TraceLog 'mimo: opening reconnect window (throttled)'
+                    Open-MiMoLogin
+                } else {
+                    TraceLog ('mimo: reconnect throttled until ' + $script:mimoReconnectAt.ToString('HH:mm:ss'))
+                }
             } else {
+                $script:mimoState.error = $res.error
                 TraceLog ('mimo balance failed: ' + $res.error)
             }
         }
@@ -984,23 +1007,55 @@ $script:quotaInjectJS = @'
   if (window.__dshQuotaInjected) return;
   window.__dshQuotaInjected = true;
   function findSidebar(){
-    var all = document.querySelectorAll('*');
+    var all = document.querySelectorAll('*'), found = null;
     for (var i=0;i<all.length;i++){
       try {
-        if (getComputedStyle(all[i]).getPropertyValue('--dsh-sidebar-inline-padding')) return all[i];
+        var el = all[i];
+        if (getComputedStyle(el).getPropertyValue('--dsh-sidebar-inline-padding')){
+          var r = el.getBoundingClientRect();
+          // last VISIBLE, in-flow candidate wins -> the real sidebar, even when the
+          // layout re-renders and produces a second (hidden) match
+          if (r && r.width > 40 && r.height > 100) found = el;
+        }
       } catch(e){}
     }
-    return null;
+    return found;
   }
   var sb = findSidebar();
   if(!sb) return;
-  var foot = null;
-  for (var k=0;k<sb.children.length;k++){
-    var c = sb.children[k];
-    var cls = (c.className||'').toString() + ' ' + (c.textContent||'');
-    if (cls.indexOf('foot')>=0 || cls.indexOf('设置')>=0 || cls.indexOf('settings')>=0){ foot = c; break; }
+  // The --dsh-sidebar-inline-padding scan can match a NARROW sub-list (observed:
+  // a 2-child "qDHVXG_list" holding 未分组+设置). For a STABLE pinned position we
+  // anchor on the "设置/Settings" leaf and insert above it inside ITS OWN parent
+  // (the bottom zone: under 未分组, above 设置) - exactly the empty area the user
+  // pointed at.
+  function findSettingAnchor(){
+    var best = null;
+    (function walk(el, d){
+      if (d > 9 || !el) return;
+      for (var i=0;i<el.children.length;i++){
+        var c = el.children[i];
+        var txt = (c.textContent||'').replace(/\s+/g,' ').trim();
+        var cls = ((c.className||'') + '').toString();
+        if (txt === '设置' || txt === 'Settings' || /(^|\s)settings($|\s)/i.test(cls)) {
+          try { var r = c.getBoundingClientRect(); if (r.width > 0 && r.height > 0) best = c; } catch(e){}
+        }
+        walk(c, d+1);
+      }
+    })(document.body, 0);
+    return best;
   }
-  if(!foot) foot = sb.children[sb.children.length-1];
+  // ---- class-based anchor strategy (verified against the real DSH DOM, 2026-08-19) ----
+  // The sidebar root is `hHd-Xa_root`; inside it: logoRow / newSession / regionArea
+  // (工作区 zone) / footArea (未分组) / settingsArea (设置). The quiet spot the user
+  // wants is DIRECTLY ABOVE settingsArea (below footArea).
+  function q(sel){ try { return document.querySelector(sel); } catch(e){ return null; } }
+  var rootEl   = q('[class*=hHd-Xa_root]') || sb;
+  var setArea  = q('[class*=hHd-Xa_settingsArea]');
+  var footEl   = q('[class*=hHd-Xa_footArea]');
+  var regionEl = q('[class*=hHd-Xa_regionArea]');
+  var newBtn   = q('[class*=hHd-Xa_newSession]');
+  var holder = rootEl;                       // the container for the pinned widget
+  var defaultAnchor = setArea;               // insert BEFORE the settings area (pinned spot; drag removed 2026-08-19)
 
   var w = document.createElement('div');
   w.id = 'dsh-quota-widget';
@@ -1017,8 +1072,16 @@ $script:quotaInjectJS = @'
 
   var hdr = document.createElement('div');
   hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
-  hdr.innerHTML = '<span style="font-size:11px;font-weight:600;letter-spacing:.4px;opacity:.85">额度</span>'+
-                  '<span id="dshq-toggle" title="展开/收起全部提供商" style="font-size:10px;opacity:.55;cursor:pointer;user-select:none">▾</span>';
+  var titleSpan = document.createElement('span');
+  titleSpan.textContent = '额度';
+  titleSpan.style.cssText = 'font-size:11px;font-weight:600;letter-spacing:.4px;opacity:.85';
+  hdr.appendChild(titleSpan);
+  var toggle = document.createElement('span');    // expand toggle, RIGHT, bigger
+  toggle.id = 'dshq-toggle';
+  toggle.textContent = '▾';
+  toggle.title = '展开/收起全部提供商';
+  toggle.style.cssText = 'font-size:13px;opacity:.6;cursor:pointer;user-select:none;margin-left:4px;';
+  hdr.appendChild(toggle);
   card.appendChild(hdr);
 
   var host = document.createElement('div');
@@ -1041,19 +1104,58 @@ $script:quotaInjectJS = @'
   mimoBtn.onclick=function(){ if(window.chrome && window.chrome.webview) window.chrome.webview.postMessage('__DSH_MIMO_CONNECT__'); };
   card.appendChild(mimoBtn);
 
-  sb.insertBefore(w, foot);
+  // legacy text-anchor fallback (unused since 2026-08-19: the card is pinned
+  // above settingsArea and drag support was removed at the user's request)
+  function findAnchor(){
+    var kids = [].slice.call(sb.children);
+    function sig(el){ try { return (((el.textContent||'')+' '+(el.className||'')).toLowerCase()); } catch(e){ return ''; } }
+    var ST  = /设置|settings/;
+    var WS  = /工作区|workspace/;
+    var NEW = /新绘画|新建|新会话|添加会话|new chat|newchat/;
+    // Priority: ABOVE 设置/Settings first - it is the stable bottom anchor that
+    // NEVER moves when folder groups expand/collapse (that is what the user asked:
+    // pinned above Settings). Then above Workspace, then below New chat.
+    for (var k=0;k<kids.length;k++){ if (ST.test(sig(kids[k])))  return { mode:'before', el:kids[k] }; }
+    for (var k=0;k<kids.length;k++){ if (WS.test(sig(kids[k])))  return { mode:'before', el:kids[k] }; }
+    for (var k=0;k<kids.length;k++){ if (NEW.test(sig(kids[k]))) return { mode:'after',  el:kids[k] }; }
+    return { mode:'top', el:null };
+  }
+  // find the DEEPEST visible element whose trimmed text equals kw (hash-immune)
+  function findTextLeaf(kw){
+    var best = null;
+    (function walk(el, d){
+      if (d > 9 || !el) return;
+      for (var i=0;i<el.children.length;i++){
+        var c = el.children[i];
+        var tt = (c.textContent||'').replace(/\s+/g,' ').trim();
+        if (tt === kw) { try { var r = c.getBoundingClientRect(); if (r.width > 0 && r.height > 0) best = c; } catch(e){ best = c; } }
+        walk(c, d+1);
+      }
+    })(document.body, 0);
+    return best;
+  }
+  function placeWidget(){
+    // defensive: never throw, never lose the card. Prefer the exact 设置 text leaf
+    // (insert ABOVE it inside its own parent), then class anchors, then body.
+    try {
+      if (w.parentNode) { try { w.parentNode.removeChild(w); } catch(e){} }
+      var setLeaf = findTextLeaf('\u8bbe\u7f6e');   // 设置
+      if (setLeaf && setLeaf.parentElement) { setLeaf.parentElement.insertBefore(w, setLeaf); return; }
+      if (defaultAnchor && holder && holder.contains(defaultAnchor)) { holder.insertBefore(w, defaultAnchor); return; }
+      if (sb) { sb.insertBefore(w, sb.firstChild); return; }
+      document.body.appendChild(w);
+    } catch(e){ try { if (!w.parentNode) document.body.appendChild(w); } catch(e2){} }
+  }
+  // diagnostic self-report -> logged by the host as "WD [...]"
+  try {
+    var sbInfo = ((holder.className||'') + '').toString().slice(0,60) + ' #kids=' + holder.children.length;
+    var wIdx = [].indexOf.call(holder.children, w);
+    var dbg = 'fixed=above-settings idx=' + wIdx + ' sb=' + sbInfo;
+    if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage('__DSH_Q_DBG__' + JSON.stringify(dbg));
+  } catch(e){}
 
-  var expanded = false;
-  var lastData = null;
-  document.getElementById('dshq-toggle').onclick=function(){
-    expanded = !expanded;
-    document.getElementById('dshq-toggle').textContent = expanded ? '▴' : '▾';
-    if (lastData) render(lastData);
-  };
-  document.getElementById('dshq-save').onclick=function(){
-    var v=document.getElementById('dshq-key').value.trim();
-    if(v && window.chrome && window.chrome.webview) window.chrome.webview.postMessage(v);
-  };
+  // (toggle/save binding moved to the very end, AFTER placeWidget() inserts the
+  // card into the DOM - getElementById only resolves once the node is attached)
   function fmtMoney(sym, v){
     return (sym==='USD'?'$':'¥') + Number(v).toFixed(2);
   }
@@ -1073,9 +1175,12 @@ $script:quotaInjectJS = @'
     if (ww) {
       var month=ww.monthly||ww.weekly||ww.rolling;
       if (month && typeof month.percent==='number') {
-        var pct=Math.max(0,Math.min(100,Math.round(month.percent*100)));
-        bar.style.width=pct+'%';
-        var txt='本月已用 '+pct+'%';
+        // OpenCode Go usage API returns percent as an integer 0-100 (16 = 16%).
+        // The bar shows the REMAINING share: the more you use, the shorter it gets.
+        var used=Math.max(0,Math.min(100,Math.round(month.percent)));
+        var remain=Math.max(0,100-used);
+        bar.style.width=remain+'%';
+        var txt='本月剩余 '+remain+'%（已用 '+used+'%）';
         if (month.resetsAt) {
           var rd=new Date(month.resetsAt);
           if(!isNaN(rd.getTime())){
@@ -1083,8 +1188,8 @@ $script:quotaInjectJS = @'
             txt+=' · 重置 '+mm+'-'+dd;
           }
         }
-        if (ww.rolling && typeof ww.rolling.percent==='number') txt+='\n滚动 '+Math.round(ww.rolling.percent*100)+'%';
-        if (ww.weekly && typeof ww.weekly.percent==='number') txt+=' · 周 '+Math.round(ww.weekly.percent*100)+'%';
+        if (ww.rolling && typeof ww.rolling.percent==='number') txt+='\n滚动 '+Math.round(ww.rolling.percent)+'%';
+        if (ww.weekly && typeof ww.weekly.percent==='number') txt+=' · 周 '+Math.round(ww.weekly.percent)+'%';
         info.textContent=txt;
       }
     } else if (p.error) {
@@ -1146,6 +1251,24 @@ $script:quotaInjectJS = @'
   if(window.chrome && window.chrome.webview){
     window.chrome.webview.addEventListener('message',function(ev){ try{ render(JSON.parse(ev.data)); }catch(e){} });
   }
+  // insert the card LAST, after every handler is registered, so an insertion
+  // failure can never kill the render chain (2026-08-19 fix)
+  placeWidget();
+  // bind expand/save AFTER the card is in the DOM (lookup only works then)
+  var expanded = false;
+  var lastData = null;
+  var toggleEl = document.getElementById('dshq-toggle');
+  if (toggleEl) toggleEl.onclick=function(){
+    expanded = !expanded;
+    var te = document.getElementById('dshq-toggle');
+    if (te) te.textContent = expanded ? '▴' : '▾';
+    if (lastData) render(lastData);
+  };
+  var saveEl = document.getElementById('dshq-save');
+  if (saveEl) saveEl.onclick=function(){
+    var v=document.getElementById('dshq-key').value.trim();
+    if(v && window.chrome && window.chrome.webview) window.chrome.webview.postMessage(v);
+  };
 })();
 '@
 
@@ -1758,6 +1881,7 @@ $timer.Add_Tick({
                                         if ($v -eq '__DSH_Q_WIDGET_OK__') { TraceLog 'quota widget injected OK' }
                                         if ($v -eq '__DSH_Q_MIMO_OK__') { TraceLog 'quota widget rendered MiMo OK' }
                                         if ($v -eq '__DSH_MIMO_CONNECT__') { TraceLog 'mimo connect requested'; Open-MiMoLogin }
+                                        if ($v.StartsWith('__DSH_Q_DBG__')) { TraceLog ('WD [' + (Get-Date -Format 'HH:mm:ss') + '] ' + $v.Substring(13)) }
 
                                         return
                                     }

@@ -1,111 +1,74 @@
-﻿# dsh-healthcheck.ps1 - one-shot health check for the DeepSeek Harness client.
-#
-# Read-only diagnostics: never modifies any file. Prints PASS/WARN/FAIL rows and
-# a summary. API keys are redacted (never printed).
-#
-# Usage:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File .\dsh-healthcheck.ps1
-#   powershell -NoProfile -ExecutionPolicy Bypass -File .\dsh-healthcheck.ps1 -Port 3080
-param(
-    [int]$Port = 3080
-)
-$ErrorActionPreference = 'Continue'
-
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pass = 0; $warn = 0; $fail = 0
-function Report([string]$name, [string]$status, [string]$detail) {
-    $p = "$($name.PadRight(26)) $status"
-    if ($detail) { $p += "  $detail" }
-    Write-Host $p
-    switch ($status) {
-        'PASS' { $script:pass++ }
-        'WARN' { $script:warn++ }
-        default { $script:fail++ }
-    }
+﻿# dsh-healthcheck.ps1 - one-shot health check for DSH Harness (unified, redacted).
+param([int]$Port=3080)
+$ErrorActionPreference='Continue'
+$root=Split-Path -Parent $MyInvocation.MyCommand.Path
+$pass=0;$warn=0;$fail=0
+function Report([string]$name,[string]$status,[string]$detail){
+    $p="$($name.PadRight(26)) $status"; if($detail){$p+="  $detail"}; Write-Host $p
+    switch($status){'PASS'{$script:pass++}'WARN'{$script:warn++}default{$script:fail++}}
 }
+try { . (Join-Path $root 'dsh-generation.ps1') 2>$null } catch {}
+$genId = try { Get-DshGenerationId -Port $Port 2>$null } catch { $null }
+Write-Host ("== DSH Health Check ({0}) | DSH {1} gen={2} ==" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), (& dsh --version 2>$null), $genId)
 
-Write-Host "== DeepSeek Harness 体检 ($(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) =="
-
-# 1. dsh CLI
-$dshCmd = Get-Command dsh -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($dshCmd -and $dshCmd.Source) {
-    $ver = & $dshCmd.Source --version 2>$null
-    Report 'dsh CLI' 'PASS' "global: $($dshCmd.Source) ($ver)"
-} else {
-    $found = $null
-    foreach ($r2 in @((Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'))) {
-        if (-not (Test-Path $r2)) { continue }
-        foreach ($d in (Get-ChildItem $r2 -Directory -ErrorAction SilentlyContinue)) {
-            $cand = Join-Path $d.FullName 'node_modules\.bin\dsh.cmd'
-            if (Test-Path $cand) { $found = $cand; break }
+# dsh CLI
+try{$v=& dsh --version 2>$null; if($v){Report 'dsh CLI' 'PASS' "$v"}else{Report 'dsh CLI' 'FAIL' 'no version'}}catch{Report 'dsh CLI' 'FAIL' $_.Exception.Message}
+# pnpm
+if(Get-Command pnpm -ErrorAction SilentlyContinue){Report 'pnpm' 'PASS' 'ok'}else{Report 'pnpm' 'WARN' 'missing'}
+# process identity + readiness (unified)
+. (Join-Path $root 'dsh-readiness.ps1') 2>$null
+. (Join-Path $root 'dsh-process-identity.ps1') 2>$null
+try{
+    $owner=Get-DshLoopbackOwner -Port $Port
+    if($owner.State -eq 'ok'){Report 'Process Identity' 'PASS' "PID $($owner.Pid)"}else{Report 'Process Identity' 'FAIL' $owner.State}
+} catch { Report 'Process Identity' 'FAIL' $_.Exception.Message }
+try{
+    $r=Test-DshReadiness -Port $Port
+    if($r.State -in @('api_ready','client_ready')){Report 'Readiness' 'PASS' $r.State} else { Report 'Readiness' 'FAIL' $r.State }
+} catch { Report 'Readiness' 'FAIL' $_.Exception.Message }
+try{
+    $cr=Test-DshReadiness -Port $Port -RequireWebSockets
+    if($cr.State -eq 'client_ready'){Report 'Events (WS)' 'PASS' 'mux+host open'} else { Report 'Events (WS)' 'WARN' $cr.State }
+} catch { Report 'Events (WS)' 'WARN' $_.Exception.Message }
+# YAML validity
+foreach($cf in @("$env:USERPROFILE\.dsh\settings.yaml","$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml")){
+    $n=Split-Path $cf -Leaf
+    try{
+        $y=(Get-Content $cf -Raw); $node=(Get-Command node -ErrorAction SilentlyContinue).Source
+        if($node){$tmp=[System.IO.Path]::GetTempFileName(); $y | Out-File $tmp -Encoding utf8; $ok=& $node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));console.log('OK')}catch(e){console.log('ERR:'+e.message)}" $tmp 2>&1; Remove-Item $tmp -Force -ErrorAction SilentlyContinue; if("$ok" -match 'OK'){Report $n 'PASS' 'YAML valid'}else{Report $n 'FAIL' "$ok"}}else{Report $n 'WARN' 'no node'}
+    }catch{Report $n 'FAIL' $_.Exception.Message}
+}
+# client files
+$need=@('DSH Harness PS.cmd','DSH-Harness-PS.ps1','start-dsh-server.ps1')
+$miss=@($need|Where-Object{-not (Test-Path (Join-Path $root $_))})
+if($miss.Count -eq 0){Report 'Client files' 'PASS' 'ok'}else{Report 'Client files' 'FAIL' "missing $($miss -join ',')"}
+# guardian
+$guard=Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object{$_.CommandLine -match 'dsh-guardian\.ps1' -and $_.ProcessId -ne $PID}
+$lnk=Join-Path ([Environment]::GetFolderPath('Startup')) 'DSH Guardian Autostart.lnk'
+if($guard -and (Test-Path $lnk)){Report 'Guardian' 'PASS' "PID $($guard.ProcessId -join ',')"}
+elseif($guard){Report 'Guardian' 'WARN' 'no autostart'}
+elseif(Test-Path $lnk){Report 'Guardian' 'WARN' 'not running'}
+else{Report 'Guardian' 'WARN' 'not installed'}
+# restart budget
+try{
+    . (Join-Path $root 'dsh-restart-budget.ps1') 2>$null
+    $b=Read-DshRestartBudget 2>$null
+    if($b -and $null -ne $b.attempts){Report 'Restart Budget' 'PASS' "attempts=$($b.attempts)"}else{Report 'Restart Budget' 'PASS' 'ok'}
+} catch { Report 'Restart Budget' 'WARN' $_.Exception.Message }
+# secret hygiene
+try{
+    $giOk=$false
+    foreach($p in @("_release-staging\.gitignore",".gitignore")){
+        if(Test-Path $p){
+            $c=Get-Content $p -Raw 2>$null
+            if($c -match '\*\.key' -and $c -match '\*\.pem'){ $giOk=$true; break }
         }
-        if ($found) { break }
     }
-    if ($found) { Report 'dsh CLI' 'WARN' "仅 npx 缓存兜底: $found（建议 npm i -g @deepseek-ai/dsh）" }
-    else { Report 'dsh CLI' 'FAIL' '未找到 dsh 命令' }
-}
+    if($giOk){Report 'Secret hygiene' 'PASS' '.gitignore ok'}else{Report 'Secret hygiene' 'WARN' 'gitignore missing patterns'}
+} catch { Report 'Secret hygiene' 'WARN' 'check failed' }
+# disk
+try{$d=Get-PSDrive C -ErrorAction Stop; $free=[math]::Round($d.Free/1GB,1); if($free -gt 5){Report 'Disk C:' 'PASS' "${free}GB"}else{Report 'Disk C:' 'WARN' "${free}GB"}}catch{Report 'Disk C:' 'WARN' 'unknown'}
 
-# 2. pnpm (dsh plugin 依赖)
-$pnpm = Get-Command pnpm -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($pnpm) { Report 'pnpm' 'PASS' "global: $($pnpm.Source)" }
-else { Report 'pnpm' 'WARN' '未安装（dsh plugin 不可用）；npm i -g pnpm' }
-
-# 3. 服务
-$url = "http://127.0.0.1:$Port/"
-try {
-    $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3
-    if ($r.StatusCode -eq 200) {
-        $proc = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess
-        Report 'DSH 服务' 'PASS' "HTTP 200 @ $url (PID $proc)"
-    } else { Report 'DSH 服务' 'WARN' "HTTP $($r.StatusCode)" }
-} catch { Report 'DSH 服务' 'WARN' '未运行（客户端会自动拉起）' }
-
-# 4. 配置目录
-if (Test-Path "$env:USERPROFILE\.dsh\settings.yaml") { Report 'settings.yaml' 'PASS' '存在' }
-else { Report 'settings.yaml' 'FAIL' '缺失' }
-if (Test-Path "$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml") { Report 'cordis.patch.yml' 'PASS' '存在' }
-else { Report 'cordis.patch.yml' 'FAIL' '缺失' }
-
-# 5. client-config.json（密钥加密状态，不打印密钥本身）
-$cfgPath = Join-Path $env:LOCALAPPDATA 'DSHHarness\client-config.json'
-if (Test-Path $cfgPath) {
-    try {
-        $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-        $q = [string]$cfg.quotaApiKey; $m = [string]$cfg.mimoApiKey
-        $enc = ($q.StartsWith('DP1:')) -and ($m.StartsWith('DP1:'))
-        Report 'client-config' ($(if ($enc) { 'PASS' } else { 'WARN' })) $(if ($enc) { 'API Key 已 DPAPI 加密' } else { '存在明文 Key（建议重开客户端以加密）' })
-        $qm = @($cfg.quotaModels | Where-Object { $_ -is [string] })
-        if ($qm.Count -gt 0) { Report 'quotaModels' 'PASS' "$($qm.Count) 个模型" }
-    } catch { Report 'client-config' 'FAIL' "解析失败: $($_.Exception.Message)" }
-} else { Report 'client-config' 'WARN' '不存在（尚未运行过客户端）' }
-
-# 6. 技能
-$skills = Get-ChildItem (Join-Path $env:USERPROFILE '.agents\skills') -Directory -ErrorAction SilentlyContinue
-if ($skills) { Report '技能目录' 'PASS' "$($skills.Count) 个技能" }
-else { Report '技能目录' 'WARN' '~/.agents/skills 为空' }
-
-# 7. 客户端文件
-$need = @('DSH Harness PS.cmd', 'DSH-Harness-PS.ps1', 'DSH Harness.cmd', 'start-dsh-server.ps1', 'DeepSeek Whale.ico')
-$missing = @($need | Where-Object { -not (Test-Path (Join-Path $root $_)) })
-if ($missing.Count -eq 0) { Report '客户端文件' 'PASS' '启动器齐全' }
-else { Report '客户端文件' 'FAIL' "缺失: $($missing -join ', ')" }
-
-# 8. 守护进程（dsh-guardian：防睡眠 + 服务自愈）
-$guard = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match '-File .*dsh-guardian\.ps1' -and $_.ProcessId -ne $PID }
-$guardLnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'DSH Guardian Autostart.lnk'
-if ($guard -and (Test-Path $guardLnk)) { Report '守护进程' 'PASS' "运行中 (PID $($guard.ProcessId -join ',')) + 自启项就绪" }
-elseif ($guard) { Report '守护进程' 'WARN' "运行中但缺自启项（重跑 dsh-guardian.ps1 -Install）" }
-elseif (Test-Path $guardLnk) { Report '守护进程' 'WARN' '未运行（手动启动：dsh-guardian.ps1）' }
-else { Report '守护进程' 'WARN' '未安装（dsh-guardian.ps1 -Install）' }
-
-# 9. 磁盘
-try {
-    $d = Get-PSDrive C -ErrorAction Stop
-    $freeGB = [math]::Round($d.Free / 1GB, 1)
-    if ($freeGB -gt 10) { Report 'C: 磁盘' 'PASS' "剩余 $freeGB GB" }
-    else { Report 'C: 磁盘' 'WARN' "剩余 $freeGB GB" }
-} catch { Report 'C: 磁盘' 'WARN' '无法读取' }
-
-Write-Host ''
-Write-Host "== 结果: PASS=$pass WARN=$warn FAIL=$fail =="
-if ($fail -gt 0) { exit 1 } elseif ($warn -gt 0) { exit 2 } else { exit 0 }
+Write-Host ""
+Write-Host ("== Result: PASS={0} WARN={1} FAIL={2} ==" -f $pass,$warn,$fail)
+if($fail -gt 0){exit 1} elseif($warn -gt 0){exit 2} else {exit 0}

@@ -5,3 +5,11 @@ update-check.json
 vps-tunnel.log
 .vs/
 src/*.user
+# --- secrets / credentials (2026-08-21 hardening) ---
+*.pem
+*.key
+vps-key
+secrets/
+.env
+.credentials.yaml
+*.env.local

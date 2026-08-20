@@ -3,6 +3,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$Action,  # install | update | remove | list
     [string]$Plugin = "",
+    [string]$Profile = "web",
     [int]$Port = 3080
 )
 
@@ -11,7 +12,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $root 'dsh-readiness.ps1')
 
 function Invoke-PluginTransaction {
-    param([string]$Action, [string]$Plugin, [int]$Port=3080)
+    param([string]$Action, [string]$Plugin, [string]$Profile, [int]$Port=3080)
     # 1. PREPARE: validate plugin name
     if($Action -in @('install','update','remove') -and [string]::IsNullOrWhiteSpace($Plugin)){
         return @{ Ok=$false; Error='plugin name required' }
@@ -21,21 +22,22 @@ function Invoke-PluginTransaction {
     Write-Host "Checkpoint: $($cp.dir)"
 
     # 3. APPLY: run pnpm via dsh plugin (forward to profile dir)
-    $dshCmd = Get-Command dsh -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
-    if(-not $dshCmd){ $dshCmd='dsh' }
+    # Note: dsh is a PowerShell wrapper (dsh.ps1), so invoke via &, not Start-Process.
     $pArgs = switch($Action){
-        'install' { @('plugin','--profile','web','add',$Plugin) }
-        'remove'  { @('plugin','--profile','web','remove',$Plugin) }
-        'update'  { @('plugin','--profile','web','update',$Plugin) }
+        'install' { @('plugin','--profile',$Profile,'add',$Plugin) }
+        'remove'  { @('plugin','--profile',$Profile,'remove',$Plugin) }
+        'update'  { @('plugin','--profile',$Profile,'update',$Plugin) }
         default   { @() }
     }
     if($pArgs.Count -eq 0){ return @{ Ok=$false; Error='unknown action' } }
     Write-Host "Running: dsh $($pArgs -join ' ')"
-    $proc = Start-Process -FilePath $dshCmd -ArgumentList $pArgs -Wait -PassThru -NoNewWindow
-    if($proc.ExitCode -ne 0){
-        Write-Host "Plugin command failed ($($proc.ExitCode)), rolling back"
+    $out = & dsh @pArgs 2>&1
+    $exitCode = $LASTEXITCODE
+    if($out){ $out | ForEach-Object { Write-Host "  $_" } }
+    if($exitCode -ne 0){
+        Write-Host "Plugin command failed (exit $exitCode), rolling back"
         Restore-DshTransactionCheckpoint -CheckpointDir $cp.dir | Out-Null
-        return @{ Ok=$false; Error="plugin command exit $($proc.ExitCode)"; RolledBack=$true }
+        return @{ Ok=$false; Error="plugin command exit $exitCode"; RolledBack=$true }
     }
     # 4. VERIFY: YAML + readiness
     Start-Sleep -Seconds 3
@@ -53,7 +55,7 @@ function Invoke-PluginTransaction {
 
 # CLI entry
 if($Action){
-    $r = Invoke-PluginTransaction -Action $Action -Plugin $Plugin -Port $Port
+    $r = Invoke-PluginTransaction -Action $Action -Plugin $Plugin -Profile $Profile -Port $Port
     $r | ConvertTo-Json -Depth 3
     if(-not $r.Ok){ exit 1 }
 }

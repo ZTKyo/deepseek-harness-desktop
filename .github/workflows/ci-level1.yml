@@ -139,3 +139,17 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\router\Test-RouterDeployRollback.ps1
           if ($LASTEXITCODE -ne 0) { Write-Host "ROLLBACK TEST FAIL"; exit 1 }
           Write-Host "router deploy rollback: PASS"
+
+      - name: Ox-alpha multi-relay same-model fallback tests (pure, no live server)
+        shell: pwsh
+        run: |
+          node tests\router\test-ox-relay-failover.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "OX-RELAY FAILOVER TEST FAIL"; exit 1 }
+          Write-Host "ox-alpha multi-relay same-model fallback: PASS"
+
+      - name: Ox-alpha relay deploy rollback tests (isolated, cross-process)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\router\Test-OxRelayDeployRollback.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "OX-RELAY ROLLBACK TEST FAIL"; exit 1 }
+          Write-Host "ox-relay deploy rollback: PASS"

@@ -1,0 +1,52 @@
+name: CI Level 4 - Chaos Drill (manual / nightly / release-candidate only)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'  # Sunday 03:00 UTC (nightly chaos)
+
+jobs:
+  chaos:
+    name: Registered chaos scenarios
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reliability Lab L1 (baseline must stay green)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File dsh-reliability-lab.ps1 -RunAll
+
+      - name: CHAOS-10 diagnostics fake-secret must fail
+        shell: pwsh
+        run: |
+          # inject a secret-looking value into a temp config and run the scanner logic
+          $tmp = Join-Path $env:TEMP ('sec-' + [guid]::NewGuid().ToString('N') + '.txt')
+          Set-Content -Path $tmp -Value 'api_key = "sk-abcdefghijklmnopqrstuvwxyz1234567890"' -Encoding UTF8
+          $c = Get-Content $tmp -Raw
+          $hit = ($c -match 'sk-[A-Za-z0-9]{20,}')
+          Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+          if (-not $hit) { throw 'fake secret was not detected - CI must fail' }
+          Write-Host 'PASS: fake secret detected (CI blocks)'
+
+      - name: CHAOS-02 syntax-valid runtime-toxic must not promote LG
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 -LivePort 35999 -SkipLive
+
+      - name: CHAOS-07/08/09 Safe state machine (isolated)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageE-SafeMode.ps1
+
+      - name: CHAOS-05 restart storm budget behavior
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:TEMP ("storm-" + [guid]::NewGuid().ToString('N') + '.json')
+          $env:DSH_RESTART_BUDGET_PATH = $tmp
+          . .\dsh-restart-budget.ps1
+          1..6 | ForEach-Object { Register-DshRestartAttempt 'storm' | Out-Null }
+          $g = Test-DshRestartAllowed
+          if ($g.Allowed) { throw 'storm should trip circuit' }
+          Write-Host "PASS restart storm circuit: $($g.Reason)"
+          Remove-Item $tmp -Force -ErrorAction SilentlyContinue

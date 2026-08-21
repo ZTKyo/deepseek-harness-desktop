@@ -33,6 +33,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $root 'dsh-process-identity.ps1')
 . (Join-Path $root 'dsh-readiness.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')
+. (Join-Path $root 'dsh-boot-mode.ps1')
 $url  = "http://127.0.0.1:$Port/"
 
 function Test-Server {
@@ -68,7 +69,7 @@ function Find-Dsh {
 # so a future WorkBuddy node upgrade cannot silently switch runtimes).
 function Select-NodeRuntime {
     foreach ($c in @((Join-Path $root 'node-runtime\node.exe'),
- )) {
+                     (Join-Path $env:USERPROFILE '.workbuddy\binaries\node\versions\22.22.2\node.exe'))) {
         if (Test-Path $c) { return $c }
     }
     return 'node'
@@ -131,6 +132,19 @@ if (-not (Test-Path $dshEntry)) {
 
 # Use the bundled/managed Node v22 (system v24 crashes on ERR_UNSUPPORTED_DIR_IMPORT).
 $nodeExe = Select-NodeRuntime
+
+# ---- boot mode (Reliability v1, Stage D) ----
+# Normal keeps RC8 Golden behavior byte-for-byte: no state file or mode=normal
+# takes the exact same launcher path. SAFE/EXPERIMENTAL record the mode and pass
+# it to the launcher via environment so the composition can differ (Stage E).
+$bootMode = Get-DshBootMode
+if ($bootMode.mode -ne 'normal') {
+    $env:DSH_BOOT_MODE = $bootMode.mode
+    Add-Content -Path (Join-Path $dataRoot 'autostart.log') `
+        -Value ("{0}  boot mode = {1} (reason={2}) - non-normal composition active" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $bootMode.mode, $bootMode.reason) -Encoding UTF8
+} else {
+    Remove-Item Env:DSH_BOOT_MODE -ErrorAction SilentlyContinue
+}
 
 # Use dsh-launcher.js to spawn the server detached (bypasses cmd.exe which
 # was causing the server process to die shortly after startup).

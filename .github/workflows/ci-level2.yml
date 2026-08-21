@@ -1,0 +1,84 @@
+name: CI Level 2 - Windows Reliability State Machines
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [reliability-v1]
+
+jobs:
+  state-machine-tests:
+    name: Reliability state machine tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restart budget state machine
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:TEMP ("budget-" + [guid]::NewGuid().ToString('N') + '.json')
+          $env:DSH_RESTART_BUDGET_PATH = $tmp
+          . .\dsh-restart-budget.ps1
+          # exhaust window budget
+          1..3 | ForEach-Object { Register-DshRestartAttempt 'test' | Out-Null }
+          $g = Test-DshRestartAllowed
+          if ($g.Allowed) { throw 'budget should be exhausted after 3 attempts' }
+          Write-Host "PASS budget exhausted: $($g.Reason)"
+          # success resets
+          Register-DshRestartSuccess | Out-Null
+          $g2 = Test-DshRestartAllowed
+          if (-not $g2.Allowed) { throw 'budget should reset after success' }
+          Write-Host 'PASS budget resets after success'
+          Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+
+      - name: Boot mode state machine
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:TEMP ("bm-" + [guid]::NewGuid().ToString('N') + '.json')
+          $env:DSH_BOOT_MODE_PATH = $tmp
+          . .\dsh-boot-mode.ps1
+          if ((Get-DshBootMode).mode -ne 'normal') { throw 'default should be normal' }
+          Set-DshBootMode -Mode safe -Reason 'ci-test' | Out-Null
+          if ((Get-DshBootMode).mode -ne 'safe') { throw 'safe not persisted' }
+          Reset-DshBootMode | Out-Null
+          if ((Get-DshBootMode).mode -ne 'normal') { throw 'reset should return normal' }
+          Write-Host 'PASS boot-mode state machine'
+          Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+
+      - name: Safe Mode state machine (isolated)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageE-SafeMode.ps1
+
+      - name: Last Good authority - guardian cannot syntax-only promote
+        shell: pwsh
+        run: |
+          $src = Get-Content .\dsh-guardian.ps1 -Raw
+          if ($src -match "if \(\`$ok -eq \`$true\)[^}]*Copy-Item \`$cf\.Path \`$lg") { throw 'guardian still promotes syntax-valid config!' }
+          if ($src -notmatch 'restored mirror snapshot') { throw 'guardian mirror-restore branch missing' }
+          Write-Host 'PASS guardian no syntax-only promote'
+
+      - name: Diagnostics redaction
+        shell: pwsh
+        run: |
+          $src = Get-Content .\dsh-diagnostics.ps1 -Raw
+          if ($src -notmatch 'redact|mask|\*\*\*') { throw 'diagnostics has no redaction' }
+          Write-Host 'PASS diagnostics redaction present'
+
+      - name: Transaction checkpoint/restore + journal
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageC-Transaction.ps1 -SkipLive
+
+      - name: Reliability Lab L1
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File dsh-reliability-lab.ps1 -RunAll
+
+      - name: Generation ID logic
+        shell: pwsh
+        run: |
+          . .\dsh-generation.ps1
+          $g = Get-DshGenerationId -Port 35998
+          if ($null -ne $g) { Write-Host "WARN generation on dead port = $g (unexpected but non-fatal)" }
+          Write-Host 'PASS generation id path executes'

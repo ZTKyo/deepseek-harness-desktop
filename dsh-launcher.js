@@ -1,4 +1,4 @@
-// dsh-launcher.js - Observable runner for the dsh web server.
+﻿// dsh-launcher.js - Observable runner for the dsh web server.
 // Spawned by start-dsh-server.ps1; owns the dsh child until it exits, writes
 // child lifecycle state, and sends stdout/stderr directly to an append-only
 // log handle. It must not exit after a fixed delay: that hid child exits and
@@ -67,7 +67,12 @@ if (logFile) {
 // (dsh web refuses --host 0.0.0.0 for safety) and `tailscale serve --http=3080`
 // forwards the Tailscale IP's 3080 to 127.0.0.1:3080; the /api browser-trust
 // fence accepts the Tailscale authority via --trusted-host.
-child = spawn(nodeExe, [dshEntry, 'web', '--port', port, ], {
+// Reliability v1 (Stage D/E): non-normal boot modes use an isolated profile.
+const bootMode = process.env.DSH_BOOT_MODE || 'normal';
+const profileArgs = (bootMode === 'safe' || bootMode === 'experimental')
+  ? ['--profile', bootMode]
+  : [];
+child = spawn(nodeExe, [dshEntry, ...profileArgs, 'web', '--port', port, ], {
   cwd: process.env.USERPROFILE,
   env: { ...process.env },
   stdio: ['ignore', logFile ? fs.openSync(logFile, 'a') : 'ignore', logFile ? fs.openSync(logFile, 'a') : 'ignore'],

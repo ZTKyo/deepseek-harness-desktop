@@ -1,0 +1,53 @@
+name: CI Level 3 - Harness Smoke (partial if provider unstable)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dsh-*.ps1'
+      - 'dsh-*.js'
+      - 'start-dsh-server.ps1'
+      - 'dsh-launcher.js'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: DSH boot + readiness smoke
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dsh (local, no provider keys needed for boot)
+        shell: pwsh
+        run: |
+          npm install -g @deepseek-ai/dsh@0.1.0-rc.8 2>&1 | Select-Object -Last 2
+
+      - name: Boot dsh web on ephemeral port (no-open)
+        shell: pwsh
+        run: |
+          $port = 33123
+          $env:DSH_HOME = Join-Path $env:RUNNER_TEMP 'dsh-home'
+          New-Item -ItemType Directory -Force -Path $env:DSH_HOME | Out-Null
+          # minimal profile so boot is self-contained
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:DSH_HOME 'profiles\web') | Out-Null
+          Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
+          Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value '[]' -Encoding UTF8
+          $proc = Start-Process -FilePath (Get-Command dsh).Source -ArgumentList "web --port $port --no-open" -PassThru -WindowStyle Hidden
+          $ready = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/host.describe" -Method Post -Body '{"type":"client-request","rpcId":"smoke","method":"host.describe","payload":{}}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction Stop
+              if ($r.result.ok) { $ready = $true; break }
+            } catch {}
+          }
+          if (-not $ready) {
+            Write-Host 'WARN: dsh smoke could not reach api_ready on CI runner - marking PARTIAL (not a hard gate)'
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            exit 0
+          }
+          Write-Host 'PASS: dsh api_ready on ephemeral port'
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

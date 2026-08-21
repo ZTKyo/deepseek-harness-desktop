@@ -1,0 +1,76 @@
+{
+  "inventoryVersion": "1.0",
+  "generatedAt": "2026-08-21T12:35:00+08:00",
+  "git": {
+    "branch": "reliability-v1",
+    "goldenCommit": "9d3884e3f2166eb80ad55255df71cdfedd462be9",
+    "goldenTag": "rc8-golden-20260821",
+    "headAtInventory": "9d3884e3f2166eb80ad55255df71cdfedd462be9",
+    "remote": "https://github.com/ZTKyo/deepseek-harness-desktop.git",
+    "worktreeClean": true
+  },
+  "dsh": {
+    "version": "0.1.0-rc.8",
+    "profile": "web",
+    "port": 3080,
+    "running": {
+      "pid": 7048,
+      "startedAt": "2026-08-21T12:00:21+08:00",
+      "note": "service restarted by delayed-restart (2026-08-21 12:00), launcher now carries --no-open"
+    }
+  },
+  "reliabilityModules": {
+    "dsh-safe-mode.ps1": { "status": "BASIC", "note": "flag+checkpoint only; True Safe Mode required (Stage E)" },
+    "dsh-transaction.ps1": { "status": "BASIC", "note": "checkpoint/restore/health only; Transaction 2.0 state machine required (Stage C)" },
+    "dsh-verified-lastgood.ps1": { "status": "FOUNDATION", "note": "health-gated save exists; authority conflict with guardian (Stage B)" },
+    "dsh-guardian.ps1": { "status": "GOLDEN", "note": "Check-ConfigSafety promotes syntax-valid to guardian-lastgood (P0 fix needed)" },
+    "dsh-restart-budget.ps1": { "status": "GOLDEN", "note": "circuit + window + hour budget present" },
+    "dsh-process-identity.ps1": { "status": "GOLDEN", "note": "fail-closed identity" },
+    "dsh-readiness.ps1": { "status": "GOLDEN", "note": "layered readiness" },
+    "dsh-generation.ps1": { "status": "GOLDEN", "note": "generation id from startTimeTicks_pid" },
+    "dsh-healthcheck.ps1": { "status": "GOLDEN", "note": "unified healthcheck" },
+    "dsh-diagnostics.ps1": { "status": "GOLDEN", "note": "redaction present" },
+    "dsh-plugin-transaction.ps1": { "status": "GOLDEN", "note": "plugin-level transaction" },
+    "start-dsh-server.ps1": { "status": "GOLDEN", "note": "launcher-based start; boot-mode abstraction target (Stage D)" },
+    "restart-dsh-server-delayed.ps1": { "status": "GOLDEN", "note": "delayed restart with maintenance lock" },
+    "dsh-guardian-watchdog.ps1": { "status": "GOLDEN", "note": "watchdog" },
+    "dsh-launcher.js": { "status": "GOLDEN", "note": "runner with --no-open (2026-08-21)" },
+    "goal-recovery.mjs": { "status": "GOLDEN", "note": "goal resume after restart" }
+  },
+  "configHashes": {
+    "settings.yaml": "EDC134F7CDAA3DEF...",
+    "profiles/web/cordis.patch.yml": "CCAF1745124CCAC6...",
+    "profiles/web/cordis.yml": "C300DCF2EBC5F020..."
+  },
+  "pluginCount": 15,
+  "sessionCount": 243,
+  "lastGood": {
+    "verifiedDir": "C:\\Users\\Administrator\\AppData\\Local\\DSHHarness\\verified-lastgood",
+    "guardianDir": "C:\\Users\\Administrator\\AppData\\Local\\DSHHarness\\guardian-lastgood",
+    "verifiedMeta": {
+      "timestamp": "2026-08-21T06:31:15+08:00",
+      "reason": "pre-tool-offload-restart",
+      "dshVersion": "0.1.0-rc.8"
+    }
+  },
+  "checkpoints": {
+    "txCheckpointsCount": 38,
+    "stateFilesCount": 33
+  },
+  "github": {
+    "ci": { "status": "ABSENT", "note": "no .github/workflows" },
+    "branchProtection": { "status": "ABSENT", "note": "main not protected (404)" },
+    "prs": { "merged": 1, "open": 0 }
+  },
+  "secrets": {
+    "secretGateRefs": ["SECRET_GATE_TEST", "VPS_SSH_PASSWORD", "OPENROUTER_API_KEY", "OPENROUTER_MANAGEMENT_KEY", "..."],
+    "note": "refs only; values never in inventory"
+  },
+  "knownGaps": [
+    "True Safe Mode (Stage E)",
+    "Rollback executed in practice (Stage C/F)",
+    "Isolated Chaos Test (Stage F)",
+    "CI (Stage G)",
+    "main Branch Protection (Stage H)"
+  ]
+}

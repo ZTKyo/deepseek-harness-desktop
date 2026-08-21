@@ -1,4 +1,4 @@
-# dsh-safe-mode.ps1 - True Safe Mode for DSH Harness (Reliability v1, Stage E)
+﻿# dsh-safe-mode.ps1 - True Safe Mode for DSH Harness (Reliability v1, Stage E)
 #
 # Safe Mode = isolated minimal profile (dsh-safe-profile.ps1) + boot-mode=safe.
 # Normal (web) profile is NEVER modified. Entering/exiting is transaction-shaped:
@@ -89,8 +89,9 @@ function Verify-SafeEnvironment {
     }
 }
 
-# ---------- Status (default) ----------
-if ($Status -or (-not $Enter -and -not $Exit -and -not $VerifySafe)) {
+# ---------- Status (default; only when run as the main script, not dot-sourced) ----------
+$isMainScript = ($MyInvocation.InvocationName -ne '.')
+if ($Status -or ($isMainScript -and -not $Enter -and -not $Exit -and -not $VerifySafe)) {
     $flag = Read-SafeFlag
     $bm = Get-DshBootMode
     $out = [ordered]@{

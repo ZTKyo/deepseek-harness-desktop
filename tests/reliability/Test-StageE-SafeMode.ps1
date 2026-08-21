@@ -44,11 +44,14 @@ Write-Host '== E5: safe-mode.ps1 Enter prepares without touching real profile ==
 # (explicit params beat env vars across process boundaries)
 $env:DSH_BOOT_MODE_PATH = Join-Path $tmp 'boot-mode.json'
 $env:DSH_SAFE_FLAG_PATH = Join-Path $tmp 'safe-mode.json'
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'dsh-safe-mode.ps1') -Enter -NoRestart -Port 3080 -FlagPath (Join-Path $tmp 'safe-mode.json') -BootModePath (Join-Path $tmp 'boot-mode.json') -ProfileDir (Join-Path $tmp 'profile') 2>&1 | Out-Null
+$e5out = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'dsh-safe-mode.ps1') -Enter -NoRestart -Port 3080 -FlagPath (Join-Path $tmp 'safe-mode.json') -BootModePath (Join-Path $tmp 'boot-mode.json') -ProfileDir (Join-Path $tmp 'profile') 2>&1
+Write-Host ("E5 enter output: {0}" -f (($e5out | Out-String).Trim()))
 $bm = Get-Content (Join-Path $tmp 'boot-mode.json') -Raw | ConvertFrom-Json
 Assert ($bm.mode -eq 'safe') 'E5 boot-mode set to safe' "mode=$($bm.mode)"
 $sf = Get-Content (Join-Path $tmp 'safe-mode.json') -Raw | ConvertFrom-Json
 Assert ($sf.active -eq $true) 'E5 safe flag written (isolated)'
+$realFlag = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\safe-mode.json'
+Assert (-not (Test-Path $realFlag)) 'E5 real safe-mode.json untouched'
 
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item Env:DSH_SAFE_PROFILE_DIR -ErrorAction SilentlyContinue

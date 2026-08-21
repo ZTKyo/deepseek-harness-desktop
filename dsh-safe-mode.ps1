@@ -48,7 +48,11 @@ $stateDir = Join-Path $env:LOCALAPPDATA 'DSHHarness\state'
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
 function Write-SafeFlag($Meta) {
-    ($Meta | ConvertTo-Json -Depth 5) | Set-Content -Path $flagPath -Encoding UTF8
+    try {
+        ($Meta | ConvertTo-Json -Depth 5) | Set-Content -Path $flagPath -Encoding UTF8
+    } catch {
+        Write-Host ("WARN: Write-SafeFlag failed for $flagPath : $($_.Exception.Message)")
+    }
 }
 function Read-SafeFlag {
     if (-not (Test-Path $flagPath)) { return $null }

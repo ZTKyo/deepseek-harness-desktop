@@ -44,6 +44,7 @@ jobs:
         shell: pwsh
         run: |
           npm install -g js-yaml 2>&1 | Out-Null
+          $env:NODE_PATH = (npm root -g)   # global modules must be resolvable
           $fail = 0
           Get-ChildItem -Recurse -Include '*.yml','*.yaml' | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
             node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));process.exit(0)}catch(e){console.error(e.message);process.exit(1)}" $_.FullName

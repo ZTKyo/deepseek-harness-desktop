@@ -63,7 +63,7 @@ jobs:
             'ghp_[A-Za-z0-9]{20,}',
             'AKIA[0-9A-Z]{16}'
           )
-          Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\.git\\' } | ForEach-Object {
+          Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\.git\\|\.github\\' } | ForEach-Object {
             $c = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
             foreach ($p in $patterns) {
               if ($c -match $p) {

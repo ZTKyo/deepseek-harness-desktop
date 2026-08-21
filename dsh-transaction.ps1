@@ -13,8 +13,16 @@
 # Backward compatible: New-DshTransactionCheckpoint / Restore-DshTransactionCheckpoint /
 # Test-DshTransactionHealth keep their signatures for existing callers.
 
-$script:DshTxRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
-$script:DshTxJournal = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
+$script:DshTxRoot = if ($env:DSH_TX_ROOT) {
+    $env:DSH_TX_ROOT
+} else {
+    Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
+}
+$script:DshTxJournal = if ($env:DSH_TX_ROOT) {
+    Join-Path (Split-Path -Parent $env:DSH_TX_ROOT) 'tx-journal.json'
+} else {
+    Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
+}
 
 # ensure dependency modules are available (idempotent dot-source)
 if (-not (Get-Command Get-DshGenerationId -ErrorAction SilentlyContinue)) {

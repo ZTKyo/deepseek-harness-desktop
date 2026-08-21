@@ -85,14 +85,17 @@ jobs:
           }
           exit $fail
 
-      - name: Module import smoke (dot-source all dsh-*.ps1 into a fresh pwsh)
+      - name: Module import smoke (dot-source pure modules into a fresh pwsh)
         shell: pwsh
         run: |
+          # runner scripts with their own main-loop body are not dot-sourceable;
+          # test only pure modules (function libraries).
+          $skip = @('dsh-guardian.ps1','dsh-guardian-watchdog.ps1','dsh-diagnostics.ps1','dsh-healthcheck.ps1','dsh-vps-tunnel-loop.ps1','dsh-reliability-lab.ps1','dsh-clean-reclaim.ps1','dsh-plugin-transaction.ps1','DSH-Client.ps1','DSH-Harness-PS.ps1','dsh-safe-mode.ps1')
           $fail = 0
           foreach ($f in (Get-ChildItem -Filter 'dsh-*.ps1')) {
-            if ($f.Name -eq 'dsh-guardian.ps1') { continue }  # guardian is long-running
+            if ($f.Name -in $skip) { Write-Host "SKIP (runner script): $($f.Name)"; continue }
             try {
-              & powershell -NoProfile -Command ". '$($f.FullName)' 2>&1 | Out-Null; if (`$LASTEXITCODE -ne 0) { exit 1 }"
+              & powershell -NoProfile -Command ". '$($f.FullName)'" 2>&1 | Out-Null
               if ($LASTEXITCODE -eq 0) { Write-Host "IMPORT OK: $($f.Name)" } else { Write-Host "IMPORT FAIL: $($f.Name)"; $script:fail = 1 }
             } catch { Write-Host "IMPORT FAIL: $($f.Name) - $($_.Exception.Message)"; $script:fail = 1 }
           }

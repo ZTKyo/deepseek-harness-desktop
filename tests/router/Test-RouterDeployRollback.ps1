@@ -58,20 +58,20 @@ Assert ($LASTEXITCODE -eq 0) 'T3 redeploy exit 0'
 Assert ((Sha (Join-Path $rt 'openrouter-router-core.mjs')) -eq $canonCore) 'T3 core == canonical (redeployed)'
 Assert ((Sha (Join-Path $rt 'openrouter-router.mjs')) -eq $canonRouter) 'T3 router == canonical (redeployed)'
 
-Write-Host '== T4: stage failure injection (bad second file) =='
-$badCanon = Join-Path $tmp 'canon-bad'; New-Item -ItemType Directory -Force -Path $badCanon | Out-Null
-Copy-Item (Join-Path $realCanon 'openrouter-router-core.mjs') (Join-Path $badCanon 'openrouter-router-core.mjs') -Force
-Set-Content (Join-Path $badCanon 'openrouter-router.mjs') "not valid javascript {{{" -Encoding UTF8
-$rt2 = Join-Path $tmp 'runtime2'; $st2 = Join-Path $tmp 'state2'
-New-Item -ItemType Directory -Force -Path $rt2 | Out-Null
-New-Item -ItemType Directory -Force -Path $st2 | Out-Null
-Set-Content (Join-Path $rt2 'openrouter-router-core.mjs') "// OLD" -Encoding UTF8
-Set-Content (Join-Path $rt2 'openrouter-router.mjs') "// OLD" -Encoding UTF8
-$o2c = Sha (Join-Path $rt2 'openrouter-router-core.mjs'); $o2m = Sha (Join-Path $rt2 'openrouter-router.mjs')
-& powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -RuntimeRoot $rt2 -StateRoot $st2 -CanonRoot $badCanon | Out-Null
-Assert ($LASTEXITCODE -ne 0) 'T4 deploy fails on bad second file'
-Assert ((Sha (Join-Path $rt2 'openrouter-router-core.mjs')) -eq $o2c) 'T4 core NOT replaced (both old)'
-Assert ((Sha (Join-Path $rt2 'openrouter-router.mjs')) -eq $o2m) 'T4 router NOT replaced (both old)'
+Write-Host '== T4: TRUE partial-replace failure (A replaced -> inject fail before B) =='
+# OLD A / OLD B -> deploy -> A replace succeeds -> inject failure -> B untouched
+$rt4 = Join-Path $tmp 'runtime4'; $st4 = Join-Path $tmp 'state4'
+New-Item -ItemType Directory -Force -Path $rt4 | Out-Null
+New-Item -ItemType Directory -Force -Path $st4 | Out-Null
+Set-Content (Join-Path $rt4 'openrouter-router-core.mjs') "// OLD-CORE-marker`nexport const OLD=1;" -Encoding UTF8
+Set-Content (Join-Path $rt4 'openrouter-router.mjs') "// OLD-ROUTER-marker`nexport const OLD=1;" -Encoding UTF8
+$o4c = Sha (Join-Path $rt4 'openrouter-router-core.mjs'); $o4m = Sha (Join-Path $rt4 'openrouter-router.mjs')
+& powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -RuntimeRoot $rt4 -StateRoot $st4 -CanonRoot $canon -InjectReplaceFailure | Out-Null
+Assert ($LASTEXITCODE -ne 0) 'T4 deploy exits non-zero on injected replace failure'
+Assert ((Sha (Join-Path $rt4 'openrouter-router-core.mjs')) -eq $o4c) 'T4 A hash == OLD A (rolled back)'
+Assert ((Sha (Join-Path $rt4 'openrouter-router.mjs')) -eq $o4m) 'T4 B hash == OLD B (never replaced)'
+$residue = Get-ChildItem $rt4 -Filter '*.new-*' -ErrorAction SilentlyContinue
+Assert ($null -eq $residue -or @($residue).Count -eq 0) 'T4 no *.new-* temp residue' $(if($residue){$residue.Name -join ','}else{''})
 
 Write-Host '== T5: absent-file semantics (deploy over absent -> rollback removes) =='
 $rt3 = Join-Path $tmp 'runtime3'; $st3 = Join-Path $tmp 'state3'

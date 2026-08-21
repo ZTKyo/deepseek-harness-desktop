@@ -34,7 +34,8 @@ param(
     [switch]$Rollback,
     [string]$RuntimeRoot = $null,   # test isolation: override runtime destination
     [string]$StateRoot = $null,     # test isolation: override persistent state root
-    [string]$CanonRoot = $null      # test isolation: override canonical source (failure injection)
+    [string]$CanonRoot = $null,     # test isolation: override canonical source (failure injection)
+    [switch]$InjectReplaceFailure  # TEST-ONLY: throw after first file replace (never used in production)
 )
 
 $ErrorActionPreference = 'Continue'
@@ -183,30 +184,47 @@ foreach ($f in $managedFiles) {
 }
 
 # 3. REPLACE (transactional: same-dir temp + Move-Item; both files, restore on any failure)
+#    All file ops use -ErrorAction Stop so a real failure enters the catch and
+#    triggers full rollback (never a silent partial deployment).
 $replaced = @()
 try {
     foreach ($f in $managedFiles) {
         $dest = Join-Path $runtimeDir $f
         $stageFile = Join-Path $stageDir $f
         $tmp = Join-Path $runtimeDir ("$f.new-" + $transactionId)
-        Copy-Item $stageFile $tmp -Force
-        if (Test-Path $dest) { Remove-Item $dest -Force }  # pre-remove for Move (see note)
-        Move-Item $tmp $dest -Force
+        Copy-Item $stageFile $tmp -Force -ErrorAction Stop
+        if (Test-Path $dest) { Remove-Item $dest -Force -ErrorAction Stop }  # pre-remove for Move (see note)
+        Move-Item $tmp $dest -Force -ErrorAction Stop
         $replaced += $f
         Write-Host "replaced $f"
+        # TEST-ONLY injection seam: simulate failure right AFTER file #1 replaced,
+        # BEFORE file #2 replace. Never enabled in production.
+        if ($InjectReplaceFailure -and $f -eq $managedFiles[0]) {
+            Write-Host "INJECT: forcing failure after first replace (test-only seam)"
+            throw "injected replace failure (test-only)"
+        }
     }
 } catch {
+    $script:allOk = $true   # explicit init; any restore failure flips to $false
     Write-Host "DEPLOY FAILED during replace: $($_.Exception.Message)"
-    # 4. AUTO ROLLBACK both files
+    # 4. AUTO ROLLBACK both files (exact pre-deploy state; verify each)
     foreach ($e in $files) {
         $dest = Join-Path $runtimeDir $e.name
         if ($e.existed) {
-            if (Test-Path (Join-Path $txnDir $e.name)) { Copy-Item (Join-Path $txnDir $e.name) $dest -Force }
+            if (Test-Path (Join-Path $txnDir $e.name)) { Copy-Item (Join-Path $txnDir $e.name) $dest -Force -ErrorAction Stop }
             $h = Get-Sha256 $dest
             Write-Host "  rollback $($e.name) hash=$($(Get-ShortHash $h))... (expect $($(Get-ShortHash $e.sha256))...) match=$($h -eq $e.sha256)"
             if ($h -ne $e.sha256) { $script:allOk = $false }
         } else {
-            if (Test-Path $dest) { Remove-Item $dest -Force }
+            if (Test-Path $dest) { Remove-Item $dest -Force -ErrorAction Stop }
+            $h = Get-Sha256 $dest
+            Write-Host "  rollback $($e.name) (was ABSENT) now=$h"
+            if ($h -ne 'ABSENT') { $script:allOk = $false }
+        }
+        # temp residue cleanup (any .new-<txn> left behind)
+        Get-ChildItem $runtimeDir -Filter "*.new-$transactionId" -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+            Write-Host "  cleaned temp residue: $($_.Name)"
         }
     }
     $manifest.status = 'failed_rolled_back'
@@ -227,8 +245,8 @@ if (-not $verifyOk) {
     # 6. AUTO ROLLBACK both files
     foreach ($e in $files) {
         $dest = Join-Path $runtimeDir $e.name
-        if ($e.existed) { Copy-Item (Join-Path $txnDir $e.name) $dest -Force }
-        else { if (Test-Path $dest) { Remove-Item $dest -Force } }
+        if ($e.existed) { Copy-Item (Join-Path $txnDir $e.name) $dest -Force -ErrorAction Stop }
+        else { if (Test-Path $dest) { Remove-Item $dest -Force -ErrorAction Stop } }
     }
     $manifest.status = 'failed_rolled_back'
     Write-Manifest $manifest

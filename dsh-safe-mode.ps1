@@ -20,10 +20,16 @@ param(
     [switch]$Status,
     [switch]$VerifySafe,
     [switch]$NoRestart,
-    [int]$Port = 3080
+    [int]$Port = 3080,
+    [string]$FlagPath = $null,
+    [string]$BootModePath = $null,
+    [string]$ProfileDir = $null
 )
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+# explicit parameters beat env vars beat defaults (reliable across process boundaries)
+if ($BootModePath) { $env:DSH_BOOT_MODE_PATH = $BootModePath }
+if ($ProfileDir) { $env:DSH_SAFE_PROFILE_DIR = $ProfileDir }
 . (Join-Path $root 'dsh-boot-mode.ps1') 2>$null
 . (Join-Path $root 'dsh-safe-profile.ps1') 2>$null
 . (Join-Path $root 'dsh-commit-readiness.ps1') 2>$null
@@ -31,7 +37,9 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $root 'dsh-process-identity.ps1') 2>$null
 . (Join-Path $root 'dsh-readiness.ps1') 2>$null
 
-$flagPath = if ($env:DSH_SAFE_FLAG_PATH) {
+$flagPath = if ($FlagPath) {
+    $FlagPath
+} elseif ($env:DSH_SAFE_FLAG_PATH) {
     $env:DSH_SAFE_FLAG_PATH
 } else {
     Join-Path $env:LOCALAPPDATA 'DSHHarness\state\safe-mode.json'

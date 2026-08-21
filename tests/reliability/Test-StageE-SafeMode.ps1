@@ -1,4 +1,4 @@
-# Test-StageE-SafeMode.ps1 - True Safe Mode isolated tests (no real profile/service touched).
+﻿# Test-StageE-SafeMode.ps1 - True Safe Mode isolated tests (no real profile/service touched).
 $ErrorActionPreference = 'Continue'
 $failCount = 0
 function Assert([bool]$Cond, [string]$Name, [string]$Detail = '') {
@@ -41,9 +41,10 @@ Assert ($out -match 'bootMode') 'E4 status outputs bootMode'
 
 Write-Host '== E5: safe-mode.ps1 Enter prepares without touching real profile =='
 # NoRestart: prepare only; verify safe flag + boot-mode written to ISOLATED paths
+# (explicit params beat env vars across process boundaries)
 $env:DSH_BOOT_MODE_PATH = Join-Path $tmp 'boot-mode.json'
 $env:DSH_SAFE_FLAG_PATH = Join-Path $tmp 'safe-mode.json'
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'dsh-safe-mode.ps1') -Enter -NoRestart -Port 3080 2>&1 | Out-Null
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'dsh-safe-mode.ps1') -Enter -NoRestart -Port 3080 -FlagPath (Join-Path $tmp 'safe-mode.json') -BootModePath (Join-Path $tmp 'boot-mode.json') -ProfileDir (Join-Path $tmp 'profile') 2>&1 | Out-Null
 $bm = Get-Content (Join-Path $tmp 'boot-mode.json') -Raw | ConvertFrom-Json
 Assert ($bm.mode -eq 'safe') 'E5 boot-mode set to safe' "mode=$($bm.mode)"
 $sf = Get-Content (Join-Path $tmp 'safe-mode.json') -Raw | ConvertFrom-Json

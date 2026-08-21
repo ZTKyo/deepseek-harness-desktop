@@ -43,13 +43,11 @@ jobs:
       - name: YAML parse (all .yml/.yaml)
         shell: pwsh
         run: |
+          npm install -g js-yaml 2>&1 | Out-Null
           $fail = 0
           Get-ChildItem -Recurse -Include '*.yml','*.yaml' | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
-            $tmp = [System.IO.Path]::GetTempFileName()
-            Get-Content $_.FullName -Raw | Out-File $tmp -Encoding utf8
-            node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));process.exit(0)}catch(e){console.error(e.message);process.exit(1)}" $tmp
+            node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));process.exit(0)}catch(e){console.error(e.message);process.exit(1)}" $_.FullName
             if ($LASTEXITCODE -ne 0) { Write-Host "YAML FAIL: $($_.FullName)"; $script:fail = 1 }
-            Remove-Item $tmp -Force -ErrorAction SilentlyContinue
           }
           exit $fail
 

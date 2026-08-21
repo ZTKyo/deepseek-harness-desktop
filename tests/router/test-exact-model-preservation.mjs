@@ -8,10 +8,15 @@
 //
 // Also regression-checks: auto unchanged, deepseek/mimo/qwen aliases unchanged.
 //
-// Run: node --input-type=module test-exact-model-preservation.mjs
-// (imports the local openrouter-router-core.mjs via absolute path; see path below)
+// Run: node tests/router/test-exact-model-preservation.mjs (from repo root)
+// Imports the REPO CANONICAL source (docs/execution-economy/plugins/), NOT any
+// machine-specific path. Clean checkout + no ~/.dsh + no credentials required.
 
-import { route, KNOWN_ROUTING_MODES } from 'file:///C:/Users/Administrator/.dsh/profiles/web/openrouter-router-core.mjs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const canonical = path.resolve(__dirname, '../../docs/execution-economy/plugins/openrouter-router-core.mjs');
+const { route, KNOWN_ROUTING_MODES } = await import('file:///' + canonical.split('\\').join('/'));
 
 let pass = 0, fail = 0;
 function check(name, cond, detail = '') {

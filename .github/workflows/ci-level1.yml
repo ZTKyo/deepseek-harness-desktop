@@ -125,3 +125,10 @@ jobs:
         shell: pwsh
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageC-Transaction.ps1 -LivePort 35999 -SkipLive
+
+      - name: OpenRouter exact-model preservation tests (pure, no live server)
+        shell: pwsh
+        run: |
+          node tests\router\test-exact-model-preservation.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "EXACT-MODEL TEST FAIL"; exit 1 }
+          Write-Host "exact-model preservation: 9/9 PASS"

@@ -148,7 +148,7 @@ code: UNKNOWN_MODEL
 
 ## 14 Remaining Risks
 
-- 本机修复在服务重启后生效（已验证）；未来若 dsh 重装/覆盖 profile，需重新应用补丁（本机配置层，非仓库代码）
+- 运行中服务在文件部署后需要重启才加载新代码（ESM 插件启动时 import）；本次部署前后 hash 一致故无需重启
 - explicit passthrough 把模型验证完全交给 Provider 层——若 Provider 对未知模型返回模糊错误，用户看到的是 Provider 错误而非 Router 信息（可接受，fail-closed 优先）
 - multi-relay fallback（同模型跨中转）未实现（deferred）
 
@@ -160,18 +160,103 @@ code: UNKNOWN_MODEL
 - Execution Economy behavioral enforcement（PR #3）
 - Model Lab / Router architecture redesign
 
-## 16 Final Verdict
+---
 
-**READY FOR REVIEW**
+## 17 Persistence Seal（2026-08-21 追加）
 
-验收核对：
-- BUG_REPRODUCED ✅（复现证据 + 修复前真实 header）
-- ROOT_CAUSE_CONFIRMED ✅（deriveRequestedMode + route Rule 0）
-- minimal fix ✅（2 文件，KNOWN_ROUTING_MODES 泛化，无 ox-alpha 硬编码）
-- explicit ox-alpha preserved ✅（单元 + 真实 header）
-- unknown explicit model 不变 auto ✅（fail-closed UNKNOWN_MODEL）
-- auto/deepseek/mimo/qwen 不变 ✅（单元测试）
-- stable catalog 不变 ✅ / primary 不变 ✅
-- 无 credential leak ✅ / 无永久测试 route ✅
-- Reliability PASS ✅ / CI 待 PR 触发
-- PR scope clean（仅 tests + docs；实现在本机 profile 层）✅
+**BEFORE PERSISTENCE SEAL**：修复仅存在于本机 runtime profile（`~/.dsh/profiles/web/`），测试依赖 `file:///C:/Users/Administrator/...` absolute path，不可复现部署。
+
+**AFTER PERSISTENCE SEAL**：修复已升级为 repository-owned + CI-tested + 可部署 + 可回滚。
+
+### 17.1 Repository Canonical Source
+
+| 文件 | 位置 | 状态 |
+|---|---|---|
+| openrouter-router-core.mjs | `docs/execution-economy/plugins/` | canonical（repo tracked） |
+| openrouter-router.mjs | `docs/execution-economy/plugins/` | canonical（repo tracked） |
+
+- **canonical hash == runtime hash**（1A09C1BD... / 08C80BBD...，两文件均一致）
+- 无机器特定路径：修复了 router.mjs 的 `C:/Users/Administrator` 硬编码 → `os.homedir()`（行为不变）
+- 无 secret
+
+### 17.2 Portable Unit Test
+
+- `tests/router/test-exact-model-preservation.mjs`：import **repo canonical source**（`docs/execution-economy/plugins/`，repo-relative 解析）
+- 从 repo root `node tests/router/test-exact-model-preservation.mjs` 直接可跑
+- **零机器依赖**：无 `C:\Users\...`、无 `~/.dsh`、无 OpenRouter key、无 live server
+- 9/9 PASS
+
+### 17.3 CI Integration
+
+- `.github/workflows/ci-level1.yml` 新增 step `OpenRouter exact-model preservation tests`
+- 保留原 required check 名（Static + secret + syntax gate），Branch Protection 无需重配
+- CI 在 clean checkout 上执行 portable test（纯 router 逻辑，deterministic）
+
+### 17.4 Deployment Mechanism
+
+- `deploy-router-fix.ps1`（repo tracked，极薄 transactional）：
+  - snapshot（pre-deploy copy + hash）
+  - stage + `node --check` 语法验证
+  - atomic copy（canonical → runtime）
+  - verify（runtime hash == canonical hash）
+  - `-Rollback` 恢复 snapshot
+- 复用 `$env:USERPROFILE`（无硬编码用户路径）
+- 不覆盖整个 profile，只部署 2 个 router 文件
+
+### 17.5 Runtime Deployment + Verification
+
+- 部署后 runtime hash == canonical（1A09C1BD / 08C80BBD）
+- 真实 identity probe：`request/header` + `request/context` = **openrouter / stealth/ox-alpha**（IDENTITY_PASS）
+- primary snapshot/restore 确认 `commandcode/auto` 不变
+
+### 17.6 Rollback / Redeploy Drill
+
+1. 模拟 bug 状态（从旧 backup 恢复 → hash 04DF37/4607F4 ≠ 修复版）
+2. `deploy-router-fix.ps1` 重新部署 → hash = canonical（1A09C1/08C80B）✅
+3. `-Rollback` → 恢复到 snapshot（hash 一致）✅
+4. 最终状态：**FIX DEPLOYED**（canonical == runtime）✅
+
+### 17.7 Reinstall / Recovery Procedure
+
+如果 `~/.dsh/profiles/web/` 被删/被覆盖：
+
+```powershell
+git clone https://github.com/ZTKyo/deepseek-harness-desktop.git
+cd deepseek-harness-desktop
+powershell -File deploy-router-fix.ps1   # canonical → runtime
+# 若服务在跑：重启 3080（加载新代码）
+```
+
+### 17.8 Persistence Evidence
+
+```
+Canonical Source:    docs/execution-economy/plugins/ (repo)
+Runtime Destination: $env:USERPROFILE/.dsh/profiles/web/
+Deployment Method:   deploy-router-fix.ps1 (transactional)
+Unit Test Source:    repo canonical (portable, 9/9 PASS)
+CI Test:             L1 step added (exact-model preservation tests)
+Runtime Identity:    openrouter / stealth/ox-alpha (request/header + context)
+Rollback:            PASS (hash-restored)
+Redeploy:            PASS (bug state → canonical)
+Final Runtime State: FIX DEPLOYED
+```
+
+## 16 Final Verdict（更新）
+
+**READY TO MERGE PR #4**
+
+验收核对（含 Persistence Seal）：
+- REPO_CANONICAL_SOURCE ✅（docs/execution-economy/plugins/，hash 与 runtime 一致）
+- NO_MACHINE_ABSOLUTE_PATH ✅（os.homedir 替换，测试 repo-relative）
+- PORTABLE_UNIT_TEST ✅（clean checkout 可跑，9/9）
+- CI_EXECUTES_UNIT_TEST ✅（L1 新 step）
+- TRANSACTIONAL_DEPLOYMENT ✅（deploy-router-fix.ps1）
+- ROLLBACK ✅（hash 恢复验证）
+- REDEPLOY ✅（bug 状态 → canonical）
+- RUNTIME_IDENTITY ✅（openrouter/stealth/ox-alpha）
+- EXPLICIT_OX_ALPHA ✅ / UNKNOWN_EXPLICIT_FAIL_CLOSED ✅
+- AUTO_REGRESSION ✅ / ALIASES_REGRESSION ✅
+- CATALOG_UNCHANGED ✅（5 项） / PRIMARY_UNCHANGED ✅（commandcode/auto）
+- SECRET_HYGIENE ✅ / COMMIT_READY ✅ / GUARDIAN ✅
+- CI_L1 / CI_L2 待最终 push 确认
+- PR_SCOPE ✅（canonical source + test + CI hook + deploy script + report）

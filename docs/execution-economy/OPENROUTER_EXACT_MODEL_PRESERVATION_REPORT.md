@@ -302,8 +302,15 @@ PROCESS 3: deploy（新进程）→ EXACT CANONICAL(1A09C1/08C80B) → exit
 
 ### 18.4 Failure Injection
 
-- 注入第二文件语法错误 → `DEPLOY FAILED | ROLLBACK PASS` → 两文件保持 pre-deploy（无 partial）。
-- verify 失败 / replace 失败走同一 restore 循环（代码路径一致）。
+- **partial-replace 失败注入（T4，2026-08-22 修正）**：`-InjectReplaceFailure` 测试专用 seam 在**第一个文件 replace 成功后、第二个文件 replace 前**抛 terminating error（生产绝不启用）。验证：
+  - A replace 成功 → 注入失败 → 部署 exit 非零
+  - **A hash == OLD A**（自动 rollback）
+  - **B hash == OLD B**（从未被 replace）
+  - **无 *.new-<txn> temp residue**（catch 中清理）
+  - 输出明确 `DEPLOY FAILED | ROLLBACK PASS`
+- replace 阶段文件操作全部 `-ErrorAction Stop`（真实失败必进 catch，无静默 partial）
+- catch 显式 `$allOk = $true` 初始化；每文件恢复后验证 hash/ABSENT
+- 早期注入（stage 语法错误）仍验证：失败时 runtime 未被触碰
 
 ### 18.5 Acceptance Matrix
 

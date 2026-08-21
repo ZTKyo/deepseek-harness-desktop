@@ -1,4 +1,4 @@
-# dsh-transaction.ps1 - Transaction 2.0: unified change transaction core (Reliability v1, Stage C)
+﻿# dsh-transaction.ps1 - Transaction 2.0: unified change transaction core (Reliability v1, Stage C)
 #
 # State machine:
 #   PREPARE -> CHECKPOINT -> APPLY -> BOOT -> VERIFY -> STABILIZE -> COMMIT
@@ -244,11 +244,13 @@ function Invoke-DshTransaction {
                 $lg = Save-VerifiedLastGood -Port $Port -Reason "tx:$Label" -StableWindowSec 0 -SkipLightProbe:$SkipLightProbe
             }
             $finalState = 'COMMITTED'
+            $dshVerAfter = ''
+            try { $dshVerAfter = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVerAfter = '' }
             Add-DshTxRecord @{
                 transactionId = $transactionId; label = $Label; startedAt = $startedAt
                 finishedAt = (Get-Date -Format 'o'); generationBefore = $tx.generationBefore
                 generationAfter = (Get-DshGenerationId -Port $Port); dshVersionBefore = $tx.dshVersionBefore
-                dshVersionAfter = ((& dsh --version 2>$null) -join '').Trim()
+                dshVersionAfter = $dshVerAfter
                 checkpointDir = $tx.dir; files = $tx.files
                 hashBefore = $tx.files; hashAfter = $tx.files; faultClass = $faultClass
                 verifyResult = $verifyResult; rollbackResult = 'none'; finalState = $finalState
@@ -270,11 +272,13 @@ function Invoke-DshTransaction {
         $recovery = Test-DshTransactionHealth -Port $Port
         if ($recovery.Ok) {
             $finalState = 'ROLLED_BACK'
+            $dshVerAfter = ''
+            try { $dshVerAfter = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVerAfter = '' }
             Add-DshTxRecord @{
                 transactionId = $transactionId; label = $Label; startedAt = $startedAt
                 finishedAt = (Get-Date -Format 'o'); generationBefore = $tx.generationBefore
                 generationAfter = (Get-DshGenerationId -Port $Port); dshVersionBefore = $tx.dshVersionBefore
-                dshVersionAfter = ((& dsh --version 2>$null) -join '').Trim()
+                dshVersionAfter = $dshVerAfter
                 checkpointDir = $tx.dir; files = $tx.files
                 hashBefore = $tx.files; hashAfter = $tx.files; faultClass = $faultClass
                 verifyResult = $verifyResult; rollbackResult = $rollbackResult; finalState = $finalState

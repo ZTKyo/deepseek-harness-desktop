@@ -130,6 +130,8 @@ if ($Enter) {
     # 2. build safe profile (does NOT touch web profile)
     $sp = New-DshSafeProfile
     # 3. record safe flag
+    $dshVer = ''
+    try { $dshVer = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVer = '' }
     $meta = @{
         active = $true
         enteredAt = (Get-Date -Format 'o')
@@ -137,10 +139,9 @@ if ($Enter) {
         checkpoint = $cp
         profileDir = $sp.Dir
         port = $Port
-        dshVersion = ((& dsh --version 2>$null) -join '').Trim()
+        dshVersion = $dshVer
     }
     Write-SafeFlag $meta
-    Write-Host ("DEBUG flagPath={0} flagParam=[{1}] env=[{2}] existsAfter={3}" -f $flagPath, $FlagPath, $env:DSH_SAFE_FLAG_PATH, (Test-Path $flagPath))
     # 4. set boot-mode = safe
     Set-DshBootMode -Mode 'safe' -Reason 'safe-mode-enter' -Checkpoint $cp -TransactionId $cp
     Write-Host "Safe Mode ENTERED (profile=$($sp.Dir))"

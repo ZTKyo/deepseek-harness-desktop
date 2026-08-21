@@ -71,11 +71,13 @@ function Save-VerifiedLastGood {
     )
     $dst = Get-VerifiedLastGoodDir
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
+    $dshVer = ''
+    try { $dshVer = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVer = '' }
     $meta = @{
         timestamp = (Get-Date -Format 'o')
         reason = $Reason
         port = $Port
-        dshVersion = ((& dsh --version 2>$null) -join '').Trim()
+        dshVersion = $dshVer
         gate = if ($gate) { $gate.Stage } else { 'forced' }
     }
     foreach ($f in $src) { if (Test-Path $f.Path) { Copy-Item $f.Path (Join-Path $dst $f.Name) -Force } }

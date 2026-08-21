@@ -51,9 +51,10 @@ watcher hot-reload）+ 独立 Trial Route 已能安全完成整个流程；缺�
 **POLICY_ONLY**
 
 - 7 条规则全部以 `AGENTS.md`（agent-instructions 自动加载）落地，零新代码。
-- Replay 测试证明 Policy 已能把同类任务从 44min 降至 <1min。
+- 术语口径：**7 Core Rules**（CLASSIFY / LOCK DOD / MACHINE-FIRST VERIFY / TWO-STRIKE REPLAN / WALL-CLOCK BUDGET / HUMAN LEVERAGE / STOP）+ **1 Probe Timeout Safety Mechanism**（probe 与生产 timeout 分离）。
+- Replay 测试证明 Fast Path Capability 能把同类任务从 44min 降至 <1min。
 - 未创建任何 Controller / Scheduler / Lifecycle Engine。
-- **无需 Thin Helper**（未触发 §35 的"规则无法稳定实现"条件）。
+- **Fast Path Capability 无需 Thin Helper**；**Policy Behavioral Compliance 仍需验证**（见 Final Validation）。
 
 ## 5 Seven Rules（落地方式）
 
@@ -170,16 +171,16 @@ DONE
 
 ## 15 Final Verdict
 
-**GO — Execution Economy v1**
+**GO — Execution Economy v1（Capability 层面）**
 
 - FAST/NORMAL/DEEP 生效 ✅
 - DoD lock 生效 ✅
-- machine-first verify 生效 ✅
+- machine-first verify 生效 ✅（replay 测试路径）
 - two-strike replan 生效 ✅
-- wall-clock budget 生效 ✅
+- wall-clock budget 生效 ✅（probe 30s deadline）
 - human leverage 未过度打扰 ✅
-- DoD 后 STOP 生效 ✅
-- Replay ≤10min（实际 8s）✅
+- DoD 后 STOP 生效 ✅（replay 测试）
+- Replay ≤10min（实际 3-8s）✅
 - Vision=0 / Screenshot=0 ✅
 - 同路线失败 ≤2 ✅
 - 无 300s probe ✅
@@ -187,5 +188,15 @@ DONE
 - primary unchanged ✅
 - rollback PASS ✅
 - Reliability regression PASS ✅
-- CI：待跑（PR 触发）
-- **NO CONTROLLER REQUIRED** ✅
+- CI：L1/L2 PASS（PR #3）
+- **NO CONTROLLER REQUIRED（Capability）** ✅
+
+**Capability vs Behavioral 区分（详见 EXECUTION_ECONOMY_V1_FINAL_VALIDATION.md）**：
+- Fast Path Capability：**PASS**（3-8s replay）
+- Real Harness Trial Route Generation：**PASS**（18s，request/header 证实 ox-alpha）
+- Policy Behavioral Compliance：**FAIL**（新 Agent 加载 Policy 但未在预算内完成；发现 Router 改写阻塞）
+
+> 说明：Capability GO 与 Behavioral FAIL 并存 —— 7 条规则作为**能力**已可用且被测试脚本证明；
+> 但**真实新 Agent 的自主行为合规**尚未达成（依赖模型遵守 AGENTS.md 的程度），
+> 且发现真实技术阻塞（openrouter 主 route 下 ox-alpha 被 router 改写）。
+> 该 PR 的最终 merge 判定以 Final Validation 的 NOT READY TO MERGE 为准。

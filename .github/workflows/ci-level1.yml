@@ -1,0 +1,125 @@
+name: CI Level 1 - Static Gate (every PR)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [reliability-v1]
+
+jobs:
+  static-gate:
+    name: Static + secret + syntax gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PowerShell syntax parse (all .ps1)
+        shell: pwsh
+        run: |
+          $fail = 0
+          Get-ChildItem -Recurse -Filter '*.ps1' | ForEach-Object {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs.Count -gt 0) {
+              Write-Host "SYNTAX FAIL: $($_.FullName)"
+              $errs | Select-Object -First 3 | ForEach-Object { Write-Host "  line $($_.Extent.StartLineNumber): $($_.Message)" }
+              $script:fail = 1
+            } else {
+              Write-Host "OK: $($_.Name)"
+            }
+          }
+          exit $fail
+
+      - name: Node syntax parse (all .js/.mjs)
+        shell: pwsh
+        run: |
+          $fail = 0
+          Get-ChildItem -Recurse -Include '*.js','*.mjs' | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
+            node --check $_.FullName 2>$null
+            if ($LASTEXITCODE -ne 0) { Write-Host "SYNTAX FAIL: $($_.FullName)"; $script:fail = 1 }
+          }
+          exit $fail
+
+      - name: YAML parse (all .yml/.yaml)
+        shell: pwsh
+        run: |
+          $fail = 0
+          Get-ChildItem -Recurse -Include '*.yml','*.yaml' | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
+            $tmp = [System.IO.Path]::GetTempFileName()
+            Get-Content $_.FullName -Raw | Out-File $tmp -Encoding utf8
+            node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));process.exit(0)}catch(e){console.error(e.message);process.exit(1)}" $tmp
+            if ($LASTEXITCODE -ne 0) { Write-Host "YAML FAIL: $($_.FullName)"; $script:fail = 1 }
+            Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+          }
+          exit $fail
+
+      - name: Secret / private-key scan (must block)
+        shell: pwsh
+        run: |
+          $fail = 0
+          $patterns = @(
+            '(?i)(api[_-]?key|secret|token|password|passwd|private[_-]?key)\s*[:=]\s*["''][A-Za-z0-9_\-]{16,}["'']',
+            '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----',
+            'sk-[A-Za-z0-9]{20,}',
+            'ghp_[A-Za-z0-9]{20,}',
+            'AKIA[0-9A-Z]{16}'
+          )
+          Get-ChildItem -Recurse -File | Where-Object { $_.FullName -notmatch 'node_modules|\.git\\' } | ForEach-Object {
+            $c = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+            foreach ($p in $patterns) {
+              if ($c -match $p) {
+                Write-Host "SECRET SCAN FAIL: $($_.FullName) matched $p"
+                $script:fail = 1
+              }
+            }
+          }
+          exit $fail
+
+      - name: .gitignore assertions
+        shell: pwsh
+        run: |
+          $gi = Get-Content .gitignore -Raw
+          $need = @('\*\.pem','\*\.key','\.credentials\.yaml','secrets/','\.env')
+          $fail = 0
+          foreach ($n in $need) {
+            if ($gi -notmatch $n) { Write-Host "GITIGNORE MISSING: $n"; $script:fail = 1 }
+          }
+          exit $fail
+
+      - name: Module import smoke (dot-source all dsh-*.ps1 into a fresh pwsh)
+        shell: pwsh
+        run: |
+          $fail = 0
+          foreach ($f in (Get-ChildItem -Filter 'dsh-*.ps1')) {
+            if ($f.Name -eq 'dsh-guardian.ps1') { continue }  # guardian is long-running
+            try {
+              & powershell -NoProfile -Command ". '$($f.FullName)' 2>&1 | Out-Null; if (`$LASTEXITCODE -ne 0) { exit 1 }"
+              if ($LASTEXITCODE -eq 0) { Write-Host "IMPORT OK: $($f.Name)" } else { Write-Host "IMPORT FAIL: $($f.Name)"; $script:fail = 1 }
+            } catch { Write-Host "IMPORT FAIL: $($f.Name) - $($_.Exception.Message)"; $script:fail = 1 }
+          }
+          exit $fail
+
+      - name: Stage B authority test (isolated, no live server)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 -LivePort 35999 -SkipLive
+
+      - name: Stage D boot-mode test
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageD-BootMode.ps1
+
+      - name: Stage E safe-mode isolated test
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageE-SafeMode.ps1
+
+      - name: Reliability Lab Level 1 (synthetic faults)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File dsh-reliability-lab.ps1 -RunAll
+
+      - name: Stage C transaction state machine (isolated)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageC-Transaction.ps1 -LivePort 35999 -SkipLive

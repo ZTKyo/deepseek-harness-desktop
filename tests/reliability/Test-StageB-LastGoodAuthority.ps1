@@ -1,6 +1,6 @@
-﻿# Test-StageB-LastGoodAuthority.ps1 - verify "YAML valid != Last Good" authority rule.
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 [-LivePort 3080]
-param([int]$LivePort = 3080)
+# Test-StageB-LastGoodAuthority.ps1 - verify "YAML valid != Last Good" authority rule.
+# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 [-LivePort 3080] [-SkipLive]
+param([int]$LivePort = 3080, [switch]$SkipLive)
 $ErrorActionPreference = 'Continue'
 $failCount = 0
 function Assert([bool]$Cond, [string]$Name, [string]$Detail = '') {
@@ -48,15 +48,19 @@ $deadPort = 35999
 $r = Save-VerifiedLastGood -Port $deadPort -Reason 'test-dead-port' -StableWindowSec 0 -SkipLightProbe
 Assert ($r.Saved -eq $false -and $r.Reason -eq 'commit_readiness_failed') 'C3a dead port refused' "reason=$($r.Reason)"
 
-Write-Host '== Case 3b: Save-VerifiedLastGood promotes on live healthy service =='
-$r2 = Save-VerifiedLastGood -Port $LivePort -Reason 'stage-b-test' -StableWindowSec 2 -SkipLightProbe
-Assert ($r2.Saved -eq $true) 'C3b live promote succeeded' "gate=$($r2.Gate)"
-# guardian-lastgood mirror must have been synced (only legal writer)
-$gMeta = Join-Path $env:LOCALAPPDATA 'DSHHarness\guardian-lastgood\meta.json'
-Assert (Test-Path $gMeta) 'C3b mirror meta synced'
-if (Test-Path $gMeta) {
-    $gm = Get-Content $gMeta -Raw | ConvertFrom-Json
-    Assert ($gm.reason -eq 'stage-b-test') 'C3b mirror meta carries same reason'
+if (-not $SkipLive) {
+    Write-Host '== Case 3b: Save-VerifiedLastGood promotes on live healthy service =='
+    $r2 = Save-VerifiedLastGood -Port $LivePort -Reason 'stage-b-test' -StableWindowSec 2 -SkipLightProbe
+    Assert ($r2.Saved -eq $true) 'C3b live promote succeeded' "gate=$($r2.Gate)"
+    # guardian-lastgood mirror must have been synced (only legal writer)
+    $gMeta = Join-Path $env:LOCALAPPDATA 'DSHHarness\guardian-lastgood\meta.json'
+    Assert (Test-Path $gMeta) 'C3b mirror meta synced'
+    if (Test-Path $gMeta) {
+        $gm = Get-Content $gMeta -Raw | ConvertFrom-Json
+        Assert ($gm.reason -eq 'stage-b-test') 'C3b mirror meta carries same reason'
+    }
+} else {
+    Write-Host 'SKIP  C3b live promote (SkipLive; verified in local/Level 3 runs)'
 }
 
 Write-Host ''

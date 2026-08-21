@@ -344,11 +344,16 @@ function Invoke-BudgetedRestart([string]$reason) {
     return $false
 }
 
-# ---------- config safety: last-good snapshots of boot-critical YAML ----------
+# ---------- config safety: guardian-lastgood is a RESTORE MIRROR ONLY ----------
 # Anti-self-kill: if settings.yaml or cordis.patch.yml is edited into an invalid
 # state (syntax error), the server would fail to boot on the next restart. The
-# guardian keeps a validated snapshot of each file and restores it automatically
-# before any start/restart, so a bad edit can never brick the service.
+# guardian restores the mirror snapshot before any start/restart, so a bad edit
+# can never brick the service.
+#
+# Reliability v1 authority rule (2026-08-21):
+#   YAML Valid != Last Good. Check-ConfigSafety NEVER writes into guardian-lastgood.
+#   Syntax-valid files are left untouched (they are "allowed to attempt boot").
+#   The mirror is updated ONLY by Save-VerifiedLastGood (full COMMIT_READY gate).
 $configFiles = @(
     @{ Path = Join-Path $env:USERPROFILE '.dsh\settings.yaml'; Name = 'settings.yaml' },
     @{ Path = Join-Path $env:USERPROFILE '.dsh\profiles\web\cordis.patch.yml'; Name = 'cordis.patch.yml' }
@@ -376,18 +381,20 @@ function Test-YamlFile([string]$path) {
     return $null
 }
 function Check-ConfigSafety {
+    # Syntax guard only. Never promotes; never writes guardian-lastgood.
     foreach ($cf in $configFiles) {
         if (-not (Test-Path $cf.Path)) { continue }
         $ok = Test-YamlFile $cf.Path
         $lg = Join-Path $lastGoodDir $cf.Name
         if ($ok -eq $true) {
-            Copy-Item $cf.Path $lg -Force
+            # syntax valid -> allowed to attempt boot; do NOT promote (authority rule)
+            TraceG ("CONFIG SAFETY: " + $cf.Name + " YAML valid (not promoted; mirror untouched)")
         } elseif ($ok -eq $false) {
             if (Test-Path $lg) {
                 Copy-Item $lg $cf.Path -Force
-                TraceG ("CONFIG SAFETY: " + $cf.Name + " was INVALID - restored last-good snapshot")
+                TraceG ("CONFIG SAFETY: " + $cf.Name + " was INVALID - restored mirror snapshot (guardian-lastgood)")
             } else {
-                TraceG ("CONFIG SAFETY: " + $cf.Name + " is INVALID and no snapshot exists")
+                TraceG ("CONFIG SAFETY: " + $cf.Name + " is INVALID and no mirror snapshot exists")
             }
         }
     }

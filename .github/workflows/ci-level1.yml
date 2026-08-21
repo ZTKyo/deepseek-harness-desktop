@@ -132,3 +132,10 @@ jobs:
           node tests\router\test-exact-model-preservation.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "EXACT-MODEL TEST FAIL"; exit 1 }
           Write-Host "exact-model preservation: 9/9 PASS"
+
+      - name: Router deploy rollback tests (isolated, cross-process)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\router\Test-RouterDeployRollback.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "ROLLBACK TEST FAIL"; exit 1 }
+          Write-Host "router deploy rollback: PASS"

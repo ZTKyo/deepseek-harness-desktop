@@ -197,9 +197,9 @@ code: UNKNOWN_MODEL
 - `deploy-router-fix.ps1`（repo tracked，极薄 transactional）：
   - snapshot（pre-deploy copy + hash）
   - stage + `node --check` 语法验证
-  - atomic copy（canonical → runtime）
+  - transactional replace（same-dir temp + Move-Item；**不是 OS-level atomic rename**，见 Rollback Seal）
   - verify（runtime hash == canonical hash）
-  - `-Rollback` 恢复 snapshot
+  - 持久化 rollback point（manifest + snapshot，跨进程可用）
 - 复用 `$env:USERPROFILE`（无硬编码用户路径）
 - 不覆盖整个 profile，只部署 2 个 router 文件
 
@@ -260,3 +260,65 @@ Final Runtime State: FIX DEPLOYED
 - SECRET_HYGIENE ✅ / COMMIT_READY ✅ / GUARDIAN ✅
 - CI_L1 / CI_L2 待最终 push 确认
 - PR_SCOPE ✅（canonical source + test + CI hook + deploy script + report）
+
+---
+
+## 18 Rollback Seal（2026-08-21 追加）
+
+### 18.1 Audit Finding（独立复核发现）
+
+Persistence Seal v1 的 rollback **过度声明了 PASS**。独立复核发现：
+
+1. **旧 rollback bug**：`deploy-router-fix.ps1` 每次运行都创建**新的随机 snapshot**（`router-fix-snap-<guid>`）。独立执行 `-Rollback` 时，它会先备份"当前状态"再恢复这个新备份——**实际恢复的是当前状态本身，不是上一次 deploy 前的状态**。跨进程 rollback 无效。
+2. **失败路径可能不恢复**：部分失败分支（如 hash mismatch）只 `exit 1`，没有真正恢复整个 deployment 前状态。
+3. **"atomic" 表述过度**：`Copy-Item -Force` 被描述为 atomic，实际不是 OS-level atomic replace。
+
+### 18.2 Rollback 修复
+
+`deploy-router-fix.ps1` 重写：
+
+- **持久 manifest**：`$HOME/.dsh/transactions/router-fix/current.json` 记录 transaction_id / status / files（existed、sha256、snapshot path）。
+- **持久 snapshot**：`$HOME/.dsh/transactions/router-fix/snapshots/<txn-id>/` 保存 pre-deploy 文件。
+- **跨进程 rollback**：`-Rollback` 读取 committed manifest → 定位 snapshot → 恢复 exact pre-deploy 状态（含 ABSENT 文件 → 删除）。**绝不**在 rollback 时重新备份当前状态。
+- **两文件一体 transaction**：任一文件 stage/replace/verify 失败 → 自动恢复两文件到 pre-deploy（无 partial deployment）。
+- **transactional replace**：same-dir temp + Move-Item；文档如实写 **transactional replace**（非 OS-level atomic rename）。
+- **测试隔离**：`-RuntimeRoot` / `-StateRoot` / `-CanonRoot`（CI/测试用，默认生产行为不变）。
+- **fail-closed**：manifest 缺失 / snapshot 缺失 / 未 committed / 未托管文件名 → `ROLLBACK REFUSED`。
+
+### 18.3 Cross-Process Rollback Test（真实三进程）
+
+```
+PROCESS 1: OLD(04DF37/4607F4) → deploy → FIXED(1A09C1/08C80B) → exit
+PROCESS 2: -Rollback（新进程）→ EXACT OLD(04DF37/4607F4) → exit
+PROCESS 3: deploy（新进程）→ EXACT CANONICAL(1A09C1/08C80B) → exit
+```
+
+`tests/router/Test-RouterDeployRollback.ps1`（CI 执行，隔离 root）：
+- T1 deploy → canonical（manifest 持久化）PASS
+- T2 跨进程 rollback → exact OLD PASS
+- T3 跨进程 redeploy → canonical PASS
+- T4 stage 失败注入（坏第二文件）→ 两文件都未替换 PASS
+- T5 absent-file 语义（deploy over absent → rollback 删除）PASS
+
+### 18.4 Failure Injection
+
+- 注入第二文件语法错误 → `DEPLOY FAILED | ROLLBACK PASS` → 两文件保持 pre-deploy（无 partial）。
+- verify 失败 / replace 失败走同一 restore 循环（代码路径一致）。
+
+### 18.5 Acceptance Matrix
+
+| 项 | 结果 |
+|---|---|
+| PERSISTENT_ROLLBACK_POINT | PASS（manifest + snapshot 持久化） |
+| CROSS_PROCESS_ROLLBACK | PASS（独立进程找到 committed snapshot） |
+| EXACT_PRESTATE_RESTORE | PASS（hash 逐文件验证） |
+| ABSENT_FILE_RESTORE | PASS（T5：部署后 rollback 删除） |
+| PARTIAL_FAILURE_RECOVERY | PASS（T4：两文件都保持 old） |
+| DEPLOY_HASH_VERIFY | PASS（runtime == canonical） |
+| REDEPLOY | PASS（T3） |
+| RUNTIME_IDENTITY | PASS（openrouter/stealth/ox-alpha） |
+| PRIMARY_UNCHANGED | PASS（commandcode/auto） |
+| CATALOG_UNCHANGED | PASS（实时 before/after 一致） |
+| COMMIT_READY | PASS |
+| GUARDIAN | PASS |
+| CI_L1 / CI_L2 | 待最终 push 确认 |

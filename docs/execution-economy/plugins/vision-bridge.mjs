@@ -70,13 +70,13 @@ const PRECISION_KEYWORDS = /逐字|OCR|精确|按钮|布局|控件|图标|坐标
 const UNCERTAIN_MARK = /^\s*UNCERTAIN\b/i;
 
 // ────────────────────────────────────────────────────────────
-// 已验证支持原生图片输入的 DeepSeek 模型（2026-08-22 实测，见 docs/）
-// 只有"真正能直接收图并答对"的 deepseek-* 模型才可在此名单；
-// 其余 deepseek-* 一律保守视为 text-only，避免图片被发到纯文本模型导致 400 会话毒化。
-// 当前实测：BAI 端点 deepseek-v4-flash-vision-exp → IMAGE_OK（正确回答"红色圆形"）。
-// 该名单可通过 config.deepseekNativeImageModels 配置扩展，无需改代码。
+// 已验证"原生图片输入"的 provider+model 联合白名单（2026-08-22 实测，见 docs/）。
+// 只放行"真实验证过能直接收图并答对"的 组合；同 model 名但未验证的 provider
+// （opencode/deepseek-v4-flash-vision-exp、openrouter/... 等）一律不放行。
+// 当前实测：provider=bai + model=deepseek-v4-flash-vision-exp → IMAGE_OK（正确回答左上角物体）。
+// 名单格式："provider/model-basename"。可通过 config.verifiedNativeImageRoutes 配置扩展。
 // ────────────────────────────────────────────────────────────
-const DEFAULT_DEEPSEEK_NATIVE_IMAGE_MODELS = ["deepseek-v4-flash-vision-exp"];
+const DEFAULT_VERIFIED_NATIVE_IMAGE = ["bai/deepseek-v4-flash-vision-exp"];
 
 /** 取模型 id 的基名（去掉 provider 前缀，如 deepseek/ deepseek-v4-flash-vision-exp → deepseek-v4-flash-vision-exp）。 */
 export function baseModelId(modelId) {
@@ -84,30 +84,42 @@ export function baseModelId(modelId) {
   const slash = id.lastIndexOf("/");
   return slash >= 0 ? id.slice(slash + 1) : id;
 }
+/** provider 归一化（小写、去空白）。 */
+export function normalizeProvider(provider) {
+  return String(provider ?? "").trim().toLowerCase();
+}
 /** 是否为 deepseek 家族（语义上保守 text-only 边界；按基名判定，兼容"provider/前缀"形式）。 */
 export function isDeepseek(modelId) {
   return /^deepseek([-.]|$)/i.test(baseModelId(modelId));
 }
-/** 是否为"已验证支持原生图片"的 DeepSeek 模型（按基名精确匹配白名单）。 */
-export function isDeepseekNativeVision(modelId, allowlist) {
+/** 该 provider+model 组合是否在已验证原生图白名单中（联合匹配，缺一不可）。 */
+export function isVerifiedNativeImageRoute(provider, modelId, allowlist) {
+  const p = normalizeProvider(provider);
   const base = baseModelId(modelId).toLowerCase();
-  const list = Array.isArray(allowlist) && allowlist.length > 0 ? allowlist : DEFAULT_DEEPSEEK_NATIVE_IMAGE_MODELS;
-  return list.some((x) => String(x).toLowerCase() === base);
+  const list = Array.isArray(allowlist) && allowlist.length > 0 ? allowlist : DEFAULT_VERIFIED_NATIVE_IMAGE;
+  return list.some((x) => {
+    const idx = String(x).indexOf("/");
+    if (idx <= 0) return false;
+    const xp = String(x).slice(0, idx).trim().toLowerCase();
+    const xm = String(x).slice(idx + 1).trim().toLowerCase();
+    return p === xp && base === xm;
+  });
 }
 
 /**
- * 决策：当前路由模型能否"原生透传图片"（无需 MiMo 转述）。
+ * 决策：当前路由（provider+model）能否"原生透传图片"（无需 MiMo 转述）。
  * @param {object|null} info resolveModelInfo 结果（含 inputModalities）
+ * @param {string} provider 路由 provider（如 bai / opencode / openrouter）
  * @param {string} modelId 路由模型 id
- * @param {string[]} allowlist 已验证原生图 DeepSeek 模型名单
+ * @param {string[]} allowlist 已验证原生图 provider/model 白名单（"provider/model" 格式）
  * @returns {boolean} true=允许原生透传图片
  */
-export function canPassThroughNativeImage(info, modelId, allowlist) {
+export function canPassThroughNativeImage(info, provider, modelId, allowlist) {
   const mods = Array.isArray(info?.inputModalities) ? info.inputModalities : [];
   if (!mods.includes("image")) return false;          // 模型声明不支持图片 → 转述
   const id = String(modelId ?? "");
   if (!isDeepseek(id)) return true;                    // 非 deepseek：声明支持即透传
-  return isDeepseekNativeVision(id, allowlist);        // deepseek：仅已验证原生图名单透传
+  return isVerifiedNativeImageRoute(provider, id, allowlist); // deepseek：仅 provider+model 白名单透传
 }
 
 /** 插件配置（apply 时初始化），避免在 Cordis 上下文代理上挂自定义属性。 */
@@ -119,7 +131,14 @@ let settings = {
   maxTokens: 1024,
   timeoutMs: 120000,
   prompt: DEFAULT_PROMPT,
-  deepseekNativeImageModels: DEFAULT_DEEPSEEK_NATIVE_IMAGE_MODELS,
+  verifiedNativeImageRoutes: DEFAULT_VERIFIED_NATIVE_IMAGE,
+};
+
+/** 预调用/原生透传计数器（进程内累计；重启清零）。用于端到端验收：XIAOMI_PRECALL_COUNT / MIMO_PRECALL_COUNT / DEEPSEEK_NATIVE_IMAGE_REQUEST。 */
+const counters = {
+  XIAOMI_PRECALL_COUNT: 0,      // 小米官方 API / MiMo 视觉预调用次数
+  MIMO_PRECALL_COUNT: 0,        // 任何 MiMo 模型（OpenCode Go 或小米官方）视觉预调用次数
+  DEEPSEEK_NATIVE_IMAGE_REQUEST: 0, // 原生图直达 DeepSeek 的请求次数
 };
 
 /** 图片描述缓存：附件 ID -> 解析文字（同一张图只解析一次，重试 turn 复用）。 */
@@ -280,15 +299,17 @@ async function describeImage(ctx, attachment, signal, userText) {
   if (!needPrecision) {
     levels.push({
       name: "OpenCode Go / MiMo-V2.5",
-      run: async () =>
-        callOpenAICompletions(
+      run: async () => {
+        counters.MIMO_PRECALL_COUNT += 1; // MiMo 模型视觉预调用（经 OpenCode Go）
+        return callOpenAICompletions(
           ctx,
           { endpoint: `${OPENCODE_BASE}/chat/completions`, model: settings.primaryModel, key: await opencodeKey() },
           prompt,
           b64,
           mime,
           signal
-        ),
+        );
+      },
     });
   }
   levels.push({
@@ -306,15 +327,17 @@ async function describeImage(ctx, attachment, signal, userText) {
   if (settings.xiaomiFallbackEnabled) {
     levels.push({
       name: "小米官方 API / MiMo",
-      run: async () =>
-        callOpenAICompletions(
+      run: async () => {
+        counters.XIAOMI_PRECALL_COUNT += 1; // 小米官方 API 视觉预调用
+        return callOpenAICompletions(
           ctx,
           { endpoint: `${XIAOMI_BASE}/chat/completions`, model: settings.xiaomiModel, key: await xiaomiKey() },
           prompt,
           b64,
           mime,
           signal
-        ),
+        );
+      },
     });
   }
 
@@ -442,10 +465,10 @@ export function apply(ctx, config = {}) {
     maxTokens: config.maxTokens ?? 1024,
     timeoutMs: config.timeoutMs ?? 120000,
     prompt: config.prompt ?? DEFAULT_PROMPT,
-    deepseekNativeImageModels: config.deepseekNativeImageModels ?? DEFAULT_DEEPSEEK_NATIVE_IMAGE_MODELS,
+    verifiedNativeImageRoutes: config.verifiedNativeImageRoutes ?? DEFAULT_VERIFIED_NATIVE_IMAGE,
   };
   ctx.logger.info(
-    `vision-bridge: 已挂载（主=${settings.primaryModel}@OpenCodeGo，fallback=${settings.fallbackModel}@OpenCodeGo，小米emergency=${settings.xiaomiFallbackEnabled ? "开" : "关"}；deepseek原生图名单=[${settings.deepseekNativeImageModels.join(",")}]）`
+    `vision-bridge: 已挂载（主=${settings.primaryModel}@OpenCodeGo，fallback=${settings.fallbackModel}@OpenCodeGo，小米emergency=${settings.xiaomiFallbackEnabled ? "开" : "关"}；verifiedNativeImageRoutes=[${settings.verifiedNativeImageRoutes.join(",")}]）`
   );
 
   ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
@@ -456,18 +479,24 @@ export function apply(ctx, config = {}) {
     // 注意：settings.yaml 中 opencode/bai 的 DeepSeek 文本模型为放行"图片准入门禁"而声明了
     // input: [text, image]，resolveModelInfo 会如实返回 image 能力——但那只是门禁声明，
     // 深版 seek 文本模型（deepseek-* 非 vision 系列）实际不收图，必须仍走桥接转换。
-    // 因此以"模型 id 是否在已验证原生 vision 名单"为准（不单靠声明，2026-08-14 修复）。
-    // 2026-08-22 迁移：DeepSeek 新模型（deepseek-v4-flash-vision-exp）已实测支持原生图片输入
-    // （BAI 端点 IMAGE_OK），故只放开该已验证名单；名单外 deepseek-* 仍保守走 MiMo 转述。
+    // 2026-08-22 迁移：只对"provider+model 联合白名单"内已验证的组合放行原生图
+    // （当前仅 bai/deepseek-v4-flash-vision-exp）；同 model 名但未验证的 provider 不放行。
+    const provider = String(agent.options.provider ?? "");
+    const modelId = String(agent.options.model ?? "");
     let nativeImage = false;
     try {
       const info = await ctx.llm.resolveModelInfo(agent.options.provider, agent.options.model, signal);
-      const modelId = String(agent.options.model ?? "");
-      nativeImage = canPassThroughNativeImage(info, modelId, settings.deepseekNativeImageModels);
+      nativeImage = canPassThroughNativeImage(info, provider, modelId, settings.verifiedNativeImageRoutes);
     } catch {
       nativeImage = false; // 无法判定时保守转换，避免图片到达纯文本 API
     }
-    if (nativeImage) return decision;
+    if (nativeImage) {
+      if (decision.messages.some((message) => hasImageBlocks(message.content))) {
+        counters.DEEPSEEK_NATIVE_IMAGE_REQUEST += 1;
+        ctx.logger.info(`vision-bridge: TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "passthrough" })}`);
+      }
+      return decision;
+    }
 
     // 历史图片块清扫（防毒化）：text-only 路由下，把 store 中已存在的图片块
     // （read_image 工具结果等）以 surface replace 事件替换为文字（仅模型视角），
@@ -475,6 +504,8 @@ export function apply(ctx, config = {}) {
     await sweepHistoryImages(ctx, agent, signal);
 
     if (!decision.messages.some((message) => hasImageBlocks(message.content))) return decision;
+
+    ctx.logger.info(`vision-bridge: TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "bridge-transform" })}`);
 
     const messages = [];
     for (const message of decision.messages) {

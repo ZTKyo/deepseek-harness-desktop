@@ -133,6 +133,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "EXACT-MODEL TEST FAIL"; exit 1 }
           Write-Host "exact-model preservation: 9/9 PASS"
 
+      - name: DeepSeek native multimodal tests (pure, no live server)
+        shell: pwsh
+        run: |
+          node tests\router\test-deepseek-native-multimodal.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "MULTIMODAL TEST FAIL"; exit 1 }
+          Write-Host "deepseek native multimodal: PASS"
+
       - name: Router deploy rollback tests (isolated, cross-process)
         shell: pwsh
         run: |

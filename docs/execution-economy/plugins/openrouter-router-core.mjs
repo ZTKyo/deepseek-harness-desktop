@@ -43,6 +43,37 @@ export const CAPABILITY = Object.freeze({
   mimo: { input: ["text", "audio", "image", "video"], structured: true, audio: true },
 });
 
+// ────────────────────────────────────────────────────────────
+// 最小 capability 区分：按"真实已验证的模型 id"区分 text-only DeepSeek 与 vision-capable DeepSeek。
+// CAPABILITY.deepseek 默认保持 ["text"]：OpenRouter 的 deepseek/deepseek-v4-flash-0731 实测纯文本
+// （2026-08-22 探测：图片请求 404 "No endpoints found that support image input"）。
+// 只有解析到的具体模型 id 命中 VERIFIED_VISION_DEEPSEEK_IDS 时，才向上修正为具备图片能力。
+// 该名单为实测可信集合（BAI 端点 deepseek-v4-flash-vision-exp 图片请求 IMAGE_OK）。
+// 不改变 KNOWN_ROUTING_MODES / explicit_model_passthrough 的 exact-model invariant。
+// ────────────────────────────────────────────────────────────
+export const VERIFIED_VISION_DEEPSEEK_IDS = Object.freeze([
+  "deepseek-v4-flash-vision-exp",
+]);
+
+/** 取模型 id 的基名（去掉 provider 前缀：deepseek/... → ...）。 */
+export function baseModelId(modelId) {
+  const parts = String(modelId ?? "").split("/");
+  const last = parts[parts.length - 1];
+  return last && last.length > 0 ? last : String(modelId ?? "");
+}
+
+/** alias 解析到的具体模型是否实际支持指定模态（在 CAPABILITY 基础上做已验证清单的向上修正）。 */
+export function aliasSupportsModality(alias, modality, cfg = {}) {
+  const cap = CAPABILITY[alias] || { input: [] };
+  if (cap.input.includes(modality)) return true;
+  // deepseek 默认 text-only；若其解析到的具体模型 id 为已验证原生图片模型，则视作支持图片。
+  if (alias === "deepseek" && modality === "image" && cfg?.modelIds?.deepseek) {
+    const resolved = baseModelId(cfg.modelIds.deepseek).toLowerCase();
+    return VERIFIED_VISION_DEEPSEEK_IDS.some((x) => String(x).toLowerCase() === resolved);
+  }
+  return false;
+}
+
 // 跨模型 fallback 链（capability-aware）
 const CHAINS = Object.freeze({
   qwen: ["qwen", "deepseek", "mimo"], // 简单任务主链；深链兜底
@@ -166,13 +197,12 @@ export function detectStrictJson(text = "") {
  * @param {string[]} modalities
  * @returns {string[]} alias chain
  */
-export function fallbackChainFor(model, modalities = []) {
+export function fallbackChainFor(model, modalities = [], cfg = {}) {
   const base = CHAINS[model] || CHAINS.deepseek;
   const mods = modalities || [];
   if (mods.length === 0) return [...base];
   return base.filter((m) => {
-    const cap = CAPABILITY[m];
-    return mods.every((mo) => cap.input.includes(mo));
+    return mods.every((mo) => aliasSupportsModality(m, mo, cfg));
   });
 }
 
@@ -203,6 +233,11 @@ export function route(request = {}, env = {}) {
   let taskType = r.taskType || classifyTask(r.text || "");
   const toolsActive = !!r.toolsActive;
 
+  // 最小 capability 区分：仅当 deepseek alias 解析到"已验证原生图片"模型（如 deepseek-v4-flash-vision-exp）
+  // 时，纯图片请求才允许直达 deepseek；否则（默认 OpenRouter text-only deepseek）仍走 MiMo。
+  // audio / video 始终 MiMo（DeepSeek 不支持）。
+  const deepseekImageCapable = aliasSupportsModality("deepseek", "image", cfg);
+
   // Rule 0：显式 override（仍在 capability 内检查）
   const explicit = r.requestedMode || "auto";
   if (explicit !== "auto") {
@@ -215,47 +250,48 @@ export function route(request = {}, env = {}) {
     if (!CAPABILITY[explicit]) return decision("auto", "deepseek", "explicit_override_invalid", "unknown explicit alias -> deepseek", cfg, modalities, "deepseek");
     // audio 必须 MiMo；显式选 qwen/deepseek 而带 audio -> capability 强制 MiMo
     if (hasAudio && explicit !== "mimo") {
-      return decision(explicit, "mimo", "capability_override", "audio requires mimo", cfg, modalities, fallbackChainFor("mimo", modalities));
+      return decision(explicit, "mimo", "capability_override", "audio requires mimo", cfg, modalities, fallbackChainFor("mimo", modalities, cfg));
     }
     // image/video + strict json：qwen 无 structured -> 若又要求严格 json 则 mimo
     if (multimodal && strictJson && explicit === "qwen") {
-      return decision(explicit, "mimo", "capability_override", "multimodal+strict json needs mimo", cfg, modalities, fallbackChainFor("mimo", modalities));
+      return decision(explicit, "mimo", "capability_override", "multimodal+strict json needs mimo", cfg, modalities, fallbackChainFor("mimo", modalities, cfg));
     }
-    return decision(explicit, explicit, "explicit_override", "user explicit " + explicit, cfg, modalities, fallbackChainFor(explicit, modalities));
+    return decision(explicit, explicit, "explicit_override", "user explicit " + explicit, cfg, modalities, fallbackChainFor(explicit, modalities, cfg));
   }
 
   // Rule 1：严格 JSON Schema → DeepSeek
   if (strictJson && !multimodal) {
-    return decision("auto", "deepseek", "strict_json", "strict JSON schema needs deepseek", cfg, modalities, fallbackChainFor("deepseek", modalities));
+    return decision("auto", "deepseek", "strict_json", "strict JSON schema needs deepseek", cfg, modalities, fallbackChainFor("deepseek", modalities, cfg));
   }
-  // Rule 1 + 多模态并存：需要既支持模态又支持 structured 的模型 → MiMo
+  // Rule 1 + 多模态并存：需要既支持模态又支持 structured 的模型 → 默认 MiMo；deepseek 已验证原生图时可直达
   if (strictJson && multimodal) {
-    return decision("auto", "mimo", "strict_json_multimodal", "multimodal+strict json -> mimo", cfg, modalities, fallbackChainFor("mimo", modalities));
+    const target = hasAudio || modSet.has("video") || !deepseekImageCapable ? "mimo" : "deepseek";
+    return decision("auto", target, "strict_json_multimodal", target === "deepseek" ? "multimodal+strict json -> native deepseek" : "multimodal+strict json -> mimo", cfg, modalities, fallbackChainFor(target, modalities, cfg));
   }
 
   // Rule 2：多模态（audio 必须 MiMo）
   if (multimodal) {
-    const target = hasAudio || hasImageVideo ? "mimo" : "mimo";
-    return decision("auto", target, "multimodal", hasAudio ? "audio requires mimo" : "multimodal -> mimo", cfg, modalities, fallbackChainFor(target, modalities));
+    const target = hasAudio || modSet.has("video") || !deepseekImageCapable ? "mimo" : "deepseek";
+    return decision("auto", target, "multimodal", hasAudio ? "audio requires mimo" : target === "deepseek" ? "image -> native deepseek" : "multimodal -> mimo", cfg, modalities, fallbackChainFor(target, modalities, cfg));
   }
 
   // Rule 3：长上下文
   if (estimated >= cfg.longContextThreshold) {
-    return decision("auto", "mimo", "long_context", `estimated_context=${estimated}>=${cfg.longContextThreshold}`, cfg, modalities, fallbackChainFor("mimo", modalities));
+    return decision("auto", "mimo", "long_context", `estimated_context=${estimated}>=${cfg.longContextThreshold}`, cfg, modalities, fallbackChainFor("mimo", modalities, cfg));
   }
 
   // Rule 4：复杂 / agentic / tool
   if (toolsActive || taskType === "complex") {
-    return decision("auto", "deepseek", "complex", taskType === "complex" ? "complex task" : "tool/agentic task", cfg, modalities, fallbackChainFor("deepseek", modalities));
+    return decision("auto", "deepseek", "complex", taskType === "complex" ? "complex task" : "tool/agentic task", cfg, modalities, fallbackChainFor("deepseek", modalities, cfg));
   }
 
   // Rule 5：简单任务
   if (taskType === "simple") {
-    return decision("auto", "qwen", "simple", "simple task", cfg, modalities, fallbackChainFor("qwen", modalities));
+    return decision("auto", "qwen", "simple", "simple task", cfg, modalities, fallbackChainFor("qwen", modalities, cfg));
   }
 
   // Rule 6：无法确定 → DeepSeek
-  return decision("auto", "deepseek", "default", "cannot classify", cfg, modalities, fallbackChainFor("deepseek", modalities));
+  return decision("auto", "deepseek", "default", "cannot classify", cfg, modalities, fallbackChainFor("deepseek", modalities, cfg));
 }
 
 function decision(requestedMode, selectedModel, ruleId, reason, cfg, modalities, chain, explicitId) {

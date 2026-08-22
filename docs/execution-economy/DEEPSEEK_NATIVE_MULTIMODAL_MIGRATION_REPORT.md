@@ -57,14 +57,27 @@
 - 在 `ci-level1.yml` 新增独立 step「DeepSeek native multimodal tests (pure)」，
   运行 `node tests\router\test-deepseek-native-multimodal.mjs`；既有 check 名称全部不变。
 
-## 动态验收（受控重启 + 真实 Harness session）
+## 动态验收（受控重启 ×3 + 真实 Harness session，2026-08-22 完成）
 
-- 重启 3080 服务加载新 `vision-bridge` 后，用**全新图片**经真实 session 验证：
-  `provider=bai`、`model=deepseek-v4-flash-vision-exp`、image modality 直达 DeepSeek、
-  `XIAOMI_PRECALL_COUNT=0`、`MIMO_PRECALL_COUNT=0`、能回答必须看图的问题。
-- 另验证 text-only DeepSeek（`bai/deepseek-v4-flash`、`openrouter/deepseek/deepseek-v4-flash-0731`）
-  仍不会直接收到图片（旧安全 fallback 保留）。
-- 结束后 `primary` 恢复原值（`bai/deepseek-v4-flash-vision-exp` 不变）、COMMIT_READY PASS、Guardian PASS。
+经三次受控重启加载新 `vision-bridge`，用**全新图片**（左上角橙色三角形）经真实 Harness session
+（与 GUI 同一条 RPC 管线：`session.create` → `session.selectModel` → `session.prompt`）验证：
+
+1. **原生路径（`bai/deepseek-v4-flash-vision-exp` + 原图）**：
+   - user message content = `['text','image']`（原图块进入请求）；
+   - `request/header` / `request/context` = **provider=bai, model=deepseek-v4-flash-vision-exp**；
+   - vision-bridge 判定 `nativeImage=true` → **passthrough**，TURN_STATS 计数（干净起点）：
+     **`XIAOMI_PRECALL_COUNT=0, MIMO_PRECALL_COUNT=0, DEEPSEEK_NATIVE_IMAGE_REQUEST=1`**；
+   - DeepSeek 正确回答必须看图的问题：「三角形」/「橙色倒三角形」。
+
+2. **text-only 路径（`bai/deepseek-v4-flash` + 原图）**：
+   - vision-bridge 判定 `nativeImage=false` → **bridge-transform**（旧安全 fallback）；
+   - 模型实际收到的是**转述文字**（assistant reasoning 明确说 "there's no image in this conversation"），
+     原始图片未直达 text-only 模型，无 400 毒化。
+
+3. 结束后状态：`agent-default-model` 恢复 `bai/deepseek-v4-flash-vision-exp`、
+   provider-registry `Role.PRIMARY` 恢复 `bai/deepseek-v4-flash`（均为任务开始时原值）；
+   **COMMIT_READY PASS**（ProcessIdentity/ApiReady/EventsMux/EventsHost/Renderer/StableWindow 全过）、**Guardian PASS**。
+   计数/诊断输出经 `~/.dsh/vision-bridge-debug.log`（config.debugFile=true 时启用）与 TURN_STATS 日志核验。
 
 ## MiMo 保留
 

@@ -46,6 +46,10 @@
 //
 // 纯 ESM，无第三方依赖（仅用 Node 内置能力），通过 ctx 使用 host 服务。
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 export const name = "vision-bridge";
 export const inject = ["llm", "attachments"];
 
@@ -140,6 +144,16 @@ const counters = {
   MIMO_PRECALL_COUNT: 0,        // 任何 MiMo 模型（OpenCode Go 或小米官方）视觉预调用次数
   DEEPSEEK_NATIVE_IMAGE_REQUEST: 0, // 原生图直达 DeepSeek 的请求次数
 };
+
+// 文件级诊断（仅 config.debugFile=true 时启用）：写入 ~/.dsh/vision-bridge-debug.log。
+const DEBUG_FILE = path.join(os.homedir(), ".dsh", "vision-bridge-debug.log");
+let debugEnabled = false;
+function debugLog(line) {
+  if (!debugEnabled) return;
+  try {
+    fs.appendFileSync(DEBUG_FILE, new Date().toISOString() + " " + line + "\n");
+  } catch {}
+}
 
 /** 图片描述缓存：附件 ID -> 解析文字（同一张图只解析一次，重试 turn 复用）。 */
 const cache = new Map();
@@ -467,13 +481,17 @@ export function apply(ctx, config = {}) {
     prompt: config.prompt ?? DEFAULT_PROMPT,
     verifiedNativeImageRoutes: config.verifiedNativeImageRoutes ?? DEFAULT_VERIFIED_NATIVE_IMAGE,
   };
+  debugEnabled = !!config.debugFile;
   ctx.logger.info(
     `vision-bridge: 已挂载（主=${settings.primaryModel}@OpenCodeGo，fallback=${settings.fallbackModel}@OpenCodeGo，小米emergency=${settings.xiaomiFallbackEnabled ? "开" : "关"}；verifiedNativeImageRoutes=[${settings.verifiedNativeImageRoutes.join(",")}]）`
   );
 
   ctx.on("agent/pre-step", async ({ agent, signal }, next) => {
     const decision = await next();
-    if (decision.kind !== "enter") return decision;
+    if (decision.kind !== "enter") {
+      debugLog(`pre-step: kind=${decision.kind} (skip)`);
+      return decision;
+    }
 
     // 原生多模态模型直连时直接透传（如 xiaomi/mimo-v2.5、opencode/mimo-v2.5、qwen3.7-plus）。
     // 注意：settings.yaml 中 opencode/bai 的 DeepSeek 文本模型为放行"图片准入门禁"而声明了
@@ -487,13 +505,16 @@ export function apply(ctx, config = {}) {
     try {
       const info = await ctx.llm.resolveModelInfo(agent.options.provider, agent.options.model, signal);
       nativeImage = canPassThroughNativeImage(info, provider, modelId, settings.verifiedNativeImageRoutes);
-    } catch {
+      debugLog(`pre-step: provider=${provider} model=${modelId} inputModalities=${JSON.stringify(info?.inputModalities)} nativeImage=${nativeImage}`);
+    } catch (e) {
       nativeImage = false; // 无法判定时保守转换，避免图片到达纯文本 API
+      debugLog(`pre-step: resolveModelInfo threw: ${String(e?.message ?? e)}`);
     }
     if (nativeImage) {
       if (decision.messages.some((message) => hasImageBlocks(message.content))) {
         counters.DEEPSEEK_NATIVE_IMAGE_REQUEST += 1;
         ctx.logger.info(`vision-bridge: TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "passthrough" })}`);
+        debugLog(`TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "passthrough" })}`);
       }
       return decision;
     }
@@ -501,11 +522,18 @@ export function apply(ctx, config = {}) {
     // 历史图片块清扫（防毒化）：text-only 路由下，把 store 中已存在的图片块
     // （read_image 工具结果等）以 surface replace 事件替换为文字（仅模型视角），
     // 防止"图片块留在历史 → 每轮请求 400"的会话毒化。
-    await sweepHistoryImages(ctx, agent, signal);
+    try {
+      await sweepHistoryImages(ctx, agent, signal);
+    } catch (e) {
+      debugLog(`pre-step: sweepHistoryImages threw: ${String(e?.message ?? e)}`);
+    }
 
-    if (!decision.messages.some((message) => hasImageBlocks(message.content))) return decision;
+    const hasImages = decision.messages.some((message) => hasImageBlocks(message.content));
+    debugLog(`pre-step: nativeImage=${nativeImage} messages=${decision.messages?.length ?? "?"} hasImages=${hasImages}`);
+    if (!hasImages) return decision;
 
     ctx.logger.info(`vision-bridge: TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "bridge-transform" })}`);
+    debugLog(`TURN_STATS ${JSON.stringify({ ...counters, provider, model: modelId, native: "bridge-transform" })}`);
 
     const messages = [];
     for (const message of decision.messages) {

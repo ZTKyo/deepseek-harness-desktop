@@ -1,4 +1,4 @@
-# dsh-process-identity.ps1 - fail-closed DSH listener/process identity helpers.
+﻿# dsh-process-identity.ps1 - fail-closed DSH listener/process identity helpers.
 #
 # This file is dot-sourced by the DSH guardian and restart/start scripts.
 # It intentionally returns only safe process metadata and a command-line hash;

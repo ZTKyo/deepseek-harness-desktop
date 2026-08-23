@@ -3,8 +3,8 @@
 # plugins from repo CANONICAL source to the runtime profile.
 #
 # Canonical source (repo, source of truth):
-#   docs/execution-economy/plugins/openrouter-router-core.mjs
-#   docs/execution-economy/plugins/openrouter-router.mjs
+#   plugins/openrouter-router-core.mjs
+#   plugins/openrouter-router.mjs
 # Runtime destination (deployed copy):
 #   $env:USERPROFILE/.dsh/profiles/web/  (no hardcoded user path)
 #
@@ -43,7 +43,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ($CanonRoot) {
     $canonDir = $CanonRoot
 } else {
-    $canonDir = Join-Path $root 'docs\execution-economy\plugins'
+    $canonDir = Join-Path $root 'plugins'
 }
 
 $managedFiles = @('openrouter-router-core.mjs', 'openrouter-router.mjs')

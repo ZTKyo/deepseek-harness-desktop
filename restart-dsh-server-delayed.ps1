@@ -27,34 +27,47 @@ function Write-Log([string]$msg) {
     Add-Content $log ("{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg)
 }
 
-# ---------- DETACH MODE: spawn the worker in a WMI-detached process ----------
+# ---------- DETACH MODE: spawn the worker in an independent process ----------
 # The caller (agent tool tree) is a child of the DSH server. If we run the restart
 # here, stopping the server kills us before finally{} can release the lock. So we
-# re-invoke this script via Win32_Process.Create: the new process's parent is
-# WmiPrvSE.exe (independent of the DSH process tree) and survives the server stop.
+# re-invoke this script as a NEW process via Start-Process (hidden window). Even if
+# the new process is still under the DSH tree, the guardian now detects an orphaned
+# maintenance lock (worker PID dead -> clears lock -> takes over restart), so a dead
+# worker can NEVER wedge self-heal. This is the equivalent lock-lost takeover.
 if (-not $WorkerMode) {
     $useDetach = $Detach -or (-not $env:DSH_RESTART_WORKER_MODE)
     if ($useDetach) {
         Write-Log ("detach: spawning worker for port $Port (delay=$DelaySeconds)")
-        $self = Join-Path $root 'restart-dsh-server-delayed.ps1'
-        $inner = '-NoProfile -ExecutionPolicy Bypass -File "' + $self + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port
-        # Env marker so a nested call does not re-detach
-        $env:DSH_RESTART_WORKER_MODE = '1'
-        $cmdLine = 'powershell.exe ' + $inner
+        # Use short path (8.3) to avoid spaces breaking the -Command string
+        $shortRoot = try { (New-Object -ComObject Scripting.FileSystemObject).GetFolder($root).ShortPath } catch { $root }
+        $shortSelf = Join-Path $shortRoot 'restart-dsh-server-delayed.ps1'
+        # Use -Command with dot-source (NOT -File): WMI/Start-Process created
+        # processes cannot load .ps1 via -File in some contexts (verified).
+        $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port
+        $env:DSH_RESTART_WORKER_MODE = '1'   # nested call must not re-detach
         try {
-            $wmi = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmdLine; CurrentDirectory = $root }
-            if ($wmi -and $wmi.ReturnValue -eq 0) {
-                Write-Log ("detach: worker spawned via WMI pid=$($wmi.ProcessId)")
-                # do NOT wait: return immediately so the agent turn can finish cleanly
+            # Start-Process hidden window (verified working). Even if the worker dies
+            # with the DSH tree, the guardian's orphaned maintenance-lock detection
+            # clears the lock and takes over recovery (backstop).
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = 'powershell.exe'
+            $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -Command "' + $inner + '"'
+            $psi.UseShellExecute = $true
+            $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+            $proc = [System.Diagnostics.Process]::Start($psi)
+            if ($proc) {
+                Write-Log ("detach: worker spawned via Start-Process pid=$($proc.Id) (guardian orphan takeover as backstop)")
                 exit 0
             }
-            Write-Log ("detach: WMI create returned $($wmi.ReturnValue); falling back to inline")
+            Write-Log "detach: Start-Process returned no process"
         } catch {
-            Write-Log ("detach: WMI create failed: $($_.Exception.Message); falling back to inline")
+            Write-Log ("detach: Start-Process failed: $($_.Exception.Message)")
         }
+        Write-Log "detach: spawn failed; running inline (risk: worker may die with server; guardian orphan takeover is the backstop)"
     }
-    # Fallback (no detach / WMI unavailable): run inline. NOTE: if the caller is the
-    # agent tool tree this may still die with the server, but we log clearly.
+    # Fallback (no detach / spawn unavailable): run inline. NOTE: if the caller is the
+    # agent tool tree this may still die with the server, but the guardian's orphaned
+    # maintenance-lock detection will clear the lock and take over recovery.
     if (-not $env:DSH_RESTART_WORKER_MODE) { $env:DSH_RESTART_WORKER_MODE = '1' }
 }
 

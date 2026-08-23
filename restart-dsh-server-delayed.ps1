@@ -14,7 +14,10 @@ param(
     [int]$DelaySeconds = 2,
     [int]$Port = 3080,
     [switch]$Detach,          # default ON: spawn detached worker via WMI
-    [switch]$WorkerMode       # internal: run the actual restart logic (spawned by Detach)
+    [switch]$WorkerMode,      # internal: run the actual restart logic (spawned by Detach)
+    [string]$AttemptId = $null,  # Phase 02 R4 (Step 1): terminal ledger identity
+    [string]$WaitAttempt = $null, # Phase 02 R4: wait for a specific attempt's terminal state
+    [int]$TimeoutSec = 180
 )
 
 $ErrorActionPreference = 'Continue'
@@ -22,9 +25,45 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $log = Join-Path $env:LOCALAPPDATA "DSHHarness\logs\restart-apply-patch.log"
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
 $lockFile = Join-Path $env:USERPROFILE '.dsh\guardian-maintenance.lock'
+# Phase 02 R4 (Step 1): restart attempt terminal ledger (callers wait on this).
+$attemptsDir = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\restart-attempts'
+New-Item -ItemType Directory -Force -Path $attemptsDir | Out-Null
 
 function Write-Log([string]$msg) {
     Add-Content $log ("{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg)
+}
+
+# ---------- WAIT MODE: block until a specific attempt reaches a terminal state ----------
+# Phase 02 R4 (Step 1): callers (Transaction / Safe Mode / GUI) must NOT treat the
+# detached outer wrapper exit 0 as "restart complete". They call
+# restart-dsh-server-delayed.ps1 -WaitAttempt <id> -TimeoutSec N and this blocks
+# until the ledger shows COMMITTED | FAILED | TIMED_OUT.
+if ($WaitAttempt) {
+    $ledgerFile = Join-Path $attemptsDir ($WaitAttempt + '.json')
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-Path $ledgerFile) {
+            $led = Get-Content $ledgerFile -Raw | ConvertFrom-Json
+            if ($led.terminalState) {
+                Write-Log ("wait-attempt {0} -> terminal {1}" -f $WaitAttempt, $led.terminalState)
+                if ($led.terminalState -eq 'COMMITTED') { exit 0 }
+                Write-Host ("restart attempt {0} terminal={1}" -f $WaitAttempt, $led.terminalState)
+                exit 2
+            }
+        }
+        Start-Sleep -Seconds 2
+    }
+    Write-Log ("wait-attempt {0} TIMED_OUT after {1}s" -f $WaitAttempt, $TimeoutSec)
+    Write-Host ("restart attempt {0} TIMED_OUT" -f $WaitAttempt)
+    exit 3
+}
+
+# ledger helpers
+function Set-AttemptState([string]$id, [string]$state, [string]$detail = '', [bool]$terminal = $false) {
+    if (-not $id) { return }
+    $f = Join-Path $attemptsDir ($id + '.json')
+    $rec = @{ attemptId = $id; port = $Port; pid = $PID; ts = (Get-Date).ToString('o'); state = $state; terminalState = if ($terminal) { $state } else { $null }; detail = $detail }
+    try { $rec | ConvertTo-Json -Compress | Set-Content $f -Encoding UTF8 } catch { Write-Log ("attempt ledger write failed: $($_.Exception.Message)") }
 }
 
 # ---------- DETACH MODE: spawn the worker in an independent process ----------
@@ -38,12 +77,17 @@ if (-not $WorkerMode) {
     $useDetach = $Detach -or (-not $env:DSH_RESTART_WORKER_MODE)
     if ($useDetach) {
         Write-Log ("detach: spawning worker for port $Port (delay=$DelaySeconds)")
+        # Phase 02 R4 (Step 1): generate attemptId + SPAWNED ledger; caller waits
+        # on this attempt's terminal state (COMMITTED | FAILED | TIMED_OUT), NOT
+        # on this outer wrapper's exit code.
+        if (-not $AttemptId) { $AttemptId = [guid]::NewGuid().ToString('N') }
+        Set-AttemptState $AttemptId 'SPAWNED' '' $false
         # Use short path (8.3) to avoid spaces breaking the -Command string
         $shortRoot = try { (New-Object -ComObject Scripting.FileSystemObject).GetFolder($root).ShortPath } catch { $root }
         $shortSelf = Join-Path $shortRoot 'restart-dsh-server-delayed.ps1'
         # Use -Command with dot-source (NOT -File): WMI/Start-Process created
         # processes cannot load .ps1 via -File in some contexts (verified).
-        $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port
+        $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port + ' -AttemptId ' + $AttemptId
         $env:DSH_RESTART_WORKER_MODE = '1'   # nested call must not re-detach
         try {
             # Start-Process hidden window (verified working). Even if the worker dies
@@ -56,11 +100,15 @@ if (-not $WorkerMode) {
             $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
             $proc = [System.Diagnostics.Process]::Start($psi)
             if ($proc) {
-                Write-Log ("detach: worker spawned via Start-Process pid=$($proc.Id) (guardian orphan takeover as backstop)")
+                Write-Log ("detach: worker spawned via Start-Process pid=$($proc.Id) attempt=$AttemptId (guardian orphan takeover as backstop)")
+                # Phase 02 R4: write attemptId so a caller can wait on the terminal state.
+                Write-Output $AttemptId
                 exit 0
             }
+            Set-AttemptState $AttemptId 'FAILED' 'spawn returned no process' $true
             Write-Log "detach: Start-Process returned no process"
         } catch {
+            Set-AttemptState $AttemptId 'FAILED' ("spawn error: " + $_.Exception.Message) $true
             Write-Log ("detach: Start-Process failed: $($_.Exception.Message)")
         }
         Write-Log "detach: spawn failed; running inline (risk: worker may die with server; guardian orphan takeover is the backstop)"
@@ -78,6 +126,7 @@ if (-not $WorkerMode) {
 
 Start-Sleep -Seconds $DelaySeconds
 Write-Log ("restart begin (port {0})" -f $Port)
+if ($AttemptId) { Set-AttemptState $AttemptId 'STARTED' '' $false }
 
 $restartLock = Enter-DshRestartLock
 if (-not $restartLock) {
@@ -196,9 +245,20 @@ if (-not $commitOk) { throw "COMMIT_READY failed after stable window; budget NOT
 
 Confirm-DshRestartStable | Out-Null
 Write-Log "restart committed (stable window + COMMIT_READY; budget reset)"
+if ($AttemptId) { Set-AttemptState $AttemptId 'COMMITTED' 'stable window + COMMIT_READY' $true }
 } finally {
     # release maintenance lock (guardian resumes auto-recovery)
     Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
     Write-Log ("maintenance lock released")
     Exit-DshRestartLock $restartLock
+    # Phase 02 R4 (Step 1): if we reach finally WITHOUT a COMMITTED terminal state
+    # and an attemptId exists, the restart failed -> FAILED terminal (caller wakes).
+    if ($AttemptId) {
+        $ledgerF = Join-Path $attemptsDir ($AttemptId + '.json')
+        $cur = if (Test-Path $ledgerF) { Get-Content $ledgerF -Raw | ConvertFrom-Json } else { $null }
+        if (-not $cur -or $cur.terminalState -ne 'COMMITTED') {
+            $failDetail = $_.Exception.Message
+            Set-AttemptState $AttemptId 'FAILED' $failDetail $true
+        }
+    }
 }

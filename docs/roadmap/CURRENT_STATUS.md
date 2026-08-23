@@ -8,7 +8,7 @@
 | Phase | 名称 | 状态 | Waiting For | 报告路径 |
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R2.md |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R3.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | — | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -20,45 +20,47 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（R2 修复完成）
+## Phase 02 执行上下文（R3 修复完成）
 
-- **Reviewer Round 1 Verdict：CHANGES_REQUIRED**（2026-08-23）
-- **Result Commit（修复）**: PR #15（`fix/phase02-review-r2`，6d2a068）
-- **Base Commit**: `b9ddc117`（R1 报告 merge）
+- **Reviewer Round 2 Verdict：CHANGES_REQUIRED**（2026-08-24）
+- **修复分支**: `fix/phase02-review-r3`（PR #17）
+- **Base Commit**: `64071dac`（R2 报告 merge）
 
-### 6 BLOCKING 关闭
-- BLOCKING-1: Router 唯一模型 fallback（EC 候选来自 Model Registry）
-- BLOCKING-2: Goal Recovery 降为 stateless executor（Guardian 只 Process Authority）
-- BLOCKING-3: plugins/model-registry.mjs 单一模型能力事实源（EC core 迁移）
-- BLOCKING-4: Restart Budget stable-window（candidate→30s→COMMIT_READY→reset）
-- BLOCKING-5: RESUME-DEFER 持久化（WAITING_NETWORK + nextRetryAt）
-- BLOCKING-6: Completion Truth 确定性幂等（side-effect 无 result → NEEDS_VERIFICATION）
+### 6 BLOCKING 关闭（真实代码/consumer/runtime evidence）
+- BLOCKING-1: EC 完全移除模型选择（modelCandidates/findCompatibleFallback 删除；agent/request pass-through；只记录 recovery REQUIREMENT）
+- BLOCKING-2: goal-recovery 自主 engine 删除（8 函数）；只留 --check + --session executor；自主路径 fail-closed
+- BLOCKING-3: Router CAPABILITY/Vision 从 registry 派生；测试 import 真实 consumer（21/21）
+- BLOCKING-4: resumeRetryCount bounded（cap 8 → FAILED_FATAL）
+- BLOCKING-5: completion-truth-core 纯模块（生产+测试共用 import；fail-closed 11/11）
+- BLOCKING-6: claude-opus-5/4-8 contextWindow 200000 → **1000000**（官方 1M）；compaction threshold = 800000
 
-### P2-0 保留（未重做）+ 第三次真实重启完整 commit
-- 23:41-23:43 timeline: stop → starter 0 → client_ready(2s) → stable 30s → COMMIT_READY → budget reset
-- user-unavailable ≈ 28s；自动恢复（launcher 23836），无人工 Desktop
+### P2-0 / stable-window 保留
+- 第三次真实重启 timeline：stop → client_ready(2s) → stable 30s → COMMIT_READY → budget reset（23:43）
+- Register-DshRestartSuccess 改为 strict（无 candidate 不 reset）
 
-### 10 条 AC 全部真实满足（见 REPORT_R2 §11）
-- 新测试：test-model-registry 19/19、test-completion-truth 9/9、Test-RestartBudget R6-R9
-- 全量回归绿（Stage B-E / crashsafe 33 / fault 38 / router 9+25 / model 21 / commandcode 51）
+### 运行时证据
+- settings.yaml agentrouter-anthropic claude-opus-5/4-8 = 1000000（YAML VALID）
+- pi-ai resolveModelInfo: contextWindow = entry.contextWindow ?? base ?? 262144 → 返回 1000000
+- compaction threshold = 1000000 × 0.8 = 800000（thresholdRatio 默认 0.8）
+- 修复既有 YAML 坏缩进（5 处）
 
 ## 当前执行位置
 
-- 当前阶段：Phase 02 — SIMPLIFY（Reviewer Round 1 修复完成）
+- 当前阶段：Phase 02 — SIMPLIFY（Reviewer Round 2 修复完成）
 - **状态：AWAITING_REVIEW**（Waiting For=EXTERNAL_REVIEW）
-- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R2.md §11）
+- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R3.md §15）
 - 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Phase 03
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：Phase 02 R2 修复完成，等待外部审核。
+当前执行位置：Phase 02 R3 修复完成，等待外部审核。
 
 ## 变更日志
 
-- 2026-08-23：创建本文件。
-- 2026-08-23：Phase 01 VERIFIED；Phase 02 开始，P2-0 最先。
-- 2026-08-23：Phase 02 R1 完成（P2-0 + Gap Audit + REPORT_R1），停 AWAITING_REVIEW。
-- 2026-08-23：Phase 02 Reviewer Round 1 = CHANGES_REQUIRED（6 BLOCKING）。
-- 2026-08-23：Phase 02 R2 修复完成（6 BLOCKING 关闭 + 10 AC 满足 + P2-0 三次真实重启 commit），
+- 2026-08-23：创建本文件；Phase 01 VERIFIED；Phase 02 开始（P2-0 最先）。
+- 2026-08-23：Phase 02 R1 完成（P2-0 + Audit + REPORT_R1）。
+- 2026-08-23：Phase 02 R2 修复（6 BLOCKING 初版）+ REPORT_R2。
+- 2026-08-24：Phase 02 Reviewer Round 2 = CHANGES_REQUIRED（R2 只做表面迁移）。
+- 2026-08-24：Phase 02 R3 修复完成（真实移除决策权 + 真实 consumer + Opus 5 context 真相），
   状态置 AWAITING_REVIEW。

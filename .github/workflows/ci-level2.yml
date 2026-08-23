@@ -24,11 +24,18 @@ jobs:
           $g = Test-DshRestartAllowed
           if ($g.Allowed) { throw 'budget should be exhausted after 3 attempts' }
           Write-Host "PASS budget exhausted: $($g.Reason)"
-          # success resets
+          # Phase 02 R2: success shortcut WITHOUT stable candidate must NOT reset
           Register-DshRestartSuccess | Out-Null
+          $g1 = Test-DshRestartAllowed
+          if ($g1.Allowed) { throw 'no-candidate success must NOT reset budget (strict stable-window)' }
+          Write-Host 'PASS no-candidate success does not reset'
+          # full stable-commit path resets
+          $env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
+          Register-DshRestartCandidate | Out-Null
+          Confirm-DshRestartStable | Out-Null
           $g2 = Test-DshRestartAllowed
-          if (-not $g2.Allowed) { throw 'budget should reset after success' }
-          Write-Host 'PASS budget resets after success'
+          if (-not $g2.Allowed) { throw 'budget should reset after stable commit' }
+          Write-Host 'PASS budget resets after stable commit'
           Remove-Item $tmp -Force -ErrorAction SilentlyContinue
 
       - name: Boot mode state machine

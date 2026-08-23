@@ -126,10 +126,11 @@ section("TEST 5: 5xx → PROVIDER_OUTAGE → compatible fallback");
   assert(outcome && outcome.kind === "retry", "5xx recovery -> retry (fallback armed)", JSON.stringify(outcome));
   const it = plugin.diagnostics().intents["sess-5xx"];
   assert(it && it.state === "RETRYING", "5xx -> session RETRYING", it ? `got ${it.state}` : "no intent");
-  // pendingFallback armed（fallbackCount 在应用时递增，armed 阶段验证 pendingFallback 存在）
+  // pendingFallback armed（BLOCKING-1: requirement-only — no provider/model decision by EC;
+  // Router decides the actual fallback model on the next agent/request）
   const itRaw = plugin._test.store.get("sess-5xx");
-  assert(itRaw && itRaw.pendingFallback && itRaw.pendingFallback.reason === "provider_outage: compatible fallback",
-    "5xx -> pendingFallback armed (compatible fallback)", itRaw && itRaw.pendingFallback ? itRaw.pendingFallback.reason : "none");
+  assert(itRaw && itRaw.pendingFallback && itRaw.pendingFallback.requirement === true && !itRaw.pendingFallback.provider,
+    "5xx -> pendingFallback requirement armed (no EC model decision)", itRaw && itRaw.pendingFallback ? JSON.stringify(itRaw.pendingFallback) : "none");
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -143,8 +144,8 @@ section("TEST 6: quota → QUOTA_EXHAUSTED → fallback (not same-provider blind
   const outcome = await runRequestError(ctx, "sess-quota", f, "opencode", "deepseek-v4-flash");
   assert(outcome && outcome.kind === "retry", "quota recovery -> retry (fallback armed)", JSON.stringify(outcome));
   const itRaw = plugin._test.store.get("sess-quota");
-  assert(itRaw && itRaw.pendingFallback && itRaw.pendingFallback.reason === "quota_exhausted: compatible fallback",
-    "quota -> compatible fallback armed (not same-provider blind retry)", itRaw && itRaw.pendingFallback ? itRaw.pendingFallback.reason : "none");
+  assert(itRaw && itRaw.pendingFallback && itRaw.pendingFallback.requirement === true && !itRaw.pendingFallback.provider,
+    "quota -> requirement armed (no EC model decision; not same-provider blind retry)", itRaw && itRaw.pendingFallback ? JSON.stringify(itRaw.pendingFallback) : "none");
 }
 
 // ═══════════════════════════════════════════════════════════════════════

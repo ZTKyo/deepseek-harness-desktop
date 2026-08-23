@@ -50,7 +50,7 @@ import {
   CATEGORY,
   DEFAULT_BUDGETS,
 } from "./execution-continuity-core.mjs";
-import { FACTS as MODEL_FACTS, modelSupports as registryModelSupports } from "./model-registry.mjs";
+import { evaluateCompletion } from "./completion-truth-core.mjs";
 
 export const name = "execution-continuity";
 
@@ -358,37 +358,10 @@ export function apply(ctx, config = {}) {
     try { logger.info(`[execution-continuity] ${line}`); } catch { /* noop */ }
   }
 
-  // 候选模型池（fallback 用）。Phase 02 R1 (BLOCKING-1): 不再自主扫描
-  // ctx.llm.providers 拼第二套候选池 —— 从单一 Model Registry 读取已知模型，
-  // Router 是模型选择的唯一 Authority；EC 只在这里向 registry 请求兼容候选。
-  function modelCandidates() {
-    const out = [];
-    try {
-      const ctxMap = MODEL_FACTS.CONTEXT_WINDOW || {};
-      for (const id of Object.keys(ctxMap)) {
-        const [provider, ...rest] = id.split("/");
-        if (provider && rest.length) {
-          out.push({ provider, model: rest.join("/"), contextWindow: ctxMap[id] || 0 });
-        } else if (id) {
-          out.push({ provider: "openrouter", model: id, contextWindow: ctxMap[id] || 0 });
-        }
-      }
-    } catch { /* noop */ }
-    return out;
-  }
-
-  function findCompatibleFallback(currentProvider, currentModel, required) {
-    const candidates = modelCandidates().filter((c) => c.provider !== currentProvider || c.model !== currentModel);
-    const withCtx = candidates.map((c) => ({ ...c, _id: `${c.provider}/${c.model}` }));
-    if (required.contextWindow) {
-      withCtx.sort((a, b) => (b.contextWindow || 0) - (a.contextWindow || 0));
-    }
-    for (const c of withCtx) {
-      // 能力校验统一走 registry（同一事实源，Router/EC/Vision 一致）
-      if (registryModelSupports(c.model, required)) return { provider: c.provider, model: c.model, key: c._id };
-    }
-    return null;
-  }
+  // Phase 02 R2 (BLOCKING-1): EC no longer constructs model candidate pools or
+  // picks fallback providers/models. Model selection is the Router's sole
+  // authority; EC records recovery requirements (see agent/request-error) that
+  // the Router's next capability-aware route() decision honors.
 
   // loopback API（与 goal-recovery.mjs 同协议；经 ensureSession 正确组合 agent）
   let rpcSeq = 0;
@@ -463,66 +436,23 @@ export function apply(ctx, config = {}) {
   //   "completed"           - side-effecting tool-call HAS a matching result; do not replay
   //   "needs_verification"  - side-effecting tool-call WITHOUT result (outcome unknown);
   //                           never blind-replay -> caller must fail-closed
-  // Side-effecting tools = anything that mutates external state (excludes
-  // read-only lookups: read, grep, glob, web_search, browser_labels, list_*).
-  const SIDE_EFFECT_TOOLS = /^(write|edit|browser_click|browser_type|browser_press|browser_open|browser_shot|pwsh|subagent|subagent_fork|subagent_qwen|subagent_mimo|subagent_research|send_message|interrupt_agent|request_secret|forget_secret|notion|mcp__|create_goal|update_goal|todo_write|workflow|ralph)/i;
+  // Phase 02 R2 (BLOCKING-5): the deterministic completion-truth decision lives
+  // in completion-truth-core.mjs (pure module, imported by BOTH production and
+  // tests — no duplicated algorithm). This wrapper only feeds it the live event
+  // log; fail-closed when events are unavailable.
   async function completionTruth(sessionId, it) {
     try {
-      // Use the same session source as checkUserWaitGate (ctx.sessions.get),
-      // which carries the live event log (session.events).
       const session = ctx.sessions?.get ? ctx.sessions.get(sessionId) : null;
       if (!session || !Array.isArray(session.events)) {
-        // cannot inspect events: fall back to clean (anti-double-kick + WAIT-GATE
-        // still guard); log for diagnostics
-        diag(`CT sid=${sessionId} no session events -> clean fallback`);
-        return { state: "clean" };
+        diag(`CT sid=${sessionId} no session events -> needs_verification (fail-closed)`);
+        return { state: "needs_verification", detail: "session events unavailable" };
       }
-      const events = session.events;
-      // scan newest -> oldest for the LAST tool-call of a side-effecting tool
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i];
-        const data = ev.data || {};
-        let callName = null;
-        let callId = null;
-        let turn = null;
-        if (ev.type === "assistant/message") {
-          const content = data.message?.content;
-          if (Array.isArray(content)) {
-            const tc = content.find((b) => b && (b.type === "tool-call" || b.type === "function_call"));
-            if (tc) {
-              callName = String(tc.name || tc.function?.name || "");
-              callId = tc.id || tc.tool_call_id || tc.call_id || tc.function?.call_id || null;
-              turn = data.turn;
-            }
-          }
-        } else if (ev.type === "tool/result") {
-          // a result for a side-effecting call: that call is complete; continue
-          // scanning older events for any UNRESOLVED side-effect call
-          continue;
-        }
-        if (!callName || !SIDE_EFFECT_TOOLS.test(callName)) continue;
-        // found the newest side-effecting tool-call; look for its result
-        const hasResult = events.some((ev2) => {
-          if (ev2.type !== "tool/result") return false;
-          const d2 = ev2.data || {};
-          const rid = d2.tool_call_id || d2.toolCallId || d2.call_id || d2.id ||
-            (d2.message && d2.message.source && d2.message.source.callId) ||
-            (d2.result && (d2.result.tool_call_id || d2.result.call_id));
-          if (callId && rid && String(rid) === String(callId)) return true;
-          if (turn !== null && d2.turn === turn) return true;
-          return false;
-        });
-        // If this side-effect call HAS a result it is complete; keep scanning
-        // older events for any UNRESOLVED side-effecting call.
-        if (hasResult) continue;
-        // Unresolved side-effecting call -> the outcome is unknown -> fail-closed.
-        return { state: "needs_verification", detail: `${callName} (id=${callId || "?"}) without result` };
-      }
-      // All side-effecting tool-calls have results (or none exist): clean.
-      return { state: "clean" };
+      const res = evaluateCompletion(session.events);
+      diag(`CT sid=${sessionId} -> ${res.state}${res.detail ? " " + res.detail : ""}`);
+      return res;
     } catch (e) {
-      diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> clean fallback`);
-      return { state: "clean" };
+      diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> needs_verification (fail-closed)`);
+      return { state: "needs_verification", detail: "completion-truth check error" };
     }
   }
 
@@ -586,10 +516,23 @@ export function apply(ctx, config = {}) {
     } catch (e) {
       // Phase 02 R1 (BLOCKING-5): RESUME-DEFER must be DURABLE. We persist a
       // WAITING_NETWORK state with reason + nextRetryAt + budget count so the
-      // timer only resumes when nextRetryAt <= now AND budget allows. Without
-      // this, a restart loses the defer entirely (previously: log + return).
-      const retryAt = Date.now() + Math.max(5000, backoffDelay(it.resumeRetryCount || 0, budgets, 0));
+      // timer only resumes when nextRetryAt <= now AND budget allows.
+      // Phase 02 R2 (BLOCKING-4): resumeRetryCount is a REAL bounded budget —
+      // it increments per defer and, at the cap, fail-closes to FAILED_FATAL
+      // (no infinite 15s/backoff defer loop). Reset happens on a successful
+      // RESUME-OK (see below).
+      const deferCap = 8; // conservative: 8 consecutive session.list failures
       it.resumeRetryCount = (it.resumeRetryCount || 0) + 1;
+      if (it.resumeRetryCount > deferCap) {
+        store.setState(sessionId, STATE.FAILED_FATAL, {
+          fatalReason: `RESUME-DEFER budget exhausted (${deferCap} retries); manual review required`,
+          resumeRetryCount: it.resumeRetryCount,
+        });
+        store.persist();
+        diag(`RESUME-DEFER sid=${sessionId} budget exhausted (${it.resumeRetryCount} > ${deferCap}) -> FAILED_FATAL (fail-closed)`);
+        return;
+      }
+      const retryAt = Date.now() + Math.max(5000, backoffDelay(it.resumeRetryCount, budgets, 0));
       store.setState(sessionId, STATE.WAITING_NETWORK, {
         reason: `RESUME-DEFER: session.list unavailable (${String(e.message).slice(0, 80)})`,
         nextRetryAt: retryAt,
@@ -639,6 +582,9 @@ export function apply(ctx, config = {}) {
       it.lastResumeAt = Date.now();
       it.autoResumeCycles = (it.autoResumeCycles || 0) + 1;
       it.resumedAt = Date.now();
+      // Phase 02 R2 (BLOCKING-4): successful resume resets the durable defer
+      // budget so the next network outage starts from a clean slate.
+      if (it.resumeRetryCount) { it.resumeRetryCount = 0; }
       store.setState(sessionId, goalActive ? STATE.RUNNING : STATE.RUNNING);
       diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
     } catch (e) {
@@ -647,40 +593,18 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  // ── Hook 1: agent/request —— 应用 pendingFallback（一次性，能力校验） ─────
+  // ── Hook 1: agent/request —— Phase 02 R2 (BLOCKING-1) ─────────────────────
+  // EC no longer rewrites provider/model. Model/provider selection is the sole
+  // responsibility of the Router (openrouter-router agent/request, which reads
+  // its own CAPABILITY/CHAINS + explicit-model preservation). EC only records
+  // recovery REQUIREMENTS (above) that the Router's next routing decision honors
+  // via its capability-aware route(). This hook is intentionally a pass-through.
   const disposeRequest = ctx.on("agent/request", async (payload, next) => {
-    let resolved;
     try {
-      resolved = await next();
+      return await next();
     } catch (e) {
-      // 上层链路异常不应逃逸：记录并原样重抛（不吞掉官方错误），由上层处理。
       diag(`agent/request next() threw (isolated): ${e && e.message ? e.message : String(e)}`);
       throw e;
-    }
-    if (!resolved) return resolved;
-    try {
-      const sid = payload?.agent?.session?.id;
-      if (!sid) return resolved;
-      const it = store.get(sid);
-      if (!it || !it.pendingFallback) return resolved;
-      const fb = it.pendingFallback;
-      if (fb.used) return resolved;
-      if (fb.provider && fb.model && modelSupports(fb.model, { modalities: fb.modalities || [], tools: fb.tools || false, structuredJson: fb.structuredJson || false })) {
-        fb.used = true;
-        it.pendingFallback = fb;
-        it.fallbackCount = (it.fallbackCount || 0) + 1;
-        it.lastActivity = Date.now();
-        store.persist();
-        diag(`FALLBACK sid=${sid} ${resolved.provider}/${resolved.model} -> ${fb.provider}/${fb.model} reason=${fb.reason || "compatible-fallback"}`);
-        return { ...resolved, provider: fb.provider, model: fb.model };
-      }
-      diag(`FALLBACK-INVALID sid=${sid} candidate=${fb.provider}/${fb.model} rejected (capability mismatch)`);
-      fb.used = true;
-      store.persist();
-      return resolved;
-    } catch (e) {
-      diag(`agent/request fallback error: ${e.message}`);
-      return resolved;
     }
   });
 
@@ -726,16 +650,22 @@ export function apply(ctx, config = {}) {
             await sleep(backoffDelay(it.retryCount, budgets, 0));
             return { kind: "retry" };
           }
-          // Fallback: compatible model without thinking, or thinking-disabled retry
+          // Fallback: Phase 02 R2 (BLOCKING-1) — EC does NOT pick the fallback
+          // model. It only records a recovery REQUIREMENT (reason + needed
+          // capabilities). The Router (openrouter-router agent/request) is the
+          // sole authority that decides provider/model on the next request.
           if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
-            const fb = findCompatibleFallback(provider, model, { modalities: it.lastModalities || [], tools: true });
-            if (fb) {
-              it.pendingFallback = { ...fb, reason: "reasoning_protocol: compatible fallback", used: false, modalities: it.lastModalities || [] };
-              store.setState(sid, STATE.RETRYING);
-              record(`REASONING_PROTOCOL_ERROR -> FALLBACK ${fb.provider}/${fb.model}`);
-              await sleep(backoffDelay(it.retryCount, budgets, 0));
-              return { kind: "retry" };
-            }
+            it.pendingFallback = {
+              requirement: true, // marker: EC no longer supplies provider/model
+              reason: "reasoning_protocol: router-decided compatible fallback",
+              modalities: it.lastModalities || [],
+              tools: true,
+              used: false,
+            };
+            store.setState(sid, STATE.RETRYING);
+            record(`REASONING_PROTOCOL_ERROR -> RECOVERY-REQUIREMENT (router decides model)`);
+            await sleep(backoffDelay(it.retryCount, budgets, 0));
+            return { kind: "retry" };
           }
           // Section 15: thinking disabled is emergency fallback, must be explicit, not silent
           diag(`REASONING_PROTOCOL_ERROR sid=${sid} Protocol recovery unavailable -> thinking disabled for recovery (budgets exhausted) category=${cls.category}`);
@@ -778,14 +708,18 @@ export function apply(ctx, config = {}) {
             return { kind: "retry" };
           }
           if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
-            const fb = findCompatibleFallback(provider, model, { contextWindow: 1000000, modalities: it.lastModalities || [] });
-            if (fb) {
-              it.pendingFallback = { ...fb, reason: "context-overflow: larger-context fallback", used: false, modalities: it.lastModalities || [] };
-              store.setState(sid, STATE.RETRYING);
-              record(`CONTEXT-OVERFLOW -> FALLBACK ${fb.provider}/${fb.model}`);
-              await sleep(backoffDelay(it.retryCount, budgets, 0));
-              return { kind: "retry" };
-            }
+            // Router decides the larger-context model; EC only records the need.
+            it.pendingFallback = {
+              requirement: true,
+              reason: "context-overflow: router-decided larger-context fallback",
+              modalities: it.lastModalities || [],
+              needLargerContext: true,
+              used: false,
+            };
+            store.setState(sid, STATE.RETRYING);
+            record(`CONTEXT-OVERFLOW -> RECOVERY-REQUIREMENT (router decides model)`);
+            await sleep(backoffDelay(it.retryCount, budgets, 0));
+            return { kind: "retry" };
           }
           store.setState(sid, STATE.FAILED_FATAL, { fatalReason: "context-overflow: budgets exhausted, no compatible fallback" });
           record(`CONTEXT-OVERFLOW -> FAILED_FATAL (no budget/fallback)`);
@@ -795,14 +729,17 @@ export function apply(ctx, config = {}) {
         case CATEGORY.QUOTA_EXHAUSTED:
         case CATEGORY.MODEL_UNAVAILABLE: {
           if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
-            const fb = findCompatibleFallback(provider, model, { modalities: it.lastModalities || [] });
-            if (fb) {
-              it.pendingFallback = { ...fb, reason: `${cls.category.toLowerCase()}: compatible fallback`, used: false, modalities: it.lastModalities || [] };
-              store.setState(sid, STATE.RETRYING);
-              record(`FALLBACK-ARMED ${fb.provider}/${fb.model}`);
-              await sleep(backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs));
-              return { kind: "retry" };
-            }
+            // Router decides the compatible provider/model; EC only records need.
+            it.pendingFallback = {
+              requirement: true,
+              reason: `${cls.category.toLowerCase()}: router-decided compatible fallback`,
+              modalities: it.lastModalities || [],
+              used: false,
+            };
+            store.setState(sid, STATE.RETRYING);
+            record(`RECOVERY-REQUIREMENT (router decides model) category=${cls.category}`);
+            await sleep(backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs));
+            return { kind: "retry" };
           }
           store.setState(sid, STATE.WAITING_PROVIDER, { nextRetryAt: Date.now() + backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs) });
           record(`FALLBACK-UNAVAILABLE -> WAITING_PROVIDER`);

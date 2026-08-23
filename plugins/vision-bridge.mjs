@@ -79,8 +79,11 @@ const UNCERTAIN_MARK = /^\s*UNCERTAIN\b/i;
 // （opencode/deepseek-v4-flash-vision-exp、openrouter/... 等）一律不放行。
 // 当前实测：provider=bai + model=deepseek-v4-flash-vision-exp → IMAGE_OK（正确回答左上角物体）。
 // 名单格式："provider/model-basename"。可通过 config.verifiedNativeImageRoutes 配置扩展。
-// ────────────────────────────────────────────────────────────
-const DEFAULT_VERIFIED_NATIVE_IMAGE = ["bai/deepseek-v4-flash-vision-exp"];
+// Phase 02 R2 (BLOCKING-3): the verified native-image FACT list comes from the
+// single Model Registry (VERIFIED_NATIVE_IMAGE); Vision only adds user-config
+// extensions on top. No second truth source.
+import { FACTS as REGISTRY_FACTS } from "./model-registry.mjs";
+const DEFAULT_VERIFIED_NATIVE_IMAGE = [...(REGISTRY_FACTS.VERIFIED_NATIVE_IMAGE || [])];
 
 /** 取模型 id 的基名（去掉 provider 前缀，如 deepseek/ deepseek-v4-flash-vision-exp → deepseek-v4-flash-vision-exp）。 */
 export function baseModelId(modelId) {

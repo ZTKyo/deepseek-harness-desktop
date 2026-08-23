@@ -35,8 +35,8 @@ const CONTEXT_WINDOW = {
   'stealth/ox-alpha': 1048576,
   'meta/muse-spark-1.2-contributor': 1048576,
   'gpt-5.6-sol': 400000,
-  'claude-opus-5': 200000,
-  'claude-opus-4-8': 200000,
+  'claude-opus-5': 1000000,
+  'claude-opus-4-8': 1000000,
 };
 
 // ---------------------------------------------------------------------------

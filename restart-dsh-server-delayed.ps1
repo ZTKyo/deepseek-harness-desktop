@@ -132,7 +132,14 @@ if (Test-Path $starter) {
     $starterProc.WaitForExit()
     $starterCode = $starterProc.ExitCode
     Write-Log ("starter exit code: {0}" -f $starterCode)
-    if ($starterCode -ne 0) { throw "start-dsh-server.ps1 failed with exit code $starterCode" }
+    # Phase 02 R2: starter exit code is advisory only. start-dsh-server.ps1
+    # returns 2 when client_ready is not reached within its own short window,
+    # but the launcher/server it spawned continues booting to client_ready on
+    # its own (observed 2026-08-23 23:17: server 20432 reached client_ready
+    # moments after starter exited 2). We do NOT fail here; the stable-window
+    # readiness + COMMIT_READY check below is the authoritative verification.
+    # exit 75 = restart lock held by another transaction (concurrent restart).
+    if ($starterCode -eq 75) { throw "start-dsh-server.ps1: another restart transaction owns the lock" }
 } else {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'cmd.exe'
@@ -143,12 +150,52 @@ if (Test-Path $starter) {
     [System.Diagnostics.Process]::Start($psi) | Out-Null
 }
 
-# verify actual DSH readiness, not only a root-page HTTP 200
-$ready = Test-DshReadiness -Port $Port -RequireWebSockets
-Write-Log ("readiness: {0} error={1}" -f $ready.State, $ready.Error)
+# verify actual DSH readiness, not only a root-page HTTP 200.
+# Phase 02 R2: wait up to 60s for client_ready (the starter may have exited
+# before its own short window saw client_ready; the server keeps booting).
+$ready = $null
+for ($i = 0; $i -lt 60; $i++) {
+    $ready = Test-DshReadiness -Port $Port -RequireWebSockets
+    if ($ready.State -eq 'client_ready') { break }
+    Start-Sleep -Seconds 1
+}
+Write-Log ("readiness: {0} error={1} (waited {2}s)" -f $ready.State, $ready.Error, $i)
 if ($ready.State -ne 'client_ready') { throw "DSH client readiness failed: $($ready.State)" }
-Register-DshRestartSuccess | Out-Null
-Write-Log "restart committed (client_ready)"
+
+# Phase 02 Reviewer Round 1 (BLOCKING-4): stable-window commit.
+# client_ready = candidate stage only (does NOT reset budget). We wait a stable
+# window, then re-verify readiness + COMMIT_READY, and only then commit success
+# (which resets the budget). A crash inside the window does not clear attempts.
+Register-DshRestartCandidate | Out-Null
+$stableSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STABLE_WINDOW_SEC } else { 30 }
+Write-Log ("stable window: waiting {0}s before commit" -f $stableSec)
+Start-Sleep -Seconds $stableSec
+
+# Re-verify after the window: readiness + COMMIT_READY.
+$ready2 = Test-DshReadiness -Port $Port -RequireWebSockets
+Write-Log ("stable re-check readiness: {0} error={1}" -f $ready2.State, $ready2.Error)
+if ($ready2.State -ne 'client_ready') { throw "stable re-check failed: $($ready2.State)" }
+
+# COMMIT_READY: full runtime surface (process identity + host.describe + session.list
+# + events.mux/host + renderer + stable window + light probe). Budget resets ONLY here.
+$crScript = Join-Path $root 'dsh-commit-readiness.ps1'
+$commitOk = $false
+if (Test-Path $crScript) {
+    try {
+        . $crScript
+        if (Get-Command Test-CommitReadiness -ErrorAction SilentlyContinue) {
+            $gate = Test-CommitReadiness -Port $Port -StableWindowSec 2 -LightProbe:$false
+            $commitOk = ($gate -and $gate.Ready -eq $true)
+            Write-Log ("COMMIT_READY: {0} stage={1}" -f $commitOk, $(if ($gate) { $gate.Stage } else { 'n/a' }))
+        }
+    } catch {
+        Write-Log ("COMMIT_READY error: {0}" -f $_.Exception.Message)
+    }
+}
+if (-not $commitOk) { throw "COMMIT_READY failed after stable window; budget NOT reset" }
+
+Confirm-DshRestartStable | Out-Null
+Write-Log "restart committed (stable window + COMMIT_READY; budget reset)"
 } finally {
     # release maintenance lock (guardian resumes auto-recovery)
     Remove-Item $lockFile -Force -ErrorAction SilentlyContinue

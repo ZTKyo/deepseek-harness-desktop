@@ -245,14 +245,16 @@ function Test-ActiveGoal {
     } catch { return 'unknown' }
 }
 function Invoke-GoalRecovery {
-    # re-arm active goals and queue a continue message after a restart
-    $gr = Join-Path $root 'goal-recovery.mjs'
-    $node = (Get-Command node -ErrorAction SilentlyContinue).Source
-    if (-not $node -or -not (Test-Path $gr)) { return }
+    # Phase 02 R1 (BLOCKING-2): Guardian is Process Authority only. It does NOT
+    # autonomously decide which goal to resume (goal-recovery.mjs --resume scans
+    # and decides, which duplicated EC's task-recovery authority). After a restart
+    # the Guardian only emits the "server ready" fact; Execution Continuity's own
+    # recoverableScan/scheduleRecoveryLoop (running inside the web profile) decides
+    # whether/which task resumes. This function is kept as a no-op hook so any
+    # legacy callers do not break; the read-only active-goal projection for
+    # stuck-safety lives in Test-ActiveGoal (--check) which stays.
     try {
-        $out = & $node $gr --resume --port $Port 2>&1 | Out-String
-        $brief = ($out -split "`n" | Where-Object { $_ -match 'resumed|queued|active goal|no active|error' } | Select-Object -First 3) -join '; '
-        TraceG ("goal-recovery: " + $(if ($brief) { $brief } else { $out.Trim().Substring(0, [Math]::Min(160, $out.Trim().Length)) }))
+        TraceG 'goal-recovery: deferred to EC task-recovery authority (guardian = process authority only)'
     } catch { TraceG ('goal-recovery error: ' + $_.Exception.Message) }
 }
 function Restore-LastGoodConfig {

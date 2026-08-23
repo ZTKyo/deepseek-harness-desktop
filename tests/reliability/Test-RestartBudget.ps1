@@ -36,7 +36,38 @@ Register-DshRestartSuccess | Out-Null
 $r5 = Test-DshRestartAllowed
 Assert ($r5.Allowed -eq $true) 'R5 success resets budget' "reason=$($r5.Reason)"
 
+# ========== Phase 02 R1 (BLOCKING-4): stable-window state machine ==========
+
+# R6: candidate does NOT reset attempts (budget still counts)
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '30'
+Register-DshRestartAttempt -Reason 'stable-test' | Out-Null
+Register-DshRestartCandidate | Out-Null
+$b6 = Read-DshRestartBudget
+Assert ([int]$b6.attempts -ge 1) 'R6 candidate keeps attempts (no early reset)' "attempts=$($b6.attempts)"
+Assert ($b6.candidateReady -eq $true) 'R6 candidateReady flag set'
+Assert ($null -ne $b6.candidateAt) 'R6 candidateAt timestamp set'
+
+# R7: stable window not elapsed -> not stable yet
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '3600'   # force window far in future
+$stable7 = Test-DshRestartStableWindow
+Assert ($stable7 -eq $false) 'R7 stable window not elapsed -> not stable' "stable=$stable7"
+
+# R8: budget still NOT reset before commit (attempts remain, circuit could trip)
+$b8 = Read-DshRestartBudget
+Assert ([int]$b8.attempts -ge 1) 'R8 attempts preserved before commit' "attempts=$($b8.attempts)"
+
+# R9: confirm-stable (commit) resets budget + records stableCommitAt
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '0'      # commit path (stable elapsed implied)
+Register-DshRestartCandidate | Out-Null
+$commit = Confirm-DshRestartStable | Out-Null
+$b9 = Read-DshRestartBudget
+Assert ([int]$b9.attempts -eq 0) 'R9 commit resets attempts' "attempts=$($b9.attempts)"
+Assert ($null -ne $b9.stableCommitAt) 'R9 stableCommitAt recorded'
+Assert ($b9.candidateReady -eq $false) 'R9 candidate state cleared after commit'
+$r9 = Test-DshRestartAllowed
+Assert ($r9.Allowed -eq $true) 'R9 allowed after commit' "reason=$($r9.Reason)"
+
 Write-Host ""
-if ($fail -eq 0) { Write-Host "RESULT: PASS (restart budget state machine)" } else { Write-Host "RESULT: FAIL ($fail)" }
+if ($fail -eq 0) { Write-Host "RESULT: PASS (restart budget state machine + stable window)" } else { Write-Host "RESULT: FAIL ($fail)" }
 Remove-Item -LiteralPath $env:DSH_RESTART_BUDGET_PATH -Force -ErrorAction SilentlyContinue
 exit $fail

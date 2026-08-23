@@ -32,7 +32,16 @@ function parseArgs(argv) {
     message: null,
     stateDir: path.join(localAppData, "DSHHarness", "state"),
     generation: null,
-    graceMs: 15000
+    graceMs: 15000,
+    // Phase 02 R1 (BLOCKING-2): stateless executor mode. When --session is
+    // provided, this script ONLY executes the given action for that session
+    // (resume / continue). It does NOT scan all active goals, does NOT decide
+    // which goal to recover, and does NOT claim ownership of recovery policy.
+    // The recovery DECISION belongs to Execution Continuity (EC); Guardian
+    // calls this as a pure executor with an explicit session + goal ref.
+    executorSession: null,
+    executorAction: "resume",
+    executorGoalRef: null,
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -43,6 +52,9 @@ function parseArgs(argv) {
     else if (a === "--state-dir") opts.stateDir = argv[++i] || opts.stateDir;
     else if (a === "--generation") opts.generation = argv[++i] || null;
     else if (a === "--grace-ms") opts.graceMs = Math.max(0, Number(argv[++i]) || 0);
+    else if (a === "--session") opts.executorSession = argv[++i] || null;
+    else if (a === "--action") opts.executorAction = argv[++i] || "resume";
+    else if (a === "--goal-ref") opts.executorGoalRef = argv[++i] || null;
   }
   return opts;
 }
@@ -296,6 +308,40 @@ async function main() {
   if (!(await waitForApi(base))) {
     console.error(`[goal-recovery] API not ready on ${base} after retries`);
     process.exit(2);
+  }
+
+  // ── Phase 02 R1 (BLOCKING-2): STATELESS EXECUTOR MODE ─────────────────
+  // When --session is given, this script is a pure executor: it does NOT scan
+  // active goals, does NOT decide which goal to recover, and does NOT own any
+  // recovery policy. The caller (Guardian after a restart, or EC) has already
+  // decided the session+goal to act on. We only perform the requested action.
+  if (opts.executorSession) {
+    const sessionId = opts.executorSession;
+    const goalRef = opts.executorGoalRef || sessionId;
+    console.log(`[goal-recovery] executor mode session=${sessionId} action=${opts.executorAction}`);
+    if (opts.executorAction === "continue") {
+      try {
+        await promptContinue(base, sessionId, opts.message);
+        console.log(`[goal-recovery] executor: continue queued for ${sessionId}`);
+        process.exit(0);
+      } catch (e) {
+        console.error(`[goal-recovery] executor: continue failed: ${e.message}`);
+        process.exit(3);
+      }
+    }
+    // default action: resume
+    try {
+      await resumeGoal(base, sessionId, goalRef);
+      console.log(`[goal-recovery] executor: resume sent for ${sessionId}`);
+      process.exit(0);
+    } catch (e) {
+      if (isAlreadyArmed(e)) {
+        console.log(`[goal-recovery] executor: already armed, no-op ${sessionId}`);
+        process.exit(0);
+      }
+      console.error(`[goal-recovery] executor: resume failed: ${e.message}`);
+      process.exit(3);
+    }
   }
 
   let sessions;

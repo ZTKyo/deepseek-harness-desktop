@@ -7,7 +7,11 @@
 //   4. Circuit breaker（provider/model 健康标记 + 冷却期）
 //   5. Capability compatibility check（context window / modalities）
 //
+// Phase 02 R1 (BLOCKING-1/3): 模型能力事实统一从单一 Model Registry 读取，
+// 本模块不再维护第二套 MODEL_CONTEXT_WINDOWS / modality regex。
 // 本模块不依赖任何 DSH 运行时，仅使用标准 JS 类型。
+
+import { modelSupports as registryModelSupports, getContextWindow } from "./model-registry.mjs";
 
 // ─── 错误分类 ───────────────────────────────────────────────────────────────
 
@@ -198,45 +202,21 @@ export function createCircuitBreaker(cooldownMs = 60000, threshold = 3) {
 }
 
 // ─── 兼容性检查 ─────────────────────────────────────────────────────────────
-
-// 已知模型的 context window 近似值（来自 settings.yaml 预估）
-const MODEL_CONTEXT_WINDOWS = {
-  'deepseek/deepseek-v4-flash-0731': 1310720,
-  'deepseek-v4-flash': 1000000,
-  'deepseek-v4-flash-vision-exp': 1000000,
-  'deepseek-v4-pro': 1000000,
-  'xiaomi/mimo-v2.5': 1050000,
-  'mimo-v2.5': 1048576,
-  'qwen/qwen3.7-flash': 1000000,
-  'qwen3.7-plus': 200000,
-  'deepseek-v4-flash-free': 200000,
-  'stealth/ox-alpha': 1048576,
-  'meta/muse-spark-1.2-contributor': 1048576,
-  'gpt-5.6-sol': 400000,
-  'claude-opus-5': 200000,
-  'claude-opus-4-8': 200000,
-};
+// Phase 02 R1 (BLOCKING-3): 模型能力事实统一来自 plugins/model-registry.mjs。
+// 本模块只做 policy（排序/排除当前模型），不持有模型事实数据。
 
 /**
- * 检查模型是否满足所需能力。
+ * 检查模型是否满足所需能力（委托 Model Registry 单一事实源）。
  * @param {string} modelId - 模型 ID
  * @param {object} required - { modalities: string[], tools: boolean, structuredJson: boolean, contextWindow: number }
  * @returns {boolean}
  */
 export function modelSupports(modelId, required = {}) {
-  if (!modelId) return false;
-  if (required.contextWindow && required.contextWindow > (MODEL_CONTEXT_WINDOWS[modelId] || Infinity)) return false;
-  // 多模态能力：已知支持 image/video 的模型（来自 settings 的 input 字段）
-  const hasImage = /mimo|vision|ox-alpha|muse/i.test(modelId);
-  if (required.modalities && required.modalities.includes('image') && !hasImage) return false;
-  // 工具/structured JSON：DeepSeek 系列全支持；Qwen 部分支持
-  if (required.structuredJson && /qwen/i.test(modelId)) return false;
-  if (required.tools && /qwen/i.test(modelId)) return false;
-  return true;
+  return registryModelSupports(modelId, required);
 }
 
 /**
- * 查找兼容 fallback 模型（按 context window 降序）。
+ * 查找兼容 fallback 模型（按 context window 降序，来自 Registry 事实）。
  * @param {string} currentModelId - 当前失败模型
  * @param {object} required - 所需能力
  * @param {string[]} candidates - 候选模型 ID 列表
@@ -244,8 +224,8 @@ export function modelSupports(modelId, required = {}) {
  */
 export function compatibleFallback(currentModelId, required = {}, candidates = []) {
   const sorted = [...candidates]
-    .filter((m) => modelSupports(m, required))
-    .sort((a, b) => (MODEL_CONTEXT_WINDOWS[b] || 0) - (MODEL_CONTEXT_WINDOWS[a] || 0));
+    .filter((m) => registryModelSupports(m, required))
+    .sort((a, b) => (getContextWindow(b) || 0) - (getContextWindow(a) || 0));
   for (const m of sorted) {
     if (m !== currentModelId) return m;
   }

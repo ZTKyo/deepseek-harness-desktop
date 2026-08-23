@@ -142,8 +142,17 @@ R2 全部修复在分支 `fix/phase01-review-r2`，通过 PR → required checks
 ## 7. PR / CI 治理
 
 - 分支：`fix/phase01-review-r2`（push origin）
-- PR：→ main（见 PR 编号与 required check 结果，merge 后更新）
-- required checks：Static+secret+syntax gate / Reliability state machine tests（CI 实际运行）
+- **PR：#8** → main（https://github.com/ZTKyo/deepseek-harness-desktop/pull/8）
+- **required checks（全部 PASS）**：
+  - Static + secret + syntax gate：PASS（58s）
+  - Reliability state machine tests：PASS（35s）
+  - DSH boot + readiness smoke：PASS（7m25s）
+- **Merge SHA**：`5c8eb1bb`（"Merge pull request #8"），main 已更新
+- R2 途中修复记录（CURRENT）：
+  1. ci-level1.yml Module import smoke 卡死 → 根因 `dsh-power-lease.ps1` 有 45min 主循环未进
+     skip 列表 → 已加入 skip（commit 6984644）
+  2. Test-RouterDeployRollback / deploy-router-fix 引用已归档的 docs/*/plugins 路径 → 更新为
+     plugins/（commit da67f67）
 
 ## 8. Canonical ↔ Deployment hashes
 

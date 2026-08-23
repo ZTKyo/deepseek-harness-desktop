@@ -23,9 +23,10 @@
 
 ## Phase 01 执行上下文（R2）
 
+- **Result Commit**: `5c8eb1bb`（PR #8 merge 到 main）
 - **Base Commit**: `b0f7d2358f9103b2e136a98a103f49feaf3150b4`（R1 报告提交）
 - **Reliability 语义基线**: `eec17de5eaafe27e9bca03e596a99fdcbcb88027`（v1 已验证，仅作对照，未整体回滚）
-- **修复分支**: `fix/phase01-review-r2`（R2 全部修复只在该分支，经 PR → CI → merge）
+- **修复分支**: `fix/phase01-review-r2`（PR #8，已 merge）
 - **DSH 版本**: `0.1.1-rc.2`
 - **Stable Golden**: `NEW_LOCAL_GOLDEN_P1_HARDENED`
 - **Candidate Golden（R2）**: `PHASE01_CANONICAL_GOLDEN_R2`（tag `phase01-save-r2`，待审核）

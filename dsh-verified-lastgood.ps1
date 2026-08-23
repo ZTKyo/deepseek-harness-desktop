@@ -9,11 +9,17 @@
 #
 # guardian-lastgood is a RESTORE MIRROR ONLY. It must never be written by
 # "YAML syntax is valid" logic. Its only legal writer is Save-VerifiedLastGood.
+#
+# Phase 02 R4 (Step 0 Test Isolation): a StateRoot env override lets tests pin
+# verified/guardian last-good to a temp root instead of the real
+# %LOCALAPPDATA%\DSHHarness. Default behaviour is unchanged when unset.
 
 function Get-VerifiedLastGoodDir {
+    if ($env:DSH_STATE_ROOT) { return (Join-Path $env:DSH_STATE_ROOT 'verified-lastgood') }
     return Join-Path $env:LOCALAPPDATA 'DSHHarness\verified-lastgood'
 }
 function Get-GuardianLastGoodDir {
+    if ($env:DSH_STATE_ROOT) { return (Join-Path $env:DSH_STATE_ROOT 'guardian-lastgood') }
     return Join-Path $env:LOCALAPPDATA 'DSHHarness\guardian-lastgood'
 }
 

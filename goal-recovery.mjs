@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-// goal-recovery.mjs —— DSH 重启后活跃 goal 的代际隔离、幂等恢复
+// goal-recovery.mjs 鈥斺€?DSH 閲嶅惎鍚庢椿璺?goal 鐨勪唬闄呴殧绂汇€佸箓绛夋仮澶?
 //
-// 背景：DSH 的 goal 自动续跑是进程内存态（goal-round-driver），服务重启后
-// 丢失，任务不会自动继续。本脚本在服务恢复后：
-//   1) 通过 session.list 找出 phase=active 的 goal 会话（goal 投影持久化在会话里）
-//   2) 以 (server generation, session, goal, revision) 的哈希作为原子 ledger 键
-//   3) 先调用 goal.resume；只有 grace 后明确未 running 才入队一次通用 continue
-//   4) 对已 armed/running、未知状态或中断 claim fail closed，绝不自动重放
+// 鑳屾櫙锛欴SH 鐨?goal 鑷姩缁窇鏄繘绋嬪唴瀛樻€侊紙goal-round-driver锛夛紝鏈嶅姟閲嶅惎鍚?
+// 涓㈠け锛屼换鍔′笉浼氳嚜鍔ㄧ户缁€傛湰鑴氭湰鍦ㄦ湇鍔℃仮澶嶅悗锛?
+//   1) 閫氳繃 session.list 鎵惧嚭 phase=active 鐨?goal 浼氳瘽锛坓oal 鎶曞奖鎸佷箙鍖栧湪浼氳瘽閲岋級
+//   2) 浠?(server generation, session, goal, revision) 鐨勫搱甯屼綔涓哄師瀛?ledger 閿?
+//   3) 鍏堣皟鐢?goal.resume锛涘彧鏈?grace 鍚庢槑纭湭 running 鎵嶅叆闃熶竴娆￠€氱敤 continue
+//   4) 瀵瑰凡 armed/running銆佹湭鐭ョ姸鎬佹垨涓柇 claim fail closed锛岀粷涓嶈嚜鍔ㄩ噸鏀?
 //
-// 用法：
-//   node goal-recovery.mjs [--port 3080] [--check] [--dry-run] [--state-dir <目录>]
-//     [--generation <fixture-generation>] [--grace-ms <毫秒>] [--message <通用消息>]
-//     --check    只检测：有活跃 goal 会话时 exit 0；否则 exit 1
-//     --dry-run  打印将执行的动作，不实际调用
-//     默认行为   执行受 ledger 约束的恢复
+// 鐢ㄦ硶锛?
+//   node goal-recovery.mjs [--port 3080] [--check] [--dry-run] [--state-dir <鐩綍>]
+//     [--generation <fixture-generation>] [--grace-ms <姣>] [--message <閫氱敤娑堟伅>]
+//     --check    鍙娴嬶細鏈夋椿璺?goal 浼氳瘽鏃?exit 0锛涘惁鍒?exit 1
+//     --dry-run  鎵撳嵃灏嗘墽琛岀殑鍔ㄤ綔锛屼笉瀹為檯璋冪敤
+//     榛樿琛屼负   鎵ц鍙?ledger 绾︽潫鐨勬仮澶?
 //
-// 依赖：Node >= 18（内置 fetch）。API 协议与浏览器一致（loopback，无需认证）。
-// 退出码：0 = 成功/无活跃 goal；1 = 有活跃 goal 需要人工复核；2 = API/代际证据不可用
+// 渚濊禆锛歂ode >= 18锛堝唴缃?fetch锛夈€侫PI 鍗忚涓庢祻瑙堝櫒涓€鑷达紙loopback锛屾棤闇€璁よ瘉锛夈€?
+// 閫€鍑虹爜锛? = 鎴愬姛/鏃犳椿璺?goal锛? = 鏈夋椿璺?goal 闇€瑕佷汉宸ュ鏍革紱2 = API/浠ｉ檯璇佹嵁涓嶅彲鐢?
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -79,7 +79,7 @@ async function rpc(method, payload, base) {
   return res.json();
 }
 
-/** 等待 API 就绪（服务刚重启时可能还在初始化）。 */
+/** 绛夊緟 API 灏辩华锛堟湇鍔″垰閲嶅惎鏃跺彲鑳借繕鍦ㄥ垵濮嬪寲锛夈€?*/
 async function waitForApi(base, tries = 15, delayMs = 2000) {
   for (let i = 1; i <= tries; i++) {
     try {
@@ -92,7 +92,7 @@ async function waitForApi(base, tries = 15, delayMs = 2000) {
   return false;
 }
 
-/** 列出所有 phase=active 的 goal 会话。 */
+/** 鍒楀嚭鎵€鏈?phase=active 鐨?goal 浼氳瘽銆?*/
 async function activeGoalSessions(base) {
   const resp = await rpc("session.list", {}, base);
   const result = resp && resp.result;
@@ -114,36 +114,6 @@ async function activeGoalSessions(base) {
   return out;
 }
 
-/** goal.resume：重新武装自动续跑（DSH 原生 goal 驱动恢复）。 */
-async function resumeGoal(base, sessionId, ref) {
-  const resp = await rpc("goal.resume", { sessionId, ref }, base);
-  const result = resp && resp.result;
-  if (!result || result.ok !== true) {
-    throw new Error(result && result.error ? `goals.resume: ${result.error.message}` : "goals.resume failed");
-  }
-  return result.value;
-}
-
-/** session.prompt 兜底：排队注入"继续"消息（不打断运行中的 turn）。 */
-async function promptContinue(base, sessionId, customMessage) {
-  const text = customMessage ||
-    "[goal-recovery] The local DSH server restarted while this goal was active. Use get_goal to check its state and continue only if it is not already progressing.";
-  const resp = await rpc("session.prompt", {
-    sessionId,
-    mode: "queue",
-    content: [{ type: "text", text }]
-  }, base);
-  const result = resp && resp.result;
-  if (!result || result.ok !== true) {
-    throw new Error(result && result.error ? `session.prompt: ${result.error.message}` : "session.prompt failed");
-  }
-  return result.value;
-}
-
-function isAlreadyArmed(error) {
-  return /already active and armed|already armed|already running/i.test(String(error && error.message ? error.message : error));
-}
-
 async function main() {
   const opts = parseArgs(process.argv);
   const base = `http://127.0.0.1:${opts.port}`;
@@ -153,46 +123,17 @@ async function main() {
     process.exit(2);
   }
 
-  // ── Phase 02 R1 (BLOCKING-2): STATELESS EXECUTOR MODE ─────────────────
-  // When --session is given, this script is a pure executor: it does NOT scan
-  // active goals, does NOT decide which goal to recover, and does NOT own any
-  // recovery policy. The caller (Guardian after a restart, or EC) has already
-  // decided the session+goal to act on. We only perform the requested action.
-  if (opts.executorSession) {
-    const sessionId = opts.executorSession;
-    const goalRef = opts.executorGoalRef || sessionId;
-    console.log(`[goal-recovery] executor mode session=${sessionId} action=${opts.executorAction}`);
-    if (opts.executorAction === "continue") {
-      try {
-        await promptContinue(base, sessionId, opts.message);
-        console.log(`[goal-recovery] executor: continue queued for ${sessionId}`);
-        process.exit(0);
-      } catch (e) {
-        console.error(`[goal-recovery] executor: continue failed: ${e.message}`);
-        process.exit(3);
-      }
-    }
-    // default action: resume
-    try {
-      await resumeGoal(base, sessionId, goalRef);
-      console.log(`[goal-recovery] executor: resume sent for ${sessionId}`);
-      process.exit(0);
-    } catch (e) {
-      if (isAlreadyArmed(e)) {
-        console.log(`[goal-recovery] executor: already armed, no-op ${sessionId}`);
-        process.exit(0);
-      }
-      console.error(`[goal-recovery] executor: resume failed: ${e.message}`);
-      process.exit(3);
-    }
-  }
+  // 鈹€鈹€ Phase 02 R4 (Step 2): executor surface removed 鈥?no production caller 鈹€鈹€
+  // The stateless --session/--action executor had NO production caller (Guardian
+  // is no-op; EC owns recovery). Per Reviewer Step 2, the executor is deleted;
+  // only the read-only --check projection remains. --session/--action are now
+  // rejected (fail-closed) so no dead surface can become a second authority.
 
-  // ── Phase 02 R2 (BLOCKING-2): no autonomous recovery path ────────────────
+  // 鈹€鈹€ Phase 02 R2 (BLOCKING-2): no autonomous recovery path 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
   // The default (no --session, no --check) autonomous scan->claim->resume engine
   // is REMOVED / fail-closed. Goal recovery decisions belong solely to EC.
   // Surviving surface:
   //   1. --check            : read-only active-goal projection (Guardian stuck-safety)
-  //   2. --session ...      : explicit stateless executor (resume / continue)
   // Anything else -> fail-closed (exit 4, no action).
   if (opts.check) {
     try {
@@ -207,7 +148,7 @@ async function main() {
 
   // Reaching here with no --session means an autonomous recovery was requested
   // without an explicit target: fail-closed. EC is the only recovery authority.
-  console.error("[goal-recovery] autonomous recovery path is disabled (BLOCKING-2); use --session <id> --action <resume|continue> or --check");
+  console.error("[goal-recovery] autonomous recovery path is disabled (BLOCKING-2/R4); only --check read-only is supported");
   process.exit(4);
 }
 

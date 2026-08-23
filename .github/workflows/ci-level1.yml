@@ -85,6 +85,19 @@ jobs:
           }
           exit $fail
 
+      - name: Roadmap status document integrity (UTF-8, no NUL/control chars)
+        shell: pwsh
+        run: |
+          $f = 'docs/roadmap/CURRENT_STATUS.md'
+          if (-not (Test-Path $f)) { Write-Host "MISSING: $f"; exit 1 }
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $f))
+          $nul = ($bytes | Where-Object { $_ -eq 0 }).Count
+          if ($nul -gt 0) { Write-Host "FAIL: CURRENT_STATUS.md contains $nul NUL bytes"; exit 1 }
+          $text = [System.IO.File]::ReadAllText((Resolve-Path $f), [System.Text.Encoding]::UTF8)
+          $ctrl = [regex]::Matches($text, "[\x00-\x08\x0B\x0C\x0E-\x1F]")
+          if ($ctrl.Count -gt 0) { Write-Host "FAIL: CURRENT_STATUS.md contains $($ctrl.Count) control chars"; exit 1 }
+          Write-Host "PASS: CURRENT_STATUS.md UTF-8 clean (NUL=0, control=0)"
+
       - name: Module import smoke (dot-source pure modules into a fresh pwsh)
         shell: pwsh
         run: |

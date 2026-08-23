@@ -50,6 +50,7 @@ import {
   CATEGORY,
   DEFAULT_BUDGETS,
 } from "./execution-continuity-core.mjs";
+import { FACTS as MODEL_FACTS, modelSupports as registryModelSupports } from "./model-registry.mjs";
 
 export const name = "execution-continuity";
 
@@ -95,6 +96,7 @@ const STATE = {
   WAITING_USER: "WAITING_USER",
   COMPLETED: "COMPLETED",
   FAILED_FATAL: "FAILED_FATAL",
+  NEEDS_VERIFICATION: "NEEDS_VERIFICATION",
 };
 
 function envNum(name, fallback) {
@@ -356,26 +358,22 @@ export function apply(ctx, config = {}) {
     try { logger.info(`[execution-continuity] ${line}`); } catch { /* noop */ }
   }
 
-  // 候选模型池（fallback 用；从 settings 的 provider 注册表取得）
+  // 候选模型池（fallback 用）。Phase 02 R1 (BLOCKING-1): 不再自主扫描
+  // ctx.llm.providers 拼第二套候选池 —— 从单一 Model Registry 读取已知模型，
+  // Router 是模型选择的唯一 Authority；EC 只在这里向 registry 请求兼容候选。
   function modelCandidates() {
     const out = [];
     try {
-      const providers = ctx.llm?.providers || {};
-      for (const p of Object.keys(providers)) {
-        const conf = providers[p];
-        const models = conf?.models || [];
-        for (const m of models) {
-          if (m && m.id) out.push({ provider: p, model: m.id, contextWindow: m.contextWindow || 0 });
+      const ctxMap = MODEL_FACTS.CONTEXT_WINDOW || {};
+      for (const id of Object.keys(ctxMap)) {
+        const [provider, ...rest] = id.split("/");
+        if (provider && rest.length) {
+          out.push({ provider, model: rest.join("/"), contextWindow: ctxMap[id] || 0 });
+        } else if (id) {
+          out.push({ provider: "openrouter", model: id, contextWindow: ctxMap[id] || 0 });
         }
       }
     } catch { /* noop */ }
-    if (out.length === 0) {
-      const ids = ["bai/deepseek-v4-flash", "opencode/deepseek-v4-flash", "openrouter/deepseek/deepseek-v4-flash-0731", "openrouter/xiaomi/mimo-v2.5"];
-      for (const id of ids) {
-        const [provider, ...rest] = id.split("/");
-        out.push({ provider, model: rest.join("/") });
-      }
-    }
     return out;
   }
 
@@ -386,7 +384,8 @@ export function apply(ctx, config = {}) {
       withCtx.sort((a, b) => (b.contextWindow || 0) - (a.contextWindow || 0));
     }
     for (const c of withCtx) {
-      if (modelSupports(c.model, required)) return { provider: c.provider, model: c.model, key: c._id };
+      // 能力校验统一走 registry（同一事实源，Router/EC/Vision 一致）
+      if (registryModelSupports(c.model, required)) return { provider: c.provider, model: c.model, key: c._id };
     }
     return null;
   }
@@ -458,6 +457,75 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  // Phase 02 R1 (BLOCKING-6): Completion Truth — deterministic side-effect
+  // idempotency check over real session events. Returns one of:
+  //   "clean"               - no outstanding side-effecting tool-call; safe to resume
+  //   "completed"           - side-effecting tool-call HAS a matching result; do not replay
+  //   "needs_verification"  - side-effecting tool-call WITHOUT result (outcome unknown);
+  //                           never blind-replay -> caller must fail-closed
+  // Side-effecting tools = anything that mutates external state (excludes
+  // read-only lookups: read, grep, glob, web_search, browser_labels, list_*).
+  const SIDE_EFFECT_TOOLS = /^(write|edit|browser_click|browser_type|browser_press|browser_open|browser_shot|pwsh|subagent|subagent_fork|subagent_qwen|subagent_mimo|subagent_research|send_message|interrupt_agent|request_secret|forget_secret|notion|mcp__|create_goal|update_goal|todo_write|workflow|ralph)/i;
+  async function completionTruth(sessionId, it) {
+    try {
+      // Use the same session source as checkUserWaitGate (ctx.sessions.get),
+      // which carries the live event log (session.events).
+      const session = ctx.sessions?.get ? ctx.sessions.get(sessionId) : null;
+      if (!session || !Array.isArray(session.events)) {
+        // cannot inspect events: fall back to clean (anti-double-kick + WAIT-GATE
+        // still guard); log for diagnostics
+        diag(`CT sid=${sessionId} no session events -> clean fallback`);
+        return { state: "clean" };
+      }
+      const events = session.events;
+      // scan newest -> oldest for the LAST tool-call of a side-effecting tool
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i];
+        const data = ev.data || {};
+        let callName = null;
+        let callId = null;
+        let turn = null;
+        if (ev.type === "assistant/message") {
+          const content = data.message?.content;
+          if (Array.isArray(content)) {
+            const tc = content.find((b) => b && (b.type === "tool-call" || b.type === "function_call"));
+            if (tc) {
+              callName = String(tc.name || tc.function?.name || "");
+              callId = tc.id || tc.tool_call_id || tc.call_id || tc.function?.call_id || null;
+              turn = data.turn;
+            }
+          }
+        } else if (ev.type === "tool/result") {
+          // a result for a side-effecting call: that call is complete; continue
+          // scanning older events for any UNRESOLVED side-effect call
+          continue;
+        }
+        if (!callName || !SIDE_EFFECT_TOOLS.test(callName)) continue;
+        // found the newest side-effecting tool-call; look for its result
+        const hasResult = events.some((ev2) => {
+          if (ev2.type !== "tool/result") return false;
+          const d2 = ev2.data || {};
+          const rid = d2.tool_call_id || d2.toolCallId || d2.call_id || d2.id ||
+            (d2.message && d2.message.source && d2.message.source.callId) ||
+            (d2.result && (d2.result.tool_call_id || d2.result.call_id));
+          if (callId && rid && String(rid) === String(callId)) return true;
+          if (turn !== null && d2.turn === turn) return true;
+          return false;
+        });
+        // If this side-effect call HAS a result it is complete; keep scanning
+        // older events for any UNRESOLVED side-effecting call.
+        if (hasResult) continue;
+        // Unresolved side-effecting call -> the outcome is unknown -> fail-closed.
+        return { state: "needs_verification", detail: `${callName} (id=${callId || "?"}) without result` };
+      }
+      // All side-effecting tool-calls have results (or none exist): clean.
+      return { state: "clean" };
+    } catch (e) {
+      diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> clean fallback`);
+      return { state: "clean" };
+    }
+  }
+
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
@@ -470,6 +538,26 @@ export function apply(ctx, config = {}) {
       store.setState(sessionId, STATE.FAILED_FATAL, { fatalReason: "auto-resume budget exhausted" });
       diag(`RESUME-BUDGET-EXHAUSTED sid=${sessionId} -> FAILED_FATAL`);
       return;
+    }
+    // Phase 02 R1 (BLOCKING-6): Completion Truth — deterministic idempotency
+    // guard before ANY resume. We inspect the session's recent tool events:
+    //   - a side-effecting tool-call with a matching tool/result  -> COMPLETE, do not replay
+    //   - a side-effecting tool-call WITHOUT a result (outcome unknown) -> NEEDS_VERIFICATION
+    //     (fail-closed: never blind-replay an unknown side effect)
+    //   - no outstanding tool-calls -> safe to resume
+    // This is the deterministic layer; the recovery prompt is only the last resort.
+    {
+      const ct = await completionTruth(sessionId, it);
+      if (ct.state === "needs_verification") {
+        store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+          reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
+        });
+        diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay)`);
+        return;
+      }
+      // state === "clean": all side-effecting calls resolved (or none) — safe to
+      // resume from the completion point; the recovery prompt remains the last
+      // resort and the WAITING_USER gate below still applies.
     }
     // P1-A：WAITING_USER 安全 Gate（fail-closed）。所有恢复入口（boot scan /
     // timer / turn-end 补位）最终都汇聚到这里，因此在此统一拦截。
@@ -496,8 +584,20 @@ export function apply(ctx, config = {}) {
         return;
       }
     } catch (e) {
-      // API 未就绪：不标记任何状态，跳过本次（nextRetryAt 稍后由 timer 重试）
-      diag(`RESUME-DEFER sid=${sessionId} session.list unavailable (${String(e.message).slice(0, 80)}); deferred`);
+      // Phase 02 R1 (BLOCKING-5): RESUME-DEFER must be DURABLE. We persist a
+      // WAITING_NETWORK state with reason + nextRetryAt + budget count so the
+      // timer only resumes when nextRetryAt <= now AND budget allows. Without
+      // this, a restart loses the defer entirely (previously: log + return).
+      const retryAt = Date.now() + Math.max(5000, backoffDelay(it.resumeRetryCount || 0, budgets, 0));
+      it.resumeRetryCount = (it.resumeRetryCount || 0) + 1;
+      store.setState(sessionId, STATE.WAITING_NETWORK, {
+        reason: `RESUME-DEFER: session.list unavailable (${String(e.message).slice(0, 80)})`,
+        nextRetryAt: retryAt,
+        lastFailure: String(e.message).slice(0, 200),
+        resumeRetryCount: it.resumeRetryCount,
+      });
+      store.persist();
+      diag(`RESUME-DEFER sid=${sessionId} durable state=WAITING_NETWORK nextRetryAt=${retryAt} retry=${it.resumeRetryCount}`);
       return;
     }
 

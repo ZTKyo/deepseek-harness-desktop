@@ -1,4 +1,4 @@
-# dsh-readiness.ps1 - layered, request-level DSH readiness checks.
+﻿# dsh-readiness.ps1 - layered, request-level DSH readiness checks.
 # Requires dsh-process-identity.ps1 when used against a real listener.
 
 $readinessIdentity = Join-Path $PSScriptRoot 'dsh-process-identity.ps1'

@@ -9,7 +9,9 @@ function Report([string]$name,[string]$status,[string]$detail){
 }
 try { . (Join-Path $root 'dsh-generation.ps1') 2>$null } catch {}
 $genId = try { Get-DshGenerationId -Port $Port 2>$null } catch { $null }
-Write-Host ("== DSH Health Check ({0}) | DSH {1} gen={2} ==" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), (& dsh --version 2>$null), $genId)
+$hcDshVer = ''
+try { $hcDshVer = (& dsh --version 2>$null) } catch { $hcDshVer = '' }
+Write-Host ("== DSH Health Check ({0}) | DSH {1} gen={2} ==" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $hcDshVer, $genId)
 
 # dsh CLI
 try{$v=& dsh --version 2>$null; if($v){Report 'dsh CLI' 'PASS' "$v"}else{Report 'dsh CLI' 'FAIL' 'no version'}}catch{Report 'dsh CLI' 'FAIL' $_.Exception.Message}

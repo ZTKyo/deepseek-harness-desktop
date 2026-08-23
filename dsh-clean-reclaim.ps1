@@ -1,4 +1,4 @@
-# dsh-clean-reclaim.ps1 - deep-clean self-heal: reclaim zombie / half-dead DSH listeners.
+﻿# dsh-clean-reclaim.ps1 - deep-clean self-heal: reclaim zombie / half-dead DSH listeners.
 #
 # P0 optimization (2026-08-18): the classic "服务拉不起来" symptom is a DSH node
 # process that still holds the loopback listen socket but whose app is dead or

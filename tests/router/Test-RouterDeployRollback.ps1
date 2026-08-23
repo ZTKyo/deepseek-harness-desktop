@@ -3,7 +3,7 @@
 # Runs deploy-router-fix.ps1 with isolated -RuntimeRoot/-StateRoot/-CanonRoot
 # across THREE separate PowerShell processes (persistence across processes).
 #
-# Requires: node, git checkout with docs/execution-economy/plugins/ (canonical).
+# Requires: node, git checkout with plugins/ (canonical).
 # No live DSH, no credentials, no ~/.dsh. Portable on Windows.
 #
 # Exit: 0 = all PASS, 1 = any FAIL.
@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Continue'
 $failCount = 0
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)  # repo root
 $scriptPath = Join-Path $root 'deploy-router-fix.ps1'
-$realCanon = Join-Path $root 'docs\execution-economy\plugins'
+$realCanon = Join-Path $root 'plugins'
 
 function Assert([bool]$Cond, [string]$Name, [string]$Detail = '') {
     if ($Cond) { Write-Host "PASS  $Name  $Detail" }

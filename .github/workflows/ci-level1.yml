@@ -90,7 +90,7 @@ jobs:
         run: |
           # runner scripts with their own main-loop body are not dot-sourceable;
           # test only pure modules (function libraries).
-          $skip = @('dsh-guardian.ps1','dsh-guardian-watchdog.ps1','dsh-diagnostics.ps1','dsh-healthcheck.ps1','dsh-vps-tunnel-loop.ps1','dsh-reliability-lab.ps1','dsh-clean-reclaim.ps1','dsh-plugin-transaction.ps1','DSH-Client.ps1','DSH-Harness-PS.ps1','dsh-safe-mode.ps1')
+          $skip = @('dsh-guardian.ps1','dsh-guardian-watchdog.ps1','dsh-diagnostics.ps1','dsh-healthcheck.ps1','dsh-vps-tunnel-loop.ps1','dsh-reliability-lab.ps1','dsh-clean-reclaim.ps1','dsh-plugin-transaction.ps1','DSH-Client.ps1','DSH-Harness-PS.ps1','dsh-safe-mode.ps1','dsh-power-lease.ps1')
           $fail = 0
           foreach ($f in (Get-ChildItem -Filter 'dsh-*.ps1')) {
             if ($f.Name -in $skip) { Write-Host "SKIP (runner script): $($f.Name)"; continue }

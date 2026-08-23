@@ -1,5 +1,20 @@
 ﻿# dsh-restart-budget.ps1 - persistent, bounded restart budget.
 # Callers must hold dsh-process-identity.ps1's restart mutex while mutating it.
+#
+# Phase 02 Reviewer Round 1 (BLOCKING-4): stable-window state machine.
+#   candidate_ready -> stable window -> readiness + COMMIT_READY -> committed success
+# client_ready alone is a CANDIDATE, it does NOT reset the budget. The budget is
+# reset (committed) only after a stable window passes AND a second readiness +
+# COMMIT_READY check passes. A crash / health failure inside the stable window
+# does NOT clear the budget (the attempts stay).
+
+# stable window in seconds before a restart is considered stable (default 30s).
+# Rationale: client_ready means the server answers; COMMIT_READY additionally
+# requires process identity + events.mux/host + renderer + stable window + light
+# probe. 30s is a conservative default that avoids counting transient flapping
+# as success while not meaningfully extending user-unavailable time (the server
+# is already usable at client_ready; the budget commit is bookkeeping only).
+$script:DshRestartStableWindowSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STABLE_WINDOW_SEC } else { 30 }
 
 $script:DshRestartBudgetPath = if ($env:DSH_RESTART_BUDGET_PATH) {
     $env:DSH_RESTART_BUDGET_PATH
@@ -17,6 +32,9 @@ function Get-DshRestartBudgetDefault {
         lastReason = $null
         lastAttempt = $null
         lastSuccess = $null
+        candidateAt = $null        # Phase 02: candidate_ready timestamp
+        candidateReady = $false    # Phase 02: server reached client_ready
+        stableCommitAt = $null     # Phase 02: stable-window commit timestamp
     }
 }
 
@@ -79,16 +97,52 @@ function Register-DshRestartAttempt([string]$Reason) {
     $s.hourAttempts = [int]$s.hourAttempts + 1
     $s.lastReason = [string]$Reason
     $s.lastAttempt = $now.ToString('o')
+    # a new attempt invalidates any previous candidate state
+    $s.candidateAt = $null
+    $s.candidateReady = $false
+    $s.stableCommitAt = $null
     Write-DshRestartBudget $s
     return $s
 }
 
-function Register-DshRestartSuccess {
+# Phase 02: mark that the new server reached client_ready (candidate stage).
+# Does NOT reset the budget; attempts stay until stable-window commit.
+function Register-DshRestartCandidate {
+    $s = Read-DshRestartBudget
+    $s.candidateAt = [DateTimeOffset]::Now.ToString('o')
+    $s.candidateReady = $true
+    Write-DshRestartBudget $s
+    return $s
+}
+
+# Phase 02: check whether the stable window has elapsed since candidate_ready.
+function Test-DshRestartStableWindow {
+    $s = Read-DshRestartBudget
+    if (-not $s.candidateReady) { return $false }
+    $cand = Convert-DshDate $s.candidateAt
+    if (-not $cand) { return $false }
+    return ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge $script:DshRestartStableWindowSec)
+}
+
+# Phase 02: commit success only after stable window + re-verification.
+# Caller is responsible for the second readiness + COMMIT_READY check before
+# calling this; this function records the commit timestamp and resets the budget.
+function Confirm-DshRestartStable {
     $s = Read-DshRestartBudget
     $s.windowStart = $null
     $s.attempts = 0
+    $s.hourWindowStart = $null
+    $s.hourAttempts = 0
     $s.pauseUntil = $null
+    $s.candidateAt = $null
+    $s.candidateReady = $false
+    $s.stableCommitAt = [DateTimeOffset]::Now.ToString('o')
     $s.lastSuccess = [DateTimeOffset]::Now.ToString('o')
     Write-DshRestartBudget $s
     return $s
+}
+
+# Backward-compatible alias: full commit (stable window + re-verify implied).
+function Register-DshRestartSuccess {
+    return (Confirm-DshRestartStable)
 }

@@ -32,29 +32,42 @@ function isSideEffect(callName) {
   return !SAFE_RESULTLESS.has(callName);
 }
 
-function extractCall(event) {
+// Phase 02 R4 (Step 4): extract ALL tool-calls in an event (a single
+// assistant/message can contain several). Each call is evaluated independently;
+// a sibling call's result must never prove this call's completion.
+function extractCalls(event) {
   const data = event && event.data ? event.data : {};
-  if (event.type === "tool/result") return null;
-  if (event.type !== "assistant/message") return null;
+  if (event.type === "tool/result") return [];
+  if (event.type !== "assistant/message") return [];
   const content = data.message && Array.isArray(data.message.content) ? data.message.content : [];
-  const tc = content.find((b) => b && (b.type === "tool-call" || b.type === "function_call"));
-  if (!tc) return null;
-  return {
-    name: String(tc.name || tc.function?.name || ""),
-    id: tc.id || tc.tool_call_id || tc.call_id || tc.function?.call_id || null,
-    turn: data.turn ?? null,
-  };
+  const out = [];
+  for (const tc of content) {
+    if (!tc || (tc.type !== "tool-call" && tc.type !== "function_call")) continue;
+    const name = String(tc.name || tc.function?.name || "");
+    const id = tc.id || tc.tool_call_id || tc.call_id || tc.function?.call_id || null;
+    out.push({
+      name,
+      id,
+      turn: data.turn ?? null,
+      // unknown/empty identity is FAIL-CLOSED for side effects
+      hasIdentity: !!(name && name.trim()) && !!id,
+    });
+  }
+  return out;
 }
 
+// Phase 02 R4 (Step 4): EXACT callId/resultId match ONLY. The same-turn fallback
+// is REMOVED — with multiple tool-calls in one turn, another tool's result must
+// never "prove" completion for an unknown side effect. Without a reliable call
+// identity, we fail-closed (no match).
 function resultMatches(call, event) {
   if (!event || event.type !== "tool/result") return false;
   const d2 = event.data || {};
   const rid = d2.tool_call_id || d2.toolCallId || d2.call_id || d2.id ||
     (d2.message && d2.message.source && d2.message.source.callId) ||
     (d2.result && (d2.result.tool_call_id || d2.result.call_id));
-  if (call.id && rid && String(rid) === String(call.id)) return true;
-  if (call.turn !== null && d2.turn === call.turn) return true;
-  return false;
+  // exact callId match only; no same-turn fallback
+  return !!(call.id && rid && String(rid) === String(call.id));
 }
 
 /**
@@ -68,15 +81,27 @@ export function evaluateCompletion(events) {
   }
   let sawEvent = false;
   for (let i = events.length - 1; i >= 0; i--) {
-    const call = extractCall(events[i]);
-    if (!call) continue;
+    const calls = extractCalls(events[i]);
+    if (calls.length === 0) continue;
     sawEvent = true;
-    if (!isSideEffect(call.name)) continue; // read-only: safe
-    const hasResult = events.some((ev) => resultMatches(call, ev));
-    if (!hasResult) {
-      return { state: "needs_verification", detail: `${call.name} (id=${call.id || "?"}) without result` };
+    for (const call of calls) {
+      // Phase 02 R4 (Step 4): empty tool name is treated as an unknown mutating
+      // identity -> fail-closed (isSideEffect("") must be TRUE for side-effect
+      // purposes; the allowlist check below only covers KNOWN read-only tools).
+      const readOnly = call.name && SAFE_RESULTLESS.has(call.name);
+      if (readOnly) continue; // read-only: safe
+      // Unknown/empty identity side effect -> fail-closed. Without a stable
+      // call identity we cannot prove completion — never let a same-turn result
+      // of another call stand in for it.
+      if (!call.hasIdentity) {
+        return { state: "needs_verification", detail: `${call.name || "(empty tool name)"} without reliable identity` };
+      }
+      const hasResult = events.some((ev) => resultMatches(call, ev));
+      if (!hasResult) {
+        return { state: "needs_verification", detail: `${call.name} (id=${call.id || "?"}) without result` };
+      }
+      // has result -> completed; continue with older events
     }
-    // has result -> completed; scan older for any unresolved side-effect
   }
   if (!sawEvent) {
     // No tool-calls at all: nothing outstanding — clean.

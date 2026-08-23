@@ -45,6 +45,55 @@ check("F read-only + completed side effect -> clean", evaluateCompletion([mkCall
 check("G unknown tool without result -> needs_verification", evaluateCompletion([mkCall("some_new_mutating_tool", "call-u", 9)]).state === "needs_verification");
 // H. events unavailable (not an array) -> needs_verification (fail-closed)
 check("H events unavailable -> needs_verification", evaluateCompletion(null).state === "needs_verification");
+// ── Phase 02 R4 (Step 4): exact-identity collision tests ──
+// I. TWO tool-calls in the SAME turn; result matches ONLY the other call ->
+//    the unresolved side effect must NOT be "proven" by the sibling result.
+{
+  const events = [
+    { type: "assistant/message", data: { turn: 10, message: { content: [
+      { type: "tool-call", name: "write", id: "call-w" },
+      { type: "tool-call", name: "read", id: "call-r" },
+    ] } } },
+    { type: "tool/result", data: { turn: 10, tool_call_id: "call-r" } }, // read result, same turn
+  ];
+  check("I same-turn sibling result does NOT prove write -> needs_verification", evaluateCompletion(events).state === "needs_verification");
+}
+// I2. Two side-effect calls same turn; result for call-A only -> call-B unresolved
+{
+  const events = [
+    { type: "assistant/message", data: { turn: 11, message: { content: [
+      { type: "tool-call", name: "write", id: "call-a" },
+      { type: "tool-call", name: "edit", id: "call-b" },
+    ] } } },
+    { type: "tool/result", data: { turn: 11, tool_call_id: "call-a" } },
+  ];
+  check("I2 call-b unresolved despite same-turn call-a result -> needs_verification", evaluateCompletion(events).state === "needs_verification");
+}
+// I3. exact result match (different turn) still works
+{
+  const events = [mkCall("write", "call-x", 1), mkResult("call-x", 2)];
+  check("I3 exact callId match across turns -> clean", evaluateCompletion(events).state === "clean");
+}
+// I4. WRONG result id (no match) -> needs_verification
+{
+  const events = [mkCall("write", "call-y", 1), mkResult("call-z", 1)];
+  check("I4 wrong result id -> needs_verification", evaluateCompletion(events).state === "needs_verification");
+}
+// I5. side-effect call WITHOUT id (missing identity) -> needs_verification
+{
+  const events = [{ type: "assistant/message", data: { turn: 3, message: { content: [{ type: "tool-call", name: "write" }] } } }];
+  check("I5 missing call id -> needs_verification (fail-closed)", evaluateCompletion(events).state === "needs_verification");
+}
+// I6. EMPTY tool name -> needs_verification (fail-closed)
+{
+  const events = [{ type: "assistant/message", data: { turn: 4, message: { content: [{ type: "tool-call", name: "", id: "call-e" }] } } }];
+  check("I6 empty tool name -> needs_verification (fail-closed)", evaluateCompletion(events).state === "needs_verification");
+}
+// I7. read-only call WITHOUT id is still safe (not a side effect)
+{
+  const events = [{ type: "assistant/message", data: { turn: 5, message: { content: [{ type: "tool-call", name: "read" }] } } }];
+  check("I7 read-only without id -> clean (safe)", evaluateCompletion(events).state === "clean");
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log("COMPLETION TRUTH TEST FAILED"); process.exit(1); }

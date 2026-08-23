@@ -662,6 +662,10 @@ export function apply(ctx, config = {}) {
               tools: true,
               used: false,
             };
+            // Phase 02 R4 (Step 3): typed bridge — tell the Router (the sole
+            // model authority) that this session needs a capability-compatible
+            // fallback. Router consumes + acks on the next agent/request.
+            try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
             record(`REASONING_PROTOCOL_ERROR -> RECOVERY-REQUIREMENT (router decides model)`);
             await sleep(backoffDelay(it.retryCount, budgets, 0));
@@ -716,6 +720,7 @@ export function apply(ctx, config = {}) {
               needLargerContext: true,
               used: false,
             };
+            try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
             record(`CONTEXT-OVERFLOW -> RECOVERY-REQUIREMENT (router decides model)`);
             await sleep(backoffDelay(it.retryCount, budgets, 0));
@@ -736,6 +741,7 @@ export function apply(ctx, config = {}) {
               modalities: it.lastModalities || [],
               used: false,
             };
+            try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
             record(`RECOVERY-REQUIREMENT (router decides model) category=${cls.category}`);
             await sleep(backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs));

@@ -50,6 +50,11 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageE-SafeMode.ps1
 
+      - name: Launcher argv preservation (no-open + trusted-host + boot-mode)
+        shell: pwsh
+        run: |
+          node tests\reliability\Test-LauncherArgs.mjs
+
       - name: Last Good authority - guardian cannot syntax-only promote
         shell: pwsh
         run: |

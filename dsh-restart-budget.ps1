@@ -43,7 +43,24 @@ function Read-DshRestartBudget {
     try {
         $value = Get-Content -LiteralPath $script:DshRestartBudgetPath -Raw | ConvertFrom-Json
         if ($null -eq $value.attempts) { return (Get-DshRestartBudgetDefault) }
-        return $value
+        # Merge defaults so legacy files (written before Phase 02 added
+        # candidateAt/candidateReady/stableCommitAt) always carry the new fields.
+        # ConvertFrom-Json objects are fixed-property; rebuild a fresh object.
+        $def = Get-DshRestartBudgetDefault
+        $merged = [pscustomobject]@{
+            windowStart      = if ($null -ne $value.windowStart) { $value.windowStart } else { $def.windowStart }
+            attempts         = $value.attempts
+            hourWindowStart  = if ($null -ne $value.hourWindowStart) { $value.hourWindowStart } else { $def.hourWindowStart }
+            hourAttempts     = if ($null -ne $value.hourAttempts) { $value.hourAttempts } else { $def.hourAttempts }
+            pauseUntil       = if ($null -ne $value.pauseUntil) { $value.pauseUntil } else { $def.pauseUntil }
+            lastReason       = if ($null -ne $value.lastReason) { $value.lastReason } else { $def.lastReason }
+            lastAttempt      = if ($null -ne $value.lastAttempt) { $value.lastAttempt } else { $def.lastAttempt }
+            lastSuccess      = if ($null -ne $value.lastSuccess) { $value.lastSuccess } else { $def.lastSuccess }
+            candidateAt      = if ($null -ne $value.candidateAt) { $value.candidateAt } else { $def.candidateAt }
+            candidateReady   = if ($null -ne $value.candidateReady) { $value.candidateReady } else { $def.candidateReady }
+            stableCommitAt   = if ($null -ne $value.stableCommitAt) { $value.stableCommitAt } else { $def.stableCommitAt }
+        }
+        return $merged
     } catch { return (Get-DshRestartBudgetDefault) }
 }
 

@@ -132,7 +132,14 @@ if (Test-Path $starter) {
     $starterProc.WaitForExit()
     $starterCode = $starterProc.ExitCode
     Write-Log ("starter exit code: {0}" -f $starterCode)
-    if ($starterCode -ne 0) { throw "start-dsh-server.ps1 failed with exit code $starterCode" }
+    # Phase 02 R2: starter exit code is advisory only. start-dsh-server.ps1
+    # returns 2 when client_ready is not reached within its own short window,
+    # but the launcher/server it spawned continues booting to client_ready on
+    # its own (observed 2026-08-23 23:17: server 20432 reached client_ready
+    # moments after starter exited 2). We do NOT fail here; the stable-window
+    # readiness + COMMIT_READY check below is the authoritative verification.
+    # exit 75 = restart lock held by another transaction (concurrent restart).
+    if ($starterCode -eq 75) { throw "start-dsh-server.ps1: another restart transaction owns the lock" }
 } else {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'cmd.exe'
@@ -143,9 +150,16 @@ if (Test-Path $starter) {
     [System.Diagnostics.Process]::Start($psi) | Out-Null
 }
 
-# verify actual DSH readiness, not only a root-page HTTP 200
-$ready = Test-DshReadiness -Port $Port -RequireWebSockets
-Write-Log ("readiness: {0} error={1}" -f $ready.State, $ready.Error)
+# verify actual DSH readiness, not only a root-page HTTP 200.
+# Phase 02 R2: wait up to 60s for client_ready (the starter may have exited
+# before its own short window saw client_ready; the server keeps booting).
+$ready = $null
+for ($i = 0; $i -lt 60; $i++) {
+    $ready = Test-DshReadiness -Port $Port -RequireWebSockets
+    if ($ready.State -eq 'client_ready') { break }
+    Start-Sleep -Seconds 1
+}
+Write-Log ("readiness: {0} error={1} (waited {2}s)" -f $ready.State, $ready.Error, $i)
 if ($ready.State -ne 'client_ready') { throw "DSH client readiness failed: $($ready.State)" }
 
 # Phase 02 Reviewer Round 1 (BLOCKING-4): stable-window commit.

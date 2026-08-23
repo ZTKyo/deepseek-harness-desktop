@@ -1,4 +1,4 @@
-﻿# Test-FinalDrill.ps1 - Final Reliability Drill (isolated full-chain, no real production mutation).
+# Test-FinalDrill.ps1 - Final Reliability Drill (isolated full-chain, no real production mutation).
 # Reliability v1 (master prompt section 33). Exercises the whole recovery chain using
 # isolated state paths and a temporary config sandbox - never touches real profiles,
 # real sessions, real credentials, or the running production server.
@@ -70,8 +70,12 @@ Assert ($patch -notmatch 'computer-use') 'D5 browser automation disabled in safe
 Assert ($patch -match 'completion-notify') 'D5 completion-notify kept'
 
 Write-Host '== D6: repair normal -> exit safe -> normal =='
-# "repair": reset budget + set boot-mode normal (equivalent to safe exit)
-Register-DshRestartSuccess | Out-Null
+# "repair": reset budget via the FULL stable-window path (candidate -> window ->
+# commit). Phase 02 R2: Register-DshRestartSuccess no longer resets without a
+# verified candidate; the drill must go through the real commit path.
+Register-DshRestartCandidate | Out-Null
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '0'   # stable elapsed immediately (drill)
+Confirm-DshRestartStable | Out-Null
 $g2 = Test-DshRestartAllowed
 Assert ($g2.Allowed) 'D6 budget reset after repair'
 Set-DshBootMode -Mode 'normal' -Reason 'drill-repaired' | Out-Null

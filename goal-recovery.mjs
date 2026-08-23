@@ -140,165 +140,8 @@ async function promptContinue(base, sessionId, customMessage) {
   return result.value;
 }
 
-function sameGoal(candidates, expected) {
-  return candidates.find((candidate) =>
-    candidate.sessionId === expected.sessionId &&
-    candidate.ref.id === expected.ref.id &&
-    candidate.ref.revision === expected.ref.revision
-  ) || null;
-}
-
-async function getServerGeneration(opts) {
-  if (opts.generation) return sha256(`fixture:${opts.generation}`);
-  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-  const runtimePath = path.join(localAppData, "DSHHarness", "logs", `dsh-runtime-${opts.port}.json`);
-  try {
-    const runtime = JSON.parse(await fs.readFile(runtimePath, "utf8"));
-    if (runtime.state !== "running" || !runtime.childPid || !runtime.startedAt) return null;
-    return sha256(JSON.stringify({
-      port: opts.port,
-      childPid: runtime.childPid,
-      startedAt: runtime.startedAt,
-      entryHash: runtime.entryHash || null
-    }));
-  } catch {
-    return null;
-  }
-}
-
-function recoveryKeyHash(generationHash, session) {
-  return sha256(JSON.stringify({
-    generationHash,
-    sessionId: session.sessionId,
-    goalId: session.ref.id,
-    revision: session.ref.revision
-  }));
-}
-
-function ledgerPath(stateDir, keyHash) {
-  return path.join(stateDir, "goal-recovery-ledger-v1", `${keyHash}.json`);
-}
-
-async function readClaim(filePath) {
-  try {
-    const claim = JSON.parse(await fs.readFile(filePath, "utf8"));
-    return claim && typeof claim === "object" ? claim : null;
-  } catch {
-    return null;
-  }
-}
-
-async function claimRecovery(stateDir, generationHash, keyHash) {
-  const filePath = ledgerPath(stateDir, keyHash);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const claim = {
-    version: 1,
-    keyHash,
-    generationHash,
-    state: "claimed",
-    claimedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  try {
-    const handle = await fs.open(filePath, "wx");
-    try {
-      await handle.writeFile(`${JSON.stringify(claim)}\n`, "utf8");
-    } finally {
-      await handle.close();
-    }
-    return { claimed: true, filePath, claim };
-  } catch (error) {
-    if (error && error.code === "EEXIST") {
-      return { claimed: false, filePath, claim: await readClaim(filePath) };
-    }
-    throw error;
-  }
-}
-
-async function markClaim(filePath, current, state, detail) {
-  const next = {
-    ...(current || {}),
-    state,
-    detail,
-    updatedAt: new Date().toISOString()
-  };
-  // The exclusive-create claim is the atomic exactly-once boundary. Updating
-  // status is evidence only; an interrupted write still leaves the claim file
-  // present and therefore fails closed on the next invocation.
-  await fs.writeFile(filePath, `${JSON.stringify(next)}\n`, "utf8");
-  return next;
-}
-
 function isAlreadyArmed(error) {
   return /already active and armed|already armed|already running/i.test(String(error && error.message ? error.message : error));
-}
-
-async function recoverOne(base, opts, generationHash, session) {
-  const keyHash = recoveryKeyHash(generationHash, session);
-  if (opts.dryRun) {
-    console.log(`[goal-recovery] dry-run key=${keyHash.slice(0, 12)} action=resume_then_verify`);
-    return { ok: true, action: "dry_run" };
-  }
-
-  const reservation = await claimRecovery(opts.stateDir, generationHash, keyHash);
-  if (!reservation.claimed) {
-    const existing = reservation.claim && reservation.claim.state ? reservation.claim.state : "unknown";
-    console.log(`[goal-recovery] duplicate skipped key=${keyHash.slice(0, 12)} state=${existing}`);
-    return { ok: true, action: "duplicate" };
-  }
-
-  let claim = reservation.claim;
-  try {
-    await resumeGoal(base, session.sessionId, session.ref);
-    claim = await markClaim(reservation.filePath, claim, "resume_sent", "goal_resume_ok");
-    console.log(`[goal-recovery] resumed goal key=${keyHash.slice(0, 12)}`);
-  } catch (error) {
-    if (isAlreadyArmed(error)) {
-      await markClaim(reservation.filePath, claim, "already_armed", "goal_resume_noop");
-      console.log(`[goal-recovery] goal already armed key=${keyHash.slice(0, 12)} no-op`);
-      return { ok: true, action: "already_armed" };
-    }
-    await markClaim(reservation.filePath, claim, "needs_review", "goal_resume_failed");
-    console.error(`[goal-recovery] resume failed key=${keyHash.slice(0, 12)}; marked needs_review`);
-    return { ok: false, action: "resume_failed" };
-  }
-
-  await sleep(opts.graceMs);
-  let after;
-  try {
-    after = sameGoal(await activeGoalSessions(base), session);
-  } catch {
-    await markClaim(reservation.filePath, claim, "needs_review", "post_resume_session_list_failed");
-    console.error(`[goal-recovery] verification failed key=${keyHash.slice(0, 12)}; marked needs_review`);
-    return { ok: false, action: "verify_failed" };
-  }
-
-  if (!after) {
-    await markClaim(reservation.filePath, claim, "needs_review", "goal_projection_changed_or_missing");
-    console.error(`[goal-recovery] projection changed key=${keyHash.slice(0, 12)}; marked needs_review`);
-    return { ok: false, action: "projection_changed" };
-  }
-  if (after.running === true) {
-    await markClaim(reservation.filePath, claim, "resumed_running", "goal_running_after_grace");
-    console.log(`[goal-recovery] goal running key=${keyHash.slice(0, 12)}; no prompt queued`);
-    return { ok: true, action: "resumed_running" };
-  }
-  if (after.running !== false) {
-    await markClaim(reservation.filePath, claim, "needs_review", "goal_running_state_unknown");
-    console.error(`[goal-recovery] running state unknown key=${keyHash.slice(0, 12)}; marked needs_review`);
-    return { ok: false, action: "running_unknown" };
-  }
-
-  try {
-    await promptContinue(base, session.sessionId, opts.message);
-    await markClaim(reservation.filePath, claim, "continue_queued", "goal_not_running_after_grace");
-    console.log(`[goal-recovery] queued continue key=${keyHash.slice(0, 12)}`);
-    return { ok: true, action: "continue_queued" };
-  } catch {
-    await markClaim(reservation.filePath, claim, "needs_review", "continue_queue_failed");
-    console.error(`[goal-recovery] continue queue failed key=${keyHash.slice(0, 12)}; marked needs_review`);
-    return { ok: false, action: "continue_failed" };
-  }
 }
 
 async function main() {
@@ -344,35 +187,28 @@ async function main() {
     }
   }
 
-  let sessions;
-  try {
-    sessions = await activeGoalSessions(base);
-  } catch (e) {
-    console.error(`[goal-recovery] ${e.message}`);
-    process.exit(2);
-  }
-
-  if (sessions.length === 0) {
-    console.log("[goal-recovery] no active goal sessions");
-    return opts.check ? 1 : 0;
-  }
+  // ── Phase 02 R2 (BLOCKING-2): no autonomous recovery path ────────────────
+  // The default (no --session, no --check) autonomous scan->claim->resume engine
+  // is REMOVED / fail-closed. Goal recovery decisions belong solely to EC.
+  // Surviving surface:
+  //   1. --check            : read-only active-goal projection (Guardian stuck-safety)
+  //   2. --session ...      : explicit stateless executor (resume / continue)
+  // Anything else -> fail-closed (exit 4, no action).
   if (opts.check) {
-    console.log(`[goal-recovery] active goal count=${sessions.length}`);
-    return 0;
+    try {
+      const sessions = await activeGoalSessions(base);
+      console.log(`[goal-recovery] active goal count=${sessions.length}`);
+      return sessions.length > 0 ? 0 : 1;
+    } catch (e) {
+      console.error(`[goal-recovery] check failed: ${e.message}`);
+      process.exit(2);
+    }
   }
 
-  const generationHash = await getServerGeneration(opts);
-  if (!generationHash) {
-    console.error("[goal-recovery] server generation unavailable; no recovery action taken");
-    return 2;
-  }
-
-  let failed = false;
-  for (const session of sessions) {
-    const result = await recoverOne(base, opts, generationHash, session);
-    if (!result.ok) failed = true;
-  }
-  return failed ? 1 : 0;
+  // Reaching here with no --session means an autonomous recovery was requested
+  // without an explicit target: fail-closed. EC is the only recovery authority.
+  console.error("[goal-recovery] autonomous recovery path is disabled (BLOCKING-2); use --session <id> --action <resume|continue> or --check");
+  process.exit(4);
 }
 
 main().then((code) => {

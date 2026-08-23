@@ -37,11 +37,38 @@ export const DEFAULT_MODEL_IDS = Object.freeze({
 
 // capability 表（2026-08-19 经 OpenRouter /models 实测核对）
 // input_modalities / structured(OpenAI 兼容 response_format json_schema)
+// Phase 02 R2 (BLOCKING-3): family capability FACTS come from the single
+// Model Registry (plugins/model-registry.mjs). CAPABILITY here is a derived
+// projection (routing policy view) of the same facts — NOT a second truth
+// source. Router/EC/Vision all resolve through the registry's familyOf().
+import { FACTS as REGISTRY_FACTS } from "./model-registry.mjs";
+const _regFamilyModalities = REGISTRY_FACTS.FAMILY_MODALITIES;
+const _regFamilyTools = REGISTRY_FACTS.FAMILY_TOOLS;
 export const CAPABILITY = Object.freeze({
-  qwen: { input: ["text", "image", "video"], structured: false, audio: false },
-  deepseek: { input: ["text"], structured: true, audio: false },
-  mimo: { input: ["text", "audio", "image", "video"], structured: true, audio: true },
+  qwen: {
+    input: buildInput(_regFamilyModalities.qwen),
+    structured: _regFamilyTools.qwen.structuredJson === true,
+    audio: _regFamilyModalities.qwen.audio === true,
+  },
+  deepseek: {
+    input: buildInput(_regFamilyModalities.deepseek),
+    structured: _regFamilyTools.deepseek.structuredJson === true,
+    audio: _regFamilyModalities.deepseek.audio === true,
+  },
+  mimo: {
+    input: buildInput(_regFamilyModalities.mimo),
+    structured: _regFamilyTools.mimo.structuredJson === true,
+    audio: _regFamilyModalities.mimo.audio === true,
+  },
 });
+// input modality list from registry family facts (text always first)
+function buildInput(fam) {
+  const out = ["text"];
+  if (fam.image) out.push("image");
+  if (fam.audio) out.push("audio");
+  if (fam.video) out.push("video");
+  return out;
+}
 
 // 跨模型 fallback 链（capability-aware）
 const CHAINS = Object.freeze({

@@ -31,10 +31,15 @@ Assert ($r3.Allowed -eq $false) 'R3 budget exhausts after 3 attempts' "reason=$(
 $r4 = Test-DshRestartAllowed
 Assert ($r4.Allowed -eq $false -and $r4.Reason -eq 'circuit_open') 'R4 circuit stays open' "reason=$($r4.Reason)"
 
-# R5: success resets budget -> allowed again
+# R5 (Phase 02 R2 strict): success WITHOUT a stable candidate must NOT reset
+# (no success shortcut bypasses the stable-window verification).
+$before5 = Read-DshRestartBudget
 Register-DshRestartSuccess | Out-Null
+$after5 = Read-DshRestartBudget
+Assert ([int]$after5.attempts -ge [int]$before5.attempts) 'R5 no-candidate success does NOT reset budget' "attempts=$($after5.attempts)"
+Assert ($after5.lastReason -match 'NOT reset') 'R5 no-candidate success records NOT-reset reason' "reason=$($after5.lastReason)"
 $r5 = Test-DshRestartAllowed
-Assert ($r5.Allowed -eq $true) 'R5 success resets budget' "reason=$($r5.Reason)"
+Assert ($r5.Allowed -eq $false) 'R5 budget still exhausted (no reset)' "reason=$($r5.Reason)"
 
 # ========== Phase 02 R1 (BLOCKING-4): stable-window state machine ==========
 

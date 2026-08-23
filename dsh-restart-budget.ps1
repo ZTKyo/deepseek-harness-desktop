@@ -159,7 +159,29 @@ function Confirm-DshRestartStable {
     return $s
 }
 
-# Backward-compatible alias: full commit (stable window + re-verify implied).
+# Phase 02 R2: Register-DshRestartSuccess is a STRICT commit — it only resets
+# the budget when the stable-window contract is satisfied (candidate_ready was
+# registered AND the stable window has elapsed). Legacy callers that never
+# registered a candidate are treated as NOT commit-worthy: we record a warning
+# marker but do NOT reset attempts, so a success shortcut cannot bypass the
+# stable-window verification. Use Confirm-DshRestartStable for the explicit
+# verified path.
 function Register-DshRestartSuccess {
+    $s = Read-DshRestartBudget
+    if ($s.candidateReady -ne $true) {
+        # No candidate registered -> cannot prove stability. Do NOT reset.
+        $s.lastReason = 'success-without-stable-candidate: budget NOT reset'
+        Write-DshRestartBudget $s
+        return $s
+    }
+    $cand = Convert-DshDate $s.candidateAt
+    $stableOk = $false
+    if ($cand) { $stableOk = ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge $script:DshRestartStableWindowSec) }
+    if (-not $stableOk) {
+        # Candidate exists but stable window not elapsed -> NOT commit-worthy.
+        $s.lastReason = 'success-before-stable-window: budget NOT reset'
+        Write-DshRestartBudget $s
+        return $s
+    }
     return (Confirm-DshRestartStable)
 }

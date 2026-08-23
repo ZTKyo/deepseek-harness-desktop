@@ -270,6 +270,11 @@ function Restore-LastGoodConfig {
 # removes it after the new instance answers. While the lock is fresh (<10 min),
 # the guardian must NOT auto-start/restart the server — otherwise two instances
 # boot at once and one dies with EADDRINUSE (and the "recovered" alert spams).
+# Phase 02 P2-0: the lock payload records the restart-worker PID. If that worker
+# process no longer exists (it died with the old server — the R4 root cause), the
+# lock is "orphaned": we clear it and let guardian recovery take over. This is the
+# equivalent lock-lost takeover mechanism, so a dead worker can never wedge the
+# system into "server down + lock present -> no self-heal".
 $maintenanceLock = Join-Path $env:USERPROFILE '.dsh\guardian-maintenance.lock'
 function Test-MaintenanceLock {
     if (-not (Test-Path $maintenanceLock)) { return $false }
@@ -278,6 +283,22 @@ function Test-MaintenanceLock {
         if ($age.TotalMinutes -gt 10) {
             Remove-Item $maintenanceLock -Force -ErrorAction SilentlyContinue
             return $false
+        }
+        # Phase 02 P2-0: orphan detection. A fresh lock whose worker PID is gone
+        # means the restart worker died before it could finish (old-server stop
+        # killed it). Treat the lock as stale and let guardian take over.
+        try {
+            $payload = Get-Content $maintenanceLock -Raw | ConvertFrom-Json
+            if ($payload.pid) {
+                $workerAlive = Get-Process -Id ([int]$payload.pid) -ErrorAction SilentlyContinue
+                if (-not $workerAlive) {
+                    TraceG ("maintenance lock ORPHANED: worker pid=$($payload.pid) no longer alive; clearing for guardian takeover")
+                    Remove-Item $maintenanceLock -Force -ErrorAction SilentlyContinue
+                    return $false
+                }
+            }
+        } catch {
+            # payload not JSON (legacy timestamp-only lock): treat as valid while fresh
         }
         return $true
     } catch { return $false }

@@ -1,4 +1,4 @@
-﻿# build.ps1 - builds the DSH Harness native client WITHOUT installing any SDK.
+# build.ps1 - builds the DSH Harness native client WITHOUT installing any SDK.
 #
 # Uses:
 #   * csc.exe from the built-in .NET Framework (C# 5, WPF code-only)

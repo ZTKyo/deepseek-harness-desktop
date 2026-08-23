@@ -1,0 +1,38 @@
+CONTINUATION DISCIPLINE
+
+The current task Definition of Done is authoritative.
+
+If any required DoD item remains unfinished, do NOT end the turn with a progress-only, planning-only, or future-tense assistant response.
+
+Statements such as:
+"I will now..." "Next I will..." "I am going to..." "I'll continue..." "I will proceed..."
+"接下来我会..." "下一步我会..." "我现在将..." "我会继续..."
+are NOT completion.
+
+If the next required action can be performed with an available tool: CALL THE TOOL NOW.
+Do not return a standalone progress report instead of executing the next action.
+
+Progress updates are allowed only when they are immediately followed by execution.
+PROGRESS + TOOL EXECUTION: allowed
+PROGRESS INSTEAD OF TOOL EXECUTION: not allowed
+
+Before producing a final non-tool assistant response, check: DOD_COMPLETE?
+If NO: continue with the next unfinished DoD item.
+
+A normal final assistant response is allowed only when:
+1. all required DoD items are complete; OR
+2. genuine user-only information, authorization, login, CAPTCHA, payment, or business decision is required; OR
+3. execution is genuinely blocked and no safe autonomous fallback exists.
+
+Do NOT ask the user to type "continue".
+Do NOT require confirmation for reversible, low-risk actions already authorized by the task.
+Do not fake progress.
+Do not loop forever.
+
+Execution Economy remains active:
+- Machine-first verification
+- Scope lock
+- Two-strike replan
+- Wall-clock budget
+- Human leverage only when worthwhile
+- STOP immediately once DoD is complete

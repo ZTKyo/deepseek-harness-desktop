@@ -306,7 +306,7 @@ function Find-Dsh {
             if ($cand -and (Test-Path $cand)) { return $cand }
         }
     }
-    foreach ($r2 in @((Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'))) {
+    foreach ($r2 in @((Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'), 'D:\C盘迁移\开发缓存\npm-cache\_npx')) {
         if (Test-Path $r2) {
             foreach ($d in (Get-ChildItem $r2 -Directory -ErrorAction SilentlyContinue)) {
                 $cand = Join-Path $d.FullName 'node_modules\.bin\dsh.cmd'
@@ -341,7 +341,9 @@ function Start-DshServer {
         New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = 'cmd.exe'
-        $psi.Arguments = '/S /C ""' + $dsh + '" web --port ' + $Port + ' > "' + $log + '" 2>&1"'
+        # 2026-08-21 FIX: 加 --no-open 不再自动打开默认浏览器（用户反馈
+        # "打开 Harness 时网页端也同步打开"；网页版仍可手动访问 127.0.0.1:3080）。
+        $psi.Arguments = '/S /C ""' + $dsh + '" web --port ' + $Port + ' --no-open --trusted-host 100.120.3.29:3080 --trusted-host ai-office-windows.tailab0bb5.ts.net:3080 > "' + $log + '" 2>&1"'
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
         $psi.WorkingDirectory = $env:USERPROFILE
@@ -417,17 +419,27 @@ function Update-QuotaUI {
             $mimoCard.currency = [string]$script:mimoState.balance.currency
             $mimoCard.error = ''
         }
+        # ---- OpenRouter 卡片（2026-08-19）----
+        # 需要两行：账户 Credits 与 当前推理 Key 用量/限额；缺失/错误都要优雅显示。
+        $orCard = @{ id = 'openrouter'; name = 'OpenRouter'; kind = 'openrouter'; needKey = ((Read-CredentialStoreValue 'OPENROUTER_API_KEY') -eq ''); error = [string]$script:orState.error }
+        if ($script:orState.account) { $orCard.account = $script:orState.account }
+        if ($script:orState.key) { $orCard.key = $script:orState.key }
         # ---- which provider is in use (settings default) ----
+        # 2026-08-21 FIX: 新增 bai（B.AI）映射 → 它跑的是 DeepSeek 模型（alias
+        # 'deepseek'），额度映射到 DeepSeek 卡片；此前 bai 不在映射表导致
+        # $cur 为空 → 前端兜底"显示全部卡片"，额度卡片永远展开收不回。
         $cur = ''
         switch -Regex ((Read-DefaultProvider).Trim().ToLowerInvariant()) {
             'opencode'  { $cur = 'go' }
             'deepseek'  { $cur = 'deepseek' }
+            'bai'       { $cur = 'deepseek' }
             'xiaomi'    { $cur = 'mimo' }
+            'openrouter'{ $cur = 'openrouter' }
         }
         $data = @{
             ok = $true
             current = $cur
-            providers = @($dsCard, $mimoCard, $goCard)
+            providers = @($dsCard, $mimoCard, $goCard, $orCard)
         }
         $script:wv.CoreWebView2.PostWebMessageAsString(($data | ConvertTo-Json -Compress -Depth 8))
     } catch { TraceLog ('quota update error: ' + $_.Exception.Message) }
@@ -590,6 +602,99 @@ function Start-MiMoFetch {
         }
         Update-QuotaUI
     } catch { TraceLog ('mimo fetch error: ' + $_.Exception.Message) }
+}
+
+# ---------- OpenRouter quota（2026-08-19；KEY 用量 + 账户 Credits） ----------
+# 密钥单一真源 = ~/.dsh/.credentials.yaml（与服务端同一份；绝不在客户端另存副本）。
+# 区分两件事：1) 当前推理 API Key 的用量/限额（GET /api/v1/key）
+#             2) 账户总 Credits（GET /api/v1/credits，需 OPENROUTER_MANAGEMENT_KEY）
+# 无 Management Key 时仅账户部分优雅降级，绝不崩卡、绝不显示伪造余额。
+$script:orState = @{ account = $null; key = $null; error = ''; lastFetch = $null }
+function Read-CredentialStoreValue([string]$name) {
+    try {
+        $p = Join-Path $env:USERPROFILE '.dsh\.credentials.yaml'
+        if (Test-Path $p) {
+            foreach ($line in (Get-Content $p)) {
+                if ($line -match ('^\s*' + [regex]::Escape($name) + '\s*:\s*(\S+)')) { return $matches[1].Trim() }
+            }
+        }
+    } catch {}
+    return ''
+}
+function Get-OpenRouterJson([string]$path, [string]$key, [int]$timeoutMs = 12000) {
+    # 返回原始 JSON 文本；失败 throw
+    $req = [System.Net.HttpWebRequest]::Create('https://openrouter.ai' + $path)
+    $req.Method = 'GET'
+    $req.Headers.Add('Authorization', 'Bearer ' + $key)
+    $req.Accept = 'application/json'
+    $req.Timeout = $timeoutMs
+    $resp = $req.GetResponse()
+    $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+    $json = $reader.ReadToEnd()
+    $reader.Close(); $resp.Close()
+    return $json
+}
+function Fetch-OpenRouterQuota {
+    # 返回 @{ ok; account($null|object); key($null|object); error }
+    $infer = Read-CredentialStoreValue 'OPENROUTER_API_KEY'
+    $mgmt  = Read-CredentialStoreValue 'OPENROUTER_MANAGEMENT_KEY'
+    if ($infer -eq '') { return @{ ok = $false; error = '未配置 OPENROUTER_API_KEY'; account = $null; key = $null } }
+    $account = $null; $key = $null
+    # 1) KEY 用量/限额：只要推理 key 在，就尽力查，失败不影响账户行
+    try {
+        $j = Get-OpenRouterJson '/api/v1/key' $infer | ConvertFrom-Json
+        $jd = if ($j -and $null -ne $j.data) { $j.data } else { $j }
+        if ($jd -and $null -ne $jd.usage) {
+            $key = @{ usage = [decimal]$jd.usage
+                     usage_daily = [decimal]$jd.usage_daily
+                     limit = if ($null -eq $jd.limit) { $null } elseif ($null -ne $jd.limit.value) { [decimal]$jd.limit.value } else { try { [decimal]$jd.limit } catch { $null } }
+                     limit_remaining = if ($null -eq $jd.limit_remaining) { $null } elseif ($null -ne $jd.limit_remaining.value) { [decimal]$jd.limit_remaining.value } else { try { [decimal]$jd.limit_remaining } catch { $null } } }
+        }
+    } catch { TraceLog ('openrouter /api/v1/key failed: ' + $_.Exception.Message) }
+    # 2) 账户 Credits：需要 Management Key；缺失/错误只影响账户行
+    if ($mgmt -eq '') {
+        $account = @{ status = 'no-mgmt-key'; message = '需配置 OPENROUTER_MANAGEMENT_KEY' }
+    } else {
+        try {
+            $cj = Get-OpenRouterJson '/api/v1/credits' $mgmt | ConvertFrom-Json
+            if ($cj -and $null -ne $cj.data) {
+                $total = [decimal]$cj.data.total_credits
+                $used  = [decimal]$cj.data.total_usage
+                $account = @{ status = 'ok'; total = $total; used = $used; remaining = $total - $used }
+            } else {
+                $account = @{ status = 'error'; message = 'credits 响应异常' }
+            }
+        } catch {
+            $resp2 = $_.Exception.Response
+            $code = if ($resp2) { [int]$resp2.StatusCode } else { 0 }
+            $account = @{ status = 'error'; message = 'HTTP ' + $code }
+        }
+    }
+    return @{ ok = $true; account = $account; key = $key; error = '' }
+}
+function Start-OpenRouterFetch {
+    try {
+        # 沿用卡片刷新节奏（20s 定时器），但 OpenRouter 上游最多每 60s 查一次（轻量缓存）
+        $now = Get-Date
+        if ($script:orState.lastFetch -and ($now -lt $script:orState.lastFetch.AddSeconds(60))) {
+            Update-QuotaUI
+            return
+        }
+        $script:orState.lastFetch = $now
+        $res = Fetch-OpenRouterQuota
+        if ($res -and $res.ok) {
+            $script:orState.account = $res.account
+            $script:orState.key = $res.key
+            $script:orState.error = $res.error
+            if ($res.key) { TraceLog ('openrouter key ok: usage=' + $res.key.usage) }
+            if ($res.account -and $res.account.status -eq 'ok') { TraceLog ('openrouter credits ok: remaining=' + $res.account.remaining) }
+        } else {
+            $script:orState.account = $null; $script:orState.key = $null
+            $script:orState.error = [string]$res.error
+            TraceLog ('openrouter quota failed: ' + $res.error)
+        }
+        Update-QuotaUI
+    } catch { TraceLog ('openrouter fetch error: ' + $_.Exception.Message) }
 }
 
 # ---------- MiMo session auto-renewal ----------
@@ -1206,6 +1311,35 @@ $script:quotaInjectJS = @'
     else val.textContent=(p.error||'额度获取失败');
     return val;
   }
+  // OpenRouter 卡片：账户 Credits 与 当前推理 Key 用量/限额 分开显示，缺省优雅降级
+  function orCardContent(p){
+    var wrap=document.createElement('div');
+    var val=document.createElement('div');
+    val.style.cssText=BAL_STYLE;
+    var info=document.createElement('div');
+    info.style.cssText='margin-top:3px;font-size:11px;opacity:.88;line-height:1.6;white-space:pre;';
+    if (p.needKey){ val.textContent='未设置 API Key'; info.textContent='需配置 OPENROUTER_API_KEY'; }
+    else if (p.error && !p.account && !p.key){ val.textContent='获取失败'; info.textContent=p.error; }
+    else {
+      var acc=p.account, key=p.key;
+      if (acc && acc.status==='ok'){ val.textContent='账户剩余 '+fmtMoney('USD',acc.remaining); }
+      else if (acc && acc.status==='no-mgmt-key'){ val.textContent='账户余额 n/a'; }
+      else if (acc && acc.status==='error'){ val.textContent='账户余额 n/a'; }
+      else { val.textContent='—'; }
+      var lines=[];
+      if (acc && acc.status==='ok'){ lines.push('已用 $'+Number(acc.used).toFixed(2)+' · 总额 $'+Number(acc.total).toFixed(2)); }
+      else if (acc && acc.status==='no-mgmt-key'){ lines.push('账户余额：需配置 OPENROUTER_MANAGEMENT_KEY'); }
+      else if (acc && acc.status==='error'){ lines.push('账户余额不可用：'+(acc.message||'查询失败')); }
+      if (key){
+        lines.push('Key 用量 $'+Number(key.usage).toFixed(4));
+        if (key.limit==null){ lines.push('Key 限额：未设置'); }
+        else { lines.push('Key 剩余 $'+Number(key.limit_remaining).toFixed(2)+' / 限额 $'+Number(key.limit).toFixed(2)); }
+      }
+      info.textContent=lines.join('\n');
+    }
+    wrap.appendChild(val); wrap.appendChild(info);
+    return wrap;
+  }
   function render(d){
     lastData=d;
     var hostEl=document.getElementById('dshq-providers');
@@ -1228,7 +1362,7 @@ $script:quotaInjectJS = @'
       name.style.cssText=NAME_STYLE;
       name.textContent=p.name||'?';
       box.appendChild(name);
-      box.appendChild(p.kind==='subscription'?subCardContent(p):balCardContent(p));
+      box.appendChild(p.kind==='subscription'?subCardContent(p):(p.kind==='openrouter'?orCardContent(p):balCardContent(p)));
       hostEl.appendChild(box);
     }
     // mimo connect button: only when a mimo card is visible and disconnected
@@ -1738,12 +1872,12 @@ $settingsTimer.Start()
 # balance refresh (every 20s)
 $quotaTimer = New-Object System.Windows.Threading.DispatcherTimer
 $quotaTimer.Interval = [TimeSpan]::FromSeconds(20)
-$quotaTimer.Add_Tick({ if ($script:quotaKey -ne '') { Start-QuotaFetch }; if ($script:mimoCookie -ne '') { Start-MiMoFetch }; Start-GoFetch })
+$quotaTimer.Add_Tick({ if ($script:quotaKey -ne '') { Start-QuotaFetch }; if ($script:mimoCookie -ne '') { Start-MiMoFetch }; Start-GoFetch; Start-OpenRouterFetch })
 $quotaTimer.Start()
 # one-shot initial fetch shortly after launch
 $initTimer = New-Object System.Windows.Threading.DispatcherTimer
 $initTimer.Interval = [TimeSpan]::FromSeconds(2)
-$initTimer.Add_Tick({ $initTimer.Stop(); if ($script:quotaKey -ne '') { Start-QuotaFetch }; if ($script:mimoCookie -ne '') { Start-MiMoFetch }; Start-GoFetch })
+$initTimer.Add_Tick({ $initTimer.Stop(); if ($script:quotaKey -ne '') { Start-QuotaFetch }; if ($script:mimoCookie -ne '') { Start-MiMoFetch }; Start-GoFetch; Start-OpenRouterFetch })
 $initTimer.Start()
 # retry widget injection until the web app has rendered its sidebar
 $injectTimer = New-Object System.Windows.Threading.DispatcherTimer

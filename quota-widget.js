@@ -201,6 +201,35 @@
     else val.textContent=(p.error||'额度获取失败');
     return val;
   }
+  // OpenRouter 卡片：账户 Credits 与 当前推理 Key 用量/限额 分开显示，缺省优雅降级
+  function orCardContent(p){
+    var wrap=document.createElement('div');
+    var val=document.createElement('div');
+    val.style.cssText=BAL_STYLE;
+    var info=document.createElement('div');
+    info.style.cssText='margin-top:3px;font-size:11px;opacity:.88;line-height:1.6;white-space:pre;';
+    if (p.needKey){ val.textContent='未设置 API Key'; info.textContent='需配置 OPENROUTER_API_KEY'; }
+    else if (p.error && !p.account && !p.key){ val.textContent='获取失败'; info.textContent=p.error; }
+    else {
+      var acc=p.account, key=p.key;
+      if (acc && acc.status==='ok'){ val.textContent='账户剩余 '+fmtMoney('USD',acc.remaining); }
+      else if (acc && acc.status==='no-mgmt-key'){ val.textContent='账户余额 n/a'; }
+      else if (acc && acc.status==='error'){ val.textContent='账户余额 n/a'; }
+      else { val.textContent='—'; }
+      var lines=[];
+      if (acc && acc.status==='ok'){ lines.push('已用 $'+Number(acc.used).toFixed(2)+' · 总额 $'+Number(acc.total).toFixed(2)); }
+      else if (acc && acc.status==='no-mgmt-key'){ lines.push('账户余额：需配置 OPENROUTER_MANAGEMENT_KEY'); }
+      else if (acc && acc.status==='error'){ lines.push('账户余额不可用：'+(acc.message||'查询失败')); }
+      if (key){
+        lines.push('Key 用量 $'+Number(key.usage).toFixed(4));
+        if (key.limit==null){ lines.push('Key 限额：未设置'); }
+        else { lines.push('Key 剩余 $'+Number(key.limit_remaining).toFixed(2)+' / 限额 $'+Number(key.limit).toFixed(2)); }
+      }
+      info.textContent=lines.join('\n');
+    }
+    wrap.appendChild(val); wrap.appendChild(info);
+    return wrap;
+  }
   function render(d){
     lastData=d;
     var hostEl=document.getElementById('dshq-providers');
@@ -223,7 +252,7 @@
       name.style.cssText=NAME_STYLE;
       name.textContent=p.name||'?';
       box.appendChild(name);
-      box.appendChild(p.kind==='subscription'?subCardContent(p):balCardContent(p));
+      box.appendChild(p.kind==='subscription'?subCardContent(p):(p.kind==='openrouter'?orCardContent(p):balCardContent(p)));
       hostEl.appendChild(box);
     }
     // mimo connect button: only when a mimo card is visible and disconnected

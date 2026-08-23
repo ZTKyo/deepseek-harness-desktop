@@ -54,8 +54,19 @@ if (-not $free) { throw 'DSH loopback port is still occupied; refusing to start 
 # start fresh via the standard autostart guard (detached, no window)
 $starter = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'start-dsh-server.ps1'
 if (Test-Path $starter) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $starter -Port $Port -LockAlreadyHeld
-    $starterCode = $LASTEXITCODE
+    # Do not invoke the starter through `&`: its detached server child can inherit
+    # this process's output pipes, leaving the restart transaction hung forever
+    # even after the starter itself has exited. A shell-executed hidden child has
+    # no redirected handles; wait only for that direct starter process.
+    $starterPsi = New-Object System.Diagnostics.ProcessStartInfo
+    $starterPsi.FileName = 'powershell.exe'
+    $starterPsi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $starter + '" -Port ' + $Port + ' -LockAlreadyHeld'
+    $starterPsi.UseShellExecute = $true
+    $starterPsi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $starterProc = [System.Diagnostics.Process]::Start($starterPsi)
+    if (-not $starterProc) { throw 'Unable to launch start-dsh-server.ps1' }
+    $starterProc.WaitForExit()
+    $starterCode = $starterProc.ExitCode
     Add-Content $log ("{0}  starter exit code: {1}" -f (Get-Date -Format 'HH:mm:ss'), $starterCode)
     if ($starterCode -ne 0) { throw "start-dsh-server.ps1 failed with exit code $starterCode" }
 } else {

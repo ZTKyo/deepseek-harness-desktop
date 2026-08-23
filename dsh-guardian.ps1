@@ -344,16 +344,11 @@ function Invoke-BudgetedRestart([string]$reason) {
     return $false
 }
 
-# ---------- config safety: guardian-lastgood is a RESTORE MIRROR ONLY ----------
+# ---------- config safety: last-good snapshots of boot-critical YAML ----------
 # Anti-self-kill: if settings.yaml or cordis.patch.yml is edited into an invalid
 # state (syntax error), the server would fail to boot on the next restart. The
-# guardian restores the mirror snapshot before any start/restart, so a bad edit
-# can never brick the service.
-#
-# Reliability v1 authority rule (2026-08-21):
-#   YAML Valid != Last Good. Check-ConfigSafety NEVER writes into guardian-lastgood.
-#   Syntax-valid files are left untouched (they are "allowed to attempt boot").
-#   The mirror is updated ONLY by Save-VerifiedLastGood (full COMMIT_READY gate).
+# guardian keeps a validated snapshot of each file and restores it automatically
+# before any start/restart, so a bad edit can never brick the service.
 $configFiles = @(
     @{ Path = Join-Path $env:USERPROFILE '.dsh\settings.yaml'; Name = 'settings.yaml' },
     @{ Path = Join-Path $env:USERPROFILE '.dsh\profiles\web\cordis.patch.yml'; Name = 'cordis.patch.yml' }
@@ -364,7 +359,7 @@ function Find-JsYaml {
     foreach ($p in @(
         (Join-Path $env:APPDATA 'npm\node_modules\js-yaml\index.js'),
         (Join-Path $env:APPDATA 'npm\node_modules\@deepseek-ai\dsh\node_modules\js-yaml\index.js'),
-        (Get-ChildItem (Join-Path $env:LOCALAPPDATA 'npm-cache\_npx') -Directory -Recurse -Filter index.js -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'js-yaml' } | Select-Object -First 1 -ExpandProperty FullName)
+        'D:\C盘迁移\开发缓存\npm-cache\_npx\1e7f6d9597241db0\node_modules\js-yaml\index.js'
     )) { if (Test-Path $p) { return $p } }
     return $null
 }
@@ -381,20 +376,18 @@ function Test-YamlFile([string]$path) {
     return $null
 }
 function Check-ConfigSafety {
-    # Syntax guard only. Never promotes; never writes guardian-lastgood.
     foreach ($cf in $configFiles) {
         if (-not (Test-Path $cf.Path)) { continue }
         $ok = Test-YamlFile $cf.Path
         $lg = Join-Path $lastGoodDir $cf.Name
         if ($ok -eq $true) {
-            # syntax valid -> allowed to attempt boot; do NOT promote (authority rule)
-            TraceG ("CONFIG SAFETY: " + $cf.Name + " YAML valid (not promoted; mirror untouched)")
+            Copy-Item $cf.Path $lg -Force
         } elseif ($ok -eq $false) {
             if (Test-Path $lg) {
                 Copy-Item $lg $cf.Path -Force
-                TraceG ("CONFIG SAFETY: " + $cf.Name + " was INVALID - restored mirror snapshot (guardian-lastgood)")
+                TraceG ("CONFIG SAFETY: " + $cf.Name + " was INVALID - restored last-good snapshot")
             } else {
-                TraceG ("CONFIG SAFETY: " + $cf.Name + " is INVALID and no mirror snapshot exists")
+                TraceG ("CONFIG SAFETY: " + $cf.Name + " is INVALID and no snapshot exists")
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿# dsh-credential-manager.ps1 - Windows Credential Manager storage for DSH secrets.
+# dsh-credential-manager.ps1 - Windows Credential Manager storage for DSH secrets.
 #
 # P2 (2026-08-18): store API keys in the system Credential Manager (the platform
 # answer the upstream project itself calls the "eventual answer"; generic

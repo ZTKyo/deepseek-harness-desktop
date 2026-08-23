@@ -9,13 +9,13 @@
 // Also regression-checks: auto unchanged, deepseek/mimo/qwen aliases unchanged.
 //
 // Run: node tests/router/test-exact-model-preservation.mjs (from repo root)
-// Imports the REPO CANONICAL source (docs/execution-economy/plugins/), NOT any
+// Imports the REPO CANONICAL source (plugins/), NOT any
 // machine-specific path. Clean checkout + no ~/.dsh + no credentials required.
 
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const canonical = path.resolve(__dirname, '../../docs/execution-economy/plugins/openrouter-router-core.mjs');
+const canonical = path.resolve(__dirname, '../../plugins/openrouter-router-core.mjs');
 const { route, KNOWN_ROUTING_MODES } = await import('file:///' + canonical.split('\\').join('/'));
 
 let pass = 0, fail = 0;

@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 rem DSH Harness (PowerShell 原生感客户端) - double-click me.
 rem SAC-safe: builds a WPF + WebView2 window at runtime under the Microsoft-signed
 rem powershell.exe, so Smart App Control has nothing unsigned to block.

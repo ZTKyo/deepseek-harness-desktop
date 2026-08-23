@@ -15,7 +15,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pluginsDir = path.resolve(__dirname, "../../docs/execution-economy/plugins");
+const pluginsDir = path.resolve(__dirname, "../../plugins");
 
 const vision = await import("file:///" + path.join(pluginsDir, "vision-bridge.mjs").split("\\").join("/"));
 const {

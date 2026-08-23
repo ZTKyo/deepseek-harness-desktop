@@ -1,4 +1,4 @@
-﻿*.log
+*.log
 probe-result.json
 probe-step.log
 update-check.json
@@ -13,3 +13,19 @@ secrets/
 .env
 .credentials.yaml
 *.env.local
+
+# --- Phase 01 (SAVE) hardening: WorkBuddy local state / runtime temp ---
+.workbuddy/
+_workbuddy/
+*.local.json
+runtime-temp/
+_client-runtime/
+notify-events.log
+*.log.bak-*
+
+# --- local runtime / session artifacts (never into Git) ---
+client-run.log
+client-run.old.log
+dsh-server-*.log
+*.pid
+*.sock

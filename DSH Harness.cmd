@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 rem DSH Harness - Edge app-mode client (double-click me).
 rem SAC-safe: runs only Microsoft-signed binaries (powershell.exe + msedge.exe).
 rem "start "": cmd exits immediately; the short-lived powershell runs with a hidden

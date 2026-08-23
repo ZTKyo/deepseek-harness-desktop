@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 rem DSH Server Autostart - called at sign-in by the Startup shortcut.
 rem Ensures the dsh web server runs detached (no windows); exits immediately
 rem if the server is already up.

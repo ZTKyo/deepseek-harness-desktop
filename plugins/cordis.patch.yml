@@ -1,0 +1,249 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+
+# Notion MCP server: reads the user's Notion workspace via the official
+# @notionhq/notion-mcp-server (stdio). The token below is the user's own
+# private Notion integration token, stored only in this local profile file.
+- insert:
+    - id: mcp-notion
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: notion
+        transport: stdio
+        command: npx
+        args: ['-y', '@notionhq/notion-mcp-server']
+        env:
+          NOTION_TOKEN: ${NOTION_TOKEN}
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+
+# --- 用户体验优化（2026-08-14，可整体删除本段还原；需重启 dsh web 生效） ---
+
+# 会话全文搜索：默认 openAt: never（全文搜索关闭，侧边栏搜索仅匹配标题）。
+# 改为 first-search 后，侧边栏搜索框在首次搜索时才加载 node:sqlite 并建立
+# 内存索引——启动保持安静（Node 22 无实验性警告），搜索即可命中会话正文。
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: first-search
+
+# 系统提示词：官方 persona + 语言跟随 + 全局任务收资协议（覆盖未自带 persona 的预设；
+# 自带 persona 的预设（standard/code/cordis/autonomous）由 ~/.dsh/AGENTS.md 全局指令覆盖）。
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+      Respond in the same language the user writes in; for Chinese users, reply in Chinese.
+
+      TASK INTAKE PROTOCOL (global): treat plain-language task descriptions as drafts. Before
+      executing, identify every unclear or missing detail — goal, scope, target files, constraints,
+      preferences, credentials, deliverables, acceptance criteria, and anything the user forgot to
+      mention — and confirm anything you are unsure about in ONE consolidated ask_user_question
+      round (up to 8 questions with recommended options). Never ask what you can find out yourself.
+      After the answers, execute fully autonomously without further check-ins; use the goal system
+      for long-running tasks and report at the end.
+
+# Agent 预设全局默认 = 自主执行（任务收资协议：先问清、后全程自主）。
+# 自定义预设位于 ~/.dsh/.agent-presets/autonomous/。改回标准：default: standard
+- id: agent-presets
+  config:
+    default: autonomous
+
+# --- 上下文压缩调优（2026-08-14 迁出，勿在此处重复添加） ---
+# 说明：cordis.patch.yml 的 id 补丁只作用于 host 组合树；本 profile 的 compaction-basic
+# 基座行被 web-app 禁用（disabled: true），实际生效的实例由 autonomous 预设挂载，
+# 其配置须写在 ~/.dsh/.agent-presets/autonomous/agent.cordis.yml 的 compaction-basic 行
+# （thresholdRatio 0.6 / retainRatio 0.2 / maxTokens 32768）。
+
+# --- ask_user_question ↔ Telegram 远程通道（2026-08-15）---
+# GUI 问题弹窗桥接到手机：本插件(ask-telegram)经 webServer.tapIndex 注入浏览器脚本
+# (ask-telegram-client.js)，弹窗出现时 POST → 写 pending 文件 → bot 推送到
+# Telegram（inline keyboard）→ 手机点选 → bot 写 answers 文件 → 浏览器脚本
+# 自动点击 GUI 弹窗对应选项 → 任务继续。
+# 需要 DSH-Client/telegram-bot/telegram-bot.mjs（常驻）配合；删除本段即还原。
+- insert:
+    - id: ask-telegram
+      name: './ask-telegram.mjs'
+      config:
+        answersRoot: 'C:\Users\Administrator\.dsh\telegram-answers'
+        httpPort: 9240
+
+# --- 浏览器 Computer Use（computer-use，2026-08-15 永久化）---
+# CDP 常驻无头 Chrome + 视觉循环（截图→read_image→vision-bridge 解析→点击/输入），
+# 提供 10 个 browser_* 工具：start/stop/open/info/shot/labels/click/type/press/back。
+# 懒启动：首次调用自动拉起常驻 Chrome（正式 Chrome，独立 profile，OpenClash 代理）；
+# 用 profile=notion 复用 Notion 登录态。截图存 shotDir，用 read_image 查看。
+# 删除本段即还原（browser_* 工具消失）。
+- insert:
+    - id: computer-use
+      name: './computer-use.mjs'
+      config:
+        port: 9223
+        chromePath: 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+        proxy: 'http://192.168.168.1:7890'
+        profilesDir: 'C:\Users\Administrator\Desktop\sdeepseek harness\DSH-Client\browser-bridge\profiles'
+        shotDir: 'C:\Users\Administrator\Desktop\sdeepseek harness\output\playwright'
+        pwCore: 'D:\C盘迁移\开发缓存\npm-cache\_npx\31e32ef8478fbf80\node_modules\playwright-core\index.js'
+        defaultProfile: 'default'
+        viewport: '1366,850'
+
+# --- 视觉桥接（vision-bridge）：DeepSeek 无感接收图片（2026-08-14 迁移至 OpenCode Go，需重启生效）---
+# 配合 ~/.dsh/settings.yaml 中 opencode/opencode-qwen 模型的 input: [text, image] 声明：
+# 用户在 GUI 上传图片后，本插件自动调视觉模型解析成文字，替换图片块后再交给 DeepSeek，全程无感。
+# 视觉路由优先级：
+#   1) OpenCode Go / MiMo-V2.5（默认视觉，走 OpenCode Go 订阅额度）
+#   2) OpenCode Go / Qwen3.7-Plus（MiMo 失败/不确定/用户要求精确 OCR 时）
+#   3) 小米官方 API / mimo-v2.5（emergency fallback，xiaomiFallbackEnabled 开关，默认开）
+# 原生多模态模型（如 xiaomi/mimo-v2.5 直连）不受影响。
+# 删除本段并移除 settings.yaml 中对应 input 声明即可还原。
+- insert:
+    - id: vision-bridge
+      name: './vision-bridge.mjs'
+      config:
+        primaryModel: mimo-v2.5
+        fallbackModel: qwen3.7-plus
+        xiaomiFallbackEnabled: true
+        maxTokens: 1024
+
+# --- 密钥安全面板（secret-gate，2026-08-16 新增）---
+# 组成：
+#   1) host 插件 ./secret-gate.mjs —— 注册 request_secret / read_secret /
+#      secret_status / forget_secret 四个模型工具；凭据值存于现有凭据库
+#      （~/.dsh/.credentials.yaml，ctx.credentials），登记元数据（仅 ref/label）
+#      存 ~/.dsh/secret-gate/refs.json。
+#   2) client 插件 secret-gate-client（npm 包名，经 ~/.dsh/profiles/node_modules
+#      的 junction 链接解析到 ./secret-gate-client/）—— 浏览器端密码遮罩弹窗：
+#      agent 调用 request_secret 时自动弹出；用户提交后经 credentials.set 直接入库
+#      （密钥不经过聊天文本），再以会话消息通知 agent 用 read_secret 读取；聊天里发
+#      /secrets（或 /密钥）可手动打开面板，"已存密钥"页签可查看/删除。
+# 删除本段即还原（无需其他改动）。
+- insert:
+    - id: secret-gate
+      name: './secret-gate.mjs'
+      config: {}
+
+    - id: secret-gate-client
+      name: './secret-gate-client/index.js'
+      config: {}
+
+# --- 回合结束完成通知（completion-notify，2026-08-15）---
+# 取代"分离进程轮询"方案（连续多轮失败：误报/TDZ 崩溃/全量解码滞后/静默卡死）。
+# agent 回合最后一个动作写入 flag 文件（~/.dsh/completion-notify.json，
+# 含 message/sessionId/createdAt），本插件在对应会话出现 reason=completed 的
+# turn/end 时异步发送 telegram-alert.ps1 并清除 flag；异常结束不发送。
+# 删除本段即还原（agent 纪律见 ~/.dsh/AGENTS.md 任务完成通知纪律）。
+- insert:
+    - id: completion-notify
+      name: './completion-notify.mjs'
+      config: {}
+
+# --- OpenRouter 三模型自动路由（openrouter-router，2026-08-19）---
+# model=auto：确定性规则路由（Rule0-6，core 纯函数），拦截 provider=openrouter 的请求，
+# 改写为 qwen/deepseek/mimo 具体模型；跨模型 fallback 与既有 dsh-llm-retry 协同；
+# 不干预 opencode/deepseek/xiaomi 等其他 provider。删除本段即还原。
+- insert:
+    - id: openrouter-router
+      name: './openrouter-router.mjs'
+      config:
+        diagnostics: false
+
+# --- AgentRouter wire image 注入（agentrouter-wire，2026-08-19）---
+# 为发往 https://agentrouter.org 的请求注入 Claude Code wire image 头
+# （User-Agent: claude-cli/...、anthropic-version、anthropic-beta、x-app），
+# 否则 agentrouter.org 的 WAF 一律返回 401。仅影响 agentrouter.org 请求，
+# 不影响 DeepSeek/MiMo/Qwen/OpenRouter 等其他 provider。
+# 与 settings.yaml 的 llm-pi-ai.providers.agentrouter-* 配套。删除该段即还原。
+- insert:
+    - id: agentrouter-wire
+      name: './agentrouter-wire.mjs'
+      config: {}
+
+# --- Agent Inspector（右侧可折叠面板，2026-08-19）---
+# 右侧 Agent Inspector 面板：显示 Task Progress / Agents / Routing / Cost / Validation / Safety / Activity。
+# 收起时右上角按钮显示状态点；展开后主聊天区自适应。
+# 宿主插件 agent-inspector.mjs 负责：1) tapIndex 注入 client.js 到浏览器 boot entries
+#   （与 secret-gate 相同模式）；2) 注册 switch_primary_model 工具（主力一句话切换）；
+#   3) 路由决策审计流。agent-inspector-client 在 node_modules 里 junction 到本地目录
+#   （同 secret-gate-client）让 framework 能通过 npm 包名解析到 ./index.js。
+# 删除本段即还原。
+- insert:
+    - id: agent-inspector
+      name: './agent-inspector.mjs'
+      config: {}
+
+    - id: agent-inspector-client
+      name: './agent-inspector-client/index.js'
+      config: {}
+
+# --- Command Code 双模型路由（commandcode-router，2026-08-20）---
+# 只拦截 provider=commandcode 的请求，把 auto / 具体模型统一决策成本次真正要发的模型：
+#   默认主力 = meta/muse-spark-1.2-contributor（Muse Spark 1.2 Contributor）
+#   单跳 fallback = deepseek/deepseek-v4-flash（DeepSeek V4 Flash），双向互为 fallback
+# 关键保证（修复"一次自动回落后整个会话被锁死"的粘滞 bug）：
+#   1) 状态拆成 preferredModel（用户意图）/ requestModel（本次请求）；
+#      自动回落只写内存里的 armedFallback / temporaryPrimary，
+#      绝不写 settings.yaml、会话默认、持久化模型选择；
+#   2) 每个 turn 结构性复位 → 下一个新任务自动重新优先 Muse，不需要新建对话；
+#   3) 每个 turn 最多一次跨模型回落，回落后再失败就如实报错（防乒乓）；
+#   4) 手动切换优先级最高，并清除陈旧的自动回落状态。
+# 决策逻辑在纯函数 core（commandcode-router-core.mjs），回归测试
+# commandcode-router-test.mjs（51 项，含 T5/T6/T7 与 30 轮防粘滞压力测试）。
+# 不干预 openrouter / opencode / xiaomi / agentrouter 等其他 provider 的既有行为。
+# 与 settings.yaml 的 llm-pi-ai.providers.commandcode 配套。
+# 可选：环境变量 CMD_ZDR=1 时为 api.commandcode.ai 注入 x-cmd-zdr: 1（默认关闭，
+# 因为本 Harness 目前没有全局 ZDR/No-Training 设置，不擅自开启）。
+# --- 全局 HTTP Keep-Alive 延长（keepalive-patch，2026-08-20）---
+# Node 22 默认 keepAliveTimeout 仅 4 秒：每次对话间隔 >4 秒就会重建 TCP/TLS，
+# 导致 Fake-IP 隧道下首次请求多付 ~800ms 冷启动代价（实测：COLD 1042ms vs WARM 217ms，
+# 6 秒空闲后回落到 1478ms）。本补丁将 keepAliveTimeout 延长到 60 秒，
+# 让"刚刚聊过接着问"的连接持续复用，直到长时间空闲才重建。
+# 仅调整连接复用时长，不改路由/认证/TLS验证/代理/模型选择；删除本段即还原。
+# 验证：打补丁后 6 秒空闲仍保持 258ms（原 1478ms），10 秒后 287ms。
+- insert:
+    - id: keepalive-patch
+      name: './keepalive-patch.mjs'
+      config: {}
+
+# 删除该段即还原。
+- insert:
+    - id: commandcode-router
+      name: './commandcode-router.mjs'
+      config: {}
+
+# --- 模型选择状态完整性守卫（model-selection-guard，2026-08-22）---
+# 修复「非法 (provider, model) pair 进入 Agent Request」的架构缺口：
+#   1) agent/request waterfall 最外层（prepend）校验最终 pair；
+#   2) 合法性复用 ctx.llm.resolveModelInfo 唯一真源（无前缀猜测、无新增白名单）；
+#   3) 非法 pair 整体拒绝并回退到 settings agent-default-model（也验证其合法）；
+#   4) default 非法 → fail-loud 原样返回让上层报错，不静默猜模型。
+# 合法 pair 原样放行，不影响 bai/opencode/commandcode/openrouter 既有路由。
+# 删除本段即还原。
+- insert:
+    - id: model-selection-guard
+      name: './model-selection-guard.mjs'
+      config: {}
+
+# --- Execution Continuity（execution-continuity，2026-08-23 crash-safe 重注册）---
+# 事故复盘（2026-08-23 00:12 crash-loop，详见 EXECUTION_CONTINUITY_CRASHSAFE_REPORT.md）：
+#   旧版 inject 声明 ["agents","goals","sessions","compaction"]，把 compaction 当成
+#   boot 期硬依赖；web profile 的 host 平面 compaction-basic 被 web-app 层禁用
+#   （disabled: true），Cordis assertEntriesActivated 发现 entry 永远 PENDING
+#   （waiting for service: compaction）→ 整个 Host boot throw → 每 21~95 秒循环退出。
+# Crash-Safe 设计（全部在 Plugin 层，不改官方 Core）：
+#   1) inject 只保留 agents/goals/sessions（web host 平面真实存在的服务）；
+#   2) compaction 改为运行时惰性探测（getCompaction：ctx.get 优先，属性访问兜底），
+#      缺失 → 仅 contextOverflowRecovery 降级（COMPACTION_UNAVAILABLE），Server 照常启动；
+#   3) 所有 handler/boot 均带异常隔离，任何内部错误只记录，绝不逃逸到 Host 顶层；
+#   4) Active Mode（2026-08-23 晚升级，enableAutoResume: true）：
+#      启用被动能力（分类+有界 retry/fallback）+ 主动恢复（boot scan / timer / turn-end
+#      补位自动 resume）。anti-double-kick：resume 前检查 session.list 的 running 标志，
+#      已 running 的 goal 跳过（与 goal-recovery.mjs 的 ledger claim + grace-verify 正交，
+#      避免双 kick）；WAITING_USER/USER_PAUSED/USER_CANCELLED/COMPLETED/FAILED_FATAL
+#      永不自动恢复。
+# 删除本段即还原（插件进入 QUARANTINED：源码保留，注册禁用）。
+- insert:
+    - id: execution-continuity
+      name: './execution-continuity.mjs'
+      config:
+        enableAutoResume: true

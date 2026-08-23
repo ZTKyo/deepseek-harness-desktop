@@ -17,11 +17,7 @@ function Redact-Secrets([string]$text){
     return $text
 }
 # system
-$diagNode = $null; $diagDsh = $null; $diagPnpm = $null
-try { $diagNode = node --version 2>$null } catch {}
-try { $diagDsh = dsh --version 2>$null } catch {}
-try { $diagPnpm = pnpm --version 2>$null } catch {}
-Safe-Write 'system' @{ os=(Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber); node=$diagNode; dsh=$diagDsh; pnpm=$diagPnpm }
+Safe-Write 'system' @{ os=(Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber); node=(node --version 2>$null); dsh=(dsh --version 2>$null); pnpm=(pnpm --version 2>$null) }
 # generation
 try { . (Join-Path $root 'dsh-generation.ps1'); Safe-Write 'generation' (Get-DshGenerationInfo -Port $Port) } catch { Safe-Write 'generation' @{ error=$_.Exception.Message } }
 # health

@@ -28,7 +28,7 @@ function Find-Dsh {
             if ($cand -and (Test-Path $cand)) { return $cand }
         }
     }
-    foreach ($root in @((Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'))) {
+    foreach ($root in @((Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'), 'D:\C盘迁移\开发缓存\npm-cache\_npx')) {
         if (Test-Path $root) {
             foreach ($d in (Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)) {
                 $cand = Join-Path $d.FullName 'node_modules\.bin\dsh.cmd'

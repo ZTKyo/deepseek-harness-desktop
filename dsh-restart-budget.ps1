@@ -1,4 +1,4 @@
-﻿# dsh-restart-budget.ps1 - persistent, bounded restart budget.
+# dsh-restart-budget.ps1 - persistent, bounded restart budget.
 # Callers must hold dsh-process-identity.ps1's restart mutex while mutating it.
 
 $script:DshRestartBudgetPath = if ($env:DSH_RESTART_BUDGET_PATH) {

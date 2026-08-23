@@ -1,4 +1,4 @@
-﻿// dsh-launcher.js - Observable runner for the dsh web server.
+// dsh-launcher.js - Observable runner for the dsh web server.
 // Spawned by start-dsh-server.ps1; owns the dsh child until it exits, writes
 // child lifecycle state, and sends stdout/stderr directly to an append-only
 // log handle. It must not exit after a fixed delay: that hid child exits and
@@ -68,11 +68,14 @@ if (logFile) {
 // forwards the Tailscale IP's 3080 to 127.0.0.1:3080; the /api browser-trust
 // fence accepts the Tailscale authority via --trusted-host.
 // Reliability v1 (Stage D/E): non-normal boot modes use an isolated profile.
+// R3 (Reviewer Round 2): three-way merge — keep BOTH the boot-mode profile
+// wiring (baseline) AND the R1 runtime behavior (--no-open + trusted-host).
 const bootMode = process.env.DSH_BOOT_MODE || 'normal';
 const profileArgs = (bootMode === 'safe' || bootMode === 'experimental')
   ? ['--profile', bootMode]
   : [];
-child = spawn(nodeExe, [dshEntry, ...profileArgs, 'web', '--port', port, ], {
+const trustedHosts = ['--trusted-host', '100.120.3.29:3080', '--trusted-host', 'ai-office-windows.tailab0bb5.ts.net:3080'];
+child = spawn(nodeExe, [dshEntry, ...profileArgs, 'web', '--port', port, '--no-open', ...trustedHosts], {
   cwd: process.env.USERPROFILE,
   env: { ...process.env },
   stdio: ['ignore', logFile ? fs.openSync(logFile, 'a') : 'ignore', logFile ? fs.openSync(logFile, 'a') : 'ignore'],

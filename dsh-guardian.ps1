@@ -258,17 +258,34 @@ function Invoke-GoalRecovery {
     } catch { TraceG ('goal-recovery error: ' + $_.Exception.Message) }
 }
 function Restore-LastGoodConfig {
-    # Phase 02 R4 (Step 8): ONLY restore from an exact verified set. If the
-    # guardian mirror carries a manifest, every file must match its sha256 —
-    # a torn copy / hash mismatch REFUSES the restore (fail-closed, don't make
-    # things worse). Mirrors without a manifest (legacy) fall back to copy.
+    # Phase 02 R6 (R5-B3): restore ONLY from an exact verified set. Missing
+    # meta.json / manifest / required file OR any hash mismatch => REFUSE
+    # (fail-closed). The legacy no-manifest copy fallback is REMOVED — a mirror
+    # without a manifest is not verifiable, so we never restore from it.
     $metaPath = Join-Path $lastGoodDir 'meta.json'
-    $manifest = $null
-    if (Test-Path $metaPath) {
-        try { $manifest = (Get-Content $metaPath -Raw | ConvertFrom-Json).manifest } catch { $manifest = $null }
+    if (-not (Test-Path $metaPath)) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood has no meta.json; restore REFUSED (no legacy copy fallback)'
+        return
     }
+    try {
+        $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+    } catch {
+        TraceG 'CONFIG SAFETY: guardian-lastgood meta.json unreadable; restore REFUSED (fail-closed)'
+        return
+    }
+    $manifest = $meta.manifest
+    if (-not $manifest -or @($manifest).Count -eq 0) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood manifest empty/missing; restore REFUSED (fail-closed)'
+        return
+    }
+    # required-set cardinality (same contract as Save-VerifiedLastGood)
+    $required = if ($meta.required) { @($meta.required) } else { @('settings.yaml', 'cordis.patch.yml', 'cordis.yml') }
+    $manifestNames = @($manifest | ForEach-Object { $_.path })
     $verified = $true
-    if ($manifest) {
+    foreach ($rn in $required) {
+        if ($rn -notin $manifestNames) { $verified = $false; TraceG ("CONFIG SAFETY: required file " + $rn + " missing from manifest; restore REFUSED"); break }
+    }
+    if ($verified) {
         foreach ($entry in $manifest) {
             $src = Join-Path $lastGoodDir $entry.path
             if (-not (Test-Path $src)) { $verified = $false; break }
@@ -276,7 +293,7 @@ function Restore-LastGoodConfig {
             if ($h -ne $entry.sha256) { $verified = $false; TraceG ("CONFIG SAFETY: " + $entry.path + " hash mismatch; refusing restore"); break }
         }
     }
-    if ($manifest -and -not $verified) {
+    if (-not $verified) {
         TraceG 'CONFIG SAFETY: guardian-lastgood set torn/hash-mismatch; restore REFUSED (fail-closed)'
         return
     }

@@ -134,5 +134,56 @@ try {
 }
 Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue
 
+# ========== Phase 02 R6 (R5-B3): required-set + cardinality + no-legacy-copy ==========
+Write-Host ''
+Write-Host '== C6: required-set enforcement + missing-manifest refusal + torn-pointer =='
+New-Item -ItemType Directory -Force -Path $vlDir | Out-Null
+$fakeSrc6 = "$env:TEMP\dsh-lg6-$([guid]::NewGuid().ToString('N'))"; New-Item -ItemType Directory -Force -Path $fakeSrc6 | Out-Null
+Set-Content -Path (Join-Path $fakeSrc6 'settings.yaml') -Value "a: b" -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc6 'cordis.patch.yml') -Value '- insert:' -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc6 'cordis.yml') -Value '[]' -Encoding UTF8
+try {
+    # C6a: MISSING required source -> promote refused (was: any-file-suffices)
+    $saveMiss = Save-VerifiedLastGood -Force -Reason 'c6-missing' -Src @(
+        @{ Path = (Join-Path $fakeSrc6 'settings.yaml'); Name = 'settings.yaml' },
+        @{ Path = (Join-Path $fakeSrc6 'cordis.patch.yml'); Name = 'cordis.patch.yml' }
+        # cordis.yml intentionally absent
+    )
+    Assert ($saveMiss.Saved -eq $false -and $saveMiss.Reason -match 'missing_required') 'C6a missing required file refuses promote' "reason=$($saveMiss.Reason)"
+
+    # C6b: full set promotes; then MISSING manifest -> Test-VerifiedSet false
+    $saveOk = Save-VerifiedLastGood -Force -Reason 'c6-ok' -Src @(
+        @{ Path = (Join-Path $fakeSrc6 'settings.yaml'); Name = 'settings.yaml' },
+        @{ Path = (Join-Path $fakeSrc6 'cordis.patch.yml'); Name = 'cordis.patch.yml' },
+        @{ Path = (Join-Path $fakeSrc6 'cordis.yml'); Name = 'cordis.yml' }
+    )
+    Assert ($saveOk.Saved -eq $true) 'C6b full required set promotes' "dir=$($saveOk.Dir)"
+    $set6 = Get-VerifiedCurrentSet
+    Assert ($null -ne $set6) 'C6b pointer resolves'
+    Remove-Item (Join-Path $set6 'meta.json') -Force -ErrorAction SilentlyContinue
+    Assert (-not (Test-VerifiedSet $set6)) 'C6b missing manifest -> set invalid (fail-closed)'
+
+    # C6c: torn pointer (points to nonexistent version) -> no set
+    $ptrFile = Join-Path $vlDir 'current'
+    Set-Content -LiteralPath $ptrFile -Value 'v-99999999-000000-000' -Encoding UTF8 -NoNewline
+    Assert ($null -eq (Get-VerifiedCurrentSet)) 'C6c torn pointer -> no set (fail-closed)'
+
+    # C6d: mixed-set (manifest lists file not present on disk) -> invalid
+    $setOk = Get-VerifiedCurrentSet  # re-save to get a valid set first
+    $saveOk2 = Save-VerifiedLastGood -Force -Reason 'c6d' -Src @(
+        @{ Path = (Join-Path $fakeSrc6 'settings.yaml'); Name = 'settings.yaml' },
+        @{ Path = (Join-Path $fakeSrc6 'cordis.patch.yml'); Name = 'cordis.patch.yml' },
+        @{ Path = (Join-Path $fakeSrc6 'cordis.yml'); Name = 'cordis.yml' }
+    )
+    $set6d = Get-VerifiedCurrentSet
+    Assert ($null -ne $set6d) 'C6d pointer resolves after resave'
+    Remove-Item (Join-Path $set6d 'cordis.yml') -Force -ErrorAction SilentlyContinue
+    Assert (-not (Test-VerifiedSet $set6d)) 'C6d mixed-set (file missing) -> invalid (fail-closed)'
+} finally {
+    Remove-Item $fakeSrc6 -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $vlDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage B authority rule verified)'; exit 0 }
 else { Write-Host "RESULT: FAIL ($failCount failed)"; exit 1 }

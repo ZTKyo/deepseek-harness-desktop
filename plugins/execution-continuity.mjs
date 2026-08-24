@@ -261,9 +261,13 @@ export class IntentStore {
       RECOVERABLE_STATES.includes(it.state));
   }
   listDue(now) {
+    // Phase 02 R8 Addendum fix: RUNNING with a nextRetryAt (grace windows,
+    // cooldowns) is ALSO due — without this, a grace-marked RUNNING intent is a
+    // one-shot dead-end (never re-checked).
     return Object.values(this.data.intents).filter((it) =>
       it.autoResume !== false &&
-      (it.state === STATE.WAITING_PROVIDER || it.state === STATE.WAITING_NETWORK || it.state === STATE.RECOVERY_QUEUED) &&
+      (it.state === STATE.WAITING_PROVIDER || it.state === STATE.WAITING_NETWORK || it.state === STATE.RECOVERY_QUEUED ||
+        (it.state === STATE.RUNNING && it.nextRetryAt)) &&
       it.nextRetryAt && it.nextRetryAt <= now &&
       (it.autoResumeCycles || 0) < 0 + 999); // 预算检查在调用处做
   }
@@ -634,8 +638,16 @@ export function apply(ctx, config = {}) {
     const it = store.get(sessionId);
     if (!it) return;
     // anti-double-kick
+    // Phase 02 R8 Addendum fix: cooldown must NOT be a silent one-shot dead-end —
+    // write RECOVERY_QUEUED + nextRetryAt (= cooldown end) so the timer re-drives
+    // this intent after the cooldown instead of leaving it in RUNNING forever.
     if (it.lastResumeAt && Date.now() - it.lastResumeAt < resumeCooldownMs) {
-      diag(`RESUME-SKIP sid=${sessionId} within cooldown (${reason})`);
+      const retryAt = it.lastResumeAt + resumeCooldownMs;
+      store.setState(sessionId, STATE.RECOVERY_QUEUED, {
+        note: `resume within cooldown (${reason}); retry after cooldown`,
+        nextRetryAt: retryAt,
+      });
+      diag(`RESUME-SKIP sid=${sessionId} within cooldown (${reason}) -> RECOVERY_QUEUED nextRetryAt=${retryAt}`);
       return;
     }
     if (!hasBudget("auto-resume", it, budgets)) {
@@ -741,6 +753,10 @@ export function apply(ctx, config = {}) {
           return;
         }
         if (!sameGen || !it.goalIdObserved || goal.id !== it.goalIdObserved) {
+          // Phase 02 R8 Addendum fix: grace RUNNING must carry nextRetryAt so
+          // the timer re-checks after the grace window — otherwise this is a
+          // one-shot dead-end (listDue did not process plain RUNNING).
+          const graceEnd = Date.now() + graceMs;
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: observed goal ${goal ? goal.id.slice(0, 12) : "none"} (new generation/identity)`,
             serverGenerationSeen: serverGeneration,
@@ -748,21 +764,24 @@ export function apply(ctx, config = {}) {
             goalRevisionObserved: goal ? goal.revision : null,
             goalRoundsObserved: goal && goal.roundsStarted !== null ? goal.roundsStarted : it.goalRoundsObserved,
             goalObservedAt: Date.now(),
+            nextRetryAt: graceEnd,
             livenessUnknownCount: 0,
           });
-          diag(`RESUME-GRACE sid=${sessionId} new generation/goal observed -> SKIP (grace, no kick)`);
+          diag(`RESUME-GRACE sid=${sessionId} new generation/goal observed -> SKIP (grace, recheck at ${graceEnd})`);
           return;
         }
         // 2) goal changed revision (new goal revision) -> re-observe (grace)
         if (goal && goal.revision !== null && it.goalRevisionObserved !== null && goal.revision !== it.goalRevisionObserved) {
+          const graceEnd = Date.now() + graceMs;
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: goal revision changed ${it.goalRevisionObserved}->${goal.revision}`,
             goalRevisionObserved: goal.revision,
             goalRoundsObserved: goal.roundsStarted,
             goalObservedAt: Date.now(),
+            nextRetryAt: graceEnd,
             livenessUnknownCount: 0,
           });
-          diag(`RESUME-GRACE sid=${sessionId} goal revision changed -> SKIP (re-observe)`);
+          diag(`RESUME-GRACE sid=${sessionId} goal revision changed -> SKIP (re-observe at ${graceEnd})`);
           return;
         }
         // 3) same generation + same goal + progress -> genuine SKIP
@@ -782,11 +801,13 @@ export function apply(ctx, config = {}) {
         //    bounded count and RETURN (no kick now; timer re-checks).
         const elapsed = Date.now() - (it.goalObservedAt || 0);
         if (elapsed < graceMs) {
+          const graceEnd = Date.now() + (graceMs - elapsed);
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: goal ${goal.id.slice(0, 12)} observed ${Math.round(elapsed / 1000)}s ago, no progress yet`,
             goalObservedAt: it.goalObservedAt || Date.now(),
+            nextRetryAt: graceEnd,
           });
-          diag(`RESUME-GRACE sid=${sessionId} no progress within grace (${Math.round(elapsed / 1000)}s/${graceMs / 1000}s) -> SKIP`);
+          diag(`RESUME-GRACE sid=${sessionId} no progress within grace (${Math.round(elapsed / 1000)}s/${graceMs / 1000}s) -> SKIP, recheck at ${graceEnd}`);
           return;
         }
         // grace elapsed, no progress -> LIVENESS_UNKNOWN (bounded, no kick now).

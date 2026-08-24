@@ -80,16 +80,27 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T2 reason mentions manual review', /manual review/.test(store2.get(sid2).reason || ''));
 }
 
-// T3: goal-scoped liveness (Refinement ②) — anti-double-kick must use goal
-// identity/revision + goal progress, NOT session updatedAt/steps. We verify the
-// production source contract.
+// T3: goal-scoped liveness (Refinement ② + R6 R5-B4) — anti-double-kick must
+// use goal identity/revision + goal progress with grace/recheck, NOT session
+// updatedAt/steps, and must NOT kick in the same call.
 {
   const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
   check('T3 goal-scoped liveness branch present', /RESUME-LIVENESS-UNKNOWN/.test(src));
-  check('T3 goal identity/revision checked', /goal\.id !== it\.goalId/.test(src) || /goal\.id !== it\.goalId/.test(src.replace(/\s+/g,' ')));
-  check('T3 goal phase active required', /goal\.phase && goal\.phase !== "active"/.test(src));
-  check('T3 goal progress via roundsStarted', /goal\.roundsStarted/.test(src));
+  check('T3 liveness grace exists (no immediate kick)', /RESUME-GRACE/.test(src));
+  check('T3 serverGenerationSeen persisted', /serverGenerationSeen/.test(src));
+  check('T3 goalId/revision persisted identity', /goalIdObserved/.test(src) && /goalRevisionObserved/.test(src));
+  check('T3 progress via roundsStarted', /goalRoundsObserved/.test(src));
+  check('T3 no-progress -> RECOVERY_QUEUED + nextRetryAt (no kick now)', /RECOVERY_QUEUED/.test(src) && /nextRetryAt/.test(src));
   check('T3 session-activity-only NOT accepted as liveness', !/zombie running reconciled/.test(src), 'old zombie marker removed');
+}
+
+// T10 (R6 R5-B4): legacy migration ONLY for schemaVersion<2 — a schema2
+// manual-review state (incl. cap-exhausted) must NOT auto-migrate on boot.
+{
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T10 schema2 NEVER auto-migrates', /it\.schemaVersion === 2\) return false/.test(src));
+  check('T10 livenessUnknownCount bounded', /livenessUnknownCount/.test(src));
+  check('T10 liveness cap -> FAILED_FATAL manual review', /liveness-unknown beyond/.test(src));
 }
 
 // T4: real NEEDS_VERIFICATION (unresolved side-effect call) is NEVER relaxed —

@@ -71,8 +71,8 @@
 ## 7. PR / CI / Merge SHA（回填后不留 pending）
 
 - **PR #29（代码+报告）**：`fix/phase02-review-r11`
-- CI：Level 1/2/3（待 PR 创建后跑）
-- Merge SHA：待 merge 后记录
+- CI：Level 1/2/3 全部成功（Static 1m9s / Reliability 1m32s / Boot smoke 4m53s）
+- Merge SHA：**`b0fb3cca`**（2026-08-25 merged）
 
 ## 8. Rollback
 

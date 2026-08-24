@@ -43,13 +43,28 @@ jobs:
           # loads the REAL custom-plugin surface, not an empty profile). No
           # secrets: this manifest only references plugin files + no-op config.
           if (Test-Path 'plugins') {
-            $plugins = Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test|core\.mjs$' } | Select-Object -ExpandProperty Name
+            # Phase 02 R4 (Step 10): the ACTIVE plugin manifest mirrors the
+            # deployed profile's local plugin set (authoritative list, not
+            # glob-based — core/helper modules like model-registry and
+            # *-core.mjs are NOT plugins and must not be loaded as such).
+            $active = @(
+              'ask-telegram.mjs','computer-use.mjs','vision-bridge.mjs',
+              'secret-gate.mjs','completion-notify.mjs','openrouter-router.mjs',
+              'agentrouter-wire.mjs','agent-inspector.mjs','keepalive-patch.mjs',
+              'commandcode-router.mjs','model-selection-guard.mjs',
+              'execution-continuity.mjs'
+            )
+            # copy every plugin module (main + their core/helper deps) so
+            # imports resolve inside the profile dir
+            Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:DSH_HOME 'profiles\web') -Force }
             $manifest = @()
-            foreach ($p in $plugins) {
-              Copy-Item (Join-Path 'plugins' $p) (Join-Path $env:DSH_HOME 'profiles\web') -Force
-              $manifest += "      - id: ci-$($p.Replace('.mjs',''))`n        name: './$p'`n        config: {}"
+            foreach ($pn in $active) {
+              if (Test-Path (Join-Path 'plugins' $pn)) {
+                $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs','').Replace('-','-'))`n      name: './$pn'`n      config: {}"
+              }
             }
-            $patchContent = "insert:`n" + ($manifest -join "`n")
+            $patchContent = $manifest -join "`n"
+            if (-not $patchContent) { $patchContent = '[]' }
             Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
           } else {
             Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value '[]' -Encoding UTF8

@@ -79,24 +79,51 @@ function Save-VerifiedLastGood {
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
     $dshVer = ''
     try { $dshVer = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVer = '' }
+    # Phase 02 R4 (Step 8): build the complete set in a STAGING dir first, with a
+    # {path, sha256} manifest. Only after every file is staged do we atomically
+    # switch the current pointer. A torn copy can never be mistaken for LastGood.
+    $staging = Join-Path $dst ".staging-$PID"
+    New-Item -ItemType Directory -Force -Path $staging | Out-Null
+    $manifest = @()
+    $any = $false
+    foreach ($f in $src) {
+        if (Test-Path $f.Path) {
+            $h = (Get-FileHash $f.Path -Algorithm SHA256).Hash
+            Copy-Item $f.Path (Join-Path $staging $f.Name) -Force
+            $manifest += @{ path = $f.Name; sha256 = $h }
+            $any = $true
+        }
+    }
+    if (-not $any) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue; return @{ Saved = $false; Reason = 'no_src_files' } }
     $meta = @{
         timestamp = (Get-Date -Format 'o')
         reason = $Reason
         port = $Port
         dshVersion = $dshVer
         gate = if ($gate) { $gate.Stage } else { 'forced' }
+        manifest = $manifest
     }
-    foreach ($f in $src) { if (Test-Path $f.Path) { Copy-Item $f.Path (Join-Path $dst $f.Name) -Force } }
-    ($meta | ConvertTo-Json -Compress) | Out-File (Join-Path $dst 'meta.json') -Encoding utf8
+    ($meta | ConvertTo-Json -Depth 5 -Compress) | Out-File (Join-Path $staging 'meta.json') -Encoding utf8
+    # ATOMIC SWITCH: rename staging -> current (same volume, Move-Item is atomic-ish).
+    # Remove stale current dir only after staging is fully written and meta validated.
+    $current = Join-Path $dst 'current'
+    if (Test-Path $current) { Remove-Item $current -Recurse -Force -ErrorAction SilentlyContinue }
+    Move-Item $staging $current
+    # legacy paths for backward-compat readers that look in verified-lastgood root
+    foreach ($f in $src) {
+        $s = Join-Path $current $f.Name
+        if (Test-Path $s) { Copy-Item $s (Join-Path $dst $f.Name) -Force }
+    }
+    (Get-Content (Join-Path $current 'meta.json') -Raw) | Out-File (Join-Path $dst 'meta.json') -Encoding utf8
     # sync the restore mirror (guardian-lastgood) - the ONLY legal writer
     $gDir = Get-GuardianLastGoodDir
     New-Item -ItemType Directory -Force -Path $gDir | Out-Null
     foreach ($f in $src) {
-        $s = Join-Path $dst $f.Name
+        $s = Join-Path $current $f.Name
         if (Test-Path $s) { Copy-Item $s (Join-Path $gDir $f.Name) -Force }
     }
-    (Get-Content (Join-Path $dst 'meta.json') -Raw) | Out-File (Join-Path $gDir 'meta.json') -Encoding utf8
-    return @{ Saved = $true; Reason = $Reason; Dir = $dst; Gate = if ($gate) { $gate.Stage } else { 'forced' } }
+    (Get-Content (Join-Path $current 'meta.json') -Raw) | Out-File (Join-Path $gDir 'meta.json') -Encoding utf8
+    return @{ Saved = $true; Reason = $Reason; Dir = $current; Gate = if ($gate) { $gate.Stage } else { 'forced' } }
 }
 
 function Restore-VerifiedLastGood {

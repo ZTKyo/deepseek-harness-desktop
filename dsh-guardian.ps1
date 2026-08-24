@@ -258,6 +258,28 @@ function Invoke-GoalRecovery {
     } catch { TraceG ('goal-recovery error: ' + $_.Exception.Message) }
 }
 function Restore-LastGoodConfig {
+    # Phase 02 R4 (Step 8): ONLY restore from an exact verified set. If the
+    # guardian mirror carries a manifest, every file must match its sha256 —
+    # a torn copy / hash mismatch REFUSES the restore (fail-closed, don't make
+    # things worse). Mirrors without a manifest (legacy) fall back to copy.
+    $metaPath = Join-Path $lastGoodDir 'meta.json'
+    $manifest = $null
+    if (Test-Path $metaPath) {
+        try { $manifest = (Get-Content $metaPath -Raw | ConvertFrom-Json).manifest } catch { $manifest = $null }
+    }
+    $verified = $true
+    if ($manifest) {
+        foreach ($entry in $manifest) {
+            $src = Join-Path $lastGoodDir $entry.path
+            if (-not (Test-Path $src)) { $verified = $false; break }
+            $h = (Get-FileHash $src -Algorithm SHA256).Hash
+            if ($h -ne $entry.sha256) { $verified = $false; TraceG ("CONFIG SAFETY: " + $entry.path + " hash mismatch; refusing restore"); break }
+        }
+    }
+    if ($manifest -and -not $verified) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood set torn/hash-mismatch; restore REFUSED (fail-closed)'
+        return
+    }
     foreach ($cf in $configFiles) {
         $lg = Join-Path $lastGoodDir $cf.Name
         if (Test-Path $lg) {

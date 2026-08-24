@@ -155,6 +155,7 @@ if (-not $WorkerMode) {
 # ================= WORKER MODE: real restart logic =================
 . (Join-Path $root 'dsh-process-identity.ps1')
 . (Join-Path $root 'dsh-readiness.ps1')
+. (Join-Path $root 'dsh-generation.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')
 
 Start-Sleep -Seconds $DelaySeconds
@@ -253,10 +254,17 @@ if ($ready.State -ne 'client_ready') { throw "DSH client readiness failed: $($re
 # the same server+generation.
 $newOwner = Get-DshLoopbackOwner -Port $Port
 $newServerPid = if ($newOwner -and $newOwner.Pid) { [int]$newOwner.Pid } else { 0 }
+# Phase 02 R5 Addendum: generation MUST be a non-empty current-server identity.
+# Empty/unknown generation -> fail-closed (do NOT commit with a blank identity).
 $newGen = ''
-try { if (Get-Command Get-DshGenerationId -ErrorAction SilentlyContinue) { $newGen = (Get-DshGenerationId -Port $Port) | Out-String | Select-Object -First 1 } } catch { $newGen = '' }
-$newGen = $newGen.Trim()
+try { if (Get-Command Get-DshGenerationId -ErrorAction SilentlyContinue) { $newGen = [string](Get-DshGenerationId -Port $Port) } } catch { $newGen = '' }
+$newGen = ($newGen -replace '\s', '')
 Write-Log ("candidate bound to new server pid={0} generation='{1}'" -f $newServerPid, $newGen)
+if (-not $newGen -or $newServerPid -le 0) {
+    Write-Log ("restart commit ABORTED: candidate identity incomplete (pid={0} gen='{1}') - fail-closed" -f $newServerPid, $newGen)
+    if ($AttemptId) { Set-AttemptState $AttemptId 'FAILED' 'candidate identity incomplete (generation missing)' $true }
+    throw "candidate identity incomplete: generation must be non-empty"
+}
 Register-DshRestartCandidate -AttemptId $AttemptId -ProcessId $newServerPid -Generation $newGen | Out-Null
 $stableSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STABLE_WINDOW_SEC } else { 30 }
 Write-Log ("stable window: waiting {0}s before commit" -f $stableSec)

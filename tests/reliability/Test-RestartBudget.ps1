@@ -46,7 +46,7 @@ Assert ($r5.Allowed -eq $false) 'R5 budget still exhausted (no reset)' "reason=$
 # R6: candidate does NOT reset attempts (budget still counts)
 $env:DSH_RESTART_STABLE_WINDOW_SEC = '30'
 Register-DshRestartAttempt -Reason 'stable-test' | Out-Null
-Register-DshRestartCandidate -AttemptId 'att-6' -ProcessId 1234 | Out-Null
+Register-DshRestartCandidate -AttemptId 'att-6' -ProcessId 1234 -Generation 'tg6' | Out-Null
 $b6 = Read-DshRestartBudget
 Assert ([int]$b6.attempts -ge 1) 'R6 candidate keeps attempts (no early reset)' "attempts=$($b6.attempts)"
 Assert ($b6.candidateReady -eq $true) 'R6 candidateReady flag set'
@@ -64,8 +64,8 @@ Assert ([int]$b8.attempts -ge 1) 'R8 attempts preserved before commit' "attempts
 
 # R9: confirm-stable (commit) resets budget + records stableCommitAt
 $env:DSH_RESTART_STABLE_WINDOW_SEC = '0'      # commit path (stable elapsed implied)
-Register-DshRestartCandidate -AttemptId 'att-9' -ProcessId 5678 | Out-Null
-$commit = Confirm-DshRestartStable -AttemptId 'att-9' -ProcessId 5678
+Register-DshRestartCandidate -AttemptId 'att-9' -ProcessId 5678 -Generation 'tg9' | Out-Null
+$commit = Confirm-DshRestartStable -AttemptId 'att-9' -ProcessId 5678 -Generation 'tg9'
 Assert ($commit.Committed -eq $true) 'R9 commit accepted (same candidate)' "reason=$($commit.Reason)"
 $b9 = Read-DshRestartBudget
 Assert ([int]$b9.attempts -eq 0) 'R9 commit resets attempts' "attempts=$($b9.attempts)"
@@ -78,15 +78,15 @@ Assert ($r9.Allowed -eq $true) 'R9 allowed after commit' "reason=$($r9.Reason)"
 
 # R10: FOREIGN candidate (different attemptId/pid) cannot commit
 Register-DshRestartAttempt -Reason 'r10-test' | Out-Null
-Register-DshRestartCandidate -AttemptId 'att-real' -ProcessId 1111 | Out-Null
+Register-DshRestartCandidate -AttemptId 'att-real' -ProcessId 1111 -Generation 'tg10' | Out-Null
 $env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
-$foreign = Confirm-DshRestartStable -AttemptId 'att-evil' -ProcessId 2222
+$foreign = Confirm-DshRestartStable -AttemptId 'att-evil' -ProcessId 2222 -Generation 'tg10'
 Assert ($foreign.Committed -eq $false) 'R10 foreign candidate rejected' "reason=$($foreign.Reason)"
 $b10 = Read-DshRestartBudget
 Assert ([int]$b10.attempts -ge 1) 'R10 budget NOT reset by foreign confirm' "attempts=$($b10.attempts)"
 
 # R11: same-candidate commit works after foreign was rejected
-$ok = Confirm-DshRestartStable -AttemptId 'att-real' -ProcessId 1111
+$ok = Confirm-DshRestartStable -AttemptId 'att-real' -ProcessId 1111 -Generation 'tg10'
 Assert ($ok.Committed -eq $true) 'R11 same-candidate commit accepted' "reason=$($ok.Reason)"
 
 # R12: CORRUPT budget file -> quarantined, fail-closed (not fresh-available)
@@ -136,6 +136,22 @@ $null = Confirm-DshRestartStable -AttemptId 'att-h2' -ProcessId 9003 -Generation
 # even after a commit, the next attempts should still count against the hour window
 $stormAllowed = Test-DshRestartAllowed
 Assert ($stormAllowed.Allowed -eq $false) 'R16 hourly storm still circuits (history not erased)' "reason=$($stormAllowed.Reason)"
+
+# ========== Phase 02 R5 Addendum: generation production binding ==========
+# R17: EMPTY generation -> confirm rejected (blank identity is never valid)
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
+Register-DshRestartAttempt -Reason 'r17-test' | Out-Null
+Register-DshRestartCandidate -AttemptId 'att-g0' -ProcessId 9004 -Generation '' | Out-Null
+$emptyGen = Confirm-DshRestartStable -AttemptId 'att-g0' -ProcessId 9004 -Generation ''
+Assert ($emptyGen.Committed -eq $false) 'R17 empty generation rejected (fail-closed)' "reason=$($emptyGen.Reason)"
+
+# R18: candidate registered with EMPTY generation can never be committed
+# (registration-time identity is authoritative; a later caller supplying a
+# generation cannot upgrade a blank-identity candidate)
+Register-DshRestartAttempt -Reason 'r18-test' | Out-Null
+Register-DshRestartCandidate -AttemptId 'att-g0b' -ProcessId 9005 -Generation '' | Out-Null
+$lateGen = Confirm-DshRestartStable -AttemptId 'att-g0b' -ProcessId 9005 -Generation 'gen-X'
+Assert ($lateGen.Committed -eq $false) 'R18 blank-registered candidate never commits' "reason=$($lateGen.Reason)"
 
 Write-Host ""
 if ($fail -eq 0) { Write-Host "RESULT: PASS (restart budget state machine + stable window + generation/corruption)" } else { Write-Host "RESULT: FAIL ($fail)" }

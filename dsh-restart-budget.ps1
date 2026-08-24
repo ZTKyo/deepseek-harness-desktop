@@ -180,11 +180,15 @@ function Test-DshCandidateIdentityMatch {
             # (fail-closed: empty caller identity cannot commit a bound candidate)
             if ($ident.attemptId -and (-not $AttemptId -or ($ident.attemptId -ne $AttemptId))) { return $false }
             if ($ident.pid -and $ident.pid -gt 0 -and (-not $ProcessId -or $ProcessId -le 0 -or ([int]$ident.pid -ne $ProcessId))) { return $false }
-            # Phase 02 R5 (R4-B2): generation is part of the identity. If the
-            # candidate recorded a generation, the confirm must match it — a
-            # server of a different generation is NOT this candidate.
-            if ($ident.generation -and $Generation -and ($ident.generation -ne $Generation)) { return $false }
-            if ($ident.generation -and -not $Generation) { return $false }
+            # Phase 02 R5 (R4-B2 + Addendum): generation is part of the identity.
+            # A candidate bound to an identity MUST carry a non-empty generation —
+            # an empty/blank generation is NOT a valid identity and can never be
+            # committed (registration-time authority; the candidate should have
+            # failed-closed at registration when generation was missing).
+            $identGen = if ($ident.PSObject.Properties.Name -contains 'generation') { [string]$ident.generation } else { '' }
+            if (-not $identGen) { return $false }
+            if ($Generation -and ($identGen -ne $Generation)) { return $false }
+            if (-not $Generation) { return $false }
         } catch { return $false }
     }
     return (Test-DshRestartStableWindow)

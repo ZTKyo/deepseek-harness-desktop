@@ -444,15 +444,19 @@ export function apply(ctx, config = {}) {
     try {
       const session = ctx.sessions?.get ? ctx.sessions.get(sessionId) : null;
       if (!session || !Array.isArray(session.events)) {
-        diag(`CT sid=${sessionId} no session events -> needs_verification (fail-closed)`);
-        return { state: "needs_verification", detail: "session events unavailable" };
+        // Phase 02 R5 Addendum (transient CT evidence defer): events temporarily
+        // unavailable is NOT the same as "we read events and found an unresolved
+        // side-effect call". Return a TRANSIENT marker so the caller defers with
+        // backoff instead of pinning the session to permanent NEEDS_VERIFICATION.
+        diag(`CT sid=${sessionId} session events unavailable -> evidence_defer (transient, bounded)`);
+        return { state: "evidence_unavailable", detail: "session events unavailable" };
       }
       const res = evaluateCompletion(session.events);
       diag(`CT sid=${sessionId} -> ${res.state}${res.detail ? " " + res.detail : ""}`);
       return res;
     } catch (e) {
-      diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> needs_verification (fail-closed)`);
-      return { state: "needs_verification", detail: "completion-truth check error" };
+      diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> evidence_defer (transient)`);
+      return { state: "evidence_unavailable", detail: "completion-truth check error" };
     }
   }
 
@@ -478,6 +482,29 @@ export function apply(ctx, config = {}) {
     // This is the deterministic layer; the recovery prompt is only the last resort.
     {
       const ct = await completionTruth(sessionId, it);
+      // Phase 02 R5 Addendum: distinguish transient evidence unavailability from
+      // a REAL unresolved side effect. evidence_unavailable -> bounded defer
+      // (retry later, same as WAITING_NETWORK); needs_verification -> permanent
+      // human review (NEVER relaxed).
+      if (ct.state === "evidence_unavailable") {
+        const ctCap = 5; // bounded: 5 consecutive evidence-unavailable defers
+        it.ctDeferCount = (it.ctDeferCount || 0) + 1;
+        if (it.ctDeferCount > ctCap) {
+          store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+            reason: `completion-evidence unavailable beyond ${ctCap} defers (${ct.detail || "events unavailable"}); manual review required`,
+          });
+          diag(`CT sid=${sessionId} evidence defer cap exceeded (${it.ctDeferCount} > ${ctCap}) -> NEEDS_VERIFICATION (manual review)`);
+        } else {
+          const retryAt = Date.now() + Math.max(10000, backoffDelay(it.ctDeferCount, budgets, 0));
+          store.setState(sessionId, STATE.WAITING_NETWORK, {
+            reason: `CT-evidence-defer: ${ct.detail || "events unavailable"} (${it.ctDeferCount}/${ctCap})`,
+            nextRetryAt: retryAt,
+            ctDeferCount: it.ctDeferCount,
+          });
+          diag(`CT sid=${sessionId} evidence unavailable -> bounded defer #${it.ctDeferCount} nextRetryAt=${retryAt}`);
+        }
+        return;
+      }
       if (ct.state === "needs_verification") {
         store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
           reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
@@ -488,6 +515,8 @@ export function apply(ctx, config = {}) {
       // state === "clean": all side-effecting calls resolved (or none) — safe to
       // resume from the completion point; the recovery prompt remains the last
       // resort and the WAITING_USER gate below still applies.
+      // a successful resume resets the transient defer counter.
+      if (it.ctDeferCount) { it.ctDeferCount = 0; }
     }
     // P1-A：WAITING_USER 安全 Gate（fail-closed）。所有恢复入口（boot scan /
     // timer / turn-end 补位）最终都汇聚到这里，因此在此统一拦截。
@@ -508,10 +537,26 @@ export function apply(ctx, config = {}) {
       // Anti-double-kick（P0 fix 2026-08-23）：若该 session 当前已在 running（例如
       // goal-recovery.mjs 已先恢复、或 goal-round-driver 已自动续跑），跳过恢复，
       // 避免与 goal-recovery 的 ledger claim 或自动续跑产生双 kick。
+      // Phase 02 R5 Addendum (zombie reconciliation): across a generation
+      // restart, `running===true` alone is NOT proof an agent is executing. If
+      // the session shows NO recent progress (updatedAt older than a bounded
+      // threshold) it is a ZOMBIE running flag — reconcile it into the recovery
+      // path (INTERRUPTED_BY_RESTART) instead of skipping forever. The
+      // completion-truth + WAITING_USER gates below still apply fail-closed.
       if (found.running === true) {
-        store.setState(sessionId, STATE.RUNNING, { note: "already running; resume skipped" });
-        diag(`RESUME-SKIP sid=${sessionId} already running (${reason})`);
-        return;
+        const updatedAt = typeof found.updatedAt === "number" ? found.updatedAt : null;
+        const zombieMs = 180000; // 3 min without any session update = zombie
+        const isZombie = updatedAt !== null && (Date.now() - updatedAt) > zombieMs;
+        if (isZombie) {
+          store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
+            note: `zombie running reconciled (updatedAt ${new Date(updatedAt).toISOString()})`,
+          });
+          diag(`RESUME-ZOMBIE sid=${sessionId} running flag stale (no progress ${Math.round((Date.now()-updatedAt)/1000)}s) -> INTERRUPTED_BY_RESTART, continuing recovery`);
+        } else {
+          store.setState(sessionId, STATE.RUNNING, { note: "already running; resume skipped" });
+          diag(`RESUME-SKIP sid=${sessionId} already running (${reason})`);
+          return;
+        }
       }
     } catch (e) {
       // Phase 02 R1 (BLOCKING-5): RESUME-DEFER must be DURABLE. We persist a

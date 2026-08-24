@@ -8,7 +8,7 @@
 | Phase | 名称 | 状态 | Waiting For | 报告路径 |
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R7.md |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R8.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | — | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -49,22 +49,22 @@
 ### 关键修复（R6 → R7 保留）
 - **① legacy NEEDS_VERIFICATION migration**：旧代码写的 "events unavailable" NEEDS_VERIFICATION 不再永久卡死——boot 时精确 legacy 签名才重跑 Completion Truth（clean→可恢复 / evidence unavailable→bounded defer / 真实 unresolved→保持 fail-closed）
 - **② goal-scoped liveness → CT-gated recovery（R7）**：anti-double-kick 需 current generation + target Goal identity/revision + Goal progress evidence；zombie/no-progress 超 grace 后进入 CT-gated recovery（clean→resume / evidence unavailable→bounded defer / unresolved→NEEDS_VERIFICATION），不再死端 FAILED_FATAL；goal projection 缺失也走 bounded recheck
-- **③ generation 非空 fail-closed + 真实 server generation（R7）**：restart worker dot-source dsh-generation.ps1；serverGenerationSeen = runtime entryHash（真实 boot identity，非 Date.now()）
+- **③ generation 非空 fail-closed + 真实 per-boot generation（R8）**：restart worker dot-source dsh-generation.ps1；serverGeneration = runtime ledger childPid+startedAt（per-boot 变、plugin reload 不变）；禁 entryHash/Date.now fallback
 - **④ LastGood atomic + required-set + canonical restore（R7）**：versioned set + pointer 原子替换；required set 缺一不可；Guardian mirror 带 canonicalSetId 且必须等于 current pointer（mirror 只能 derived cache）
-- **⑤ Capacity truth（R7）**：可注入 exact route resolver + runtime-capacity-adapter 接官方 resolveModelInfo；unknown runtime fail-closed
-- **⑥ Loaded release manifest（R7）**：EC boot 时写 loaded-release.json（server generation + 插件 sha256），3-way source/deployed/loaded attestation
+- **⑤ Capacity truth（R8）**：live ctx.llm.resolveModelInfo 真实接线（wired=true source=runtime，1M 真实容量）；registry hint 只作 fallback
+- **⑥ Loaded release manifest（R7→R8）**：EC boot 写 loaded-release.json（真 per-boot generation + 8 插件 sha256）；r8-attestation-check 严格 3-way（mismatch FAIL）
 
 ## 当前执行位置
 
-- 当前阶段：Phase 02 — SIMPLIFY（Reviewer Round 6 修复完成，R7 已提交）
+- 当前阶段：Phase 02 — SIMPLIFY（Round 7 + Post-PR24 Follow-up 修复完成，R8 已提交）
 - **状态：AWAITING_REVIEW**（Waiting For=EXTERNAL_REVIEW）
-- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R7.md）
+- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R8.md）
 - 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Phase 03
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：Phase 02 R7 修复完成，等待外部审核。
+当前执行位置：Phase 02 R8 修复完成，等待外部审核。
 
 ## 变更日志
 

@@ -142,6 +142,122 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T7 LEGACY_EVIDENCE_UNAVAILABLE kind', /verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE"/.test(src));
 }
 
+// T11 (R8-2): production-path fault test — drive resumeAfterCtClean directly
+// (the SINGLE shared recovery tail). Contract: ONLY a real goal.resume or queue
+// kick SUCCESS writes RUNNING; any failure writes a durable due-state.
+{
+  // success: goal.resume OK + prompt OK -> RUNNING + baseline reset
+  {
+    const ctxT = makeCtx({ 'sess-r8': { events: [] } });
+    let promptCalls = 0, resumeCalls = 0;
+    const realFetch = globalThis.fetch;
+    const calls = [];
+    const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8', projections: { values: { goal: { goal: { id: 'g-r8', revision: 1 }, roundsStarted: 3 } } } }]);
+      if (url.includes('/goal.resume')) { resumeCalls++; return okResult({}); }
+      if (url.includes('/session.prompt')) { promptCalls++; calls.push('prompt'); return okResult({}); }
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-r8');
+    it.goalId = 'g-r8';
+    const st = await p._test.resumeAfterCtClean('sess-r8', it, 't11-success');
+    check('T11 success -> RUNNING', st === 'RUNNING', `st=${st}`);
+    check('T11 success -> prompt kicked', promptCalls >= 1, `prompt=${promptCalls}`);
+    check('T11 success -> liveness baseline reset', it.livenessUnknownCount === 0 && it.goalObservedAt !== null, `liveness=${it.livenessUnknownCount}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // goal.resume throws + prompt OK -> still RUNNING (prompt fallback accepted)
+  {
+    const ctxT = makeCtx({ 'sess-r8b': { events: [] } });
+    let promptCalls = 0;
+    const realFetch = globalThis.fetch;
+    const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8b', projections: { values: { goal: { goal: { id: 'g-r8b', revision: 1 } } } } }]);
+      if (url.includes('/goal.resume')) throw new Error('goal not active');
+      if (url.includes('/session.prompt')) { promptCalls++; return okResult({}); }
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-r8b');
+    it.goalId = 'g-r8b';
+    const st = await p._test.resumeAfterCtClean('sess-r8b', it, 't11-resume-throw');
+    check('T11 goal.resume throws + prompt OK -> RUNNING', st === 'RUNNING', `st=${st}`);
+    check('T11 prompt fallback kicked', promptCalls >= 1, `prompt=${promptCalls}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // prompt FAILS -> durable WAITING_PROVIDER + nextRetryAt (NOT RUNNING)
+  {
+    const ctxT = makeCtx({ 'sess-r8c': { events: [] } });
+    const realFetch = globalThis.fetch;
+    const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8c', projections: { values: { goal: { goal: { id: 'g-r8c', revision: 1 } } } } }]);
+      if (url.includes('/goal.resume')) return okResult({});
+      if (url.includes('/session.prompt')) throw new Error('prompt rejected');
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-r8c');
+    it.goalId = 'g-r8c';
+    const st = await p._test.resumeAfterCtClean('sess-r8c', it, 't11-prompt-fail');
+    const after = p._test.store.get('sess-r8c');
+    check('T11 prompt FAIL -> durable WAITING_PROVIDER', st === 'WAITING_PROVIDER' && after.state === 'WAITING_PROVIDER', `st=${st} state=${after.state}`);
+    check('T11 prompt FAIL -> nextRetryAt set', typeof after.nextRetryAt === 'number' && after.nextRetryAt > Date.now() - 1000, `nextRetryAt=${after.nextRetryAt}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // no goalRef -> prompt-only fallback; success still RUNNING
+  {
+    const ctxT = makeCtx({ 'sess-r8d': { events: [] } });
+    let promptCalls = 0;
+    const realFetch = globalThis.fetch;
+    const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (url.includes('/session.list')) return okResult([]); // no goal projection
+      if (url.includes('/session.prompt')) { promptCalls++; return okResult({}); }
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-r8d');
+    it.goalId = null; // no goal identity
+    const st = await p._test.resumeAfterCtClean('sess-r8d', it, 't11-no-goalref');
+    check('T11 no goalRef + prompt OK -> RUNNING', st === 'RUNNING' && promptCalls >= 1, `st=${st} prompt=${promptCalls}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // store reload: durable WAITING_PROVIDER survives a new store instance (restart)
+  {
+    const ctxT = makeCtx({ 'sess-r8e': { events: [] } });
+    const realFetch = globalThis.fetch;
+    const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+    globalThis.fetch = async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8e', projections: { values: { goal: { goal: { id: 'g-r8e', revision: 1 } } } } }]);
+      if (url.includes('/goal.resume')) return okResult({});
+      if (url.includes('/session.prompt')) throw new Error('prompt rejected');
+      return okResult({});
+    };
+    const p1 = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it1 = p1._test.store.ensure('sess-r8e');
+    it1.goalId = 'g-r8e';
+    await p1._test.resumeAfterCtClean('sess-r8e', it1, 't11-reload');
+    // NEW plugin instance = new store instance reading the SAME file (restart sim)
+    const p2 = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it2 = p2._test.store.get('sess-r8e');
+    check('T11 store reload keeps durable due-state', it2 && it2.state === 'WAITING_PROVIDER' && typeof it2.nextRetryAt === 'number', `state=${it2 && it2.state}`);
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

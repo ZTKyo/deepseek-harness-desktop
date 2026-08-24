@@ -606,10 +606,15 @@ export function apply(ctx, config = {}) {
       // grace window and the bounded counter does not accumulate.
       it.goalObservedAt = Date.now();
       it.livenessUnknownCount = 0;
+      // R9-1: confirmed resume success -> RUNNING MUST atomically clear the
+      // stale due-state (nextRetryAt + prior defer/grace reason) — otherwise a
+      // healthy resumed intent stays "due" and the timer keeps re-driving it.
       store.setState(sessionId, STATE.RUNNING, {
         note: `resume-after-ct-clean (${reason}): kick accepted`,
         goalObservedAt: it.goalObservedAt,
         livenessUnknownCount: 0,
+        nextRetryAt: null,
+        reason: null,
       });
       diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
       return STATE.RUNNING;
@@ -637,6 +642,20 @@ export function apply(ctx, config = {}) {
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
+    // Phase 02 R9 (R9-4): a REAL server restart is a NEW BOOT — reset the
+    // auto-resume cycle budget so a long-lived session (historical cycles
+    // accumulated across many prior boots) gets a fresh recovery opportunity.
+    // Without this, restart auto-resume fails with BUDGET-EXHAUSTED and the
+    // task can only be resumed by manual intervention (observed: session
+    // turn=46 hit budget on restart). Anti-storm semantics still hold WITHIN
+    // a single boot (cycles increment per RESUME-OK).
+    if (serverGeneration && it.serverGenerationSeen !== serverGeneration) {
+      if (it.autoResumeCycles) {
+        diag(`RESUME-BUDGET-RESET sid=${sessionId} new generation (${serverGeneration}) resets autoResumeCycles ${it.autoResumeCycles}->0`);
+        it.autoResumeCycles = 0;
+        store.persist();
+      }
+    }
     // anti-double-kick
     // Phase 02 R8 Addendum fix: cooldown must NOT be a silent one-shot dead-end —
     // write RECOVERY_QUEUED + nextRetryAt (= cooldown end) so the timer re-drives
@@ -786,11 +805,15 @@ export function apply(ctx, config = {}) {
         }
         // 3) same generation + same goal + progress -> genuine SKIP
         if (goalProgressed) {
+          // R9-1: genuine progress -> RUNNING must CLEAR the stale nextRetryAt
+          // (a previously grace-set due timestamp must not keep this healthy
+          // intent due forever).
           store.setState(sessionId, STATE.RUNNING, {
             note: `already running; goal rounds progressed ${it.goalRoundsObserved}->${goal.roundsStarted}`,
             goalRoundsObserved: goal.roundsStarted,
             goalObservedAt: Date.now(),
             livenessUnknownCount: 0,
+            nextRetryAt: null,
           });
           diag(`RESUME-SKIP sid=${sessionId} goal progress (rounds ${it.goalRoundsObserved}->${goal.roundsStarted}) (${reason})`);
           return;
@@ -903,7 +926,10 @@ export function apply(ctx, config = {}) {
       // Phase 02 R2 (BLOCKING-4): successful resume resets the durable defer
       // budget so the next network outage starts from a clean slate.
       if (it.resumeRetryCount) { it.resumeRetryCount = 0; }
-      store.setState(sessionId, goalActive ? STATE.RUNNING : STATE.RUNNING);
+      // R9-1: confirmed resume success -> RUNNING must clear stale due-state
+      // (WAITING_*/QUEUED recovery leaves a nextRetryAt that must not keep the
+      // healthy intent due).
+      store.setState(sessionId, goalActive ? STATE.RUNNING : STATE.RUNNING, { nextRetryAt: null, reason: null });
       diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
     } catch (e) {
       diag(`RESUME-FAILED sid=${sessionId} ${String(e.message).slice(0, 160)}`);
@@ -1197,7 +1223,7 @@ export function apply(ctx, config = {}) {
       diag(`RECONCILE-LEGACY sid=${sessionId} legacy NEEDS_VERIFICATION (reason='${String(it.reason).slice(0, 80)}') -> revalidate`);
       const ct = await completionTruth(sessionId, it);
       if (ct.state === "clean") {
-        store.setState(sessionId, STATE.RUNNING, { note: "legacy revalidation: CT clean -> recoverable", schemaVersion: 2, verificationKind: null, ctUnresolvedCall: null, reason: null });
+        store.setState(sessionId, STATE.RUNNING, { note: "legacy revalidation: CT clean -> recoverable", schemaVersion: 2, verificationKind: null, ctUnresolvedCall: null, reason: null, nextRetryAt: null });
         diag(`RECONCILE-LEGACY sid=${sessionId} CT clean -> RUNNING (recoverable)`);
         return true;
       }
@@ -1414,6 +1440,6 @@ export function apply(ctx, config = {}) {
       intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery },
+    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi },
   };
 }

@@ -106,11 +106,11 @@ mismatch fixture（篡改 vision-bridge）→ FAIL exit 1；还原 → PASS
 | resumeAfterCtClean fault test（T11 8 项） | synthetic（生产模块+真实 fetch mock） |
 | adapter ctx.get 抛错隔离修复 | synthetic + 真实 CTX-LLM 诊断 |
 
-## 10. PR / CI / Merge SHA
+## 10. PR / CI / Merge SHA（已回填，不留 pending）
 
 - **PR #25（代码+报告）**：`fix/phase02-review-r8`
-- CI：Level 1/2/3（待 PR 创建后跑）
-- Merge SHA：待 merge 后记录（不留 pending）
+- CI：Level 1/2/3 **全部成功**（Static 59s / Reliability 1m40s / Boot smoke 4m14s）
+- Merge SHA：**`8fe679e0`**（2026-08-24 merged）
 
 ## 11. Regression（全量）
 

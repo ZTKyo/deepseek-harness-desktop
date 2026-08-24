@@ -8,7 +8,7 @@
 | Phase | 名称 | 状态 | Waiting For | 报告路径 |
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R9.md |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | — | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -20,19 +20,17 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（R9 external review=CHANGES_REQUIRED — R10 pending）
+## Phase 02 执行上下文（R10 external review=CHANGES_REQUIRED — R11 收口）
 
-- **Reviewer Round 9 Verdict：CHANGES_REQUIRED**（2026-08-25；R10 未通过前禁止进入 Security-Hardening / P2.5 / P3）
-- **修复分支**: `fix/phase02-review-r10`（R10 进行中）
-- **前置**：PR #23（6 commits，merged）、PR #24（R7 adversarial audit，merged）、PR #25（R8，merged）、PR #26（R8 Addendum，merged）、**PR #27（R9，merge SHA=f3336eb8）**
+- **Reviewer Round 10 Verdict：CHANGES_REQUIRED**（2026-08-25；最终 verification/truth 收口，非新架构缺陷；R11 未通过前禁止进入 Security-Hardening / P2.5 / P3）
+- **修复分支**: `fix/phase02-review-r11`（R11 进行中）
+- **前置**：PR #23–#26（R7/R8，merged）、PR #27（R9，f3336eb8）、**PR #28（R10，merge=3c005b64，backfill=7554221）**
 
-### R10 剩余 blocker（进行中）
-- R10-1 budget-generation 一次性语义（autoResumeBudgetGeneration 专用字段，同 boot 不重复 reset）——已修
-- R10-2 真实 exact CommandCode→OpenCode gate（已执行：pre=commandcode/deepseek-v4-flash → post=opencode/deepseek-v4-flash，均 source=runtime）——已修
-- R10-3 runtime evidence file（PHASE02_R9_RUNTIME_GATES.md）——已修
-- R10-4 REPORT_R9 编码修复 + CURRENT_STATUS truth——进行中
+### R11 收口项（进行中）
+- R11-1 真实 budget-epoch production-path test（T16：同 gen 25 次入口含 fault → reset=1；reload 不 re-reset；新 gen reset=1）——已修
+- R11-2 CURRENT_STATUS canonical truth（R10=CHANGES_REQUIRED / R11 pending / PR#28 merge）——进行中
 
-### 路线顺序（R10 通过后）
+### 路线顺序（R11 通过后）
 1. **Phase 02 VERIFIED / APPROVED**（由 Reviewer 判定）
 2. **Security-Hardening**（既定 gate，notion / ACL / credential rotation 等）
 3. **P2.5**（如果存在）
@@ -56,16 +54,16 @@
 
 ## 当前执行位置
 
-- 当前阶段：Phase 02 — SIMPLIFY（R9 external review=CHANGES_REQUIRED — R10 修复中）
+- 当前阶段：Phase 02 — SIMPLIFY（R10 external review=CHANGES_REQUIRED — R11 收口中）
 - **状态：AWAITING_REVIEW**（Waiting For=EXTERNAL_REVIEW）
-- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R9.md）
+- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R10.md；R11 完成后指 REPORT_R11）
 - 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Security-Hardening 阶段
 - 路线顺序：P2 VERIFIED → Security-Hardening → P2.5 → P3
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：Phase 02 R10 修复中（R9 external review=CHANGES_REQUIRED）。
+当前执行位置：Phase 02 R11 收口中（R10 external review=CHANGES_REQUIRED）。
 
 ## 变更日志
 
@@ -86,3 +84,5 @@
 - 2026-08-25：Phase 02 R9 完成（4 项 + MINOR 关闭；长会话 provider switch + 无人为输入 restart 真实 gate 通过），PR #27 merged（main=f3336eb8）。
 - 2026-08-25：Phase 02 Reviewer Round 9 = CHANGES_REQUIRED（budget once-per-boot / exact CommandCode→OpenCode / evidence file / REPORT_R9 编码 + CURRENT_STATUS truth）。
 - 2026-08-25：Phase 02 R10 完成（4 项关闭；R9 evidence 补提交；REPORT_R9 编码修复），状态置 AWAITING_REVIEW。
+- 2026-08-25：Phase 02 Reviewer Round 10 = CHANGES_REQUIRED（R11 收口：budget-epoch production-path test + canonical status truth）。
+- 2026-08-25：Phase 02 R11 完成（T16 真实 budget-epoch production-path 6 项 + CURRENT_STATUS canonical truth），状态置 AWAITING_REVIEW。

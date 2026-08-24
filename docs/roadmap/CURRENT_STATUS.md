@@ -20,23 +20,23 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（R8 修复中 — R7 + PR24 partial closure）
+## Phase 02 执行上下文（R9 external review=CHANGES_REQUIRED — R10 pending）
 
-- **Reviewer Round 7 + Post-PR24 Follow-up Verdict：CHANGES_REQUIRED**（2026-08-24）
-- **修复分支**: `fix/phase02-review-r8`（R8 进行中）
-- 前置：PR #23（**6 commits**，merged）；PR #24（R7 adversarial audit，4 真实缺陷，merged main=e64e57e9）
+- **Reviewer Round 9 Verdict：CHANGES_REQUIRED**（2026-08-25；R10 未通过前禁止进入 Security-Hardening / P2.5 / P3）
+- **修复分支**: `fix/phase02-review-r10`（R10 进行中）
+- **前置**：PR #23（6 commits，merged）、PR #24（R7 adversarial audit，merged）、PR #25（R8，merged）、PR #26（R8 Addendum，merged）、**PR #27（R9，merge SHA=f3336eb8）**
 
-### R8 剩余 blocker（进行中）
-- R8-1 generation：serverGeneration = childPid+startedAt（per-boot 变、plugin reload 不变）；禁 entryHash/Date.now fallback（已修）
-- R8-2 resumeAfterCtClean：单一恢复尾（仅成功才 RUNNING；失败 durable due-state）+ T11 fault test（已修）
-- R8-3 live capacity probe：EC boot 探测 ctx.llm.resolveModelInfo 真实容量（已实现，待重启验证）
-- R8-4 attestation：含 runtime-capacity-adapter + 严格 3-way FAIL（已实现 r8-attestation-check）
-- R8-5：-Reason 传 worker / 清 stale finally / 文档计数修正（已修）
+### R10 剩余 blocker（进行中）
+- R10-1 budget-generation 一次性语义（autoResumeBudgetGeneration 专用字段，同 boot 不重复 reset）——已修
+- R10-2 真实 exact CommandCode→OpenCode gate（已执行：pre=commandcode/deepseek-v4-flash → post=opencode/deepseek-v4-flash，均 source=runtime）——已修
+- R10-3 runtime evidence file（PHASE02_R9_RUNTIME_GATES.md）——已修
+- R10-4 REPORT_R9 编码修复 + CURRENT_STATUS truth——进行中
 
-### R7 已确认保留（禁止重做）
-- Guardian exact restart + boot grace + budget gate（真实 b94659f... COMMITTED）
-- LastGood required-set/canonicalSetId；legacy migration；schema2 no-migrate
-- completion 0.6/0.2/32768；async capacity 契约（PR #24 关闭）
+### 路线顺序（R10 通过后）
+1. **Phase 02 VERIFIED / APPROVED**（由 Reviewer 判定）
+2. **Security-Hardening**（既定 gate，notion / ACL / credential rotation 等）
+3. **P2.5**（如果存在）
+4. **Phase 03**（AUTONOMY）
 
 ### R6 判定更新
 - RestartAndWait exact terminal：真实 PASS（保留）
@@ -56,15 +56,16 @@
 
 ## 当前执行位置
 
-- 当前阶段：Phase 02 — SIMPLIFY（Round 7 + Post-PR24 Follow-up 修复完成，R8 已提交）
+- 当前阶段：Phase 02 — SIMPLIFY（R9 external review=CHANGES_REQUIRED — R10 修复中）
 - **状态：AWAITING_REVIEW**（Waiting For=EXTERNAL_REVIEW）
-- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R8.md）
-- 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Phase 03
+- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R9.md）
+- 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Security-Hardening 阶段
+- 路线顺序：P2 VERIFIED → Security-Hardening → P2.5 → P3
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：Phase 02 R8 修复完成，等待外部审核。
+当前执行位置：Phase 02 R10 修复中（R9 external review=CHANGES_REQUIRED）。
 
 ## 变更日志
 
@@ -79,3 +80,9 @@
 - 2026-08-24：Phase 02 R6 完成（6 BLOCKING 关闭；preset 0.6/0.2/32768 真实读取），PR #22 merged（main=02fa12e5）。
 - 2026-08-24：Phase 02 Reviewer Round 6 = CHANGES_REQUIRED（Guardian handoff / zombie→CT-gated / capacity runtime / loaded manifest / mirror canonical / 内部一致）。
 - 2026-08-24：Phase 02 R7 完成（6 问题关闭；Guardian-triggered restart COMMITTED + 3-way ALL-MATCH），状态置 AWAITING_REVIEW。
+- 2026-08-24：Phase 02 R7 adversarial audit（PR #24，4 真实缺陷关闭）；Round 7 + Post-PR24 Follow-up = CHANGES_REQUIRED。
+- 2026-08-24：Phase 02 R8 完成（5 blocker + Runtime Interruption Addendum 关闭；wired=true source=runtime 真实），PR #25 + PR #26 merged。
+- 2026-08-24：Phase 02 Reviewer Round 8 = CHANGES_REQUIRED（stale due / production-path T12 / provider switch / unattended restart）。
+- 2026-08-25：Phase 02 R9 完成（4 项 + MINOR 关闭；长会话 provider switch + 无人为输入 restart 真实 gate 通过），PR #27 merged（main=f3336eb8）。
+- 2026-08-25：Phase 02 Reviewer Round 9 = CHANGES_REQUIRED（budget once-per-boot / exact CommandCode→OpenCode / evidence file / REPORT_R9 编码 + CURRENT_STATUS truth）。
+- 2026-08-25：Phase 02 R10 完成（4 项关闭；R9 evidence 补提交；REPORT_R9 编码修复），状态置 AWAITING_REVIEW。

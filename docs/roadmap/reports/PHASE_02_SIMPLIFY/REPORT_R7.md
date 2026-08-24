@@ -145,4 +145,24 @@ hourAttempts 不重复计数；maintenance lock released；HTTP 200 + COMMIT_REA
 
 ---
 
+## 17. 对抗性自审附录（PR #24，merge SHA=e64e57e9）
+
+按用户要求以"不把接口存在/单测 PASS/报告声称完成当完成标准"对 R7 6 项修复做对抗性自审
+（生产调用链反向追踪 + 主动构造反例），发现并修复 **4 个真实缺陷**：
+
+1. **Guardian stale-session restart 绕过预算 gate**（直接 Restart-Server 无 Test-DshRestartAllowed）→ 改走 Invoke-BudgetedRestart
+2. **ctGatedRecovery 未重置 liveness 基线** → goal.resume 失败时 RUNNING→grace→cap→CT 无限循环 → 重置 goalObservedAt/livenessUnknownCount/lastResumeAt + 刷新 goalRoundsObserved
+3. **sync/async 契约断裂**：官方 dsh-llm `resolveModelInfo` 是 **async**，adapter 同步读返回（拿到 Promise → context 永远 undefined → "wiring" 静默失效）→ capacity-resolver.resolve 改 async + adapter await + router/commandcode await（反例测试 T1b：async resolveModelInfo → window 888000）
+4. **Guardian canonicalPtr 硬编码 LOCALAPPDATA**（Get-VerifiedLastGoodDir 支持 DSH_STATE_ROOT 注入）→ 注入模式 canonical 校验恒不等 → 复用 Get-VerifiedLastGoodDir
+
+**记录为设计权衡（不修）**：guardian 主循环同步阻塞（RestartAndWait）——keep-awake 由独立
+60s timer 兜底；RestartAndWait 必须同步等 exact terminal；不新增异步 supervisor（约束）。
+
+**验证**：capacity 6/6（sync+async）/ adapter 13/13（async 反例）/ bridge 14 / r5-addendum 31
+/ crashsafe 33 / fault 38 / RestartBudget / StageB C1-C7 / StageC-E / FinalDrill / Lab 9 全 PASS；
+PR #24 CI 3/3 绿 → merged（e64e57e9）。
+证据：docs/roadmap/evidence/PHASE02_R7_ADVERSARIAL_AUDIT.md
+
+---
+
 *报告不可覆盖：复审修改将生成 REPORT_R8.md……*

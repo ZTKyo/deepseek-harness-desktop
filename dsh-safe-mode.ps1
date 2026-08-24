@@ -44,7 +44,15 @@ $flagPath = if ($FlagPath) {
 } else {
     Join-Path $env:LOCALAPPDATA 'DSHHarness\state\safe-mode.json'
 }
-$stateDir = Join-Path $env:LOCALAPPDATA 'DSHHarness\state'
+# Phase 02 R5 (R4-B1): state dir follows the flag path's container when the
+# flag is overridden (tests inject DSH_SAFE_FLAG_PATH to a temp root); otherwise
+# default to live %LOCALAPPDATA%\DSHHarness\state. Never silently keep creating
+# the live dir while a test believes it is isolated.
+$stateDir = if ($env:DSH_SAFE_FLAG_PATH) {
+    Split-Path -Parent $env:DSH_SAFE_FLAG_PATH
+} else {
+    Join-Path $env:LOCALAPPDATA 'DSHHarness\state'
+}
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
 function Write-SafeFlag($Meta) {

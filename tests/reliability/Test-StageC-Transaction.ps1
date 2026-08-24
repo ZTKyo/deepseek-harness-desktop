@@ -11,6 +11,33 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 # Phase 02 R4 (Step 0 Test Isolation): pin transaction checkpoints + journal to
 # a temp root so the test never writes the real %LOCALAPPDATA%\DSHHarness.
 $env:DSH_TX_ROOT = Join-Path $env:TEMP ("dsh-tx-root-" + [guid]::NewGuid().ToString('N'))
+# Phase 02 R5 (R4-B1): isolated PROFILE root — checkpoint restore targets a temp
+# profile, never the live %USERPROFILE%\.dsh. Transaction rollback therefore
+# cannot write the real profile.
+$script:TestProfileRoot = Join-Path $env:TEMP ("dsh-tx-profile-" + [guid]::NewGuid().ToString('N'))
+# Record TRUE before-state of the live profile config (hash + mtime) so the end
+# assert can prove zero writes to the live profile.
+$liveProfile = Join-Path $env:USERPROFILE '.dsh'
+$script:LiveProfileBefore = @()
+foreach ($rel in @('settings.yaml','profiles\web\cordis.patch.yml','profiles\web\cordis.yml','profiles\web\package.json')) {
+    $p = Join-Path $liveProfile $rel
+    if (Test-Path $p) {
+        $script:LiveProfileBefore += @{ rel = $rel; hash = (Get-FileHash $p).Hash; mtime = (Get-Item $p).LastWriteTimeUtc }
+    } else {
+        $script:LiveProfileBefore += @{ rel = $rel; hash = $null; mtime = $null }
+    }
+}
+# hard deny helper: any file path under live profile / live DSHHarness is a FAIL
+function Deny-LiveWrite([string]$msg) {
+    $bad = $false
+    foreach ($e in $script:LiveProfileBefore) {
+        $p = Join-Path $liveProfile $e.rel
+        if (Test-Path $p) {
+            if ((Get-FileHash $p).Hash -ne $e.hash) { $bad = $true; Write-Host ("  DENY-LIVE-CHANGED: " + $e.rel) }
+        } elseif ($null -ne $e.hash) { $bad = $true; Write-Host ("  DENY-LIVE-DELETED: " + $e.rel) }
+    }
+    if ($bad) { Write-Host "FAIL  $msg (live profile was written)"; $script:failCount++ } else { Write-Host "PASS  $msg (live profile untouched)" }
+}
 . (Join-Path $root 'dsh-transaction.ps1')
 
 Write-Host '== T1: DryRun transaction -> FAILED(dry), journal record =='
@@ -26,7 +53,7 @@ $t2 = Invoke-DshTransaction -Label 'stage-c-t2-fail' -Apply {
     param($m)
     Set-Content -Path $m -Value 'MUTATED' -Encoding UTF8
     throw 'simulated apply failure'
-} -ApplyArgs @($marker) -RestartOnApply:$false
+} -ApplyArgs @($marker) -RestartOnApply:$false -ProfileRoot $script:TestProfileRoot
 Assert ($t2.FinalState -eq 'ROLLED_BACK') 'T2 apply-fail rolled back' $t2.FinalState
 $content = if (Test-Path $marker) { Get-Content $marker -Raw } else { '' }
 Assert ($content -match 'MUTATED') 'T2 marker mutated by apply' $content
@@ -51,15 +78,24 @@ $t3rec = $all | Where-Object { $_.transactionId -eq $t3Id } | Select-Object -Fir
 Assert ($null -ne $t3rec) 'T4 t3 record persisted'
 
 Write-Host ''
-# Phase 02 R4 (Step 0): isolation cleanup + deny assertion.
-$realTx = Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
+# Phase 02 R5 (R4-B1): TRUE before/after deny — profile config hash/mtime must
+# be unchanged (recorded at test start), and real tx-journal mtime unchanged.
 $realJournal = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
-$txBefore = if (Test-Path $realTx) { (Get-ChildItem $realTx -Recurse -File | Measure-Object).Count } else { 0 }
-$txStamp = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTime } else { $null }
-# journal writes happen in the temp root; real journal timestamp must be unchanged
-$txStampAfter = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTime } else { $null }
+$txStamp = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTimeUtc } else { $null }
+$txStampAfter = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTimeUtc } else { $null }
 Assert (($null -eq $txStamp) -or ($txStamp -eq $txStampAfter)) 'C5 real tx-journal untouched (isolation)'
+# real profile config files untouched (true before-state comparison)
+$denyBad = $false
+foreach ($e in $script:LiveProfileBefore) {
+    $p = Join-Path $liveProfile $e.rel
+    if (Test-Path $p) {
+        if ((Get-FileHash $p).Hash -ne $e.hash) { $denyBad = $true; Write-Host ("  LIVE-CHANGED: " + $e.rel) }
+        if ((Get-Item $p).LastWriteTimeUtc -ne $e.mtime) { $denyBad = $true; Write-Host ("  LIVE-MTIME: " + $e.rel) }
+    } elseif ($null -ne $e.hash) { $denyBad = $true; Write-Host ("  LIVE-DELETED: " + $e.rel) }
+}
+Assert (-not $denyBad) 'C5 live profile untouched (true before/after deny)'
 Remove-Item $env:DSH_TX_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $script:TestProfileRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage C Transaction 2.0)'; exit 0 }
 else { Write-Host "RESULT: FAIL ($failCount failed)"; exit 1 }

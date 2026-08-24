@@ -108,18 +108,42 @@ function New-DshTransactionCheckpoint {
 }
 
 function Restore-DshTransactionCheckpoint {
-    param([string]$CheckpointDir)
+    <#
+    .SYNOPSIS
+    Restore a transaction checkpoint's config files to their live locations.
+    Phase 02 R5 (R4-B1): a ProfileRoot override lets tests restore into an
+    isolated temp profile instead of the real %USERPROFILE%\.dsh. Default
+    (ProfileRoot = $null) restores to the live profile, preserving old behavior.
+    .PARAMETER CheckpointDir
+    Directory holding the checkpoint files.
+    .PARAMETER ProfileRoot
+    If non-null, config targets resolve under this root (e.g. an isolated test
+    profile). Avoids test-destructive writes to the live profile.
+    #>
+    param([string]$CheckpointDir, [string]$ProfileRoot = $null)
     if (-not (Test-Path $CheckpointDir)) { return @{ Restored = @(); Error = 'checkpoint_not_found' } }
+    $base = if ($ProfileRoot) { $ProfileRoot } else { (Join-Path $env:USERPROFILE '.dsh') }
     $map = @{
-        'settings.yaml' = "$env:USERPROFILE\.dsh\settings.yaml"
-        'cordis.patch.yml' = "$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml"
-        'cordis.yml' = "$env:USERPROFILE\.dsh\profiles\web\cordis.yml"
-        'package.json' = "$env:USERPROFILE\.dsh\profiles\web\package.json"
+        'settings.yaml' = Join-Path $base 'settings.yaml'
+        'cordis.patch.yml' = Join-Path $base 'profiles\web\cordis.patch.yml'
+        'cordis.yml' = Join-Path $base 'profiles\web\cordis.yml'
+        'package.json' = Join-Path $base 'profiles\web\package.json'
+    }
+    # Phase 02 R5: hard deny — if a ProfileRoot was requested but the resolved
+    # restore target still lands on the live profile, fail closed (never let a
+    # test restore into live config).
+    $liveBase = Join-Path $env:USERPROFILE '.dsh'
+    if ($ProfileRoot) {
+        foreach ($t in $map.Values) { if ($t.StartsWith($liveBase, [System.StringComparison]::OrdinalIgnoreCase)) { return @{ Restored = @(); Error = 'profile_deny_live' } } }
     }
     $restored = @()
     foreach ($k in $map.Keys) {
         $s = Join-Path $CheckpointDir $k
-        if (Test-Path $s) { Copy-Item $s $map[$k] -Force; $restored += $k }
+        if (Test-Path $s) {
+            $dstDir = Split-Path $map[$k]
+            New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+            Copy-Item $s $map[$k] -Force; $restored += $k
+        }
     }
     return @{ Restored = $restored; Count = $restored.Count }
 }
@@ -182,7 +206,11 @@ function Invoke-DshTransaction {
         [switch]$RestartOnApply = $true,
         [switch]$SkipLightProbe,
         [int]$StableWindowSec = 5,
-        [switch]$DryRun
+        [switch]$DryRun,
+        # Phase 02 R5 (R4-B1): isolated profile root for checkpoint restore in
+        # tests. When set (non-empty), Restore-DshTransactionCheckpoint writes
+        # back into this temp profile instead of the live %USERPROFILE%\.dsh.
+        [string]$ProfileRoot = $null
     )
     $root = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
     $tx = New-DshTransactionCheckpoint -Label $Label
@@ -215,7 +243,7 @@ function Invoke-DshTransaction {
         } catch {
             $faultClass = 'apply_exception'
             $verifyResult = "APPLY failed: $($_.Exception.Message)"
-            $rollbackResult = Restore-DshTransactionCheckpoint -CheckpointDir $tx.dir
+            $rollbackResult = Restore-DshTransactionCheckpoint -CheckpointDir $tx.dir -ProfileRoot $ProfileRoot
             $finalState = 'ROLLED_BACK'
             Add-DshTxRecord @{
                 transactionId = $transactionId; label = $Label; startedAt = $startedAt
@@ -280,7 +308,7 @@ function Invoke-DshTransaction {
 
         # ---- VERIFY FAIL -> ROLLBACK -> RESTART -> VERIFY_RECOVERY ----
         $faultClass = 'verify_failed'
-        $rollbackResult = Restore-DshTransactionCheckpoint -CheckpointDir $tx.dir
+        $rollbackResult = Restore-DshTransactionCheckpoint -CheckpointDir $tx.dir -ProfileRoot $ProfileRoot
         if ($RestartOnApply) {
             $rs = Join-Path $root 'restart-dsh-server-delayed.ps1'
             if (Test-Path $rs) {

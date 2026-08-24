@@ -18,6 +18,10 @@ $env:DSH_RESTART_BUDGET_PATH = Join-Path $tmp 'restart-budget.json'
 $env:DSH_SAFE_FLAG_PATH = Join-Path $tmp 'safe-mode.json'
 $env:DSH_SAFE_PROFILE_DIR = Join-Path $tmp 'profile'
 New-Item -ItemType Directory -Force -Path $env:DSH_SAFE_PROFILE_DIR | Out-Null
+# Phase 02 R5 (R4-B1): isolate transaction checkpoints/journal so Lab fault
+# tests never write real %LOCALAPPDATA%\DSHHarness\tx-checkpoints.
+$env:DSH_TX_ROOT = Join-Path $tmp 'tx'
+New-Item -ItemType Directory -Force -Path $env:DSH_TX_ROOT | Out-Null
 
 . (Join-Path $root 'dsh-boot-mode.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')

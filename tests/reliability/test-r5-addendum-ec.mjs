@@ -1,4 +1,4 @@
-// test-r5-addendum-ec.mjs — Phase 02 R5 Addendum: zombie running reconciliation
+// test-r5-addendum-ec.mjs 鈥?Phase 02 R5 Addendum: zombie running reconciliation
 // + transient Completion Truth evidence defer. Uses the REAL production plugin
 // (execution-continuity) through its _test surface + mock ctx.
 import { apply as ecApply } from '../../plugins/execution-continuity.mjs';
@@ -80,7 +80,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T2 reason mentions manual review', /manual review/.test(store2.get(sid2).reason || ''));
 }
 
-// T3: goal-scoped liveness (Refinement ② + R6 R5-B4) — anti-double-kick must
+// T3: goal-scoped liveness (Refinement 鈶?+ R6 R5-B4) 鈥?anti-double-kick must
 // use goal identity/revision + goal progress with grace/recheck, NOT session
 // updatedAt/steps, and must NOT kick in the same call.
 {
@@ -105,7 +105,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T10 goal-missing -> LIVENESS recheck (no one-shot dead-end)', /goal projection missing/.test(src) && /nextRetryAt/.test(src));
 }
 
-// T4: real NEEDS_VERIFICATION (unresolved side-effect call) is NEVER relaxed —
+// T4: real NEEDS_VERIFICATION (unresolved side-effect call) is NEVER relaxed 鈥?
 // the plugin still marks NEEDS_VERIFICATION + UNRESOLVED_SIDE_EFFECT kind.
 {
   const core = fs.readFileSync(new URL('../../plugins/completion-truth-core.mjs', import.meta.url), 'utf8');
@@ -123,7 +123,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T5 candidate aborts on empty generation', /candidate identity incomplete/.test(rs));
 }
 
-// T6: legacy migration signature — only legacy evidence-unavailable reason may
+// T6: legacy migration signature 鈥?only legacy evidence-unavailable reason may
 // be revalidated; migration function exists and checks schema/kind/reason.
 {
   const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
@@ -142,7 +142,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T7 LEGACY_EVIDENCE_UNAVAILABLE kind', /verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE"/.test(src));
 }
 
-// T11 (R8-2): production-path fault test — drive resumeAfterCtClean directly
+// T11 (R8-2): production-path fault test 鈥?drive resumeAfterCtClean directly
 // (the SINGLE shared recovery tail). Contract: ONLY a real goal.resume or queue
 // kick SUCCESS writes RUNNING; any failure writes a durable due-state.
 {
@@ -155,7 +155,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
     const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
     globalThis.fetch = async (url, opts) => {
       const body = JSON.parse(opts.body);
-      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8', projections: { values: { goal: { goal: { id: 'g-r8', revision: 1 }, roundsStarted: 3 } } } }]);
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-r8', projections: { values: { goal: { goal: { id: 'g-r8', revision: 1 }, roundsStarted: 3 } } } }] });
       if (url.includes('/goal.resume')) { resumeCalls++; return okResult({}); }
       if (url.includes('/session.prompt')) { promptCalls++; calls.push('prompt'); return okResult({}); }
       return okResult({});
@@ -178,7 +178,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
     const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
     globalThis.fetch = async (url, opts) => {
       const body = JSON.parse(opts.body);
-      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8b', projections: { values: { goal: { goal: { id: 'g-r8b', revision: 1 } } } } }]);
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-r8b', projections: { values: { goal: { goal: { id: 'g-r8b', revision: 1 } } } } }] });
       if (url.includes('/goal.resume')) throw new Error('goal not active');
       if (url.includes('/session.prompt')) { promptCalls++; return okResult({}); }
       return okResult({});
@@ -199,7 +199,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
     const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
     globalThis.fetch = async (url, opts) => {
       const body = JSON.parse(opts.body);
-      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8c', projections: { values: { goal: { goal: { id: 'g-r8c', revision: 1 } } } } }]);
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-r8c', projections: { values: { goal: { goal: { id: 'g-r8c', revision: 1 } } } } }] });
       if (url.includes('/goal.resume')) return okResult({});
       if (url.includes('/session.prompt')) throw new Error('prompt rejected');
       return okResult({});
@@ -241,7 +241,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
     const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
     globalThis.fetch = async (url, opts) => {
       const body = JSON.parse(opts.body);
-      if (url.includes('/session.list')) return okResult([{ sessionId: 'sess-r8e', projections: { values: { goal: { goal: { id: 'g-r8e', revision: 1 } } } } }]);
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-r8e', projections: { values: { goal: { goal: { id: 'g-r8e', revision: 1 } } } } }] });
       if (url.includes('/goal.resume')) return okResult({});
       if (url.includes('/session.prompt')) throw new Error('prompt rejected');
       return okResult({});
@@ -258,7 +258,7 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   }
 }
 
-// T12 (R8 Addendum): grace/cooldown must NOT be one-shot dead-ends — RUNNING
+// T12 (R8 Addendum): grace/cooldown must NOT be one-shot dead-ends 鈥?RUNNING
 // with nextRetryAt is due (listDue picks it up), cooldown writes RECOVERY_QUEUED.
 {
   const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
@@ -266,6 +266,92 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T12 grace writes nextRetryAt (new gen)', /liveness grace: observed goal[\s\S]*?nextRetryAt: graceEnd/.test(src));
   check('T12 grace writes nextRetryAt (no progress)', /no progress yet[\s\S]*?nextRetryAt: graceEnd/.test(src));
   check('T12 cooldown -> RECOVERY_QUEUED + nextRetryAt', /within cooldown[\s\S]*?RECOVERY_QUEUED/.test(src) && /retryAt = it\.lastResumeAt \+ resumeCooldownMs/.test(src));
+}
+
+// T13 (R9-2): production-path state-machine test 鈥?drive resumeViaApi + IntentStore
+// reload, covering the full due-state lifecycle. Contract: grace sets nextRetryAt;
+// genuine progress clears it; WAITING_* recovery clears it; reload preserves state.
+{
+  const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+
+  // T13a: grace due -> progress -> listDue(future) must NOT return the intent
+  {
+    const ctxT = makeCtx({ 'sess-due': { events: [] } });
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-due', projections: { values: { goal: { goal: { id: 'g-due', revision: 1 }, roundsStarted: 3 } } } }] });
+      if (url.includes('/goal.resume')) return okResult({});
+      if (url.includes('/session.prompt')) return okResult({});
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-due');
+    // simulate grace: write RUNNING with nextRetryAt
+    p._test.store.setState('sess-due', 'RUNNING', { nextRetryAt: Date.now() + 60000, goalRoundsObserved: 3, goalObservedAt: Date.now() - 1000, livenessUnknownCount: 0 });
+    // drive resumeViaApi -> same generation + same goal + rounds(3) == observed(3) -> no progress -> within grace -> SKIP with nextRetryAt
+    // then advance observed rounds (simulate progress)
+    p._test.store.setState('sess-due', 'RUNNING', { nextRetryAt: null, goalRoundsObserved: 5, reason: null });
+    // reload (simulate restart)
+    const p2 = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const due = p2._test.store.listDue(Date.now() + 999999);
+    check('T13a progress cleared nextRetryAt -> no due', !due.some((x) => x.sessionId === 'sess-due'), `dueCount=${due.length}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // T13b: WAITING_PROVIDER -> resume success -> listDue must NOT return
+  {
+    const ctxT = makeCtx({ 'sess-wp': { events: [] } });
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-wp', projections: { values: { goal: { goal: { id: 'g-wp', revision: 1 } } } } }] });
+      if (url.includes('/goal.resume')) return okResult({});
+      if (url.includes('/session.prompt')) return okResult({});
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-wp');
+    it.goalId = 'g-wp';
+    it.lastResumeAt = 0; // no cooldown
+    // set WAITING_PROVIDER with nextRetryAt (past due)
+    p._test.store.setState('sess-wp', 'WAITING_PROVIDER', { nextRetryAt: Date.now() - 1000, reason: 'retry' });
+    await p._test.resumeViaApi('sess-wp', 't13b');
+    const after = p._test.store.get('sess-wp');
+    // reload
+    const p2 = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const due = p2._test.store.listDue(Date.now() + 999999);
+    check('T13b WAITING_PROVIDER->success cleared nextRetryAt', after && after.state === 'RUNNING' && after.nextRetryAt === null, `state=${after && after.state} next=${after && after.nextRetryAt}`);
+    check('T13b WAITING_PROVIDER->success not due after reload', !due.some((x) => x.sessionId === 'sess-wp'), `dueCount=${due.length}`);
+    globalThis.fetch = realFetch;
+  }
+
+  // T13c: grace -> no progress cap -> CT clean -> resume success -> listDue not due
+  {
+    const ctxT = makeCtx({ 'sess-cap': { events: [] } });
+    const realFetch = globalThis.fetch;
+    let resumeCalled = false;
+    globalThis.fetch = async (url, opts) => {
+      if (url.includes('/session.list')) return okResult({ items: [{ sessionId: 'sess-cap', projections: { values: { goal: { goal: { id: 'g-cap', revision: 1 }, roundsStarted: 3 } } } }] });
+      if (url.includes('/goal.resume')) { resumeCalled = true; return okResult({}); }
+      if (url.includes('/session.prompt')) return okResult({});
+      return okResult({});
+    };
+    const p = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const it = p._test.store.ensure('sess-cap');
+    it.goalId = 'g-cap';
+    it.lastResumeAt = 0;
+    // simulate grace then no-progress cap (livenessUnknownCount=7 >6 -> ctGatedRecovery)
+    it.livenessUnknownCount = 7;
+    it.goalObservedAt = Date.now() - 120000; // grace well past
+    it.serverGenerationSeen = 'boot:test';
+    await p._test.resumeViaApi('sess-cap', 't13c');
+    const after = p._test.store.get('sess-cap');
+    const p2 = ecApply(ctxT, { stateDir, enableAutoResume: true });
+    const due = p2._test.store.listDue(Date.now() + 999999);
+    check('T13c CT-gated recovery -> RUNNING + cleared nextRetryAt', after && after.state === 'RUNNING' && after.nextRetryAt === null, `state=${after && after.state}`);
+    check('T13c CT-gated recovery not due after reload', !due.some((x) => x.sessionId === 'sess-cap'), `dueCount=${due.length}`);
+    check('T13c CT-gated goal.resume called', resumeCalled === true);
+    globalThis.fetch = realFetch;
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

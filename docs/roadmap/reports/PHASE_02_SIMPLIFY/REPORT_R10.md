@@ -93,8 +93,8 @@ post-switch: settings.yaml provider: opencode, model: deepseek-v4-flash
 ## 9. PR / CI / Merge SHA（回填后不留 pending）
 
 - **PR #28（代码+报告）**：`fix/phase02-review-r10`
-- CI：Level 1/2/3（待 PR 创建后跑）
-- Merge SHA：待 merge 后记录
+- CI：Level 1/2/3 全部成功（Static 1m15s / Reliability 1m37s / Boot smoke 4m3s）
+- Merge SHA：**`3c005b64`**（2026-08-25 merged）
 
 ## 10. Rollback
 

@@ -88,6 +88,24 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File dsh-reliability-lab.ps1 -RunAll
 
+      # Phase 02 R6 (R5-B6): production-path state machine regressions —
+      # EC recovery bridge, capacity resolver, R5 addendum/refinement, and
+      # LastGood required-set. These are the new R5/R6 key state machines.
+      - name: EC recovery bridge + capacity resolver + R5 addendum (production path)
+        shell: pwsh
+        run: |
+          node tests\reliability\test-ec-router-bridge.mjs
+          node tests\reliability\test-capacity-resolver.mjs
+          node tests\reliability\test-r5-addendum-ec.mjs
+          node tests\reliability\test-model-registry.mjs
+          node tests\reliability\test-completion-truth.mjs
+          node tests\reliability\test-resume-defer.mjs
+
+      - name: Last Good required-set + atomic restore (isolated)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 -SkipLive
+
       - name: Generation ID logic
         shell: pwsh
         run: |

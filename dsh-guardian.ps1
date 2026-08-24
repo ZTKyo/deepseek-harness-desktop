@@ -345,22 +345,16 @@ function Test-MaintenanceLock {
     } catch { return $false }
 }
 function Restart-Server([string]$reason) {
-    $restartLock = Enter-DshRestartLock
-    if (-not $restartLock) {
-        TraceG ("RESTART skipped: another start/restart transaction owns the lock (reason=$reason)")
-        return $false
-    }
+    # Phase 02 R7 (R6-1): Guardian is the Process Authority / POLICY entry ONLY.
+    # It must NOT hold the restart mutex while waiting on the delegated worker —
+    # Enter-DshRestartLock is a NAMED MUTEX (Local\DSHHarness.Restart.v1); a
+    # worker spawned as a separate process cannot re-acquire a mutex the parent
+    # already holds, so the worker would exit 75 (lock busy) and the Guardian's
+    # -Wait would read a false failure. The delegated exact primitive
+    # (restart-dsh-server-delayed.ps1) OWNS the mutex + budget attempt + commit.
     try {
     TraceG ("RESTART: " + $reason)
     Check-ConfigSafety            # never boot with a broken config (anti-self-kill)
-    # Phase 02 R6 (R5-B2): Guardian is the Process Authority / policy entry, but
-    # the restart ITSELF must go through the SAME exact-attempt contract as
-    # Transaction/SafeMode — restart-dsh-server-delayed.ps1 -RestartAndWait:
-    # detach worker -> attempt ledger -> new server pid+generation bound
-    # candidate -> stable window -> COMMIT_READY -> commit (budget reset).
-    # This removes Guardian's divergent stop->Start-DshServer->client_ready path
-    # and the stale "restart budget reset" log that contradicted the real budget
-    # (Register-DshRestartSuccess does NOT reset without a verified candidate).
     $rs = Join-Path $PSScriptRoot 'restart-dsh-server-delayed.ps1'
     if (-not (Test-Path $rs)) {
         TraceG ('  RESTART aborted: restart script missing')
@@ -385,7 +379,9 @@ function Invoke-BudgetedRestart([string]$reason) {
         TraceG ("restart circuit closed: reason=$($gate.Reason) pauseUntil=$($gate.PauseUntil)")
         return $false
     }
-    Register-DshRestartAttempt $reason | Out-Null
+    # Phase 02 R7 (R6-1): the delegated worker registers the attempt ONCE inside
+    # (restart-dsh-server-delayed.ps1 L182 Register-DshRestartAttempt). Do NOT
+    # register here too — that would double-count hourly attempts for one restart.
     $ok = Restart-Server $reason
     if ($ok) {
         # Phase 02 R6: the exact-attempt path already committed the budget

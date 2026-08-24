@@ -18,6 +18,9 @@ param(
     [string]$AttemptId = $null,  # Phase 02 R4 (Step 1): terminal ledger identity
     [string]$WaitAttempt = $null, # Phase 02 R4: wait for a specific attempt's terminal state
     [int]$TimeoutSec = 180,
+    # Phase 02 R7 (R6-1): caller reason recorded in the attempt ledger (Guardian
+    # passes its restart reason; SafeMode/Transaction pass theirs).
+    [string]$Reason = $null,
     # Phase 02 R5 (R4-B2): one-shot "restart AND wait for exact terminal" — the
     # caller (SafeMode / Transaction / GUI) gets the detailed worker's terminal
     # state, NOT the outer wrapper's exit. Equivalent to calling with -AttemptId
@@ -179,7 +182,8 @@ try {
 
 $budgetGate = Test-DshRestartAllowed
 if (-not $budgetGate.Allowed) { throw "restart budget blocked: $($budgetGate.Reason)" }
-Register-DshRestartAttempt 'delayed-restart' | Out-Null
+$attemptReason = if ($Reason) { $Reason } else { 'delayed-restart' }
+Register-DshRestartAttempt $attemptReason | Out-Null
 
 # stop the old DSH server only after loopback ownership is proven
 $owner = Get-DshLoopbackOwner -Port $Port

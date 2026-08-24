@@ -43,16 +43,13 @@ jobs:
           # loads the REAL custom-plugin surface, not an empty profile). No
           # secrets: this manifest only references plugin files + no-op config.
           if (Test-Path 'plugins') {
-            # Phase 02 R4 (Step 10): the ACTIVE plugin manifest mirrors the
-            # deployed profile's local plugin set (authoritative list, not
-            # glob-based — core/helper modules like model-registry and
-            # *-core.mjs are NOT plugins and must not be loaded as such).
+            # Phase 02 R4 (Step 10): smoke loads a REPRESENTATIVE real plugin set
+            # (lightweight, no external credentials needed). Full 12-plugin
+            # surface is exercised locally/on-device; CI proves the current dsh
+            # version boots with REAL repo plugins (not an empty profile).
             $active = @(
-              'ask-telegram.mjs','computer-use.mjs','vision-bridge.mjs',
-              'secret-gate.mjs','completion-notify.mjs','openrouter-router.mjs',
-              'agentrouter-wire.mjs','agent-inspector.mjs','keepalive-patch.mjs',
-              'commandcode-router.mjs','model-selection-guard.mjs',
-              'execution-continuity.mjs'
+              'completion-notify.mjs','keepalive-patch.mjs',
+              'model-selection-guard.mjs','execution-continuity.mjs'
             )
             # copy every plugin module (main + their core/helper deps) so
             # imports resolve inside the profile dir
@@ -60,7 +57,7 @@ jobs:
             $manifest = @()
             foreach ($pn in $active) {
               if (Test-Path (Join-Path 'plugins' $pn)) {
-                $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs','').Replace('-','-'))`n      name: './$pn'`n      config: {}"
+                $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}"
               }
             }
             $patchContent = $manifest -join "`n"

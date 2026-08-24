@@ -8,8 +8,9 @@
 | Phase | 名称 | 状态 | Waiting For | 报告路径 |
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | — | — |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
+| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `IN_PROGRESS` | — | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/（待建） |
+| 03 | AUTONOMY / Task Autonomy | 未开始 | Security-Hardening + P2.5 完成 | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -20,21 +21,21 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（R10 external review=CHANGES_REQUIRED — R11 收口）
+## Phase 02 执行上下文（Phase 02 VERIFIED — 进入 Security-Hardening）
 
-- **Reviewer Round 10 Verdict：CHANGES_REQUIRED**（2026-08-25；最终 verification/truth 收口，非新架构缺陷；R11 未通过前禁止进入 Security-Hardening / P2.5 / P3）
-- **修复分支**: `fix/phase02-review-r11`（R11 进行中）
-- **前置**：PR #23–#26（R7/R8，merged）、PR #27（R9，f3336eb8）、**PR #28（R10，merge=3c005b64，backfill=7554221）**
+- **Reviewer Verdict：APPROVED / VERIFIED**（2026-08-25；Phase 02 R1–R11 全部闭环）
+- **Phase 02 已通过**；下一步严格进入 **Security-Hardening**；Security-Hardening 未完成前禁止 P2.5，P2.5 未 VERIFIED 前禁止 Phase 03
+- **前置**：PR #23–#26（R7/R8）、PR #27（R9）、PR #28（R10）、PR #29（R11）全部 merged
 
-### R11 收口项（进行中）
-- R11-1 真实 budget-epoch production-path test（T16：同 gen 25 次入口含 fault → reset=1；reload 不 re-reset；新 gen reset=1）——已修
-- R11-2 CURRENT_STATUS canonical truth（R10=CHANGES_REQUIRED / R11 pending / PR#28 merge）——进行中
+### Security-Hardening Gate（进行中）
+- **入口条件**：Phase 02 VERIFIED ✅
+- **范围**（BLOCKING_PHASE03_ENTRY / SECURITY-HARDENING 既定点）：credential rotation、plaintext credential 迁移、ACL、command-line token、backup secret、notion/cordis.patch.yml 硬编码 token 等
+- **禁止**：未完成前进入 P2.5 / Phase 03
 
-### 路线顺序（R11 通过后）
-1. **Phase 02 VERIFIED / APPROVED**（由 Reviewer 判定）
-2. **Security-Hardening**（既定 gate，notion / ACL / credential rotation 等）
-3. **P2.5**（如果存在）
-4. **Phase 03**（AUTONOMY）
+### 路线顺序（Security-Hardening 通过后）
+1. **Security-Hardening Gate VERIFIED**（本轮目标）
+2. **P2.5**（若存在）
+3. **Phase 03**（AUTONOMY）
 
 ### R6 判定更新
 - RestartAndWait exact terminal：真实 PASS（保留）
@@ -54,16 +55,16 @@
 
 ## 当前执行位置
 
-- 当前阶段：Phase 02 — SIMPLIFY（R10 external review=CHANGES_REQUIRED — R11 收口中）
-- **状态：AWAITING_REVIEW**（Waiting For=EXTERNAL_REVIEW）
-- Final Verdict：IMPLEMENTATION_COMPLETE（见 REPORT_R10.md；R11 完成后指 REPORT_R11）
-- 等待：99｜Reviewer Feedback 中 Reviewer Verdict=APPROVED 后才可进入 Security-Hardening 阶段
-- 路线顺序：P2 VERIFIED → Security-Hardening → P2.5 → P3
+- 当前阶段：**Security-Hardening Gate**（Phase 02 VERIFIED 后进入）
+- **状态：IN_PROGRESS**（next=Security-Hardening）
+- Final Verdict：Phase 02 = **APPROVED / VERIFIED**（见 REPORT_R11.md）
+- 等待：Security-Hardening 完成后 → P2.5 → Phase 03
+- 路线顺序：P2 VERIFIED ✅ → **Security-Hardening** → P2.5 → P3
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：Phase 02 R11 收口中（R10 external review=CHANGES_REQUIRED）。
+当前执行位置：**Security-Hardening Gate（Phase 02 VERIFIED 后进入）。**
 
 ## 变更日志
 
@@ -86,3 +87,5 @@
 - 2026-08-25：Phase 02 R10 完成（4 项关闭；R9 evidence 补提交；REPORT_R9 编码修复），状态置 AWAITING_REVIEW。
 - 2026-08-25：Phase 02 Reviewer Round 10 = CHANGES_REQUIRED（R11 收口：budget-epoch production-path test + canonical status truth）。
 - 2026-08-25：Phase 02 R11 完成（T16 真实 budget-epoch production-path 6 项 + CURRENT_STATUS canonical truth），状态置 AWAITING_REVIEW。
+- 2026-08-25：Phase 02 **Reviewer Verdict = APPROVED / VERIFIED**（R1–R11 全部闭环）；状态更新为 P2 VERIFIED。
+- 2026-08-25：进入 **Security-Hardening Gate**（纯文档状态回填，不修改 P2 生产代码）；Security-Hardening 完成前禁止 P2.5 / Phase 03。

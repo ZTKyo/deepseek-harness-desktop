@@ -40,6 +40,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 import {
   classifyFailure,
   createCircuitBreaker,
@@ -1211,6 +1212,33 @@ export function apply(ctx, config = {}) {
         const apiOk = await waitForApi(10, 1000);
         const compAvail = compactionAvailable(ctx);
         diag(`plugin ready; apiOk=${apiOk} compaction=${compAvail ? "available" : "UNAVAILABLE -> contextOverflowRecovery DEGRADED"} safeMode=${!enableAutoResume} enableAutoResume=${enableAutoResume} budgets=${JSON.stringify(budgets)} maxConcurrent=${maxConcurrentResume} capability=${JSON.stringify(capability)}`);
+        // Phase 02 R7 (R6-4): record the LOADED release manifest at plugin boot —
+        // server generation/boot identity + the ACTUAL plugin files this process
+        // loaded (path + sha256), persisted for source/deployed/loaded
+        // attestation. This is written from the plugin lifecycle itself (no new
+        // service); a restart rewrites it with the new generation.
+        try {
+          const local = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+          const profileWeb = path.join(os.homedir(), ".dsh", "profiles", "web");
+          const loadedManifest = {
+            serverGeneration: serverGeneration || `proc:${processStartMs}`,
+            loadedAt: new Date().toISOString(),
+            pid: process.pid,
+            plugins: {},
+          };
+          for (const p of ["execution-continuity.mjs", "openrouter-router.mjs", "commandcode-router.mjs", "model-registry.mjs", "completion-truth-core.mjs", "capacity-resolver.mjs", "runtime-capacity-adapter.mjs", "vision-bridge.mjs"]) {
+            const fp = path.join(profileWeb, p);
+            try {
+              loadedManifest.plugins[p] = { sha256: crypto.createHash("sha256").update(fs.readFileSync(fp)).digest("hex") };
+            } catch { loadedManifest.plugins[p] = { sha256: null }; }
+          }
+          const mf = path.join(local, "DSHHarness", "state", "loaded-release.json");
+          fs.mkdirSync(path.dirname(mf), { recursive: true });
+          const tmp = mf + ".tmp";
+          fs.writeFileSync(tmp, JSON.stringify(loadedManifest, null, 2));
+          fs.renameSync(tmp, mf);
+          diag(`LOADED-MANIFEST serverGeneration=${loadedManifest.serverGeneration} pid=${process.pid} -> ${mf}`);
+        } catch (e) { diag(`LOADED-MANIFEST error: ${String(e.message).slice(0, 80)}`); }
         checkRetryPolicyGuard();
         if (apiOk) {
           if (enableAutoResume) {

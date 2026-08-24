@@ -73,16 +73,25 @@ for (const p of activePlugins) {
 }
 const allSame = attest.every((a) => a.same);
 
-// 5) loaded release attestation
-let runtime = null;
-try { runtime = JSON.parse(fs.readFileSync(path.join(home, 'AppData', 'Local', 'DSHHarness', 'logs', 'dsh-runtime-3080.json'), 'utf8')); } catch {}
-const serverStartMs = runtime && runtime.startedAt ? Date.parse(runtime.startedAt) : null;
-const depMtimes = {};
-for (const p of activePlugins) {
-  const fp = path.join(live, p);
-  try { depMtimes[p] = fs.statSync(fp).mtimeMs; } catch { depMtimes[p] = null; }
+// 5) loaded release attestation — Phase 02 R7 (R6-4): the LOADED manifest
+// written by execution-continuity at boot (server generation + actual plugin
+// sha256 this process loaded). Compare source / deployed / loaded (3-way).
+let loaded = null;
+try { loaded = JSON.parse(fs.readFileSync(path.join(home, 'AppData', 'Local', 'DSHHarness', 'state', 'loaded-release.json'), 'utf8')); } catch {}
+const loadedHashes = (loaded && loaded.plugins) || {};
+const threeWay = [];
+for (const a of attest) {
+  const lh = loadedHashes[a.plugin] ? loadedHashes[a.plugin].sha256 : null;
+  const loadedShort = lh ? lh.slice(0, 12) : null;
+  threeWay.push({
+    plugin: a.plugin,
+    source: a.source,
+    deployed: a.deployed,
+    loaded: loadedShort,
+    allMatch: !!(a.source && a.deployed && loadedShort && a.source === a.deployed && a.deployed === loadedShort),
+  });
 }
-const allDeployedBeforeStart = Object.values(depMtimes).every((m) => m !== null && serverStartMs !== null && m < serverStartMs);
+const allThreeMatch = threeWay.length > 0 && threeWay.every((t) => t.allMatch);
 
 // 6) proactive threshold
 const resolvedCtx = declaredCtx || null;
@@ -100,10 +109,10 @@ console.log('=== SOURCE -> DEPLOYED ATTESTATION ===');
 for (const a of attest) console.log(a.plugin.padEnd(32), 'src=' + a.source, 'deployed=' + a.deployed, a.same ? 'MATCH' : 'MISMATCH');
 console.log('overall source==deployed:', allSame ? 'ALL MATCH' : 'MISMATCH - CHECK DEPLOYMENT');
 console.log('');
-console.log('=== LOADED RELEASE ATTESTATION ===');
-console.log('runtime entryHash:', runtime ? runtime.entryHash : '(no runtime json)');
-console.log('server startedAt:', runtime ? runtime.startedAt : '(none)');
-console.log('all plugin mtimes < server start (loaded=deployed):', allDeployedBeforeStart ? 'YES (loaded == deployed)' : 'NO - server may have loaded older/newer files');
+console.log('=== LOADED RELEASE ATTESTATION (3-way) ===');
+console.log('loaded manifest serverGeneration:', loaded ? loaded.serverGeneration : '(no loaded-release.json - plugin not yet booted with R7)');
+for (const t of threeWay) console.log(t.plugin.padEnd(32), 'src=' + t.source, 'deployed=' + t.deployed, 'loaded=' + t.loaded, t.allMatch ? 'ALL-MATCH' : (t.source === t.deployed ? 'deployed=source, loaded pending/restart' : 'MISMATCH'));
+console.log('overall source==deployed==loaded:', allThreeMatch ? 'ALL MATCH (3-way)' : 'NOT-YET-ALL-MATCH (loaded manifest may predate latest deploy; restart to load)');
 console.log('');
 console.log('=== MODEL CAPACITY (registry hints via resolver) ===');
 const cap = await import('file:///' + repo.replace(/ /g, '%20') + '/plugins/capacity-resolver.mjs');

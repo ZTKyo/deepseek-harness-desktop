@@ -12,12 +12,15 @@ export function makeRuntimeCapacityResolver(ctx) {
   let runtimeResolve = null;
   try {
     // Official Harness runtime: ctx.get("runtime") / ctx.runtime exposes
-    // resolveModelInfo(provider, model) -> { context: { contextWindow } }.
+    // resolveModelInfo(provider, model) -> Promise<{ context: { contextWindow } }>.
     const runtime = (ctx && (ctx.get ? ctx.get("runtime") : null)) || (ctx && ctx.runtime) || null;
     if (runtime && typeof runtime.resolveModelInfo === "function") {
-      runtimeResolve = (provider, model) => {
+      // Phase 02 R7 adversarial fix: the official method is ASYNC — await it.
+      // A synchronous resolver (tests/mocks) still works because await on a
+      // plain value is a no-op.
+      runtimeResolve = async (provider, model) => {
         try {
-          const info = runtime.resolveModelInfo(provider, model);
+          const info = await runtime.resolveModelInfo(provider, model);
           const w = info && info.context && info.context.contextWindow;
           return typeof w === "number" && w > 0 ? w : null;
         } catch { return null; }
@@ -38,9 +41,9 @@ export function makeRuntimeCapacityResolverLoose(ctx) {
       if (!svc) continue;
       const fn = svc.resolveModelInfo || (svc.models && typeof svc.models.resolveModelInfo === "function" && svc.models.resolveModelInfo);
       if (typeof fn === "function") {
-        runtimeResolve = (provider, model) => {
+        runtimeResolve = async (provider, model) => {
           try {
-            const info = fn.call(svc, provider, model);
+            const info = await fn.call(svc, provider, model);
             const w = info && info.context && info.context.contextWindow;
             return typeof w === "number" && w > 0 ? w : null;
           } catch { return null; }

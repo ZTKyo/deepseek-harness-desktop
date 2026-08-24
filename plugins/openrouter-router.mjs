@@ -309,14 +309,14 @@ export function apply(ctx, config = {}) {
           const candidates = [];
           if (cfg.modelIds.mimo) candidates.push(cfg.modelIds.mimo);
           if (cfg.modelIds.deepseek) candidates.push(cfg.modelIds.deepseek);
-          // Phase 02 R6 (R5-B5): exact route capacity via injectable resolver
-          // (runtime resolveModelInfo when available; unknown runtime -> null).
-          const curRes = capacityResolver.resolve(resolved.provider, finalModel);
+          // Phase 02 R7 adversarial fix: capacityResolver.resolve is ASYNC
+          // (official resolveModelInfo is async) — must await.
+          const curRes = await capacityResolver.resolve(resolved.provider, finalModel);
           const curWin = curRes ? curRes.window : null;
           let best = null;
           let bestWin = 0;
           for (const c of candidates) {
-            const cRes = capacityResolver.resolve(resolved.provider, c);
+            const cRes = await capacityResolver.resolve(resolved.provider, c);
             const cw = cRes ? cRes.window : null;
             if (cw === null || cw === undefined) continue; // unknown candidate -> skip
             if (curWin !== null && curWin !== undefined && cw <= curWin) continue; // must be strictly larger

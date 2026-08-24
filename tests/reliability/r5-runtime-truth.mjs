@@ -118,6 +118,6 @@ console.log('=== MODEL CAPACITY (registry hints via resolver) ===');
 const cap = await import('file:///' + repo.replace(/ /g, '%20') + '/plugins/capacity-resolver.mjs');
 const resolver = cap.defaultCapacityResolver();
 for (const [p, m] of [['commandcode', 'deepseek/deepseek-v4-flash'], ['opencode', 'deepseek-v4-flash'], ['openrouter', 'qwen/qwen3.7-flash'], ['openrouter', 'deepseek/deepseek-v4-flash-0731'], ['openrouter', 'claude-opus-5']]) {
-  const r = resolver.resolve(p, m);
+  const r = await resolver.resolve(p, m);
   console.log((p + '/' + m).padEnd(45), 'resolvedWindow=' + r.window, 'source=' + r.source);
 }

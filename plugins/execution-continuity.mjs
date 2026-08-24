@@ -556,9 +556,18 @@ export function apply(ctx, config = {}) {
     if (!proceed) return it.state; // defer / needs_verification already written
     // clean: re-arm the goal (same path as normal resume) — the official Goal
     // truth is the recovery authority; a prompt kick only if goal.resume fails.
-    store.setState(sessionId, STATE.RUNNING, { note: `ct-gated recovery (${why}): CT clean, goal re-armed` });
-    diag(`RESUME-CT-GATED sid=${sessionId} ${why}: CT clean -> goal re-arm`);
+    // Phase 02 R7 adversarial fix: RESET the liveness observation baseline so a
+    // resumed goal gets a FRESH grace window (not re-judged as "no progress"
+    // from pre-resume data), and reset the bounded counter — otherwise a
+    // goal.resume failure would loop: RUNNING -> grace -> cap -> CT -> RUNNING
+    // forever with an ever-growing counter.
+    it.goalObservedAt = Date.now();
+    it.livenessUnknownCount = 0;
+    it.lastResumeAt = Date.now();
+    store.setState(sessionId, STATE.RUNNING, { note: `ct-gated recovery (${why}): CT clean, goal re-armed`, goalObservedAt: it.goalObservedAt, livenessUnknownCount: 0 });
+    diag(`RESUME-CT-GATED sid=${sessionId} ${why}: CT clean -> goal re-arm (liveness baseline reset)`);
     let goalRef = it.goalId ? { id: it.goalId } : null;
+    let newRounds = null;
     try {
       const goalList = await apiRpc("session.list", {});
       const items2 = (goalList && goalList.items) || [];
@@ -566,6 +575,7 @@ export function apply(ctx, config = {}) {
       const gv = found2 && found2.projections && found2.projections.values && found2.projections.values.goal;
       const g = gv && gv.goal;
       if (g && g.id && typeof g.revision === "number") goalRef = { id: g.id, revision: g.revision };
+      if (gv && typeof gv.roundsStarted === "number") newRounds = gv.roundsStarted;
     } catch { /* fallback to intent goalId */ }
     if (goalRef && goalRef.id) {
       try {
@@ -574,6 +584,12 @@ export function apply(ctx, config = {}) {
       } catch (e) {
         diag(`RESUME-CT-GATED sid=${sessionId} goal.resume skipped: ${String(e.message).slice(0, 120)}`);
       }
+    }
+    // Refresh the observed rounds baseline so the NEXT liveness check compares
+    // against post-resume rounds (goal.resume bumps roundsStarted).
+    if (newRounds !== null) {
+      it.goalRoundsObserved = newRounds;
+      store.persist();
     }
     return STATE.RUNNING;
   }

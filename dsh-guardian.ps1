@@ -291,7 +291,13 @@ function Restore-LastGoodConfig {
     }
     $canonicalPtr = $null
     try {
-        $vlgRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness\verified-lastgood'
+        # Phase 02 R7 adversarial fix: use the SAME injection-aware root as the
+        # canonical writer (Get-VerifiedLastGoodDir honors DSH_STATE_ROOT) — a
+        # hard-coded LOCALAPPDATA path would read the REAL canonical while the
+        # mirror here lives under an injected root, causing an impossible
+        # equality check (restore always refused in isolated/guardian test mode).
+        . (Join-Path $PSScriptRoot 'dsh-verified-lastgood.ps1') 2>$null
+        $vlgRoot = Get-VerifiedLastGoodDir
         $ptrFile = Join-Path $vlgRoot 'current'
         if (Test-Path $ptrFile) { $canonicalPtr = (Get-Content $ptrFile -Raw).Trim() }
     } catch { $canonicalPtr = $null }
@@ -605,7 +611,11 @@ do {
                     if ($goalState -eq 'active' -and $stuckHits -ge 2 -and $cooldownOk) {
                         $lastStuckRestart = Get-Date
                         TraceG ("RESTART: stale session age=$ageMin min with ACTIVE goal; recovering task")
-                        if (Restart-Server ("stale session $ageMin min with active goal")) {
+                        # Phase 02 R7 adversarial fix: stale-session restart MUST go
+                        # through the budget gate (Invoke-BudgetedRestart) — a direct
+                        # Restart-Server call bypasses Test-DshRestartAllowed and can
+                        # restart even when the circuit is open.
+                        if (Invoke-BudgetedRestart ("stale session $ageMin min with active goal")) {
                             Invoke-GoalRecovery
                             Send-TelegramAlert ("dsh 检测到活跃 goal 但会话已 $ageMin 分钟无写入，已重启服务并恢复任务。")
                         }

@@ -63,7 +63,7 @@ section("C1: agent-scoped compaction lookup succeeds when host has none");
   assert(comp !== null && typeof comp.compactNow === "function", "getCompaction returns agent compaction");
 }
 
-section("C2: CONTEXT_OVERFLOW + agent compaction → compactNow called once → retry");
+section("C2: CONTEXT_OVERFLOW → EC does NOT hand-call compactNow (official compaction owns it); EC records needLargerContext requirement → retry");
 {
   const compactNowCalls = [];
   const agent = makeAgent({ compactNow: async () => { compactNowCalls.push("called"); return { ok: true }; } });
@@ -75,10 +75,14 @@ section("C2: CONTEXT_OVERFLOW + agent compaction → compactNow called once → 
     async () => ({ kind: "no-retry" })
   );
   assert(outcome && outcome.kind === "retry", "CONTEXT_OVERFLOW -> retry action", JSON.stringify(outcome));
-  assert(compactNowCalls.length >= 1, "compactNow called at least once", `got ${compactNowCalls.length}`);
-  const diag = plugin.diagnostics();
+  // Phase 02 R4 (Step 5): EC must NOT hand-call compactNow(undefined) — the
+  // official compaction-basic owns the compact->retry layer.
+  assert(compactNowCalls.length === 0, "compactNow NOT hand-called by EC (official compaction owns it)", `got ${compactNowCalls.length}`);
   const it = plugin._test.store.get(agent.session.id);
-  assert(it && it.state === "RETRYING", "session RETRYING after compact", it ? `got ${it.state}` : "no intent");
+  assert(it && it.state === "RETRYING", "session RETRYING after overflow", it ? `got ${it.state}` : "no intent");
+  // EC records a needLargerContext recovery requirement for the Router.
+  assert(it && it.pendingFallback && it.pendingFallback.needLargerContext === true,
+    "EC records needLargerContext requirement (Router decides model)", it && it.pendingFallback ? it.pendingFallback.reason : "none");
 }
 
 section("C3: agent compaction unavailable → COMPACTION_UNAVAILABLE → safe fallback, Host survives");
@@ -133,7 +137,13 @@ section("C5: multi-agent isolation — A has compaction, B does not, no cross-po
     { agent: agentA, failure: { code: "400", message: "Input token exceed the limit" }, provider: "opencode", model: "deepseek-v4-flash" },
     async () => ({ kind: "no-retry" })
   );
-  assert(compactNowCalls.length >= 1, "agent A compact still called (no global cache pollution)", `got ${compactNowCalls.length}`);
+  // Phase 02 R4 (Step 5): EC does NOT hand-call compactNow (0 calls expected);
+  // A's requirement is recorded per-session and does NOT pollute agent B.
+  assert(compactNowCalls.length === 0, "EC does not hand-call compactNow (official compaction owns it)", `got ${compactNowCalls.length}`);
+  const itA = plugin._test.store.get(agentA.session.id);
+  assert(itA && itA.pendingFallback && itA.pendingFallback.needLargerContext === true, "agent A requirement recorded", itA && itA.pendingFallback ? itA.pendingFallback.reason : "none");
+  const itB = plugin._test.store.get(agentB.session.id);
+  assert(!itB || !itB.pendingFallback, "agent B has no requirement (no cross-pollution)");
 }
 
 console.log(`\n${"=".repeat(60)}`);

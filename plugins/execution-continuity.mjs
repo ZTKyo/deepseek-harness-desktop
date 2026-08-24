@@ -321,22 +321,32 @@ export function apply(ctx, config = {}) {
     return {};
   }
   const logger = ctx.logger || { info() {}, warn() {}, error() {} };
-  // Phase 02 R7 (R6-2): server generation = the REAL DSH server boot identity
-  // (launcher runtime ledger entryHash), NOT processStartMs. A plugin reload in
-  // the same server must NOT look like a new generation; a real server restart
-  // (new launcher child) produces a new entryHash. Read from the runtime ledger
-  // written by dsh-launcher; fall back to host.describe provider/model when the
-  // ledger is unreadable (still a real identity, never Date.now()).
+  // Phase 02 R8 (R8-1): server generation = the REAL per-boot identity. The
+  // canonical helper Get-DshGenerationId (dsh-generation.ps1) is
+  // `${StartTime.Ticks}_${PID}` — new value on every server boot, unchanged on
+  // plugin reload. The launcher runtime ledger records the same server process
+  // via childPid + startedAt, so we construct the IDENTICAL identity from it:
+  // `${childPid}_${Date.parse(startedAt)}` (PID + boot timestamp = per-boot,
+  // reload-invariant). entryHash is an executable-PATH identity (SHA256 of the
+  // DSH entry path) — it does NOT change per boot and must NOT be used as
+  // generation. When the ledger is unreadable we FAIL-CLOSED to null (liveness
+  // unknown) — never Date.now()/plugin-start (plugin reload would fake a new
+  // generation).
   let serverGeneration = null;
   try {
     const local = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
     const runtimePath = path.join(local, "DSHHarness", "logs", `dsh-runtime-${process.env.EC_API_PORT || 3080}.json`);
     if (fs.existsSync(runtimePath)) {
       const rt = JSON.parse(fs.readFileSync(runtimePath, "utf8"));
-      if (rt && rt.entryHash) serverGeneration = `gen:${rt.entryHash.slice(0, 16)}`;
+      if (rt && rt.childPid && rt.startedAt) {
+        const bootMs = Date.parse(rt.startedAt);
+        if (Number.isFinite(bootMs) && bootMs > 0) {
+          serverGeneration = `boot:${rt.childPid}_${bootMs}`;
+        }
+      }
     }
   } catch { serverGeneration = null; }
-  const processStartMs = Date.now(); // fallback identity marker only
+  // No processStartMs fallback: null generation -> liveness unknown (fail-closed).
   const store = new IntentStore(config.stateDir || null, logger);
   const budgets = {
     ...DEFAULT_BUDGETS,
@@ -547,51 +557,77 @@ export function apply(ctx, config = {}) {
     return true;
   }
 
-  // Phase 02 R7 (R6-2): CT-gated recovery for LIVENESS_UNKNOWN (zombie /
-  // no-progress) — Completion Truth decides, never blind-resume. clean ->
-  // attempt goal.resume (armed); evidence unavailable / unresolved -> handled by
-  // runCtGate (defer / NEEDS_VERIFICATION). Returns the state written.
-  async function ctGatedRecovery(sessionId, it, why) {
-    const proceed = await runCtGate(sessionId, it);
-    if (!proceed) return it.state; // defer / needs_verification already written
-    // clean: re-arm the goal (same path as normal resume) — the official Goal
-    // truth is the recovery authority; a prompt kick only if goal.resume fails.
-    // Phase 02 R7 adversarial fix: RESET the liveness observation baseline so a
-    // resumed goal gets a FRESH grace window (not re-judged as "no progress"
-    // from pre-resume data), and reset the bounded counter — otherwise a
-    // goal.resume failure would loop: RUNNING -> grace -> cap -> CT -> RUNNING
-    // forever with an ever-growing counter.
-    it.goalObservedAt = Date.now();
-    it.livenessUnknownCount = 0;
-    it.lastResumeAt = Date.now();
-    store.setState(sessionId, STATE.RUNNING, { note: `ct-gated recovery (${why}): CT clean, goal re-armed`, goalObservedAt: it.goalObservedAt, livenessUnknownCount: 0 });
-    diag(`RESUME-CT-GATED sid=${sessionId} ${why}: CT clean -> goal re-arm (liveness baseline reset)`);
+  // Phase 02 R8 (R8-2): SINGLE shared "resume after CT clean" helper used by BOTH
+  // the normal resume path and the liveness (zombie/no-progress) recovery path.
+  // Contract (Reviewer): only a REAL goal.resume OR queue-kick SUCCESS evidence
+  // writes RUNNING/RESUME-OK; any failure writes a DURABLE due-state
+  // (RECOVERY_QUEUED/WAITING_PROVIDER) + nextRetryAt + bounded budget, so the
+  // timer re-drives it. There is exactly ONE recovery tail — no second half-baked
+  // path that silently returns RUNNING on failure.
+  async function resumeAfterCtClean(sessionId, it, reason) {
+    // goal.resume with current revision (same source as goal-recovery.mjs)
+    let goalActive = false;
     let goalRef = it.goalId ? { id: it.goalId } : null;
-    let newRounds = null;
     try {
       const goalList = await apiRpc("session.list", {});
       const items2 = (goalList && goalList.items) || [];
       const found2 = items2.find((i) => i.sessionId === sessionId);
       const gv = found2 && found2.projections && found2.projections.values && found2.projections.values.goal;
       const g = gv && gv.goal;
-      if (g && g.id && typeof g.revision === "number") goalRef = { id: g.id, revision: g.revision };
-      if (gv && typeof gv.roundsStarted === "number") newRounds = gv.roundsStarted;
-    } catch { /* fallback to intent goalId */ }
+      if (g && g.id && typeof g.revision === "number") {
+        goalRef = { id: g.id, revision: g.revision };
+        if (it.goalId !== g.id) { it.goalId = g.id; }
+      }
+    } catch { /* projection unavailable -> fall back to intent goalId */ }
     if (goalRef && goalRef.id) {
       try {
         await apiRpc("goal.resume", { sessionId, ref: goalRef });
-        diag(`RESUME-CT-GATED sid=${sessionId} goal.resume OK`);
+        goalActive = true;
+        diag(`RESUME-CT-CLEAN sid=${sessionId} goal re-armed (${reason})`);
       } catch (e) {
-        diag(`RESUME-CT-GATED sid=${sessionId} goal.resume skipped: ${String(e.message).slice(0, 120)}`);
+        diag(`RESUME-CT-CLEAN sid=${sessionId} goal.resume failed: ${String(e.message).slice(0, 120)} (prompt fallback)`);
       }
+    } else {
+      diag(`RESUME-CT-CLEAN sid=${sessionId} no goalRef -> prompt-only fallback`);
     }
-    // Refresh the observed rounds baseline so the NEXT liveness check compares
-    // against post-resume rounds (goal.resume bumps roundsStarted).
-    if (newRounds !== null) {
-      it.goalRoundsObserved = newRounds;
-      store.persist();
+    const message = "[execution-continuity] The local DSH server restarted / the task was interrupted. Inspect the current session state and workspace, verify the last operation's outcome before repeating any write/delete/send/payment action, then continue the task. Do not re-run the whole task from scratch.";
+    try {
+      await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
+      it.lastResumeAt = Date.now();
+      it.autoResumeCycles = (it.autoResumeCycles || 0) + 1;
+      it.resumedAt = Date.now();
+      if (it.resumeRetryCount) { it.resumeRetryCount = 0; }
+      // R8-2: RUNNING ONLY after the kick was ACCEPTED (goal.resume OK or queue
+      // accepted). Reset the liveness baseline so the resumed goal gets a fresh
+      // grace window and the bounded counter does not accumulate.
+      it.goalObservedAt = Date.now();
+      it.livenessUnknownCount = 0;
+      store.setState(sessionId, STATE.RUNNING, {
+        note: `resume-after-ct-clean (${reason}): kick accepted`,
+        goalObservedAt: it.goalObservedAt,
+        livenessUnknownCount: 0,
+      });
+      diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
+      return STATE.RUNNING;
+    } catch (e) {
+      // DURABLE due-state: the timer re-drives via listDue (WAITING_PROVIDER is
+      // a due-state). Never return RUNNING on failure.
+      diag(`RESUME-FAILED sid=${sessionId} kick failed: ${String(e.message).slice(0, 160)}`);
+      const retryAt = Date.now() + 30000;
+      store.setState(sessionId, STATE.WAITING_PROVIDER, { nextRetryAt: retryAt, reason: `kick failed: ${String(e.message).slice(0, 120)}` });
+      diag(`RESUME-DUE sid=${sessionId} durable WAITING_PROVIDER nextRetryAt=${retryAt}`);
+      return STATE.WAITING_PROVIDER;
     }
-    return STATE.RUNNING;
+  }
+
+  // Phase 02 R7 (R6-2) + R8 (R8-2): CT-gated recovery for LIVENESS_UNKNOWN —
+  // Completion Truth decides, never blind-resume. clean -> resumeAfterCtClean
+  // (the SAME tail as normal resume); evidence unavailable / unresolved ->
+  // handled by runCtGate (defer / NEEDS_VERIFICATION). Returns the state written.
+  async function ctGatedRecovery(sessionId, it, why) {
+    const proceed = await runCtGate(sessionId, it);
+    if (!proceed) return it.state; // defer / needs_verification already written
+    return await resumeAfterCtClean(sessionId, it, why);
   }
 
   async function resumeViaApi(sessionId, reason) {
@@ -655,7 +691,9 @@ export function apply(ctx, config = {}) {
             };
           }
         } catch { goal = null; }
-        const sameGen = it.serverGenerationSeen === (serverGeneration || `proc:${processStartMs}`);
+        // R8-1: generation unavailable -> sameGen=false -> LIVENESS_UNKNOWN
+        // (fail-closed). Never fabricate a generation from plugin start time.
+        const sameGen = !!serverGeneration && it.serverGenerationSeen === serverGeneration;
         const sameGoal = !!(goal && it.goalIdObserved && goal.id === it.goalIdObserved && goal.revision !== null && goal.revision === it.goalRevisionObserved);
         const goalProgressed = sameGoal && goal.roundsStarted !== null && it.goalRoundsObserved !== null && goal.roundsStarted > it.goalRoundsObserved;
         const graceMs = 60000; // 60s grace before declaring liveness unknown
@@ -675,7 +713,7 @@ export function apply(ctx, config = {}) {
           store.setState(sessionId, STATE.RECOVERY_QUEUED, {
             note: `liveness-unknown (no goal projection) recheck #${it.livenessUnknownCount}`,
             nextRetryAt: nextRetry,
-            serverGenerationSeen: serverGeneration || `proc:${processStartMs}`,
+            serverGenerationSeen: serverGeneration,
             livenessUnknownCount: it.livenessUnknownCount,
           });
           diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} goal projection missing -> RECOVERY_QUEUED recheck #${it.livenessUnknownCount} nextRetryAt=${nextRetry}`);
@@ -683,10 +721,29 @@ export function apply(ctx, config = {}) {
         }
         // 1) FIRST observation in this generation (or goal changed): record
         //    identity + observedAt, SKIP this round (grace) — do NOT kick.
+        // R8-1: with NO authoritative generation we cannot claim a stable
+        // identity — treat as liveness unknown (bounded recheck below), never
+        // the grace-RUNNING branch (that would recreate the one-shot dead-end).
+        if (!serverGeneration) {
+          it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
+          if (it.livenessUnknownCount > 6) {
+            diag(`RESUME-LIVENESS sid=${sessionId} no authoritative generation beyond cap -> CT-gated recovery`);
+            return await ctGatedRecovery(sessionId, it, `no server generation (${it.livenessUnknownCount} rechecks)`);
+          }
+          const nextRetry = Date.now() + Math.min(120000, 15000 * it.livenessUnknownCount);
+          store.setState(sessionId, STATE.RECOVERY_QUEUED, {
+            note: `liveness-unknown (no server generation) recheck #${it.livenessUnknownCount}`,
+            nextRetryAt: nextRetry,
+            serverGenerationSeen: null,
+            livenessUnknownCount: it.livenessUnknownCount,
+          });
+          diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no authoritative generation -> RECOVERY_QUEUED #${it.livenessUnknownCount} nextRetryAt=${nextRetry}`);
+          return;
+        }
         if (!sameGen || !it.goalIdObserved || goal.id !== it.goalIdObserved) {
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: observed goal ${goal ? goal.id.slice(0, 12) : "none"} (new generation/identity)`,
-            serverGenerationSeen: serverGeneration || `proc:${processStartMs}`,
+            serverGenerationSeen: serverGeneration,
             goalIdObserved: goal ? goal.id : null,
             goalRevisionObserved: goal ? goal.revision : null,
             goalRoundsObserved: goal && goal.roundsStarted !== null ? goal.roundsStarted : it.goalRoundsObserved,
@@ -1237,7 +1294,7 @@ export function apply(ctx, config = {}) {
           const local = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
           const profileWeb = path.join(os.homedir(), ".dsh", "profiles", "web");
           const loadedManifest = {
-            serverGeneration: serverGeneration || `proc:${processStartMs}`,
+            serverGeneration: serverGeneration, // R8-1: true per-boot identity or null
             loadedAt: new Date().toISOString(),
             pid: process.pid,
             plugins: {},
@@ -1248,6 +1305,42 @@ export function apply(ctx, config = {}) {
               loadedManifest.plugins[p] = { sha256: crypto.createHash("sha256").update(fs.readFileSync(fp)).digest("hex") };
             } catch { loadedManifest.plugins[p] = { sha256: null }; }
           }
+          // Phase 02 R8 (R8-3): LIVE exact-route capacity probe — wire the
+          // official ctx.llm.resolveModelInfo (async) via the adapter and record
+          // the REAL runtime capacity for the active route + candidates. This is
+          // evidence that the runtime path is genuinely wired (source=runtime),
+          try {
+            // diagnostic: what does ctx expose for llm?
+            let llmKeys = "none", llmType = "n/a", llmHasResolve = "n/a";
+            try {
+              const llm = (ctx && typeof ctx.get === "function" ? ctx.get("llm") : null) || (ctx && ctx.llm) || null;
+              llmKeys = llm ? Object.keys(llm).slice(0, 12).join(",") : "none";
+              llmType = llm ? (llm.constructor && llm.constructor.name) : "null";
+              llmHasResolve = llm ? String(typeof llm.resolveModelInfo) : "null";
+            } catch (e) { llmKeys = "err:" + e.message; }
+            diag(`CTX-LLM keys=${llmKeys} type=${llmType} resolveModelInfo=${llmHasResolve}`);
+          } catch (e) { diag(`CTX-LLM diag error: ${String(e.message).slice(0, 80)}`); }
+          // not registry hints.
+          loadedManifest.capacity = { source: "none", entries: [] };
+          try {
+            const { makeRuntimeCapacityResolverLoose } = await import("./runtime-capacity-adapter.mjs");
+            const wired = makeRuntimeCapacityResolverLoose(ctx);
+            const resolver = (await import("./capacity-resolver.mjs")).createCapacityResolver({ runtimeResolve: wired.wired ? wired.runtimeResolve : null });
+            const routes = [
+              { provider: "commandcode", model: "deepseek/deepseek-v4-flash" },
+              { provider: "opencode", model: "deepseek-v4-flash" },
+              { provider: "openrouter", model: "qwen/qwen3.7-flash" },
+            ];
+            const entries = [];
+            for (const rt of routes) {
+              try {
+                const r = await resolver.resolve(rt.provider, rt.model);
+                entries.push({ provider: rt.provider, model: rt.model, contextWindow: r.window, source: r.source });
+              } catch { entries.push({ provider: rt.provider, model: rt.model, contextWindow: null, source: "error" }); }
+            }
+            loadedManifest.capacity = { source: wired.wired ? "runtime" : "hint", wired: wired.wired, entries };
+            diag(`LIVE-CAPACITY wired=${wired.wired} ${JSON.stringify(entries)}`);
+          } catch (e) { diag(`LIVE-CAPACITY error: ${String(e.message).slice(0, 120)}`); }
           const mf = path.join(local, "DSHHarness", "state", "loaded-release.json");
           fs.mkdirSync(path.dirname(mf), { recursive: true });
           const tmp = mf + ".tmp";
@@ -1300,6 +1393,6 @@ export function apply(ctx, config = {}) {
       intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume },
+    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery },
   };
 }

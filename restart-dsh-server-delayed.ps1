@@ -123,7 +123,9 @@ if (-not $WorkerMode) {
         $shortSelf = Join-Path $shortRoot 'restart-dsh-server-delayed.ps1'
         # Use -Command with dot-source (NOT -File): WMI/Start-Process created
         # processes cannot load .ps1 via -File in some contexts (verified).
-        $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port + ' -AttemptId ' + $AttemptId
+        # Phase 02 R8 (R8-5): forward -Reason to the worker so the attempt ledger
+        # records the REAL caller reason (was falling back to 'delayed-restart').
+        $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port + ' -AttemptId ' + $AttemptId + ' -Reason "' + ($Reason -replace '"', '""') + '"'
         $env:DSH_RESTART_WORKER_MODE = '1'   # nested call must not re-detach
         try {
             # Start-Process hidden window (verified working). Even if the worker dies

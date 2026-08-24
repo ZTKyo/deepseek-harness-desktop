@@ -1,5 +1,5 @@
-// runtime-capacity-adapter.mjs — Phase 02 R7 (R6-3): thin adapter that wires the
-// Harness OFFICIAL exact route capacity resolver (Adapter resolveModel() /
+// runtime-capacity-adapter.mjs — Phase 02 R7 (R6-3) + R8: thin adapter that wires
+// the Harness OFFICIAL exact route capacity resolver (Adapter resolveModel() /
 // Runtime resolveModelInfo(provider, model)) into the router capacity
 // resolution path. createCapacityResolver({ runtimeResolve }) already fails
 // CLOSED when the runtime path exists but cannot resolve — this adapter finds
@@ -33,24 +33,26 @@ export function makeRuntimeCapacityResolver(ctx) {
 // Best-effort: try ctx services via common keys, then the runtime property.
 export function makeRuntimeCapacityResolverLoose(ctx) {
   let runtimeResolve = null;
-  try {
-    for (const key of ["runtime", "adapterRegistry", "modelRegistry", "llm"]) {
-      let svc = null;
-      try { svc = ctx && typeof ctx.get === "function" ? ctx.get(key) : null; } catch { svc = null; }
-      if (!svc && ctx) svc = ctx[key];
-      if (!svc) continue;
-      const fn = svc.resolveModelInfo || (svc.models && typeof svc.models.resolveModelInfo === "function" && svc.models.resolveModelInfo);
-      if (typeof fn === "function") {
-        runtimeResolve = async (provider, model) => {
-          try {
-            const info = await fn.call(svc, provider, model);
-            const w = info && info.context && info.context.contextWindow;
-            return typeof w === "number" && w > 0 ? w : null;
-          } catch { return null; }
-        };
-        break;
-      }
+  for (const key of ["runtime", "adapterRegistry", "modelRegistry", "llm"]) {
+    let svc = null;
+    // Phase 02 R8 adversarial fix: ctx.get(key) can THROW for unknown keys on
+    // some hosts — previously ONE throw aborted the WHOLE loop (wired=false
+    // even though ctx.llm.resolveModelInfo exists, as diagnosed via CTX-LLM:
+    // type=LlmRuntime resolveModelInfo=function). Isolate each key lookup.
+    try { svc = ctx && typeof ctx.get === "function" ? ctx.get(key) : null; } catch { svc = null; }
+    if (!svc && ctx) { try { svc = ctx[key]; } catch { svc = null; } }
+    if (!svc) continue;
+    const fn = svc.resolveModelInfo || (svc.models && typeof svc.models.resolveModelInfo === "function" && svc.models.resolveModelInfo);
+    if (typeof fn === "function") {
+      runtimeResolve = async (provider, model) => {
+        try {
+          const info = await fn.call(svc, provider, model);
+          const w = info && info.context && info.context.contextWindow;
+          return typeof w === "number" && w > 0 ? w : null;
+        } catch { return null; }
+      };
+      break;
     }
-  } catch { runtimeResolve = null; }
+  }
   return { runtimeResolve, wired: typeof runtimeResolve === "function" };
 }

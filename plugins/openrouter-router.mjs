@@ -15,6 +15,7 @@
 //   ROUTER_DIAGNOSTICS=true 时把不敏感的路由决定追加到日志文件 ~/.dsh/router-diagnostics.log
 
 import { route, resolveConfig, classifyTask, detectModalities, detectStrictJson, ALIASES, CAPABILITY } from "./openrouter-router-core.mjs";
+import { getContextWindow } from "./model-registry.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -225,6 +226,10 @@ export function apply(ctx, config = {}) {
     }
     // 只路由 openrouter；opencode 主力仅在该 session 已标记跨 provider 回落时才拦截
     if (!resolved) return resolved;
+    // Phase 02 R5 (R4-B4): the requirement is consumed ONLY by the provider it
+    // targets. openrouter does NOT ack a requirement when the resolved route is
+    // another provider (e.g. commandcode) — that consumer owns it. No stale
+    // carry-over guard here: consumption is single-owner by design.
     if (resolved.provider !== "openrouter") {
       const sid0 = payload?.agent?.session?.id ?? "?";
       const st0 = getState(sid0);
@@ -241,11 +246,18 @@ export function apply(ctx, config = {}) {
     const st = getState(sid);
     try {
       const signal = buildSignal(ctx, payload.agent);
-      // 用户意图 = agent.options.model（会话级选择，通常是 'auto'）。
-      // 不能用 resolved.model：后续步骤它会变成"上一步我路由出的具体模型"，
-      // 会被误判成用户显式指定 → 卡死在第一个决定（sticky bug）。
+      // Phase 02 R5 (R4-B4): explicit selection must come from the CURRENT
+      // official request/session truth — payload.resolved.model /
+      // payload.model / payload.request.model (this request's resolved model) —
+      // NOT the stale session-level agent.options.model. agent.options.model is
+      // a persisted choice that can be outdated after routing; the current
+      // request's resolved model is what this turn actually uses.
+      const currentRequestModel = resolvedModelOf(payload);
       const agentOptionsModel = payload?.agent?.options?.model;
-      const requestedMode = deriveRequestedMode(agentOptionsModel && String(agentOptionsModel).length > 0 ? agentOptionsModel : resolved.model, env);
+      // Prefer the current-request truth; fall back to agent options only when
+      // the request carries no model at all.
+      const effectiveModel = currentRequestModel && String(currentRequestModel).length > 0 ? currentRequestModel : agentOptionsModel;
+      const requestedMode = deriveRequestedMode(effectiveModel && String(effectiveModel).length > 0 ? effectiveModel : resolved.model, env);
       st.requestedMode = requestedMode;
       const text = signal.text;
       let taskType = classifyTask(text);
@@ -273,11 +285,29 @@ export function apply(ctx, config = {}) {
         const req = st.recoveryRequirement;
         st.recoveryRequirement = null; // consume (ack) before applying
         if (req.needLargerContext === true) {
-          // pick the largest-context known model for the family
-          const bigModel = cfg.modelIds.mimo || cfg.modelIds.deepseek;
-          if (finalModel !== bigModel) {
-            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: bigModel, ctx: "needLargerContext" });
-            finalModel = bigModel;
+          // Phase 02 R5 (R4-B4): needLargerContext must be decided by EXACT
+          // context-capacity comparison, not a blind mimo||deepseek pick. The
+          // candidate must have a STRICTLY LARGER context window than the
+          // current model (registry = provenance-backed thin hints; runtime
+          // resolveModelInfo is the authority when available). Unknown current
+          // window -> fail-closed (keep current model, do not guess).
+          const candidates = [];
+          if (cfg.modelIds.mimo) candidates.push(cfg.modelIds.mimo);
+          if (cfg.modelIds.deepseek) candidates.push(cfg.modelIds.deepseek);
+          const curWin = getContextWindow(finalModel);
+          let best = null;
+          let bestWin = 0;
+          for (const c of candidates) {
+            const cw = getContextWindow(c);
+            if (cw === null || cw === undefined) continue; // unknown candidate -> skip
+            if (curWin !== null && curWin !== undefined && cw <= curWin) continue; // must be strictly larger
+            if (cw > bestWin) { best = c; bestWin = cw; }
+          }
+          if (best && best !== finalModel) {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: best, ctx: "needLargerContext", fromWin: curWin, toWin: bestWin });
+            finalModel = best;
+          } else {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: finalModel, ctx: "needLargerContext-no-larger", fromWin: curWin });
           }
         } else if (req.modalities && req.modalities.includes("image")) {
           // image-capable fallback (mimo family)

@@ -44,7 +44,15 @@ $flagPath = if ($FlagPath) {
 } else {
     Join-Path $env:LOCALAPPDATA 'DSHHarness\state\safe-mode.json'
 }
-$stateDir = Join-Path $env:LOCALAPPDATA 'DSHHarness\state'
+# Phase 02 R5 (R4-B1): state dir follows the flag path's container when the
+# flag is overridden (tests inject DSH_SAFE_FLAG_PATH to a temp root); otherwise
+# default to live %LOCALAPPDATA%\DSHHarness\state. Never silently keep creating
+# the live dir while a test believes it is isolated.
+$stateDir = if ($env:DSH_SAFE_FLAG_PATH) {
+    Split-Path -Parent $env:DSH_SAFE_FLAG_PATH
+} else {
+    Join-Path $env:LOCALAPPDATA 'DSHHarness\state'
+}
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 
 function Write-SafeFlag($Meta) {
@@ -64,8 +72,15 @@ function Restart-DshServerNow {
     if ($NoRestart) { return @{ Restarted = $false; Reason = 'no-restart-requested' } }
     $rs = Join-Path $root 'restart-dsh-server-delayed.ps1'
     if (-not (Test-Path $rs)) { return @{ Restarted = $false; Reason = 'restart-script-missing' } }
-    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port"
-    Start-Process powershell -ArgumentList $args -WindowStyle Hidden -Wait
+    # Phase 02 R5 (R4-B2): use RestartAndWait — the caller waits for the exact
+    # worker terminal state (COMMITTED | FAILED | TIMED_OUT), NOT the outer
+    # wrapper's exit. The script prints the attemptId; we check the exit code
+    # which is now terminal-state based (0 = COMMITTED).
+    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port -RestartAndWait -TimeoutSec 180"
+    $p = Start-Process powershell -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
+    if ($p.ExitCode -ne 0) {
+        return @{ Restarted = $false; Reason = "restart-terminal-not-committed (exit=$($p.ExitCode))" }
+    }
     return @{ Restarted = $true; Reason = $Reason }
 }
 

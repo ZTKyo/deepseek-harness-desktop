@@ -30,9 +30,10 @@ jobs:
           if ($g1.Allowed) { throw 'no-candidate success must NOT reset budget (strict stable-window)' }
           Write-Host 'PASS no-candidate success does not reset'
           # full stable-commit path resets
+          # Phase 02 R5: candidate/commit require non-empty generation identity
           $env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
-          Register-DshRestartCandidate | Out-Null
-          Confirm-DshRestartStable | Out-Null
+          Register-DshRestartCandidate -AttemptId 'ci-gen' -ProcessId 4242 -Generation 'ci-gen-v1' | Out-Null
+          $null = Confirm-DshRestartStable -AttemptId 'ci-gen' -ProcessId 4242 -Generation 'ci-gen-v1'
           $g2 = Test-DshRestartAllowed
           if (-not $g2.Allowed) { throw 'budget should reset after stable commit' }
           Write-Host 'PASS budget resets after stable commit'

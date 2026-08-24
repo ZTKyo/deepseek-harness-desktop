@@ -1,4 +1,4 @@
-# Test-StageB-LastGoodAuthority.ps1 - verify "YAML valid != Last Good" authority rule.
+﻿# Test-StageB-LastGoodAuthority.ps1 - verify "YAML valid != Last Good" authority rule.
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageB-LastGoodAuthority.ps1 [-LivePort 3080] [-SkipLive]
 param([int]$LivePort = 3080, [switch]$SkipLive)
 $ErrorActionPreference = 'Continue'
@@ -80,6 +80,58 @@ $vlgAfter = if (Test-Path $realVLG) { Get-ChildItem $realVLG -Recurse -File | Fo
 $glgAfter = if (Test-Path $realGLG) { Get-ChildItem $realGLG -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
 Assert ((Compare-Object $vlgBefore $vlgAfter | Measure-Object).Count -eq 0) 'C4 verified-lastgood real path untouched (isolation)'
 Assert ((Compare-Object $glgBefore $glgAfter | Measure-Object).Count -eq 0) 'C4 guardian-lastgood real path untouched (isolation)'
+
+# ========== Phase 02 R5 (B3): atomic versioned set + pointer + hash-validated restore ==========
+Write-Host ''
+Write-Host '== C5: atomic pointer switch (no delete-then-move gap) + hash-validated restore =='
+. (Join-Path $root 'dsh-verified-lastgood.ps1') 2>$null
+$vlDir = Get-VerifiedLastGoodDir
+New-Item -ItemType Directory -Force -Path $vlDir | Out-Null
+# fake live sources to save
+$fakeSrc = "$env:TEMP\dsh-lg-fake-$([guid]::NewGuid().ToString('N'))"; New-Item -ItemType Directory -Force -Path $fakeSrc | Out-Null
+Set-Content -Path (Join-Path $fakeSrc 'settings.yaml') -Value "knownGood: true`natomic: yes" -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc 'cordis.patch.yml') -Value '- insert:' -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc 'cordis.yml') -Value '[]' -Encoding UTF8
+try {
+    # save (bypass gate via -Force) with injected fake sources
+    $save = Save-VerifiedLastGood -Force -Reason 'stage-b-c5' -Src @(
+        @{ Path = (Join-Path $fakeSrc 'settings.yaml'); Name = 'settings.yaml' },
+        @{ Path = (Join-Path $fakeSrc 'cordis.patch.yml'); Name = 'cordis.patch.yml' },
+        @{ Path = (Join-Path $fakeSrc 'cordis.yml'); Name = 'cordis.yml' }
+    )
+    Assert ($save.Saved -eq $true) 'C5 save succeeded' "dir=$($save.Dir)"
+    # pointer resolves to a versioned set
+    $set = Get-VerifiedCurrentSet
+    Assert ($null -ne $set) 'C5 current pointer resolves to versioned set'
+    Assert ((Split-Path $set -Leaf) -match '^v-\d{8}-') 'C5 pointer names v-* versioned set' (Split-Path $set -Leaf)
+    # set validates against manifest
+    Assert (Test-VerifiedSet $set) 'C5 set passes manifest sha256 validation'
+    # legacy root files exist for backward-compat (derived, not authoritative)
+    Assert (Test-Path (Join-Path $vlDir 'settings.yaml')) 'C5 legacy derived file present'
+    # TORN set: corrupt one file -> validation must refuse
+    $corruptTarget = Join-Path $set 'settings.yaml'
+    Set-Content -Path $corruptTarget -Value 'corrupted!!' -Encoding UTF8
+    Assert (-not (Test-VerifiedSet $set)) 'C5 torn set rejected by hash validation (fail-closed)'
+    # restore refuses on invalid set
+    $badRestore = Restore-VerifiedLastGood
+    Assert ($badRestore.Error -eq 'set_invalid_hash_mismatch') 'C5 restore refuses invalid set' "err=$($badRestore.Error)"
+    # restore into isolated profile root works with valid set
+    Set-Content -Path $corruptTarget -Value "knownGood: true`natomic: yes" -Encoding UTF8
+    $isoProfile = "$env:TEMP\dsh-lg-restore-$([guid]::NewGuid().ToString('N'))"
+    $okRestore = Restore-VerifiedLastGood -ProfileRoot $isoProfile
+    Assert ($okRestore.Count -ge 1 -and -not $okRestore.Error) 'C5 restore into isolated profile root' "restored=$($okRestore.Count)"
+    Assert ((Get-Content (Join-Path $isoProfile 'settings.yaml') -Raw) -match 'atomic: yes') 'C5 restored content matches set'
+    Remove-Item $isoProfile -Recurse -Force -ErrorAction SilentlyContinue
+    # no pointer -> refuse
+    $backupPtr = Join-Path $vlDir 'current'
+    if (Test-Path $backupPtr) { Move-Item $backupPtr (Join-Path $vlDir 'current.bak') -Force }
+    $noPtr = Get-VerifiedCurrentSet
+    Assert ($null -eq $noPtr) 'C5 missing pointer -> no set (fail-closed)'
+    if (Test-Path (Join-Path $vlDir 'current.bak')) { Move-Item (Join-Path $vlDir 'current.bak') $backupPtr -Force }
+} finally {
+    Remove-Item $fakeSrc -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $vlDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage B authority rule verified)'; exit 0 }

@@ -17,7 +17,12 @@ param(
     [switch]$WorkerMode,      # internal: run the actual restart logic (spawned by Detach)
     [string]$AttemptId = $null,  # Phase 02 R4 (Step 1): terminal ledger identity
     [string]$WaitAttempt = $null, # Phase 02 R4: wait for a specific attempt's terminal state
-    [int]$TimeoutSec = 180
+    [int]$TimeoutSec = 180,
+    # Phase 02 R5 (R4-B2): one-shot "restart AND wait for exact terminal" — the
+    # caller (SafeMode / Transaction / GUI) gets the detailed worker's terminal
+    # state, NOT the outer wrapper's exit. Equivalent to calling with -AttemptId
+    # then -WaitAttempt, in a single invocation.
+    [switch]$RestartAndWait
 )
 
 $ErrorActionPreference = 'Continue'
@@ -34,6 +39,34 @@ function Write-Log([string]$msg) {
 }
 
 # ---------- WAIT MODE: block until a specific attempt reaches a terminal state ----------
+# Phase 02 R5 (R4-B2): RestartAndWait = detach a restart with a fresh attemptId,
+# then fall through to the WaitAttempt loop below for the exact terminal state.
+$restartAndWaitId = $null
+if ($RestartAndWait -and -not $WorkerMode -and -not $WaitAttempt) {
+    $restartAndWaitId = [guid]::NewGuid().ToString('N')
+    $AttemptId = $restartAndWaitId
+    Set-AttemptState $attemptId 'SPAWNED' '' $false
+    $shortRoot = try { (New-Object -ComObject Scripting.FileSystemObject).GetFolder($root).ShortPath } catch { $root }
+    $shortSelf = Join-Path $shortRoot 'restart-dsh-server-delayed.ps1'
+    $inner = '. "' + $shortSelf + '" -WorkerMode -DelaySeconds ' + $DelaySeconds + ' -Port ' + $Port + ' -AttemptId ' + $AttemptId
+    $env:DSH_RESTART_WORKER_MODE = '1'
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'powershell.exe'
+        $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -Command "' + $inner + '"'
+        $psi.UseShellExecute = $true
+        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        if (-not $proc) { Set-AttemptState $AttemptId 'FAILED' 'spawn returned no process' $true; exit 4 }
+        Write-Log ("restart-and-wait: worker spawned pid=$($proc.Id) attempt=$AttemptId")
+    } catch {
+        Set-AttemptState $AttemptId 'FAILED' ("spawn error: " + $_.Exception.Message) $true
+        Write-Host ("restart attempt {0} FAILED" -f $AttemptId)
+        exit 4
+    }
+    $WaitAttempt = $AttemptId
+    Write-Host $AttemptId   # caller can read the attemptId from stdout
+}
 # Phase 02 R4 (Step 1): callers (Transaction / Safe Mode / GUI) must NOT treat the
 # detached outer wrapper exit 0 as "restart complete". They call
 # restart-dsh-server-delayed.ps1 -WaitAttempt <id> -TimeoutSec N and this blocks
@@ -122,6 +155,7 @@ if (-not $WorkerMode) {
 # ================= WORKER MODE: real restart logic =================
 . (Join-Path $root 'dsh-process-identity.ps1')
 . (Join-Path $root 'dsh-readiness.ps1')
+. (Join-Path $root 'dsh-generation.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')
 
 Start-Sleep -Seconds $DelaySeconds
@@ -215,7 +249,23 @@ if ($ready.State -ne 'client_ready') { throw "DSH client readiness failed: $($re
 # client_ready = candidate stage only (does NOT reset budget). We wait a stable
 # window, then re-verify readiness + COMMIT_READY, and only then commit success
 # (which resets the budget). A crash inside the window does not clear attempts.
-Register-DshRestartCandidate -AttemptId $AttemptId -Pid $PID | Out-Null
+# Phase 02 R5 (R4-B2): the candidate is bound to the NEW server's identity —
+# its loopback PID + runtime generation — not the worker PID. Confirm must prove
+# the same server+generation.
+$newOwner = Get-DshLoopbackOwner -Port $Port
+$newServerPid = if ($newOwner -and $newOwner.Pid) { [int]$newOwner.Pid } else { 0 }
+# Phase 02 R5 Addendum: generation MUST be a non-empty current-server identity.
+# Empty/unknown generation -> fail-closed (do NOT commit with a blank identity).
+$newGen = ''
+try { if (Get-Command Get-DshGenerationId -ErrorAction SilentlyContinue) { $newGen = [string](Get-DshGenerationId -Port $Port) } } catch { $newGen = '' }
+$newGen = ($newGen -replace '\s', '')
+Write-Log ("candidate bound to new server pid={0} generation='{1}'" -f $newServerPid, $newGen)
+if (-not $newGen -or $newServerPid -le 0) {
+    Write-Log ("restart commit ABORTED: candidate identity incomplete (pid={0} gen='{1}') - fail-closed" -f $newServerPid, $newGen)
+    if ($AttemptId) { Set-AttemptState $AttemptId 'FAILED' 'candidate identity incomplete (generation missing)' $true }
+    throw "candidate identity incomplete: generation must be non-empty"
+}
+Register-DshRestartCandidate -AttemptId $AttemptId -ProcessId $newServerPid -Generation $newGen | Out-Null
 $stableSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STABLE_WINDOW_SEC } else { 30 }
 Write-Log ("stable window: waiting {0}s before commit" -f $stableSec)
 Start-Sleep -Seconds $stableSec
@@ -243,7 +293,7 @@ if (Test-Path $crScript) {
 }
 if (-not $commitOk) { throw "COMMIT_READY failed after stable window; budget NOT reset" }
 
-$commitRes = Confirm-DshRestartStable -AttemptId $AttemptId -Pid $PID
+$commitRes = Confirm-DshRestartStable -AttemptId $AttemptId -ProcessId $newServerPid -Generation $newGen
 if (-not $commitRes.Committed) {
     Write-Log ("restart commit rejected: {0} (budget NOT reset)" -f $commitRes.Reason)
     throw "restart commit rejected: $($commitRes.Reason)"

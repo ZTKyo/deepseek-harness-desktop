@@ -170,7 +170,7 @@ function Test-DshRestartStableWindow {
 # is the SAME candidate (attemptId + pid) AND the stable window elapsed.
 # Stale/foreign confirm -> fail-closed (no reset). Returns @{Committed, Reason}.
 function Test-DshCandidateIdentityMatch {
-    param([string]$AttemptId = $null, [int]$ProcessId = 0)
+    param([string]$AttemptId = $null, [int]$ProcessId = 0, [string]$Generation = $null)
     $s = Read-DshRestartBudget
     if (-not $s.candidateReady) { return $false }
     if ($s.candidateIdentity) {
@@ -180,6 +180,15 @@ function Test-DshCandidateIdentityMatch {
             # (fail-closed: empty caller identity cannot commit a bound candidate)
             if ($ident.attemptId -and (-not $AttemptId -or ($ident.attemptId -ne $AttemptId))) { return $false }
             if ($ident.pid -and $ident.pid -gt 0 -and (-not $ProcessId -or $ProcessId -le 0 -or ([int]$ident.pid -ne $ProcessId))) { return $false }
+            # Phase 02 R5 (R4-B2 + Addendum): generation is part of the identity.
+            # A candidate bound to an identity MUST carry a non-empty generation —
+            # an empty/blank generation is NOT a valid identity and can never be
+            # committed (registration-time authority; the candidate should have
+            # failed-closed at registration when generation was missing).
+            $identGen = if ($ident.PSObject.Properties.Name -contains 'generation') { [string]$ident.generation } else { '' }
+            if (-not $identGen) { return $false }
+            if ($Generation -and ($identGen -ne $Generation)) { return $false }
+            if (-not $Generation) { return $false }
         } catch { return $false }
     }
     return (Test-DshRestartStableWindow)
@@ -190,15 +199,17 @@ function Test-DshCandidateIdentityMatch {
 # calling this; this function records the commit timestamp and resets the budget.
 # Phase 02 R4 (Step 7): verifies SAME candidate identity before reset.
 function Confirm-DshRestartStable {
-    param([string]$AttemptId = $null, [int]$ProcessId = 0)
-    if (-not (Test-DshCandidateIdentityMatch -AttemptId $AttemptId -ProcessId $ProcessId)) {
+    param([string]$AttemptId = $null, [int]$ProcessId = 0, [string]$Generation = $null)
+    if (-not (Test-DshCandidateIdentityMatch -AttemptId $AttemptId -ProcessId $ProcessId -Generation $Generation)) {
         return [pscustomobject]@{ Committed = $false; Reason = 'stale_or_foreign_candidate' }
     }
     $s = Read-DshRestartBudget
     $s.windowStart = $null
     $s.attempts = 0
-    $s.hourWindowStart = $null
-    $s.hourAttempts = 0
+    # Phase 02 R5 (R4-B2): a normal commit clears the SHORT 10-min window only.
+    # The HOURLY crash history (hourWindowStart/hourAttempts) is PRESERVED so a
+    # stable-then-crash storm can still open the circuit — one success must not
+    # erase the past hour of failures.
     $s.pauseUntil = $null
     $s.candidateAt = $null
     $s.candidateReady = $false

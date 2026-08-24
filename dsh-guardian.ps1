@@ -258,17 +258,34 @@ function Invoke-GoalRecovery {
     } catch { TraceG ('goal-recovery error: ' + $_.Exception.Message) }
 }
 function Restore-LastGoodConfig {
-    # Phase 02 R4 (Step 8): ONLY restore from an exact verified set. If the
-    # guardian mirror carries a manifest, every file must match its sha256 —
-    # a torn copy / hash mismatch REFUSES the restore (fail-closed, don't make
-    # things worse). Mirrors without a manifest (legacy) fall back to copy.
+    # Phase 02 R6 (R5-B3): restore ONLY from an exact verified set. Missing
+    # meta.json / manifest / required file OR any hash mismatch => REFUSE
+    # (fail-closed). The legacy no-manifest copy fallback is REMOVED — a mirror
+    # without a manifest is not verifiable, so we never restore from it.
     $metaPath = Join-Path $lastGoodDir 'meta.json'
-    $manifest = $null
-    if (Test-Path $metaPath) {
-        try { $manifest = (Get-Content $metaPath -Raw | ConvertFrom-Json).manifest } catch { $manifest = $null }
+    if (-not (Test-Path $metaPath)) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood has no meta.json; restore REFUSED (no legacy copy fallback)'
+        return
     }
+    try {
+        $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+    } catch {
+        TraceG 'CONFIG SAFETY: guardian-lastgood meta.json unreadable; restore REFUSED (fail-closed)'
+        return
+    }
+    $manifest = $meta.manifest
+    if (-not $manifest -or @($manifest).Count -eq 0) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood manifest empty/missing; restore REFUSED (fail-closed)'
+        return
+    }
+    # required-set cardinality (same contract as Save-VerifiedLastGood)
+    $required = if ($meta.required) { @($meta.required) } else { @('settings.yaml', 'cordis.patch.yml', 'cordis.yml') }
+    $manifestNames = @($manifest | ForEach-Object { $_.path })
     $verified = $true
-    if ($manifest) {
+    foreach ($rn in $required) {
+        if ($rn -notin $manifestNames) { $verified = $false; TraceG ("CONFIG SAFETY: required file " + $rn + " missing from manifest; restore REFUSED"); break }
+    }
+    if ($verified) {
         foreach ($entry in $manifest) {
             $src = Join-Path $lastGoodDir $entry.path
             if (-not (Test-Path $src)) { $verified = $false; break }
@@ -276,7 +293,7 @@ function Restore-LastGoodConfig {
             if ($h -ne $entry.sha256) { $verified = $false; TraceG ("CONFIG SAFETY: " + $entry.path + " hash mismatch; refusing restore"); break }
         }
     }
-    if ($manifest -and -not $verified) {
+    if (-not $verified) {
         TraceG 'CONFIG SAFETY: guardian-lastgood set torn/hash-mismatch; restore REFUSED (fail-closed)'
         return
     }
@@ -336,38 +353,27 @@ function Restart-Server([string]$reason) {
     try {
     TraceG ("RESTART: " + $reason)
     Check-ConfigSafety            # never boot with a broken config (anti-self-kill)
-    $owner = Get-PortIdentity
-    if ($owner.State -eq 'ok') {
-        TraceG ("  validated DSH loopback owner PID $($owner.Pid) creation=$($owner.Snapshot.CreationDate) cmdHash=$($owner.Snapshot.CommandLineHash)")
-        $stop = Stop-DshLoopbackOwner -Port $Port -ExpectedPid $owner.Pid
-        TraceG ("  stop result=$($stop.State) reason=$($stop.Reason)")
-        if ($stop.State -ne 'stopped') {
-            TraceG '  restart aborted: validated loopback owner did not stop'
-            return $false
-        }
-    } elseif ($owner.State -eq 'none') {
-        TraceG ("  no DSH loopback owner; nonLoopbackListeners=$($owner.NonLoopbackCount)")
-    } else {
-        TraceG ("  restart aborted: unsafe owner state=$($owner.State) pid=$($owner.Pid) nonLoopbackListeners=$($owner.NonLoopbackCount)")
+    # Phase 02 R6 (R5-B2): Guardian is the Process Authority / policy entry, but
+    # the restart ITSELF must go through the SAME exact-attempt contract as
+    # Transaction/SafeMode — restart-dsh-server-delayed.ps1 -RestartAndWait:
+    # detach worker -> attempt ledger -> new server pid+generation bound
+    # candidate -> stable window -> COMMIT_READY -> commit (budget reset).
+    # This removes Guardian's divergent stop->Start-DshServer->client_ready path
+    # and the stale "restart budget reset" log that contradicted the real budget
+    # (Register-DshRestartSuccess does NOT reset without a verified candidate).
+    $rs = Join-Path $PSScriptRoot 'restart-dsh-server-delayed.ps1'
+    if (-not (Test-Path $rs)) {
+        TraceG ('  RESTART aborted: restart script missing')
         return $false
     }
-    $afterStop = Get-PortIdentity
-    if ($afterStop.State -ne 'none') {
-        TraceG ("  restart aborted: loopback state after stop=$($afterStop.State)")
+    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port -RestartAndWait -TimeoutSec 180 -Reason `"$reason`""
+    $p = Start-Process powershell -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
+    if ($p.ExitCode -ne 0) {
+        TraceG ("  RESTART FAILED: exact terminal not COMMITTED (exit=$($p.ExitCode))")
         return $false
     }
-    if (-not (Start-DshServer)) {
-        TraceG '  restart aborted: start transaction could not be launched'
-        return $false
-    }
-    $ready = $null
-    for ($i = 0; $i -lt 45; $i++) {
-        Start-Sleep -Seconds 1
-        $ready = Test-DshReadiness -Port $Port -RequireWebSockets
-        if ($ready.State -eq 'client_ready') { break }
-    }
-    TraceG ("  after restart readiness=$($ready.State) error=$($ready.Error)")
-    return ($ready.State -eq 'client_ready')
+    TraceG '  RESTART COMMITTED (exact attempt: candidate -> stable -> COMMIT_READY; budget reset by Confirm-DshRestartStable)'
+    return $true
     } finally {
         Exit-DshRestartLock $restartLock
     }
@@ -382,8 +388,12 @@ function Invoke-BudgetedRestart([string]$reason) {
     Register-DshRestartAttempt $reason | Out-Null
     $ok = Restart-Server $reason
     if ($ok) {
-        Register-DshRestartSuccess | Out-Null
-        TraceG 'restart budget reset after client-ready success'
+        # Phase 02 R6: the exact-attempt path already committed the budget
+        # (Confirm-DshRestartStable inside the restart worker). Do NOT call
+        # Register-DshRestartSuccess here — without a candidate it records
+        # "NOT reset" while the real budget WAS reset by the worker's commit,
+        # causing log/budget contradiction.
+        TraceG 'restart budget committed via exact attempt (Confirm-DshRestartStable)'
         return $true
     }
     return $false

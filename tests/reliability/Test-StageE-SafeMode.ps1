@@ -12,6 +12,16 @@ $tmp = Join-Path $env:TEMP ("dsh-safe-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path (Join-Path $tmp 'profile') | Out-Null
 $env:DSH_SAFE_PROFILE_DIR = Join-Path $tmp 'profile'
 $env:DSH_BOOT_MODE_PATH = Join-Path $tmp 'boot-mode.json'
+# Phase 02 R6 (R5-B1): safe-mode Enter creates a Transaction checkpoint — pin
+# the transaction root to the temp dir so it can never write the real
+# %LOCALAPPDATA%\DSHHarness\tx-checkpoints.
+$env:DSH_TX_ROOT = Join-Path $tmp 'tx'
+New-Item -ItemType Directory -Force -Path $env:DSH_TX_ROOT | Out-Null
+# Phase 02 R6: TRUE pre-state snapshot of live tx-checkpoints + state (hash/count)
+# for post-run 0-delta assertion.
+$realTxDir = Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
+$script:RealTxBefore = if (Test-Path $realTxDir) { Get-ChildItem $realTxDir -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+$script:RealTxCountBefore = @($script:RealTxBefore).Count
 
 Write-Host '== E1: safe profile build (isolated) =='
 . (Join-Path $root 'dsh-safe-profile.ps1')
@@ -57,6 +67,13 @@ Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item Env:DSH_SAFE_PROFILE_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:DSH_BOOT_MODE_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:DSH_SAFE_FLAG_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:DSH_TX_ROOT -ErrorAction SilentlyContinue
+
+# Phase 02 R6 (R5-B1): real tx-checkpoints must show 0 delta after the run.
+$script:RealTxAfter = if (Test-Path $realTxDir) { Get-ChildItem $realTxDir -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+$delta = @()
+foreach ($f in $script:RealTxAfter) { if ($f -notin $script:RealTxBefore) { $delta += $f } }
+Assert (($delta.Count -eq 0) -and ($script:RealTxAfter.Count -eq $script:RealTxCountBefore)) 'E6 real tx-checkpoints 0-delta (isolation)' "delta=$($delta.Count) before=$($script:RealTxCountBefore) after=$(@($script:RealTxAfter).Count)"
 
 Write-Host ''
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage E Safe Mode isolated)'; exit 0 }

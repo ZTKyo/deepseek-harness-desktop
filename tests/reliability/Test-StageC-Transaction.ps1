@@ -27,6 +27,13 @@ foreach ($rel in @('settings.yaml','profiles\web\cordis.patch.yml','profiles\web
         $script:LiveProfileBefore += @{ rel = $rel; hash = $null; mtime = $null }
     }
 }
+# Phase 02 R6 (R5-B1): record TRUE pre-state of real tx-journal (mtime + content
+# hash) and tx-checkpoint count BEFORE the test runs, so the end assert is a
+# genuine pre/post comparison (was: reading twice after the test).
+$script:RealJournalPath = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
+$script:RealTxDirPath = Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
+$script:JournalBefore = if (Test-Path $script:RealJournalPath) { (Get-Item $script:RealJournalPath).LastWriteTimeUtc.ToString('o') + '|' + (Get-FileHash $script:RealJournalPath).Hash } else { $null }
+$script:TxCountBefore = if (Test-Path $script:RealTxDirPath) { @(Get-ChildItem $script:RealTxDirPath -Recurse -File).Count } else { 0 }
 # hard deny helper: any file path under live profile / live DSHHarness is a FAIL
 function Deny-LiveWrite([string]$msg) {
     $bad = $false
@@ -78,12 +85,12 @@ $t3rec = $all | Where-Object { $_.transactionId -eq $t3Id } | Select-Object -Fir
 Assert ($null -ne $t3rec) 'T4 t3 record persisted'
 
 Write-Host ''
-# Phase 02 R5 (R4-B1): TRUE before/after deny — profile config hash/mtime must
-# be unchanged (recorded at test start), and real tx-journal mtime unchanged.
-$realJournal = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
-$txStamp = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTimeUtc } else { $null }
-$txStampAfter = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTimeUtc } else { $null }
-Assert (($null -eq $txStamp) -or ($txStamp -eq $txStampAfter)) 'C5 real tx-journal untouched (isolation)'
+# Phase 02 R6 (R5-B1): TRUE pre/post deny — real tx-journal mtime+hash and real
+# tx-checkpoint count recorded at test start must be unchanged.
+$journalAfter = if (Test-Path $script:RealJournalPath) { (Get-Item $script:RealJournalPath).LastWriteTimeUtc.ToString('o') + '|' + (Get-FileHash $script:RealJournalPath).Hash } else { $null }
+$txCountAfter = if (Test-Path $script:RealTxDirPath) { @(Get-ChildItem $script:RealTxDirPath -Recurse -File).Count } else { 0 }
+Assert (($null -eq $script:JournalBefore) -or ($script:JournalBefore -eq $journalAfter)) 'C5 real tx-journal untouched (true pre/post)'
+Assert ($txCountAfter -eq $script:TxCountBefore) 'C5 real tx-checkpoint count unchanged' "before=$($script:TxCountBefore) after=$txCountAfter"
 # real profile config files untouched (true before-state comparison)
 $denyBad = $false
 foreach ($e in $script:LiveProfileBefore) {

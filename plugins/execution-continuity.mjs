@@ -220,6 +220,14 @@ export class IntentStore {
         verificationKind: null,
         ctUnresolvedCall: null, // persisted exact {callId, tool} if known
         goalRoundsObserved: null, // last observed goal roundsStarted (goal liveness)
+        // Phase 02 R6 (R5-B4): goal-scoped liveness identity + bounded recheck
+        // state — server generation seen, goal id/revision, observation time and
+        // consecutive liveness-unknown count.
+        serverGenerationSeen: null,
+        goalIdObserved: null,
+        goalRevisionObserved: null,
+        goalObservedAt: null,
+        livenessUnknownCount: 0,
       };
       this.data.intents[sessionId] = it;
     }
@@ -312,6 +320,11 @@ export function apply(ctx, config = {}) {
     return {};
   }
   const logger = ctx.logger || { info() {}, warn() {}, error() {} };
+  // Phase 02 R6 (R5-B4): process-start marker = this plugin instance's
+  // generation. A fresh process after a restart has a new startMs, so a running
+  // flag seen by the NEW process cannot be assumed to be the SAME generation's
+  // execution.
+  const processStartMs = Date.now();
   const store = new IntentStore(config.stateDir || null, logger);
   const budgets = {
     ...DEFAULT_BUDGETS,
@@ -563,12 +576,15 @@ export function apply(ctx, config = {}) {
         diag(`RESUME sid=${sessionId} session missing -> COMPLETED`);
         return;
       }
-      // Anti-double-kick（P0 fix 2026-08-23）+ Phase 02 R5 Refinement (②):
-      // liveness must be GOAL-scoped, not session-scoped. `running===true` /
-      // updatedAt / steps only prove the SESSION has activity (user diagnostics,
-      // GUI attach, other turns) — they do NOT prove the target Goal is
-      // self-progressing. We require: current server generation + target active
-      // Goal identity/revision + Goal-level progress evidence.
+      // Anti-double-kick（P0 fix 2026-08-23）+ Phase 02 R6 (R5-B4):
+      // goal-scoped liveness state machine. `running===true` alone proves
+      // nothing about the target Goal. We persist the server generation seen,
+      // goal id/revision, observed rounds, observation time and a bounded
+      // liveness-unknown count. ONLY same-generation + same-goal + progress
+      // after a grace window justifies SKIP. No progress => persist
+      // LIVENESS_UNKNOWN/RECOVERY_QUEUED + nextRetryAt + bounded count and
+      // return WITHOUT kicking — the timer re-checks later (never kick in the
+      // same call).
       if (found.running === true) {
         // --- goal projection (official truth from session.list) ---
         let goal = null;
@@ -583,47 +599,80 @@ export function apply(ctx, config = {}) {
             };
           }
         } catch { goal = null; }
-        // 1) target goal changed / missing / inactive -> not running, recover
-        if (it.goalId) {
-          if (!goal || goal.id !== it.goalId || (goal.phase && goal.phase !== "active")) {
-            store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
-              note: `goal no longer active/current (goal=${goal ? goal.id.slice(0, 12) : "none"} phase=${goal ? goal.phase : "n/a"})`,
-            });
-            diag(`RESUME-GOAL-CHANGED sid=${sessionId} target goal not active -> INTERRUPTED_BY_RESTART, continuing recovery`);
-            // fall through to recovery (CT + WAITING_USER gates below still fail-closed)
-            found.running = false;
-          } else {
-            // 2) same active goal: is there GOAL-LEVEL progress evidence?
-            const observedRounds = it.goalRoundsObserved ?? null;
-            const goalProgressed = goal.roundsStarted !== null && observedRounds !== null && goal.roundsStarted > observedRounds;
-            if (goalProgressed) {
-              it.goalRoundsObserved = goal.roundsStarted;
-              store.setState(sessionId, STATE.RUNNING, { note: "already running; goal rounds progressed; resume skipped", goalRoundsObserved: goal.roundsStarted });
-              diag(`RESUME-SKIP sid=${sessionId} goal progress (rounds ${observedRounds}->${goal.roundsStarted}) (${reason})`);
-              return;
-            }
-            if (observedRounds === null && goal.roundsStarted !== null) {
-              it.goalRoundsObserved = goal.roundsStarted;
-              store.persist();
-            }
-            // 3) active goal but NO goal-level progress evidence -> LIVENESS_UNKNOWN:
-            //    fail-closed into a bounded recheck (recovery path, CT-gated), NOT
-            //    session-activity-based SKIP.
-            store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
-              note: `liveness-unknown: goal ${goal.id.slice(0, 12)} rev=${goal.revision} rounds=${goal.roundsStarted} no goal-progress evidence`,
-            });
-            diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} running but no goal progress evidence -> INTERRUPTED_BY_RESTART (bounded recheck)`);
-            found.running = false;
-          }
-        } else {
-          // no target goal recorded: session activity is the only signal -> treat
-          // as unknown liveness, bounded recheck (never blind-resume).
-          store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
-            note: "liveness-unknown: no goal identity recorded",
+        const sameGen = it.serverGenerationSeen === processStartMs;
+        const sameGoal = !!(goal && it.goalIdObserved && goal.id === it.goalIdObserved && goal.revision !== null && goal.revision === it.goalRevisionObserved);
+        const goalProgressed = sameGoal && goal.roundsStarted !== null && it.goalRoundsObserved !== null && goal.roundsStarted > it.goalRoundsObserved;
+        const graceMs = 60000; // 60s grace before declaring liveness unknown
+        // 1) FIRST observation in this generation (or goal changed): record
+        //    identity + observedAt, SKIP this round (grace) — do NOT kick.
+        if (!sameGen || !it.goalIdObserved || !goal || goal.id !== it.goalIdObserved) {
+          store.setState(sessionId, STATE.RUNNING, {
+            note: `liveness grace: observed goal ${goal ? goal.id.slice(0, 12) : "none"} (new generation/identity)`,
+            serverGenerationSeen: processStartMs,
+            goalIdObserved: goal ? goal.id : null,
+            goalRevisionObserved: goal ? goal.revision : null,
+            goalRoundsObserved: goal && goal.roundsStarted !== null ? goal.roundsStarted : it.goalRoundsObserved,
+            goalObservedAt: Date.now(),
+            livenessUnknownCount: 0,
           });
-          diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no goal identity -> INTERRUPTED_BY_RESTART (bounded recheck)`);
-          found.running = false;
+          diag(`RESUME-GRACE sid=${sessionId} new generation/goal observed -> SKIP (grace, no kick)`);
+          return;
         }
+        // 2) goal changed revision (new goal revision) -> re-observe (grace)
+        if (goal && goal.revision !== null && it.goalRevisionObserved !== null && goal.revision !== it.goalRevisionObserved) {
+          store.setState(sessionId, STATE.RUNNING, {
+            note: `liveness grace: goal revision changed ${it.goalRevisionObserved}->${goal.revision}`,
+            goalRevisionObserved: goal.revision,
+            goalRoundsObserved: goal.roundsStarted,
+            goalObservedAt: Date.now(),
+            livenessUnknownCount: 0,
+          });
+          diag(`RESUME-GRACE sid=${sessionId} goal revision changed -> SKIP (re-observe)`);
+          return;
+        }
+        // 3) same generation + same goal + progress -> genuine SKIP
+        if (goalProgressed) {
+          store.setState(sessionId, STATE.RUNNING, {
+            note: `already running; goal rounds progressed ${it.goalRoundsObserved}->${goal.roundsStarted}`,
+            goalRoundsObserved: goal.roundsStarted,
+            goalObservedAt: Date.now(),
+            livenessUnknownCount: 0,
+          });
+          diag(`RESUME-SKIP sid=${sessionId} goal progress (rounds ${it.goalRoundsObserved}->${goal.roundsStarted}) (${reason})`);
+          return;
+        }
+        // 4) same generation + same goal but NO progress: bounded recheck.
+        //    If within grace since observation -> SKIP (give it time).
+        //    If grace elapsed -> persist RECOVERY_QUEUED + nextRetryAt +
+        //    bounded count and RETURN (no kick now; timer re-checks).
+        const elapsed = Date.now() - (it.goalObservedAt || 0);
+        if (elapsed < graceMs) {
+          store.setState(sessionId, STATE.RUNNING, {
+            note: `liveness grace: goal ${goal.id.slice(0, 12)} observed ${Math.round(elapsed / 1000)}s ago, no progress yet`,
+            goalObservedAt: it.goalObservedAt || Date.now(),
+          });
+          diag(`RESUME-GRACE sid=${sessionId} no progress within grace (${Math.round(elapsed / 1000)}s/${graceMs / 1000}s) -> SKIP`);
+          return;
+        }
+        // grace elapsed, no progress -> LIVENESS_UNKNOWN (bounded, no kick now)
+        const livenessCap = 6;
+        it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
+        if (it.livenessUnknownCount > livenessCap) {
+          store.setState(sessionId, STATE.FAILED_FATAL, {
+            reason: `liveness-unknown beyond ${livenessCap} rechecks (goal ${goal.id.slice(0, 12)} no progress); manual review required`,
+            livenessUnknownCount: it.livenessUnknownCount,
+          });
+          diag(`RESUME-LIVENESS-FATAL sid=${sessionId} no goal progress beyond cap -> FAILED_FATAL (manual review)`);
+          return;
+        }
+        const nextRetry = Date.now() + Math.min(120000, 15000 * it.livenessUnknownCount);
+        store.setState(sessionId, STATE.RECOVERY_QUEUED, {
+          note: `liveness-unknown recheck #${it.livenessUnknownCount}: goal ${goal.id.slice(0, 12)} no progress in ${Math.round(elapsed / 1000)}s`,
+          nextRetryAt: nextRetry,
+          livenessUnknownCount: it.livenessUnknownCount,
+        });
+        diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no progress after grace -> RECOVERY_QUEUED recheck #${it.livenessUnknownCount} nextRetryAt=${nextRetry} (no kick now)`);
+        return;
       }
     } catch (e) {
       // Phase 02 R1 (BLOCKING-5): RESUME-DEFER must be DURABLE. We persist a
@@ -971,7 +1020,13 @@ export function apply(ctx, config = {}) {
   async function reconcileLegacyVerification(sessionId, it) {
     try {
       if (it.state !== STATE.NEEDS_VERIFICATION) return false;
-      // 1) real unresolved side effect (new schema) -> never migrate
+      // Phase 02 R6 (R5-B4): migration is ONLY for legacy schema (<2) intents or
+      // one-shot explicit legacy markers. schemaVersion===2 states (including
+      // cap-exhausted LEGACY_EVIDENCE_UNAVAILABLE manual-review) are NEVER
+      // auto-migrated on boot — a manual-review state must stay manual across
+      // restarts.
+      if (it.schemaVersion === 2) return false;
+      // 1) real unresolved side effect -> never migrate
       if (it.verificationKind === "UNRESOLVED_SIDE_EFFECT") return false;
       // 2) has a persisted exact unresolved call identity -> never migrate
       if (it.ctUnresolvedCall) return false;
@@ -980,7 +1035,7 @@ export function apply(ctx, config = {}) {
       const legacyReason = /session events unavailable|no session events|completion-unknown: side-effect tool-call without result \(session events unavailable\)/i.test(reason);
       if (!legacyReason) return false;
       // 4) unknown/absent kind with a NON-legacy reason -> fail-closed, no guess
-      if (it.schemaVersion === 2 && it.verificationKind === null && !legacyReason) return false;
+      if (it.schemaVersion !== undefined && it.schemaVersion !== 1 && it.schemaVersion !== 0 && it.verificationKind === null && !legacyReason) return false;
       // ---- exact legacy signature confirmed: re-run current Completion Truth ----
       diag(`RECONCILE-LEGACY sid=${sessionId} legacy NEEDS_VERIFICATION (reason='${String(it.reason).slice(0, 80)}') -> revalidate`);
       const ct = await completionTruth(sessionId, it);

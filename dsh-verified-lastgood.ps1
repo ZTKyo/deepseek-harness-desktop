@@ -91,20 +91,35 @@ function Save-VerifiedLastGood {
     # Phase 02 R4 (Step 8): build the complete set in a STAGING dir first, with a
     # {path, sha256} manifest. Only after every file is staged do we atomically
     # switch the current pointer. A torn copy can never be mistaken for LastGood.
+    # Phase 02 R6 (R5-B3): minimum REQUIRED config set — promote is refused if
+    # ANY required file is missing (was: any single file sufficed, allowing a
+    # partial set to become LastGood).
+    $requiredNames = @('settings.yaml', 'cordis.patch.yml', 'cordis.yml')
     $staging = Join-Path $dst ".staging-$PID"
     New-Item -ItemType Directory -Force -Path $staging | Out-Null
     $manifest = @()
-    $any = $false
+    # Phase 02 R6 (R5-B3): required-set check against the FULL required set —
+    # even if the caller supplied fewer sources, every required name must be
+    # present AND readable, otherwise promote is refused.
+    $providedNames = @($srcList | ForEach-Object { $_.Name })
+    $missingRequired = @($requiredNames | Where-Object { $_ -notin $providedNames })
     foreach ($f in $srcList) {
         if (Test-Path $f.Path) {
             $h = (Get-FileHash $f.Path -Algorithm SHA256).Hash
             Copy-Item $f.Path (Join-Path $staging $f.Name) -Force
             $manifest += @{ path = $f.Name; sha256 = $h }
-            $any = $true
+        } else {
+            if ($f.Name -in $requiredNames -and $f.Name -notin $missingRequired) { $missingRequired += $f.Name }
         }
     }
-    if (-not $any) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue; return @{ Saved = $false; Reason = 'no_src_files' } }
+    if ($missingRequired.Count -gt 0) {
+        Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+        return @{ Saved = $false; Reason = "missing_required_files: $($missingRequired -join ',')" }
+    }
+    if ($manifest.Count -eq 0) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue; return @{ Saved = $false; Reason = 'no_src_files' } }
     $meta = @{
+        schema = 2
+        required = $requiredNames
         timestamp = (Get-Date -Format 'o')
         reason = $Reason
         port = $Port
@@ -164,14 +179,22 @@ function Get-VerifiedCurrentSet {
     } catch { return $null }
 }
 
-# Phase 02 R5 (B3): validate a set against its manifest — every manifest entry
-# must exist with matching sha256; torn/hash-mismatch -> $false.
+# Phase 02 R6 (R5-B3): validate a set against its manifest — EVERY manifest
+# entry must exist with matching sha256 AND the required set must be complete
+# (cardinality check). Missing meta / missing required file / hash mismatch ->
+# $false (fail-closed).
 function Test-VerifiedSet([string]$SetDir) {
     $metaPath = Join-Path $SetDir 'meta.json'
     if (-not (Test-Path $metaPath)) { return $false }
     try {
         $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
         if (-not $meta.manifest -or @($meta.manifest).Count -eq 0) { return $false }
+        # required-set cardinality: every required name must be in the manifest
+        $required = if ($meta.required) { @($meta.required) } else { @('settings.yaml', 'cordis.patch.yml', 'cordis.yml') }
+        $manifestNames = @($meta.manifest | ForEach-Object { $_.path })
+        foreach ($rn in $required) {
+            if ($rn -notin $manifestNames) { return $false }
+        }
         foreach ($entry in $meta.manifest) {
             $f = Join-Path $SetDir $entry.path
             if (-not (Test-Path $f)) { return $false }

@@ -15,7 +15,7 @@
 //   ROUTER_DIAGNOSTICS=true 时把不敏感的路由决定追加到日志文件 ~/.dsh/router-diagnostics.log
 
 import { route, resolveConfig, classifyTask, detectModalities, detectStrictJson, ALIASES, CAPABILITY } from "./openrouter-router-core.mjs";
-import { getContextWindow } from "./model-registry.mjs";
+import { createCapacityResolver } from "./capacity-resolver.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -191,6 +191,11 @@ export function apply(ctx, config = {}) {
   const cfg = resolveConfig(env);
   fileLogEnabled = !!(config && config.diagnostics) || cfg.diagnostics;
   const state = new Map(); // sid -> { requestedMode, lastDecision, forcedAlias, fallbackIndex, modelFallbackCount, providerFallbackAttempts, escalationPending, escalationCount, opencodeEmptyFailures, forcedOpenRouter }
+  // Phase 02 R6 (R5-B5): EXACT route capacity resolver — injectable. Production
+  // can pass config.capacityResolver wired to the Harness runtime
+  // resolveModelInfo(provider, model); default falls back to registry hints
+  // (unknown runtime capacity fails closed).
+  const capacityResolver = config.capacityResolver || createCapacityResolver({});
 
   const getState = (sid) => {
     let s = state.get(sid);
@@ -294,17 +299,21 @@ export function apply(ctx, config = {}) {
           const candidates = [];
           if (cfg.modelIds.mimo) candidates.push(cfg.modelIds.mimo);
           if (cfg.modelIds.deepseek) candidates.push(cfg.modelIds.deepseek);
-          const curWin = getContextWindow(finalModel);
+          // Phase 02 R6 (R5-B5): exact route capacity via injectable resolver
+          // (runtime resolveModelInfo when available; unknown runtime -> null).
+          const curRes = capacityResolver.resolve(resolved.provider, finalModel);
+          const curWin = curRes ? curRes.window : null;
           let best = null;
           let bestWin = 0;
           for (const c of candidates) {
-            const cw = getContextWindow(c);
+            const cRes = capacityResolver.resolve(resolved.provider, c);
+            const cw = cRes ? cRes.window : null;
             if (cw === null || cw === undefined) continue; // unknown candidate -> skip
             if (curWin !== null && curWin !== undefined && cw <= curWin) continue; // must be strictly larger
             if (cw > bestWin) { best = c; bestWin = cw; }
           }
           if (best && best !== finalModel) {
-            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: best, ctx: "needLargerContext", fromWin: curWin, toWin: bestWin });
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: best, ctx: "needLargerContext", fromWin: curWin, toWin: bestWin, capacitySource: curRes ? curRes.source : null });
             finalModel = best;
           } else {
             logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: finalModel, ctx: "needLargerContext-no-larger", fromWin: curWin });

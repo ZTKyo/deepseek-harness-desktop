@@ -82,7 +82,14 @@ jobs:
           }
           if (-not $ready) {
             # Phase 02 R4 (Step 10): readiness failure MUST fail the job — a
-            # "partial" pass hides boot regressions.
+            # "partial" pass hides boot regressions. Dump diagnostics first.
+            Write-Host "=== manifest ==="
+            Get-Content (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml')
+            Write-Host "=== dsh logs ==="
+            Get-ChildItem (Join-Path $env:LOCALAPPDATA 'DSHHarness\logs') -Filter 'dsh-server-*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.Name) ---"
+              Get-Content $_.FullName -Tail 25 -ErrorAction SilentlyContinue
+            }
             Write-Host "FAIL: dsh smoke did not reach api_ready on CI runner (lastErr=$lastErr)"
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
             exit 1

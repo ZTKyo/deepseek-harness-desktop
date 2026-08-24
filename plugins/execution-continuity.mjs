@@ -202,6 +202,11 @@ export class IntentStore {
         fallbackCount: 0,
         contextRecoveryCount: 0,
         autoResumeCycles: 0,
+        // Phase 02 R10 (R10-1): once-per-boot budget epoch. When a REAL new
+        // boot is detected, autoResumeCycles resets AND this marker is set to
+        // the current generation in the SAME atomic write — so any later
+        // resume/defer/cooldown path in the same boot never resets again.
+        autoResumeBudgetGeneration: null,
         lastFailure: null,
         lastFailureAt: null,
         lastActivity: Date.now(),
@@ -649,10 +654,22 @@ export function apply(ctx, config = {}) {
     // task can only be resumed by manual intervention (observed: session
     // turn=46 hit budget on restart). Anti-storm semantics still hold WITHIN
     // a single boot (cycles increment per RESUME-OK).
-    if (serverGeneration && it.serverGenerationSeen !== serverGeneration) {
-      if (it.autoResumeCycles) {
-        diag(`RESUME-BUDGET-RESET sid=${sessionId} new generation (${serverGeneration}) resets autoResumeCycles ${it.autoResumeCycles}->0`);
+    // Phase 02 R10 (R10-1): use a DEDICATED once-per-boot marker
+    // (autoResumeBudgetGeneration) instead of reusing serverGenerationSeen
+    // (liveness observation semantics — only updated when reaching the
+    // running/liveness branch; if session.list fails / WAITING_* / cooldown /
+    // prompt-fail returns early, the next entry in the SAME boot would see the
+    // mismatch again and re-reset the budget -> unbounded fresh budgets).
+    if (serverGeneration && it.autoResumeBudgetGeneration !== serverGeneration) {
+      if (it.autoResumeCycles || it.autoResumeBudgetGeneration === null) {
+        diag(`RESUME-BUDGET-RESET sid=${sessionId} new generation (${serverGeneration}) resets autoResumeCycles ${it.autoResumeCycles}->0 (budget epoch ${it.autoResumeBudgetGeneration}->${serverGeneration})`);
+        // ATOMIC: marker + cycles in one persist — later paths in this boot
+        // see marker == generation and never reset again.
         it.autoResumeCycles = 0;
+        it.autoResumeBudgetGeneration = serverGeneration;
+        store.persist();
+      } else {
+        it.autoResumeBudgetGeneration = serverGeneration;
         store.persist();
       }
     }

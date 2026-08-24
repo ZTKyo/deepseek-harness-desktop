@@ -100,6 +100,43 @@ Assert ($null -ne $quarantined) 'R12 corrupt budget quarantined (not fresh-avail
 $b13 = Read-DshRestartBudget
 Assert ($b13.lastReason -match 'QUARANTINED') 'R13 post-quarantine flagged' "reason=$($b13.lastReason)"
 
+# ========== Phase 02 R5 (R4-B2): generation binding + hourly crash history ==========
+# reset to a clean budget file for R14-R16 (quarantine from R12 shadows reads)
+Remove-Item -LiteralPath $env:DSH_RESTART_BUDGET_PATH -Force -ErrorAction SilentlyContinue
+Get-ChildItem (Split-Path $env:DSH_RESTART_BUDGET_PATH) -Filter "*.quarantined-*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+
+# R14: generation mismatch -> confirm rejected (identity includes generation)
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
+Register-DshRestartAttempt -Reason 'r14-test' | Out-Null
+Register-DshRestartCandidate -AttemptId 'att-g1' -ProcessId 9001 -Generation 'gen-A' | Out-Null
+$gWrong = Confirm-DshRestartStable -AttemptId 'att-g1' -ProcessId 9001 -Generation 'gen-B'
+Assert ($gWrong.Committed -eq $false) 'R14 wrong generation rejected' "reason=$($gWrong.Reason)"
+$gRight = Confirm-DshRestartStable -AttemptId 'att-g1' -ProcessId 9001 -Generation 'gen-A'
+Assert ($gRight.Committed -eq $true) 'R14 same generation committed' "reason=$($gRight.Reason)"
+
+# R15: hourly crash history PRESERVED across a normal commit (one success must
+# not erase the past hour's failures)
+Register-DshRestartAttempt -Reason 'r15-test' | Out-Null
+Register-DshRestartAttempt -Reason 'r15-test' | Out-Null
+Register-DshRestartAttempt -Reason 'r15-test' | Out-Null
+$b15before = Read-DshRestartBudget
+Assert ([int]$b15before.hourAttempts -ge 3) 'R15 hourAttempts accumulate' "hour=$($b15before.hourAttempts)"
+Register-DshRestartCandidate -AttemptId 'att-h1' -ProcessId 9002 -Generation 'gen-C' | Out-Null
+$null = Confirm-DshRestartStable -AttemptId 'att-h1' -ProcessId 9002 -Generation 'gen-C'
+$b15after = Read-DshRestartBudget
+Assert ([int]$b15after.hourAttempts -eq [int]$b15before.hourAttempts) 'R15 hourly history preserved after commit' "hour=$($b15after.hourAttempts) (was $($b15before.hourAttempts))"
+Assert ([int]$b15after.attempts -eq 0) 'R15 short window attempts reset (10-min only)' "att=$($b15after.attempts)"
+
+# R16: stable-then-crash storm still opens the circuit via hourly budget
+$env:DSH_RESTART_STABLE_WINDOW_SEC = '0'
+# burn enough hourly attempts to trip the hourly gate (6 max)
+1..6 | ForEach-Object { Register-DshRestartAttempt -Reason 'r16-storm' | Out-Null }
+Register-DshRestartCandidate -AttemptId 'att-h2' -ProcessId 9003 -Generation 'gen-D' | Out-Null
+$null = Confirm-DshRestartStable -AttemptId 'att-h2' -ProcessId 9003 -Generation 'gen-D'
+# even after a commit, the next attempts should still count against the hour window
+$stormAllowed = Test-DshRestartAllowed
+Assert ($stormAllowed.Allowed -eq $false) 'R16 hourly storm still circuits (history not erased)' "reason=$($stormAllowed.Reason)"
+
 Write-Host ""
 if ($fail -eq 0) { Write-Host "RESULT: PASS (restart budget state machine + stable window + generation/corruption)" } else { Write-Host "RESULT: FAIL ($fail)" }
 Remove-Item -LiteralPath $env:DSH_RESTART_BUDGET_PATH -Force -ErrorAction SilentlyContinue

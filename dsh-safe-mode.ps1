@@ -72,8 +72,15 @@ function Restart-DshServerNow {
     if ($NoRestart) { return @{ Restarted = $false; Reason = 'no-restart-requested' } }
     $rs = Join-Path $root 'restart-dsh-server-delayed.ps1'
     if (-not (Test-Path $rs)) { return @{ Restarted = $false; Reason = 'restart-script-missing' } }
-    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port"
-    Start-Process powershell -ArgumentList $args -WindowStyle Hidden -Wait
+    # Phase 02 R5 (R4-B2): use RestartAndWait — the caller waits for the exact
+    # worker terminal state (COMMITTED | FAILED | TIMED_OUT), NOT the outer
+    # wrapper's exit. The script prints the attemptId; we check the exit code
+    # which is now terminal-state based (0 = COMMITTED).
+    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port -RestartAndWait -TimeoutSec 180"
+    $p = Start-Process powershell -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
+    if ($p.ExitCode -ne 0) {
+        return @{ Restarted = $false; Reason = "restart-terminal-not-committed (exit=$($p.ExitCode))" }
+    }
     return @{ Restarted = $true; Reason = $Reason }
 }
 

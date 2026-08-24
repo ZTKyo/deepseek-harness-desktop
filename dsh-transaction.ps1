@@ -281,6 +281,12 @@ function Invoke-DshTransaction {
         }
 
         # ---- VERIFY (full COMMIT_READY) ----
+        # Phase 02 R5 (R4-B2): if the restart attempt did NOT reach a COMMITTED
+        # terminal state (boot_failed), do NOT let a generic COMMIT_READY sweep
+        # the transaction into COMMITTED — fail the transaction instead.
+        if ($faultClass -eq 'boot_failed') {
+            return [pscustomobject]@{ TransactionId = $transactionId; FinalState = 'BOOT_FAILED'; Verify = 'restart-terminal-not-committed'; LastGood = $null }
+        }
         $gate = Test-DshTransactionCommitReady -Port $Port -StableWindowSec $StableWindowSec -SkipLightProbe:$SkipLightProbe
         $verifyResult = $gate.Stage
         if ($gate.Ready) {
@@ -312,8 +318,14 @@ function Invoke-DshTransaction {
         if ($RestartOnApply) {
             $rs = Join-Path $root 'restart-dsh-server-delayed.ps1'
             if (Test-Path $rs) {
-                $rsArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port"
-                Start-Process powershell -ArgumentList $rsArgs -WindowStyle Hidden -Wait
+                # Phase 02 R5 (R4-B2): wait for the exact worker terminal state,
+                # not the outer wrapper's exit 0.
+                $rollbackAttempt = [guid]::NewGuid().ToString('N')
+                $rsArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port -AttemptId $rollbackAttempt"
+                Start-Process powershell -ArgumentList $rsArgs -WindowStyle Hidden | Out-Null
+                $waitArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -WaitAttempt $rollbackAttempt -TimeoutSec 180 -Port $Port"
+                $wb = Start-Process powershell -ArgumentList $waitArgs -WindowStyle Hidden -Wait -PassThru
+                if ($wb.ExitCode -ne 0) { $faultClass = 'rollback_restart_failed' }
             }
         }
         $recovery = Test-DshTransactionHealth -Port $Port

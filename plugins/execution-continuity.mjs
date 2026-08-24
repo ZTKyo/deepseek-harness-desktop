@@ -691,26 +691,17 @@ export function apply(ctx, config = {}) {
           return action;
         }
         case CATEGORY.CONTEXT_OVERFLOW: {
-          if (hasBudget("context-recovery", it, budgets)) {
-            it.contextRecoveryCount = (it.contextRecoveryCount || 0) + 1;
-            store.persist();
-            let compacted = false;
-            try {
-              // P1-B fix 2026-08-23：从 agent scoped ctx 获取 compaction（真实所在），
-              // 而非 host ctx（realm 隔离下永远 unavailable → 假 DEGRADED）。
-              const comp = getCompaction(ctx, agent);
-              if (comp && typeof comp.compactNow === "function") {
-                const res = await comp.compactNow(agent, undefined, `ec-${Date.now()}`);
-                compacted = !!res;
-              }
-            } catch (e) {
-              diag(`COMPACT-FAILED sid=${sid} ${e.message}`);
-            }
-            store.setState(sid, STATE.RETRYING);
-            record(compacted ? `CONTEXT-OVERFLOW -> COMPACTED, RETRY` : `CONTEXT-OVERFLOW -> COMPACT-UNAVAILABLE, RETRY`);
-            await sleep(backoffDelay(it.retryCount, budgets, 0));
-            return { kind: "retry" };
-          }
+          // Phase 02 R4 (Step 5): official compaction-basic OWNS the
+          // context-overflow -> compact -> retry layer (it listens on
+          // agent/request-error with a real AbortSignal and only retries when
+          // surface replacement progressed). EC no longer hand-calls
+          // compactNow(agent, undefined) — that violated the official contract
+          // (signal.throwIfAborted on undefined) and duplicated the recovery
+          // authority. EC only: (a) records durable incident state, and
+          // (b) if a budget remains, emits a needLargerContext recovery
+          // REQUIREMENT to the Router as the fallback path.
+          it.contextRecoveryCount = (it.contextRecoveryCount || 0) + 1;
+          store.persist();
           if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
             // Router decides the larger-context model; EC only records the need.
             it.pendingFallback = {
@@ -722,12 +713,12 @@ export function apply(ctx, config = {}) {
             };
             try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
-            record(`CONTEXT-OVERFLOW -> RECOVERY-REQUIREMENT (router decides model)`);
+            record(`CONTEXT-OVERFLOW -> RECOVERY-REQUIREMENT (router decides model; official compaction owns compact)`);
             await sleep(backoffDelay(it.retryCount, budgets, 0));
             return { kind: "retry" };
           }
           store.setState(sid, STATE.FAILED_FATAL, { fatalReason: "context-overflow: budgets exhausted, no compatible fallback" });
-          record(`CONTEXT-OVERFLOW -> FAILED_FATAL (no budget/fallback)`);
+          record(`CONTEXT-OVERFLOW -> FAILED_FATAL (no budget/fallback; official compaction handled compact)`);
           return action;
         }
         case CATEGORY.PROVIDER_OUTAGE:

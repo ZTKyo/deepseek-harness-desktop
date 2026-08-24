@@ -26,7 +26,7 @@ import {
   newState, applyTurnBoundary, applyManualSwitch, resolvePreferred,
   decideRequestModel, decideFallback, classifyFailure, normalizeModel, snapshot,
 } from './commandcode-router-core.mjs';
-import { getContextWindow } from './model-registry.mjs';
+import { createCapacityResolver } from './capacity-resolver.mjs';
 
 export const name = 'commandcode-router';
 
@@ -75,6 +75,9 @@ function audit(sid, fields) {
 export function apply(ctx) {
   fileLogEnabled = String(process.env.ROUTER_DIAGNOSTICS || '').toLowerCase() === 'true';
   const zdr = String(process.env.CMD_ZDR || '') === '1';
+  // Phase 02 R6 (R5-B5): exact route capacity resolver (registry hint default;
+  // production can wire runtime resolveModelInfo).
+  const capacityResolver = createCapacityResolver({});
   const state = new Map();
   const getState = (sid) => {
     let s = state.get(sid);
@@ -185,16 +188,20 @@ export function apply(ctx) {
         st.recoveryRequirement = null; // consume (ack) once
         if (req.needLargerContext === true) {
           const candidates = [MUSE, DEEPSEEK].filter(Boolean);
-          const curWin = getContextWindow(finalModel);
+          // Phase 02 R6 (R5-B5): exact route capacity via resolver (runtime
+          // authoritative when wired; unknown -> null -> fail-closed).
+          const curRes = capacityResolver.resolve(PROVIDER, finalModel);
+          const curWin = curRes ? curRes.window : null;
           let best = null; let bestWin = 0;
           for (const c of candidates) {
-            const cw = getContextWindow(c);
+            const cRes = capacityResolver.resolve(PROVIDER, c);
+            const cw = cRes ? cRes.window : null;
             if (cw === null || cw === undefined) continue;
             if (curWin !== null && curWin !== undefined && cw <= curWin) continue;
             if (cw > bestWin) { best = c; bestWin = cw; }
           }
           if (best && best !== finalModel) {
-            logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: best, ctx: 'needLargerContext', fromWin: curWin, toWin: bestWin });
+            logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: best, ctx: 'needLargerContext', fromWin: curWin, toWin: bestWin, capacitySource: curRes ? curRes.source : null });
             finalModel = best;
           } else {
             logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: finalModel, ctx: 'needLargerContext-no-larger', fromWin: curWin });

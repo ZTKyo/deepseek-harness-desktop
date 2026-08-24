@@ -258,6 +258,16 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   }
 }
 
+// T12 (R8 Addendum): grace/cooldown must NOT be one-shot dead-ends — RUNNING
+// with nextRetryAt is due (listDue picks it up), cooldown writes RECOVERY_QUEUED.
+{
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T12 listDue processes RUNNING+nextRetryAt', /\(it\.state === STATE\.RUNNING && it\.nextRetryAt\)/.test(src));
+  check('T12 grace writes nextRetryAt (new gen)', /liveness grace: observed goal[\s\S]*?nextRetryAt: graceEnd/.test(src));
+  check('T12 grace writes nextRetryAt (no progress)', /no progress yet[\s\S]*?nextRetryAt: graceEnd/.test(src));
+  check('T12 cooldown -> RECOVERY_QUEUED + nextRetryAt', /within cooldown[\s\S]*?RECOVERY_QUEUED/.test(src) && /retryAt = it\.lastResumeAt \+ resumeCooldownMs/.test(src));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

@@ -16,6 +16,7 @@
 
 import { route, resolveConfig, classifyTask, detectModalities, detectStrictJson, ALIASES, CAPABILITY } from "./openrouter-router-core.mjs";
 import { createCapacityResolver } from "./capacity-resolver.mjs";
+import { makeRuntimeCapacityResolverLoose } from "./runtime-capacity-adapter.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -195,7 +196,16 @@ export function apply(ctx, config = {}) {
   // can pass config.capacityResolver wired to the Harness runtime
   // resolveModelInfo(provider, model); default falls back to registry hints
   // (unknown runtime capacity fails closed).
-  const capacityResolver = config.capacityResolver || createCapacityResolver({});
+  // Phase 02 R7 (R6-3): wire the REAL runtime resolveModelInfo when not injected.
+  let capacityResolver = config.capacityResolver || null;
+  if (!capacityResolver) {
+    try {
+      const wired = makeRuntimeCapacityResolverLoose(ctx);
+      capacityResolver = createCapacityResolver({ runtimeResolve: wired.wired ? wired.runtimeResolve : null });
+    } catch {
+      capacityResolver = createCapacityResolver({});
+    }
+  }
 
   const getState = (sid) => {
     let s = state.get(sid);

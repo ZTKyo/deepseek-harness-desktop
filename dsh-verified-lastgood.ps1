@@ -151,14 +151,21 @@ function Save-VerifiedLastGood {
     (Get-Content (Join-Path $current 'meta.json') -Raw) | Out-File (Join-Path $dst 'meta.json') -Encoding utf8
     # cleanup old versioned sets (keep only the pointed set + immediate previous)
     Get-ChildItem $dst -Directory -Filter 'v-*' -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -Skip 2 | ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
-    # sync the restore mirror (guardian-lastgood) - the ONLY legal writer
+    # sync the restore mirror (guardian-lastgood) - the ONLY legal writer.
+    # Phase 02 R7 (R6-5): the mirror is a DERIVED CACHE — it carries the
+    # canonical set-id (the versioned set the current pointer names) so the
+    # Guardian can prove the mirror equals the canonical current set. A stale
+    # but internally-consistent mirror (crash between pointer switch and mirror
+    # sync) must NOT be treated as authority.
     $gDir = Get-GuardianLastGoodDir
     New-Item -ItemType Directory -Force -Path $gDir | Out-Null
     foreach ($f in $srcList) {
         $s = Join-Path $current $f.Name
         if (Test-Path $s) { Copy-Item $s (Join-Path $gDir $f.Name) -Force }
     }
-    (Get-Content (Join-Path $current 'meta.json') -Raw) | Out-File (Join-Path $gDir 'meta.json') -Encoding utf8
+    $gMeta = Get-Content (Join-Path $current 'meta.json') -Raw | ConvertFrom-Json
+    $gMeta | Add-Member -NotePropertyName canonicalSetId -NotePropertyValue $versionName -Force
+    ($gMeta | ConvertTo-Json -Depth 5 -Compress) | Out-File (Join-Path $gDir 'meta.json') -Encoding utf8
     return @{ Saved = $true; Reason = $Reason; Dir = $current; Gate = if ($gate) { $gate.Stage } else { 'forced' } }
 }
 

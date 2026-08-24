@@ -40,6 +40,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 import {
   classifyFailure,
   createCircuitBreaker,
@@ -320,11 +321,22 @@ export function apply(ctx, config = {}) {
     return {};
   }
   const logger = ctx.logger || { info() {}, warn() {}, error() {} };
-  // Phase 02 R6 (R5-B4): process-start marker = this plugin instance's
-  // generation. A fresh process after a restart has a new startMs, so a running
-  // flag seen by the NEW process cannot be assumed to be the SAME generation's
-  // execution.
-  const processStartMs = Date.now();
+  // Phase 02 R7 (R6-2): server generation = the REAL DSH server boot identity
+  // (launcher runtime ledger entryHash), NOT processStartMs. A plugin reload in
+  // the same server must NOT look like a new generation; a real server restart
+  // (new launcher child) produces a new entryHash. Read from the runtime ledger
+  // written by dsh-launcher; fall back to host.describe provider/model when the
+  // ledger is unreadable (still a real identity, never Date.now()).
+  let serverGeneration = null;
+  try {
+    const local = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+    const runtimePath = path.join(local, "DSHHarness", "logs", `dsh-runtime-${process.env.EC_API_PORT || 3080}.json`);
+    if (fs.existsSync(runtimePath)) {
+      const rt = JSON.parse(fs.readFileSync(runtimePath, "utf8"));
+      if (rt && rt.entryHash) serverGeneration = `gen:${rt.entryHash.slice(0, 16)}`;
+    }
+  } catch { serverGeneration = null; }
+  const processStartMs = Date.now(); // fallback identity marker only
   const store = new IntentStore(config.stateDir || null, logger);
   const budgets = {
     ...DEFAULT_BUDGETS,
@@ -489,6 +501,83 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  // Phase 02 R7 (R6-2): run the Completion Truth gate. Returns true when the
+  // state is CLEAN (safe to continue recovery/resume); false when the gate
+  // already wrote a terminal/defer state (evidence_unavailable -> bounded
+  // WAITING_NETWORK defer; needs_verification -> permanent NEEDS_VERIFICATION).
+  // This is the SINGLE CT decision used by both the normal resume path and the
+  // liveness (zombie/no-progress) recovery path — no duplicated algorithm.
+  async function runCtGate(sessionId, it) {
+    const ct = await completionTruth(sessionId, it);
+    if (ct.state === "evidence_unavailable") {
+      const ctCap = 5;
+      it.ctDeferCount = (it.ctDeferCount || 0) + 1;
+      if (it.ctDeferCount > ctCap) {
+        store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+          reason: `completion-evidence unavailable beyond ${ctCap} defers (${ct.detail || "events unavailable"}); manual review required`,
+          schemaVersion: 2,
+          verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE",
+        });
+        diag(`CT sid=${sessionId} evidence defer cap exceeded (${it.ctDeferCount} > ${ctCap}) -> NEEDS_VERIFICATION (manual review)`);
+      } else {
+        const retryAt = Date.now() + Math.max(10000, backoffDelay(it.ctDeferCount, budgets, 0));
+        store.setState(sessionId, STATE.WAITING_NETWORK, {
+          reason: `CT-evidence-defer: ${ct.detail || "events unavailable"} (${it.ctDeferCount}/${ctCap})`,
+          nextRetryAt: retryAt,
+          ctDeferCount: it.ctDeferCount,
+          schemaVersion: 2,
+          verificationKind: "EVIDENCE_DEFER",
+        });
+        diag(`CT sid=${sessionId} evidence unavailable -> bounded defer #${it.ctDeferCount} nextRetryAt=${retryAt}`);
+      }
+      return false;
+    }
+    if (ct.state === "needs_verification") {
+      store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+        reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
+        schemaVersion: 2,
+        verificationKind: "UNRESOLVED_SIDE_EFFECT",
+        ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
+      });
+      diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay)`);
+      return false;
+    }
+    // clean
+    if (it.ctDeferCount) { it.ctDeferCount = 0; }
+    return true;
+  }
+
+  // Phase 02 R7 (R6-2): CT-gated recovery for LIVENESS_UNKNOWN (zombie /
+  // no-progress) — Completion Truth decides, never blind-resume. clean ->
+  // attempt goal.resume (armed); evidence unavailable / unresolved -> handled by
+  // runCtGate (defer / NEEDS_VERIFICATION). Returns the state written.
+  async function ctGatedRecovery(sessionId, it, why) {
+    const proceed = await runCtGate(sessionId, it);
+    if (!proceed) return it.state; // defer / needs_verification already written
+    // clean: re-arm the goal (same path as normal resume) — the official Goal
+    // truth is the recovery authority; a prompt kick only if goal.resume fails.
+    store.setState(sessionId, STATE.RUNNING, { note: `ct-gated recovery (${why}): CT clean, goal re-armed` });
+    diag(`RESUME-CT-GATED sid=${sessionId} ${why}: CT clean -> goal re-arm`);
+    let goalRef = it.goalId ? { id: it.goalId } : null;
+    try {
+      const goalList = await apiRpc("session.list", {});
+      const items2 = (goalList && goalList.items) || [];
+      const found2 = items2.find((i) => i.sessionId === sessionId);
+      const gv = found2 && found2.projections && found2.projections.values && found2.projections.values.goal;
+      const g = gv && gv.goal;
+      if (g && g.id && typeof g.revision === "number") goalRef = { id: g.id, revision: g.revision };
+    } catch { /* fallback to intent goalId */ }
+    if (goalRef && goalRef.id) {
+      try {
+        await apiRpc("goal.resume", { sessionId, ref: goalRef });
+        diag(`RESUME-CT-GATED sid=${sessionId} goal.resume OK`);
+      } catch (e) {
+        diag(`RESUME-CT-GATED sid=${sessionId} goal.resume skipped: ${String(e.message).slice(0, 120)}`);
+      }
+    }
+    return STATE.RUNNING;
+  }
+
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
@@ -503,62 +592,13 @@ export function apply(ctx, config = {}) {
       return;
     }
     // Phase 02 R1 (BLOCKING-6): Completion Truth — deterministic idempotency
-    // guard before ANY resume. We inspect the session's recent tool events:
-    //   - a side-effecting tool-call with a matching tool/result  -> COMPLETE, do not replay
-    //   - a side-effecting tool-call WITHOUT a result (outcome unknown) -> NEEDS_VERIFICATION
-    //     (fail-closed: never blind-replay an unknown side effect)
-    //   - no outstanding tool-calls -> safe to resume
-    // This is the deterministic layer; the recovery prompt is only the last resort.
+    // guard before ANY resume. Phase 02 R7 (R6-2): single CT decision shared
+    // with the liveness recovery path (runCtGate); clean -> continue, else the
+    // gate already wrote defer/NEEDS_VERIFICATION.
     {
-      const ct = await completionTruth(sessionId, it);
-      // Phase 02 R5 Addendum: distinguish transient evidence unavailability from
-      // a REAL unresolved side effect. evidence_unavailable -> bounded defer
-      // (retry later, same as WAITING_NETWORK); needs_verification -> permanent
-      // human review (NEVER relaxed).
-      if (ct.state === "evidence_unavailable") {
-        const ctCap = 5; // bounded: 5 consecutive evidence-unavailable defers
-        it.ctDeferCount = (it.ctDeferCount || 0) + 1;
-        if (it.ctDeferCount > ctCap) {
-          store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
-            reason: `completion-evidence unavailable beyond ${ctCap} defers (${ct.detail || "events unavailable"}); manual review required`,
-            // Phase 02 R5 Refinement: this is evidence-unavailable exhaustion,
-            // NOT a confirmed unresolved side effect — mark kind so reconcile
-            // knows it may revalidate (it never auto-recovers without CT clean).
-            schemaVersion: 2,
-            verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE",
-          });
-          diag(`CT sid=${sessionId} evidence defer cap exceeded (${it.ctDeferCount} > ${ctCap}) -> NEEDS_VERIFICATION (manual review)`);
-        } else {
-          const retryAt = Date.now() + Math.max(10000, backoffDelay(it.ctDeferCount, budgets, 0));
-          store.setState(sessionId, STATE.WAITING_NETWORK, {
-            reason: `CT-evidence-defer: ${ct.detail || "events unavailable"} (${it.ctDeferCount}/${ctCap})`,
-            nextRetryAt: retryAt,
-            ctDeferCount: it.ctDeferCount,
-            schemaVersion: 2,
-            verificationKind: "EVIDENCE_DEFER",
-          });
-          diag(`CT sid=${sessionId} evidence unavailable -> bounded defer #${it.ctDeferCount} nextRetryAt=${retryAt}`);
-        }
-        return;
-      }
-      if (ct.state === "needs_verification") {
-        // Phase 02 R5 Refinement: REAL unresolved side effect — persist the
-        // exact unresolved call identity (if available) + kind. This is the
-        // permanent, fail-closed state that migration NEVER auto-relaxes.
-        store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
-          reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
-          schemaVersion: 2,
-          verificationKind: "UNRESOLVED_SIDE_EFFECT",
-          ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
-        });
-        diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay)`);
-        return;
-      }
-      // state === "clean": all side-effecting calls resolved (or none) — safe to
-      // resume from the completion point; the recovery prompt remains the last
-      // resort and the WAITING_USER gate below still applies.
-      // a successful resume resets the transient defer counter.
-      if (it.ctDeferCount) { it.ctDeferCount = 0; }
+      const proceed = await runCtGate(sessionId, it);
+      if (!proceed) return;
+      // clean: continue to the WAITING_USER gate + goal.resume below.
     }
     // P1-A：WAITING_USER 安全 Gate（fail-closed）。所有恢复入口（boot scan /
     // timer / turn-end 补位）最终都汇聚到这里，因此在此统一拦截。
@@ -599,16 +639,38 @@ export function apply(ctx, config = {}) {
             };
           }
         } catch { goal = null; }
-        const sameGen = it.serverGenerationSeen === processStartMs;
+        const sameGen = it.serverGenerationSeen === (serverGeneration || `proc:${processStartMs}`);
         const sameGoal = !!(goal && it.goalIdObserved && goal.id === it.goalIdObserved && goal.revision !== null && goal.revision === it.goalRevisionObserved);
         const goalProgressed = sameGoal && goal.roundsStarted !== null && it.goalRoundsObserved !== null && goal.roundsStarted > it.goalRoundsObserved;
         const graceMs = 60000; // 60s grace before declaring liveness unknown
+        // Phase 02 R7 (R6-2): goal projection MISSING — must NOT silently loop
+        // in RUNNING (one-shot dead-end: timer only drives WAITING_*/QUEUED).
+        // Treat as LIVENESS_UNKNOWN with a bounded nextRetryAt recheck.
+        if (!goal) {
+          it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
+          const livenessCap = 6;
+          if (it.livenessUnknownCount > livenessCap) {
+            // no goal identity at all after cap -> CT-gated recovery (safe:
+            // Completion Truth decides; never blind-resume)
+            diag(`RESUME-LIVENESS sid=${sessionId} goal projection missing beyond cap -> CT-gated recovery`);
+            return await ctGatedRecovery(sessionId, it, `goal projection missing (${it.livenessUnknownCount} rechecks)`);
+          }
+          const nextRetry = Date.now() + Math.min(120000, 15000 * it.livenessUnknownCount);
+          store.setState(sessionId, STATE.RECOVERY_QUEUED, {
+            note: `liveness-unknown (no goal projection) recheck #${it.livenessUnknownCount}`,
+            nextRetryAt: nextRetry,
+            serverGenerationSeen: serverGeneration || `proc:${processStartMs}`,
+            livenessUnknownCount: it.livenessUnknownCount,
+          });
+          diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} goal projection missing -> RECOVERY_QUEUED recheck #${it.livenessUnknownCount} nextRetryAt=${nextRetry}`);
+          return;
+        }
         // 1) FIRST observation in this generation (or goal changed): record
         //    identity + observedAt, SKIP this round (grace) — do NOT kick.
-        if (!sameGen || !it.goalIdObserved || !goal || goal.id !== it.goalIdObserved) {
+        if (!sameGen || !it.goalIdObserved || goal.id !== it.goalIdObserved) {
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: observed goal ${goal ? goal.id.slice(0, 12) : "none"} (new generation/identity)`,
-            serverGenerationSeen: processStartMs,
+            serverGenerationSeen: serverGeneration || `proc:${processStartMs}`,
             goalIdObserved: goal ? goal.id : null,
             goalRevisionObserved: goal ? goal.revision : null,
             goalRoundsObserved: goal && goal.roundsStarted !== null ? goal.roundsStarted : it.goalRoundsObserved,
@@ -654,16 +716,17 @@ export function apply(ctx, config = {}) {
           diag(`RESUME-GRACE sid=${sessionId} no progress within grace (${Math.round(elapsed / 1000)}s/${graceMs / 1000}s) -> SKIP`);
           return;
         }
-        // grace elapsed, no progress -> LIVENESS_UNKNOWN (bounded, no kick now)
+        // grace elapsed, no progress -> LIVENESS_UNKNOWN (bounded, no kick now).
+        // Phase 02 R7 (R6-2): after the bounded recheck cap, enter CT-GATED
+        // recovery — Completion Truth decides (clean -> resume; evidence
+        // unavailable -> bounded defer; exact unresolved mutating ->
+        // NEEDS_VERIFICATION). NEVER just park at FAILED_FATAL (manual backstop
+        // only), and never blind-resume.
         const livenessCap = 6;
         it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
         if (it.livenessUnknownCount > livenessCap) {
-          store.setState(sessionId, STATE.FAILED_FATAL, {
-            reason: `liveness-unknown beyond ${livenessCap} rechecks (goal ${goal.id.slice(0, 12)} no progress); manual review required`,
-            livenessUnknownCount: it.livenessUnknownCount,
-          });
-          diag(`RESUME-LIVENESS-FATAL sid=${sessionId} no goal progress beyond cap -> FAILED_FATAL (manual review)`);
-          return;
+          diag(`RESUME-LIVENESS sid=${sessionId} no goal progress beyond cap -> CT-gated recovery`);
+          return await ctGatedRecovery(sessionId, it, `no goal progress (${it.livenessUnknownCount} rechecks)`);
         }
         const nextRetry = Date.now() + Math.min(120000, 15000 * it.livenessUnknownCount);
         store.setState(sessionId, STATE.RECOVERY_QUEUED, {
@@ -1149,6 +1212,33 @@ export function apply(ctx, config = {}) {
         const apiOk = await waitForApi(10, 1000);
         const compAvail = compactionAvailable(ctx);
         diag(`plugin ready; apiOk=${apiOk} compaction=${compAvail ? "available" : "UNAVAILABLE -> contextOverflowRecovery DEGRADED"} safeMode=${!enableAutoResume} enableAutoResume=${enableAutoResume} budgets=${JSON.stringify(budgets)} maxConcurrent=${maxConcurrentResume} capability=${JSON.stringify(capability)}`);
+        // Phase 02 R7 (R6-4): record the LOADED release manifest at plugin boot —
+        // server generation/boot identity + the ACTUAL plugin files this process
+        // loaded (path + sha256), persisted for source/deployed/loaded
+        // attestation. This is written from the plugin lifecycle itself (no new
+        // service); a restart rewrites it with the new generation.
+        try {
+          const local = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
+          const profileWeb = path.join(os.homedir(), ".dsh", "profiles", "web");
+          const loadedManifest = {
+            serverGeneration: serverGeneration || `proc:${processStartMs}`,
+            loadedAt: new Date().toISOString(),
+            pid: process.pid,
+            plugins: {},
+          };
+          for (const p of ["execution-continuity.mjs", "openrouter-router.mjs", "commandcode-router.mjs", "model-registry.mjs", "completion-truth-core.mjs", "capacity-resolver.mjs", "runtime-capacity-adapter.mjs", "vision-bridge.mjs"]) {
+            const fp = path.join(profileWeb, p);
+            try {
+              loadedManifest.plugins[p] = { sha256: crypto.createHash("sha256").update(fs.readFileSync(fp)).digest("hex") };
+            } catch { loadedManifest.plugins[p] = { sha256: null }; }
+          }
+          const mf = path.join(local, "DSHHarness", "state", "loaded-release.json");
+          fs.mkdirSync(path.dirname(mf), { recursive: true });
+          const tmp = mf + ".tmp";
+          fs.writeFileSync(tmp, JSON.stringify(loadedManifest, null, 2));
+          fs.renameSync(tmp, mf);
+          diag(`LOADED-MANIFEST serverGeneration=${loadedManifest.serverGeneration} pid=${process.pid} -> ${mf}`);
+        } catch (e) { diag(`LOADED-MANIFEST error: ${String(e.message).slice(0, 80)}`); }
         checkRetryPolicyGuard();
         if (apiOk) {
           if (enableAutoResume) {

@@ -27,6 +27,7 @@ import {
   decideRequestModel, decideFallback, classifyFailure, normalizeModel, snapshot,
 } from './commandcode-router-core.mjs';
 import { createCapacityResolver } from './capacity-resolver.mjs';
+import { makeRuntimeCapacityResolverLoose } from './runtime-capacity-adapter.mjs';
 
 export const name = 'commandcode-router';
 
@@ -72,12 +73,23 @@ function audit(sid, fields) {
   try { recordRouting?.(sid, fields); } catch {}
 }
 
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
   fileLogEnabled = String(process.env.ROUTER_DIAGNOSTICS || '').toLowerCase() === 'true';
   const zdr = String(process.env.CMD_ZDR || '') === '1';
-  // Phase 02 R6 (R5-B5): exact route capacity resolver (registry hint default;
-  // production can wire runtime resolveModelInfo).
-  const capacityResolver = createCapacityResolver({});
+  // Phase 02 R7 (R6-3): exact route capacity resolver with REAL runtime wiring.
+  // config.capacityResolver may be injected; otherwise try the Harness official
+  // runtime resolveModelInfo(provider,model) via the thin adapter; only when NO
+  // runtime path is available do we fall back to registry hints. Runtime path
+  // present-but-unknown stays fail-closed inside capacity-resolver.
+  let capacityResolver = config.capacityResolver || null;
+  if (!capacityResolver) {
+    try {
+      const wired = makeRuntimeCapacityResolverLoose(ctx);
+      capacityResolver = createCapacityResolver({ runtimeResolve: wired.wired ? wired.runtimeResolve : null });
+    } catch {
+      capacityResolver = createCapacityResolver({});
+    }
+  }
   const state = new Map();
   const getState = (sid) => {
     let s = state.get(sid);

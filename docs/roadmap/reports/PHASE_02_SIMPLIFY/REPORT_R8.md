@@ -151,7 +151,7 @@ mismatch fixture（篡改 vision-bridge）→ FAIL exit 1；还原 → PASS
 
 ---
 
-## 16. Runtime Interruption Addendum 附录（PR #26）
+## 16. Runtime Interruption Addendum 附录（PR #26，merge SHA=ee853e0a）
 
 R8 live capacity 验证中连续真实 restart 暴露 **RUNNING grace one-shot dead-end**（新真实缺陷）：
 - grace 分支写 RUNNING **无 nextRetryAt**；timer listDue 不处理普通 RUNNING → grace 后**不再检查** → 永久死端

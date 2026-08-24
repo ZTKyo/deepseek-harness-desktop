@@ -161,9 +161,11 @@ export function modelSupports(modelId, required = {}) {
   if (!modelId) return false;
   if (required.contextWindow) {
     const cw = getContextWindow(modelId);
-    if (cw === null) {
-      // unknown window: allow only if no explicit requirement cap semantics break
-      // (conservative: treat unknown as insufficient only when a specific cap is demanded)
+    // Phase 02 R5 (R4-B5): UNKNOWN context window with an explicit required
+    // capacity is FAIL-CLOSED — we cannot prove the model fits the requirement,
+    // so it must NOT pass (was silently allowing unknown).
+    if (cw === null || cw === undefined) {
+      return false;
     } else if (required.contextWindow > cw) {
       return false;
     }

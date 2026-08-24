@@ -64,6 +64,13 @@ check("R8 unknown family modelSupports(tools) fails", modelSupports("totally-unk
 check("R8 contextWindow is tokens (deepseek 1310720)", getContextWindow("deepseek/deepseek-v4-flash-0731") === 1310720);
 check("R8 opus-5 context 1M (tokens)", getContextWindow("claude-opus-5") === 1000000);
 check("R8 contextWindow thin override (does not override runtime)", typeof getContextWindow === "function");
+// ── Phase 02 R5 (R4-B5): unknown required context fail-closed ──
+check("R9 unknown-context model rejected for explicit required window", modelSupports("unknown-model-no-window", { contextWindow: 1000000 }) === false);
+check("R9 known-context model satisfies equal required window", modelSupports("deepseek/deepseek-v4-flash-0731", { contextWindow: 1310720 }) === true);
+check("R9 known-context model rejects larger required window", modelSupports("deepseek/deepseek-v4-flash-0731", { contextWindow: 2000000 }) === false);
+check("R9 opus-5 (1M) satisfies 1M required", modelSupports("claude-opus-5", { contextWindow: 1000000 }) === true);
+check("R9 opus-5 rejects >1M required", modelSupports("claude-opus-5", { contextWindow: 1000001 }) === false);
+check("R9 commandcode deepseek id has window (1310720)", getContextWindow("deepseek/deepseek-v4-flash") === 1310720);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log("MODEL REGISTRY TEST FAILED"); process.exit(1); }

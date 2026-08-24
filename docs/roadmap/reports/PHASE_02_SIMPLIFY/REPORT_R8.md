@@ -151,4 +151,20 @@ mismatch fixture（篡改 vision-bridge）→ FAIL exit 1；还原 → PASS
 
 ---
 
+## 16. Runtime Interruption Addendum 附录（PR #26）
+
+R8 live capacity 验证中连续真实 restart 暴露 **RUNNING grace one-shot dead-end**（新真实缺陷）：
+- grace 分支写 RUNNING **无 nextRetryAt**；timer listDue 不处理普通 RUNNING → grace 后**不再检查** → 永久死端
+- cooldown 命中时只记 RESUME-SKIP 后 return，无 due-state → 连续 restart 命中 cooldown 又成死端
+
+**修复**（最小）：
+- `listDue` 纳入 **RUNNING + nextRetryAt**（grace 窗口到期重扫）
+- 4 个 grace 分支（new generation / revision changed / progress / within grace）写 **nextRetryAt = grace end**
+- cooldown 分支写 **RECOVERY_QUEUED + nextRetryAt = cooldown end**（timer 到期重驱）
+**验证**：T12（4 断言：listDue RUNNING due / grace nextRetryAt×2 / cooldown due）——r5-addendum **44/44** PASS；crashsafe 33 / fault 38 PASS。
+
+**真实 gate 说明**：Reviewer 要求"无人为输入的真实 restart gate"（restart 后自动恢复 + wired=true）——本轮多次真实 restart 中 wired=true + source=runtime 已达成（§5）；auto-resume 的 one-shot 死端已修复；最终无人为输入的 restart gate 验证随本附录提交后执行。
+
+---
+
 *报告不可覆盖：复审修改将生成 REPORT_R9.md……*

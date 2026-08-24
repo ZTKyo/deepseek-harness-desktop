@@ -215,7 +215,7 @@ if ($ready.State -ne 'client_ready') { throw "DSH client readiness failed: $($re
 # client_ready = candidate stage only (does NOT reset budget). We wait a stable
 # window, then re-verify readiness + COMMIT_READY, and only then commit success
 # (which resets the budget). A crash inside the window does not clear attempts.
-Register-DshRestartCandidate | Out-Null
+Register-DshRestartCandidate -AttemptId $AttemptId -Pid $PID | Out-Null
 $stableSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STABLE_WINDOW_SEC } else { 30 }
 Write-Log ("stable window: waiting {0}s before commit" -f $stableSec)
 Start-Sleep -Seconds $stableSec
@@ -243,7 +243,11 @@ if (Test-Path $crScript) {
 }
 if (-not $commitOk) { throw "COMMIT_READY failed after stable window; budget NOT reset" }
 
-Confirm-DshRestartStable | Out-Null
+$commitRes = Confirm-DshRestartStable -AttemptId $AttemptId -Pid $PID
+if (-not $commitRes.Committed) {
+    Write-Log ("restart commit rejected: {0} (budget NOT reset)" -f $commitRes.Reason)
+    throw "restart commit rejected: $($commitRes.Reason)"
+}
 Write-Log "restart committed (stable window + COMMIT_READY; budget reset)"
 if ($AttemptId) { Set-AttemptState $AttemptId 'COMMITTED' 'stable window + COMMIT_READY' $true }
 } finally {

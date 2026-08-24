@@ -35,6 +35,7 @@ function Get-DshRestartBudgetDefault {
         candidateAt = $null        # Phase 02: candidate_ready timestamp
         candidateReady = $false    # Phase 02: server reached client_ready
         stableCommitAt = $null     # Phase 02: stable-window commit timestamp
+        candidateIdentity = $null  # Phase 02 R4: {attemptId,pid,generation} of the candidate
     }
 }
 
@@ -59,9 +60,23 @@ function Read-DshRestartBudget {
             candidateAt      = if ($null -ne $value.candidateAt) { $value.candidateAt } else { $def.candidateAt }
             candidateReady   = if ($null -ne $value.candidateReady) { $value.candidateReady } else { $def.candidateReady }
             stableCommitAt   = if ($null -ne $value.stableCommitAt) { $value.stableCommitAt } else { $def.stableCommitAt }
+            candidateIdentity = if ($null -ne $value.candidateIdentity) { $value.candidateIdentity } else { $null }
         }
         return $merged
-    } catch { return (Get-DshRestartBudgetDefault) }
+    } catch {
+        # Phase 02 R4 (Step 7): corrupt/torn state -> QUARANTINE (fail-closed).
+        # Do NOT silently return a fresh default (that would turn corruption into
+        # "budget recovered available"). Quarantine the file and surface a
+        # circuit_open state so callers fail closed until an operator clears it.
+        try {
+            $q = "$($script:DshRestartBudgetPath).quarantined-$([guid]::NewGuid().ToString('N'))"
+            Move-Item -LiteralPath $script:DshRestartBudgetPath -Destination $q -Force -ErrorAction SilentlyContinue
+        } catch { }
+        $def = Get-DshRestartBudgetDefault
+        $def.lastReason = 'BUDGET_CORRUPT_QUARANTINED'
+        $def.pauseUntil = ([DateTimeOffset]::Now).AddMinutes(30).ToString('o')
+        return $def
+    }
 }
 
 function Write-DshRestartBudget($Value) {
@@ -124,27 +139,61 @@ function Register-DshRestartAttempt([string]$Reason) {
 
 # Phase 02: mark that the new server reached client_ready (candidate stage).
 # Does NOT reset the budget; attempts stay until stable-window commit.
+# Phase 02 R4 (Step 7): candidate is bound to {attemptId, pid, generation} so a
+# later Confirm must prove SAME candidate before it may reset the budget.
 function Register-DshRestartCandidate {
+    param([string]$AttemptId = $null, [int]$ProcessId = 0, [string]$Generation = $null)
     $s = Read-DshRestartBudget
     $s.candidateAt = [DateTimeOffset]::Now.ToString('o')
     $s.candidateReady = $true
+    $s.candidateIdentity = @{ attemptId = $AttemptId; pid = $ProcessId; generation = $Generation } | ConvertTo-Json -Compress
     Write-DshRestartBudget $s
     return $s
 }
 
 # Phase 02: check whether the stable window has elapsed since candidate_ready.
+# Phase 02 R4 (Step 7): reads the window from env AT CALL TIME (tests mutate
+# DSH_RESTART_STABLE_WINDOW_SEC between cases; a load-time cache would freeze it).
+function Get-DshStableWindowSec {
+    if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { return [int]$env:DSH_RESTART_STABLE_WINDOW_SEC }
+    return $script:DshRestartStableWindowSec
+}
 function Test-DshRestartStableWindow {
     $s = Read-DshRestartBudget
     if (-not $s.candidateReady) { return $false }
     $cand = Convert-DshDate $s.candidateAt
     if (-not $cand) { return $false }
-    return ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge $script:DshRestartStableWindowSec)
+    return ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge (Get-DshStableWindowSec))
+}
+
+# Phase 02 R4 (Step 7): a commit may ONLY reset the budget when it can prove it
+# is the SAME candidate (attemptId + pid) AND the stable window elapsed.
+# Stale/foreign confirm -> fail-closed (no reset). Returns @{Committed, Reason}.
+function Test-DshCandidateIdentityMatch {
+    param([string]$AttemptId = $null, [int]$ProcessId = 0)
+    $s = Read-DshRestartBudget
+    if (-not $s.candidateReady) { return $false }
+    if ($s.candidateIdentity) {
+        try {
+            $ident = $s.candidateIdentity | ConvertFrom-Json
+            # candidate bound to identity: caller MUST prove the same identity
+            # (fail-closed: empty caller identity cannot commit a bound candidate)
+            if ($ident.attemptId -and (-not $AttemptId -or ($ident.attemptId -ne $AttemptId))) { return $false }
+            if ($ident.pid -and $ident.pid -gt 0 -and (-not $ProcessId -or $ProcessId -le 0 -or ([int]$ident.pid -ne $ProcessId))) { return $false }
+        } catch { return $false }
+    }
+    return (Test-DshRestartStableWindow)
 }
 
 # Phase 02: commit success only after stable window + re-verification.
 # Caller is responsible for the second readiness + COMMIT_READY check before
 # calling this; this function records the commit timestamp and resets the budget.
+# Phase 02 R4 (Step 7): verifies SAME candidate identity before reset.
 function Confirm-DshRestartStable {
+    param([string]$AttemptId = $null, [int]$ProcessId = 0)
+    if (-not (Test-DshCandidateIdentityMatch -AttemptId $AttemptId -ProcessId $ProcessId)) {
+        return [pscustomobject]@{ Committed = $false; Reason = 'stale_or_foreign_candidate' }
+    }
     $s = Read-DshRestartBudget
     $s.windowStart = $null
     $s.attempts = 0
@@ -153,10 +202,11 @@ function Confirm-DshRestartStable {
     $s.pauseUntil = $null
     $s.candidateAt = $null
     $s.candidateReady = $false
+    $s.candidateIdentity = $null
     $s.stableCommitAt = [DateTimeOffset]::Now.ToString('o')
     $s.lastSuccess = [DateTimeOffset]::Now.ToString('o')
     Write-DshRestartBudget $s
-    return $s
+    return [pscustomobject]@{ Committed = $true; Reason = 'committed'; Budget = $s }
 }
 
 # Phase 02 R2: Register-DshRestartSuccess is a STRICT commit — it only resets
@@ -176,7 +226,7 @@ function Register-DshRestartSuccess {
     }
     $cand = Convert-DshDate $s.candidateAt
     $stableOk = $false
-    if ($cand) { $stableOk = ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge $script:DshRestartStableWindowSec) }
+    if ($cand) { $stableOk = ((([DateTimeOffset]::Now) - $cand).TotalSeconds -ge (Get-DshStableWindowSec)) }
     if (-not $stableOk) {
         # Candidate exists but stable window not elapsed -> NOT commit-worthy.
         $s.lastReason = 'success-before-stable-window: budget NOT reset'

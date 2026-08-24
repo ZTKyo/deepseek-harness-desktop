@@ -26,11 +26,16 @@ export function createCapacityResolver(opts = {}) {
     } catch { return null; }
   });
 
-  function resolve(provider, model) {
+  // Phase 02 R7 adversarial fix: resolve() is ASYNC because the official Harness
+  // runtime resolveModelInfo(provider, model) is an async method — treating its
+  // return value synchronously would read a Promise (context always undefined ->
+  // permanent fail-closed, i.e. the "wiring" silently never fires). We await the
+  // runtime result; a synchronous resolver (tests) still works.
+  async function resolve(provider, model) {
     // 1) runtime official path is the AUTHORITY
     if (typeof runtimeResolve === 'function') {
       try {
-        const w = runtimeResolve(provider, model);
+        const w = await runtimeResolve(provider, model);
         if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
           return { window: w, source: 'runtime' };
         }

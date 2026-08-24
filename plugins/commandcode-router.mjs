@@ -200,13 +200,13 @@ export function apply(ctx, config = {}) {
         st.recoveryRequirement = null; // consume (ack) once
         if (req.needLargerContext === true) {
           const candidates = [MUSE, DEEPSEEK].filter(Boolean);
-          // Phase 02 R6 (R5-B5): exact route capacity via resolver (runtime
-          // authoritative when wired; unknown -> null -> fail-closed).
-          const curRes = capacityResolver.resolve(PROVIDER, finalModel);
+          // Phase 02 R7 adversarial fix: capacityResolver.resolve is ASYNC
+          // (official resolveModelInfo is async) — must await.
+          const curRes = await capacityResolver.resolve(PROVIDER, finalModel);
           const curWin = curRes ? curRes.window : null;
           let best = null; let bestWin = 0;
           for (const c of candidates) {
-            const cRes = capacityResolver.resolve(PROVIDER, c);
+            const cRes = await capacityResolver.resolve(PROVIDER, c);
             const cw = cRes ? cRes.window : null;
             if (cw === null || cw === undefined) continue;
             if (curWin !== null && curWin !== undefined && cw <= curWin) continue;

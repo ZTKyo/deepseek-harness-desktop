@@ -89,11 +89,11 @@ hourAttempts 不重复计数；maintenance lock released；HTTP 200 + COMMIT_REA
 - schemaVersion=2 manual review 不再自动 migration
 - active compaction 0.6 / 0.2 / 32768；Goal Recovery 只读；Completion Truth exact callId；EC 无手工 compact
 
-## 10. PR / CI / Merge SHA（不留 pending）
+## 10. PR / CI / Merge SHA（已回填，不留 pending）
 
-- **PR #23（代码+报告）**：`fix/phase02-review-r7`（7 commits）
-- CI：Level 1/2/3（待 PR 创建后跑）
-- Merge SHA：待 merge 后记录（本报告 merge 后回填）
+- **PR #23（代码+报告）**：`fix/phase02-review-r7`（7 commits + 报告）
+- CI：Level 1/2/3 **全部成功**（Static 53s / Reliability 1m36s / Boot smoke 5m37s）
+- Merge SHA：**`c2e8e032`**（2026-08-24 merged）
 
 ## 11. Real vs Synthetic Evidence 分栏
 

@@ -355,6 +355,13 @@ export function apply(ctx, config = {}) {
       }
     }
   } catch { serverGeneration = null; }
+  // Phase 02 R11 (R11-1): TEST-ONLY serverGeneration injection — allows the
+  // production-path budget-epoch test to drive resumeViaApi() against a
+  // controlled per-boot identity WITHOUT touching the real runtime ledger or
+  // production logic. Production callers never pass this config key.
+  if (config.serverGeneration && typeof config.serverGeneration === "string") {
+    serverGeneration = config.serverGeneration;
+  }
   // No processStartMs fallback: null generation -> liveness unknown (fail-closed).
   const store = new IntentStore(config.stateDir || null, logger);
   const budgets = {

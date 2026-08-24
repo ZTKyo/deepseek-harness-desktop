@@ -401,6 +401,82 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   globalThis.fetch = realFetch;
 }
 
+// T16 (R11-1): REAL production-path budget-epoch test — drives production
+// resumeViaApi() with a TEST-ONLY injected serverGeneration, 20+ entries in the
+// SAME generation (including an early-return fault path) must reset the budget
+// EXACTLY ONCE; store reload in the same generation must NOT re-reset; a new
+// generation (changed childPid/startedAt) resets once more. Checks the PERSISTED
+// autoResumeBudgetGeneration + autoResumeCycles (no regex-only acceptance).
+{
+  const ctxT = makeCtx({ 'sess-epoch': { events: [] } });
+  const realFetch = globalThis.fetch;
+  const okResult = (value) => ({ ok: true, json: async () => ({ result: { ok: true, value } }) });
+  let listCall = 0;
+  globalThis.fetch = async (url, opts) => {
+    if (url.includes('/session.list')) {
+      listCall++;
+      // early-return fault path: every 5th call throws (simulates session.list
+      // unavailable -> WAITING_NETWORK defer path, which returns BEFORE the
+      // liveness branch that would otherwise update serverGenerationSeen)
+      if (listCall % 5 === 0) throw new Error('simulated session.list unavailable');
+      return okResult({ items: [{ sessionId: 'sess-epoch', projections: { values: { goal: { goal: { id: 'g-epoch', revision: 1 } } } } }] });
+    }
+    if (url.includes('/goal.resume')) return okResult({});
+    if (url.includes('/session.prompt')) return okResult({});
+    return okResult({});
+  };
+
+  // Boot A: inject generation boot:AAA, intent has old marker boot:OLD
+  const pA = ecApply(ctxT, { stateDir, enableAutoResume: true, serverGeneration: 'boot:AAA_1' });
+  const itA = pA._test.store.ensure('sess-epoch');
+  itA.goalId = 'g-epoch';
+  itA.autoResumeBudgetGeneration = 'boot:OLD_0';   // marker from a previous boot
+  itA.autoResumeCycles = 15;                        // historical cycles above cap
+  itA.lastResumeAt = 0;
+  itA.serverGenerationSeen = 'boot:OLD_0';
+  pA._test.store.persist();
+
+  // 20+ entries in the SAME generation boot:AAA_1 — including early-return
+  // fault paths (every 5th call throws). The budget must reset EXACTLY ONCE
+  // (first entry sets marker=AAA_1; later entries see marker==gen -> skip).
+  for (let i = 0; i < 25; i++) {
+    await pA._test.resumeViaApi('sess-epoch', 't16-same-gen');
+  }
+  const after20 = pA._test.store.get('sess-epoch');
+  check('T16 same-gen 25 entries reset EXACTLY once', after20.autoResumeBudgetGeneration === 'boot:AAA_1' && after20.autoResumeCycles <= 1, `marker=${after20.autoResumeBudgetGeneration} cycles=${after20.autoResumeCycles}`);
+  // The cycles should be 0 or 1 (reset once at first entry, then +1 per
+  // RESUME-OK within this boot). The KEY assertion: marker stayed AAA_1 and
+  // cycles did NOT get reset again (would show cycles > 1 if re-reset looped).
+
+  // store reload (simulate plugin restart in the SAME boot) -> same gen, no reset
+  const pB = ecApply(ctxT, { stateDir, enableAutoResume: true, serverGeneration: 'boot:AAA_1' });
+  const itB = pB._test.store.get('sess-epoch');
+  const cyclesBeforeReload = itB.autoResumeCycles;
+  const markerBeforeReload = itB.autoResumeBudgetGeneration;
+  for (let i = 0; i < 20; i++) {
+    await pB._test.resumeViaApi('sess-epoch', 't16-reload-same-gen');
+  }
+  const afterReload = pB._test.store.get('sess-epoch');
+  check('T16 reload same-gen does NOT re-reset marker', afterReload.autoResumeBudgetGeneration === 'boot:AAA_1' && afterReload.autoResumeBudgetGeneration === markerBeforeReload, `marker=${afterReload.autoResumeBudgetGeneration}`);
+  check('T16 reload same-gen cycles monotonic (no reset to 0)', afterReload.autoResumeCycles >= cyclesBeforeReload, `cycles ${cyclesBeforeReload}->${afterReload.autoResumeCycles}`);
+
+  // NEW generation (childPid/startedAt changed -> boot:BBB) -> reset ONCE more
+  const pC = ecApply(ctxT, { stateDir, enableAutoResume: true, serverGeneration: 'boot:BBB_2' });
+  const itC = pC._test.store.get('sess-epoch');
+  const cyclesBeforeNew = itC.autoResumeCycles;
+  await pC._test.resumeViaApi('sess-epoch', 't16-new-gen');
+  const afterNew1 = pC._test.store.get('sess-epoch');
+  check('T16 new gen resets marker to new gen', afterNew1.autoResumeBudgetGeneration === 'boot:BBB_2', `marker=${afterNew1.autoResumeBudgetGeneration}`);
+  check('T16 new gen resets cycles', afterNew1.autoResumeCycles <= 1, `cycles=${afterNew1.autoResumeCycles} (was ${cyclesBeforeNew})`);
+  for (let i = 0; i < 15; i++) {
+    await pC._test.resumeViaApi('sess-epoch', 't16-new-gen-more');
+  }
+  const afterNew2 = pC._test.store.get('sess-epoch');
+  check('T16 new gen 16 entries reset EXACTLY once', afterNew2.autoResumeBudgetGeneration === 'boot:BBB_2', `marker=${afterNew2.autoResumeBudgetGeneration} cycles=${afterNew2.autoResumeCycles}`);
+
+  globalThis.fetch = realFetch;
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

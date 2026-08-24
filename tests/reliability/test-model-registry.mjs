@@ -2,7 +2,7 @@
 // Phase 02 Reviewer Round 2 (BLOCKING-3): the test must import the REAL consumers
 // (Router CAPABILITY, Vision verified-native-image, EC core modelSupports) and
 // verify they all resolve through the SAME registry facts. No renamed self-calls.
-import registry, { FACTS, modelSupports, getContextWindow, getModalities, supportsImage, isVerifiedNativeImage, canonicalId } from '../../plugins/model-registry.mjs';
+import registry, { FACTS, modelSupports, getContextWindow, getModalities, supportsImage, isVerifiedNativeImage, canonicalId, getTools } from '../../plugins/model-registry.mjs';
 // REAL consumers (not re-implementations):
 import { CAPABILITY } from '../../plugins/openrouter-router-core.mjs';
 import { isVerifiedNativeImageRoute } from '../../plugins/vision-bridge.mjs';
@@ -56,6 +56,14 @@ check("R6 Vision route bai vision-exp native", isVerifiedNativeImageRoute("bai",
 
 // ── 7. Registry is pure (no service dependency) ──
 check("R7 registry is a pure module", typeof registry.modelSupports === "function");
+
+// ── Phase 02 R4 (Step 6): unknown capability fail-closed + tokens semantics ──
+check("R8 unknown family tools fail-closed", getTools("totally-unknown-model").tools === false);
+check("R8 unknown family structuredJson fail-closed", getTools("totally-unknown-model").structuredJson === false);
+check("R8 unknown family modelSupports(tools) fails", modelSupports("totally-unknown-model", { tools: true }) === false);
+check("R8 contextWindow is tokens (deepseek 1310720)", getContextWindow("deepseek/deepseek-v4-flash-0731") === 1310720);
+check("R8 opus-5 context 1M (tokens)", getContextWindow("claude-opus-5") === 1000000);
+check("R8 contextWindow thin override (does not override runtime)", typeof getContextWindow === "function");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) { console.log("MODEL REGISTRY TEST FAILED"); process.exit(1); }

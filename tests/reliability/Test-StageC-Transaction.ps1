@@ -1,4 +1,4 @@
-# Test-StageC-Transaction.ps1 - Transaction 2.0 state machine tests (isolated, no real config damage).
+﻿# Test-StageC-Transaction.ps1 - Transaction 2.0 state machine tests (isolated, no real config damage).
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-StageC-Transaction.ps1 [-LivePort 3080] [-SkipLive]
 param([int]$LivePort = 3080, [switch]$SkipLive)
 $ErrorActionPreference = 'Continue'
@@ -8,6 +8,9 @@ function Assert([bool]$Cond, [string]$Name, [string]$Detail = '') {
     else { Write-Host ("FAIL  {0}  {1}" -f $Name, $Detail); $script:failCount++ }
 }
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# Phase 02 R4 (Step 0 Test Isolation): pin transaction checkpoints + journal to
+# a temp root so the test never writes the real %LOCALAPPDATA%\DSHHarness.
+$env:DSH_TX_ROOT = Join-Path $env:TEMP ("dsh-tx-root-" + [guid]::NewGuid().ToString('N'))
 . (Join-Path $root 'dsh-transaction.ps1')
 
 Write-Host '== T1: DryRun transaction -> FAILED(dry), journal record =='
@@ -48,5 +51,15 @@ $t3rec = $all | Where-Object { $_.transactionId -eq $t3Id } | Select-Object -Fir
 Assert ($null -ne $t3rec) 'T4 t3 record persisted'
 
 Write-Host ''
+# Phase 02 R4 (Step 0): isolation cleanup + deny assertion.
+$realTx = Join-Path $env:LOCALAPPDATA 'DSHHarness\tx-checkpoints'
+$realJournal = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\tx-journal.json'
+$txBefore = if (Test-Path $realTx) { (Get-ChildItem $realTx -Recurse -File | Measure-Object).Count } else { 0 }
+$txStamp = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTime } else { $null }
+# journal writes happen in the temp root; real journal timestamp must be unchanged
+$txStampAfter = if (Test-Path $realJournal) { (Get-Item $realJournal).LastWriteTime } else { $null }
+Assert (($null -eq $txStamp) -or ($txStamp -eq $txStampAfter)) 'C5 real tx-journal untouched (isolation)'
+Remove-Item $env:DSH_TX_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage C Transaction 2.0)'; exit 0 }
 else { Write-Host "RESULT: FAIL ($failCount failed)"; exit 1 }

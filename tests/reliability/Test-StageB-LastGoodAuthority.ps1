@@ -10,6 +10,17 @@ function Assert([bool]$Cond, [string]$Name, [string]$Detail = '') {
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
+# Phase 02 R4 (Step 0 Test Isolation): pin last-good state to a temp root so the
+# test can NEVER touch the real %LOCALAPPDATA%\DSHHarness, and assert the real
+# paths were untouched (filesystem deny assertion).
+$env:DSH_STATE_ROOT = Join-Path $env:TEMP ("dsh-stageb-root-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path (Join-Path $env:DSH_STATE_ROOT 'verified-lastgood') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $env:DSH_STATE_ROOT 'guardian-lastgood') | Out-Null
+$realVLG = Join-Path $env:LOCALAPPDATA 'DSHHarness\verified-lastgood'
+$realGLG = Join-Path $env:LOCALAPPDATA 'DSHHarness\guardian-lastgood'
+$vlgBefore = if (Test-Path $realVLG) { Get-ChildItem $realVLG -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+$glgBefore = if (Test-Path $realGLG) { Get-ChildItem $realGLG -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+
 Write-Host '== Case 1: YAML syntax broken -> restore from mirror (guardian behavior) =='
 # Simulate: a config file is invalid YAML; guardian Check-ConfigSafety must restore the mirror,
 # and must NOT have overwritten the mirror when the file was valid.
@@ -64,5 +75,12 @@ if (-not $SkipLive) {
 }
 
 Write-Host ''
+# Phase 02 R4 (Step 0): filesystem deny assertion - real last-good untouched.
+$vlgAfter = if (Test-Path $realVLG) { Get-ChildItem $realVLG -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+$glgAfter = if (Test-Path $realGLG) { Get-ChildItem $realGLG -Recurse -File | ForEach-Object { $_.FullName + ':' + (Get-FileHash $_.FullName).Hash } } else { @() }
+Assert ((Compare-Object $vlgBefore $vlgAfter | Measure-Object).Count -eq 0) 'C4 verified-lastgood real path untouched (isolation)'
+Assert ((Compare-Object $glgBefore $glgAfter | Measure-Object).Count -eq 0) 'C4 guardian-lastgood real path untouched (isolation)'
+Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue
+
 if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage B authority rule verified)'; exit 0 }
 else { Write-Host "RESULT: FAIL ($failCount failed)"; exit 1 }

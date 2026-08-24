@@ -194,11 +194,26 @@ export function apply(ctx, config = {}) {
   const getState = (sid) => {
     let s = state.get(sid);
     if (!s) {
-      s = { requestedMode: "auto", forcedAlias: null, fallbackIndex: 0, modelFallbackCount: 0, providerFallbackAttempts: 0, escalationPending: false, escalationCount: 0, opencodeEmptyFailures: 0, forcedOpenRouter: false };
+      s = { requestedMode: "auto", forcedAlias: null, fallbackIndex: 0, modelFallbackCount: 0, providerFallbackAttempts: 0, escalationPending: false, escalationCount: 0, opencodeEmptyFailures: 0, forcedOpenRouter: false, recoveryRequirement: null };
       state.set(sid, s);
     }
     return s;
   };
+
+  // Phase 02 R4 (Step 3): typed bridge — EC (execution-continuity) emits a
+  // recovery REQUIREMENT (reason/modalities/tools/needLargerContext) when it
+  // classifies an agent/request-error but is NOT allowed to pick the fallback
+  // model. Router is the sole model authority; it stores the requirement and
+  // applies it on the next agent/request (consume + ack).
+  ctx.on("ec/recovery-requirement", (payload) => {
+    try {
+      const sid = payload && payload.sessionId;
+      if (!sid) return;
+      const st = getState(sid);
+      st.recoveryRequirement = payload.requirement || null;
+      logDiagVolume(sid, { type: "ec-recovery-requirement", reason: st.recoveryRequirement ? st.recoveryRequirement.reason : "?" });
+    } catch (e) { /* bridge must never break routing */ }
+  });
 
   ctx.on("agent/request", async (payload, next) => {
     let resolved;
@@ -250,6 +265,34 @@ export function apply(ctx, config = {}) {
       st.lastDecision = d;
       // 质量升级：pending 时把 qwen 提升到 deepseek
       let finalModel = st.forcedAlias ? cfg.modelIds[st.forcedAlias] : d.selected_model_id;
+      // Phase 02 R4 (Step 3): consume EC's recovery requirement (typed bridge).
+      // Router is the sole model authority — it decides the fallback model here.
+      // Consumed once (ack); explicit user selection is preserved unless the
+      // requirement explicitly demands a capability the current model lacks.
+      if (st.recoveryRequirement) {
+        const req = st.recoveryRequirement;
+        st.recoveryRequirement = null; // consume (ack) before applying
+        if (req.needLargerContext === true) {
+          // pick the largest-context known model for the family
+          const bigModel = cfg.modelIds.mimo || cfg.modelIds.deepseek;
+          if (finalModel !== bigModel) {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: bigModel, ctx: "needLargerContext" });
+            finalModel = bigModel;
+          }
+        } else if (req.modalities && req.modalities.includes("image")) {
+          // image-capable fallback (mimo family)
+          if (cfg.modelIds.mimo && finalModel !== cfg.modelIds.mimo) {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: cfg.modelIds.mimo, ctx: "image-required" });
+            finalModel = cfg.modelIds.mimo;
+          }
+        } else if (req.reason && /reasoning_protocol/i.test(req.reason)) {
+          // reasoning-protocol: prefer a model with stable reasoning
+          if (cfg.modelIds.deepseek && finalModel !== cfg.modelIds.deepseek) {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: cfg.modelIds.deepseek, ctx: "reasoning" });
+            finalModel = cfg.modelIds.deepseek;
+          }
+        }
+      }
       if (st.escalationPending && d.selected_model === "qwen") {
         finalModel = cfg.modelIds.deepseek;
         st.escalationPending = false;

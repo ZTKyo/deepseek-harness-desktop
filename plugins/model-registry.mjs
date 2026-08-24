@@ -19,8 +19,11 @@
 // Pure module: no I/O, no service, no daemon. Imported by plugins.
 
 // ---------------------------------------------------------------------------
-// contextWindow (chars). Source: consolidated from EC MODEL_CONTEXT_WINDOWS
-// and provider/settings declarations.
+// contextWindow (TOKENS, not chars). Phase 02 R4 (Step 6): this is a thin
+// provenance/override table for routing hints only — the AUTHORITY for exact
+// {provider, model} capacity is the routed Adapter resolveModelInfo(). Values
+// are tokens (matching pi-ai DEFAULT_CONTEXT_WINDOW=262144 and provider
+// declarations). It must NOT override runtime capacity.
 // ---------------------------------------------------------------------------
 const CONTEXT_WINDOW = {
   'deepseek/deepseek-v4-flash-0731': 1310720,
@@ -127,7 +130,11 @@ export function supportsVideo(modelId) {
 
 export function getTools(modelId) {
   const f = familyOf(modelId);
-  return f ? { ...FAMILY_TOOLS[f] } : { tools: true, structuredJson: true };
+  // Phase 02 R4 (Step 6): UNKNOWN family -> fail-closed (no capability claimed).
+  // Previously returned {tools:true, structuredJson:true} for unknown models,
+  // which was fail-open: an unverified model could claim tools+json. Unknown
+  // required capability must NOT pass.
+  return f ? { ...FAMILY_TOOLS[f] } : { tools: false, structuredJson: false };
 }
 
 export function supportsTools(modelId) {

@@ -67,7 +67,12 @@ jobs:
             Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value '[]' -Encoding UTF8
           }
           Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
-          $proc = Start-Process -FilePath (Get-Command dsh).Source -ArgumentList "web --port $port --no-open" -PassThru -WindowStyle Hidden
+          # Phase 02 R4: launch via cmd /c dsh so the npm .cmd wrapper resolves
+          # (Start-Process on (Get-Command dsh).Source can hit the .ps1 shim
+          # which Start-Process cannot execute directly).
+          $dshCmd = Join-Path (Split-Path (Get-Command dsh).Source) 'dsh.cmd'
+          if (-not (Test-Path $dshCmd)) { $dshCmd = (Get-Command dsh).Source }
+          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $port --no-open" -PassThru -WindowStyle Hidden
           $ready = $false
           $lastErr = ''
           for ($i = 0; $i -lt 60; $i++) {

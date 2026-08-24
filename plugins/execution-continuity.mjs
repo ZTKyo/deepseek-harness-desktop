@@ -1309,6 +1309,17 @@ export function apply(ctx, config = {}) {
           // official ctx.llm.resolveModelInfo (async) via the adapter and record
           // the REAL runtime capacity for the active route + candidates. This is
           // evidence that the runtime path is genuinely wired (source=runtime),
+          try {
+            // diagnostic: what does ctx expose for llm?
+            let llmKeys = "none", llmType = "n/a", llmHasResolve = "n/a";
+            try {
+              const llm = (ctx && typeof ctx.get === "function" ? ctx.get("llm") : null) || (ctx && ctx.llm) || null;
+              llmKeys = llm ? Object.keys(llm).slice(0, 12).join(",") : "none";
+              llmType = llm ? (llm.constructor && llm.constructor.name) : "null";
+              llmHasResolve = llm ? String(typeof llm.resolveModelInfo) : "null";
+            } catch (e) { llmKeys = "err:" + e.message; }
+            diag(`CTX-LLM keys=${llmKeys} type=${llmType} resolveModelInfo=${llmHasResolve}`);
+          } catch (e) { diag(`CTX-LLM diag error: ${String(e.message).slice(0, 80)}`); }
           // not registry hints.
           loadedManifest.capacity = { source: "none", entries: [] };
           try {

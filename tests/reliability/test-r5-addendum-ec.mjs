@@ -80,23 +80,27 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T2 reason mentions manual review', /manual review/.test(store2.get(sid2).reason || ''));
 }
 
-// T3: zombie running reconciliation — running flag + STALE updatedAt ->
-// INTERRUPTED_BY_RESTART (not SKIP). We verify the plugin's source decision
-// logic: the anti-double-kick branch must classify stale-running as zombie.
+// T3: goal-scoped liveness (Refinement ②) — anti-double-kick must use goal
+// identity/revision + goal progress, NOT session updatedAt/steps. We verify the
+// production source contract.
 {
   const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
-  check('T3 zombie branch present in source', /zombie running reconciled/.test(src));
-  check('T3 zombie threshold 180s', /180000/.test(src));
-  check('T3 zombie sets INTERRUPTED_BY_RESTART', /INTERRUPTED_BY_RESTART/.test(src));
+  check('T3 goal-scoped liveness branch present', /RESUME-LIVENESS-UNKNOWN/.test(src));
+  check('T3 goal identity/revision checked', /goal\.id !== it\.goalId/.test(src) || /goal\.id !== it\.goalId/.test(src.replace(/\s+/g,' ')));
+  check('T3 goal phase active required', /goal\.phase && goal\.phase !== "active"/.test(src));
+  check('T3 goal progress via roundsStarted', /goal\.roundsStarted/.test(src));
+  check('T3 session-activity-only NOT accepted as liveness', !/zombie running reconciled/.test(src), 'old zombie marker removed');
 }
 
 // T4: real NEEDS_VERIFICATION (unresolved side-effect call) is NEVER relaxed —
-// the plugin still marks NEEDS_VERIFICATION for evaluateCompletion's
-// needs_verification state (production core contract).
+// the plugin still marks NEEDS_VERIFICATION + UNRESOLVED_SIDE_EFFECT kind.
 {
   const core = fs.readFileSync(new URL('../../plugins/completion-truth-core.mjs', import.meta.url), 'utf8');
   check('T4 completion-truth still returns needs_verification', /needs_verification/.test(core));
   check('T4 unknown/empty identity fail-closed kept', /without reliable identity/.test(core));
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T4 UNRESOLVED_SIDE_EFFECT kind persisted', /UNRESOLVED_SIDE_EFFECT/.test(src));
+  check('T4 ctUnresolvedCall persisted', /ctUnresolvedCall/.test(src));
 }
 
 // T5: generation fail-closed marker present in restart script
@@ -104,6 +108,25 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   const rs = fs.readFileSync(new URL('../../restart-dsh-server-delayed.ps1', import.meta.url), 'utf8');
   check('T5 generation non-empty fail-closed', /generation must be non-empty/.test(rs));
   check('T5 candidate aborts on empty generation', /candidate identity incomplete/.test(rs));
+}
+
+// T6: legacy migration signature — only legacy evidence-unavailable reason may
+// be revalidated; migration function exists and checks schema/kind/reason.
+{
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T6 reconcileLegacyVerification exists', /reconcileLegacyVerification/.test(src));
+  check('T6 legacy reason signature matched', /session events unavailable\|no session events/.test(src));
+  check('T6 UNRESOLVED_SIDE_EFFECT never migrates', /verificationKind === "UNRESOLVED_SIDE_EFFECT"\) return false/.test(src));
+  check('T6 ctUnresolvedCall blocks migration', /it\.ctUnresolvedCall\) return false/.test(src));
+  check('T6 unknown/incomplete stays fail-closed', /no migration \(fail-closed\)/.test(src));
+}
+
+// T7: schemaVersion + verificationKind written by CT decision paths
+{
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T7 schemaVersion 2 default', /schemaVersion: 2/.test(src));
+  check('T7 EVIDENCE_DEFER kind', /verificationKind: "EVIDENCE_DEFER"/.test(src));
+  check('T7 LEGACY_EVIDENCE_UNAVAILABLE kind', /verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE"/.test(src));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -209,6 +209,17 @@ export class IntentStore {
         lastResumeAt: null,
         pendingFallback: null,
         nextRetryAt: null,
+        // Phase 02 R5 Refinement: schema version + completion-verification kind.
+        // verificationKind distinguishes a REAL unresolved side-effect
+        // (UNRESOLVED_SIDE_EFFECT — permanent, fail-closed) from legacy
+        // evidence-unavailable states written by older code
+        // (LEGACY_EVIDENCE_UNAVAILABLE) and the current transient defer
+        // (EVIDENCE_DEFER). Boot reconcile uses this to migrate only exact
+        // legacy signatures.
+        schemaVersion: 2,
+        verificationKind: null,
+        ctUnresolvedCall: null, // persisted exact {callId, tool} if known
+        goalRoundsObserved: null, // last observed goal roundsStarted (goal liveness)
       };
       this.data.intents[sessionId] = it;
     }
@@ -226,6 +237,11 @@ export class IntentStore {
     const it = this.ensure(sessionId);
     it.lastActivity = Date.now();
     this.persist();
+  }
+  // Phase 02 R5 Refinement: raw iteration over ALL intents (including
+  // non-recoverable states like NEEDS_VERIFICATION) for legacy reconcile.
+  all() {
+    return Object.values(this.data.intents);
   }
   listRecoverable() {
     return Object.values(this.data.intents).filter((it) =>
@@ -492,6 +508,11 @@ export function apply(ctx, config = {}) {
         if (it.ctDeferCount > ctCap) {
           store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
             reason: `completion-evidence unavailable beyond ${ctCap} defers (${ct.detail || "events unavailable"}); manual review required`,
+            // Phase 02 R5 Refinement: this is evidence-unavailable exhaustion,
+            // NOT a confirmed unresolved side effect — mark kind so reconcile
+            // knows it may revalidate (it never auto-recovers without CT clean).
+            schemaVersion: 2,
+            verificationKind: "LEGACY_EVIDENCE_UNAVAILABLE",
           });
           diag(`CT sid=${sessionId} evidence defer cap exceeded (${it.ctDeferCount} > ${ctCap}) -> NEEDS_VERIFICATION (manual review)`);
         } else {
@@ -500,14 +521,22 @@ export function apply(ctx, config = {}) {
             reason: `CT-evidence-defer: ${ct.detail || "events unavailable"} (${it.ctDeferCount}/${ctCap})`,
             nextRetryAt: retryAt,
             ctDeferCount: it.ctDeferCount,
+            schemaVersion: 2,
+            verificationKind: "EVIDENCE_DEFER",
           });
           diag(`CT sid=${sessionId} evidence unavailable -> bounded defer #${it.ctDeferCount} nextRetryAt=${retryAt}`);
         }
         return;
       }
       if (ct.state === "needs_verification") {
+        // Phase 02 R5 Refinement: REAL unresolved side effect — persist the
+        // exact unresolved call identity (if available) + kind. This is the
+        // permanent, fail-closed state that migration NEVER auto-relaxes.
         store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
           reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
+          schemaVersion: 2,
+          verificationKind: "UNRESOLVED_SIDE_EFFECT",
+          ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
         });
         diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay)`);
         return;
@@ -534,28 +563,66 @@ export function apply(ctx, config = {}) {
         diag(`RESUME sid=${sessionId} session missing -> COMPLETED`);
         return;
       }
-      // Anti-double-kick（P0 fix 2026-08-23）：若该 session 当前已在 running（例如
-      // goal-recovery.mjs 已先恢复、或 goal-round-driver 已自动续跑），跳过恢复，
-      // 避免与 goal-recovery 的 ledger claim 或自动续跑产生双 kick。
-      // Phase 02 R5 Addendum (zombie reconciliation): across a generation
-      // restart, `running===true` alone is NOT proof an agent is executing. If
-      // the session shows NO recent progress (updatedAt older than a bounded
-      // threshold) it is a ZOMBIE running flag — reconcile it into the recovery
-      // path (INTERRUPTED_BY_RESTART) instead of skipping forever. The
-      // completion-truth + WAITING_USER gates below still apply fail-closed.
+      // Anti-double-kick（P0 fix 2026-08-23）+ Phase 02 R5 Refinement (②):
+      // liveness must be GOAL-scoped, not session-scoped. `running===true` /
+      // updatedAt / steps only prove the SESSION has activity (user diagnostics,
+      // GUI attach, other turns) — they do NOT prove the target Goal is
+      // self-progressing. We require: current server generation + target active
+      // Goal identity/revision + Goal-level progress evidence.
       if (found.running === true) {
-        const updatedAt = typeof found.updatedAt === "number" ? found.updatedAt : null;
-        const zombieMs = 180000; // 3 min without any session update = zombie
-        const isZombie = updatedAt !== null && (Date.now() - updatedAt) > zombieMs;
-        if (isZombie) {
-          store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
-            note: `zombie running reconciled (updatedAt ${new Date(updatedAt).toISOString()})`,
-          });
-          diag(`RESUME-ZOMBIE sid=${sessionId} running flag stale (no progress ${Math.round((Date.now()-updatedAt)/1000)}s) -> INTERRUPTED_BY_RESTART, continuing recovery`);
+        // --- goal projection (official truth from session.list) ---
+        let goal = null;
+        try {
+          const gv = found.projections && found.projections.values && found.projections.values.goal;
+          if (gv && gv.goal && gv.goal.id) {
+            goal = {
+              id: gv.goal.id,
+              revision: typeof gv.goal.revision === "number" ? gv.goal.revision : null,
+              phase: gv.goal.phase || null,
+              roundsStarted: typeof gv.roundsStarted === "number" ? gv.roundsStarted : null,
+            };
+          }
+        } catch { goal = null; }
+        // 1) target goal changed / missing / inactive -> not running, recover
+        if (it.goalId) {
+          if (!goal || goal.id !== it.goalId || (goal.phase && goal.phase !== "active")) {
+            store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
+              note: `goal no longer active/current (goal=${goal ? goal.id.slice(0, 12) : "none"} phase=${goal ? goal.phase : "n/a"})`,
+            });
+            diag(`RESUME-GOAL-CHANGED sid=${sessionId} target goal not active -> INTERRUPTED_BY_RESTART, continuing recovery`);
+            // fall through to recovery (CT + WAITING_USER gates below still fail-closed)
+            found.running = false;
+          } else {
+            // 2) same active goal: is there GOAL-LEVEL progress evidence?
+            const observedRounds = it.goalRoundsObserved ?? null;
+            const goalProgressed = goal.roundsStarted !== null && observedRounds !== null && goal.roundsStarted > observedRounds;
+            if (goalProgressed) {
+              it.goalRoundsObserved = goal.roundsStarted;
+              store.setState(sessionId, STATE.RUNNING, { note: "already running; goal rounds progressed; resume skipped", goalRoundsObserved: goal.roundsStarted });
+              diag(`RESUME-SKIP sid=${sessionId} goal progress (rounds ${observedRounds}->${goal.roundsStarted}) (${reason})`);
+              return;
+            }
+            if (observedRounds === null && goal.roundsStarted !== null) {
+              it.goalRoundsObserved = goal.roundsStarted;
+              store.persist();
+            }
+            // 3) active goal but NO goal-level progress evidence -> LIVENESS_UNKNOWN:
+            //    fail-closed into a bounded recheck (recovery path, CT-gated), NOT
+            //    session-activity-based SKIP.
+            store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
+              note: `liveness-unknown: goal ${goal.id.slice(0, 12)} rev=${goal.revision} rounds=${goal.roundsStarted} no goal-progress evidence`,
+            });
+            diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} running but no goal progress evidence -> INTERRUPTED_BY_RESTART (bounded recheck)`);
+            found.running = false;
+          }
         } else {
-          store.setState(sessionId, STATE.RUNNING, { note: "already running; resume skipped" });
-          diag(`RESUME-SKIP sid=${sessionId} already running (${reason})`);
-          return;
+          // no target goal recorded: session activity is the only signal -> treat
+          // as unknown liveness, bounded recheck (never blind-resume).
+          store.setState(sessionId, STATE.INTERRUPTED_BY_RESTART, {
+            note: "liveness-unknown: no goal identity recorded",
+          });
+          diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no goal identity -> INTERRUPTED_BY_RESTART (bounded recheck)`);
+          found.running = false;
         }
       }
     } catch (e) {
@@ -895,7 +962,76 @@ export function apply(ctx, config = {}) {
 
   // ── 恢复扫描（boot + 定时） ──────────────────────────────────────────────
   let resuming = new Set();
+  // Phase 02 R5 Refinement (① legacy NEEDS_VERIFICATION reason-aware
+  // migration): only EXACT legacy signatures (old schema + evidence-unavailable
+  // reason + no persisted unresolved call identity) may be revalidated by a
+  // fresh Completion Truth. REAL UNRESOLVED_SIDE_EFFECT / unknown/incomplete
+  // states stay fail-closed forever. Returns true if the intent was migrated
+  // (revalidated), false otherwise.
+  async function reconcileLegacyVerification(sessionId, it) {
+    try {
+      if (it.state !== STATE.NEEDS_VERIFICATION) return false;
+      // 1) real unresolved side effect (new schema) -> never migrate
+      if (it.verificationKind === "UNRESOLVED_SIDE_EFFECT") return false;
+      // 2) has a persisted exact unresolved call identity -> never migrate
+      if (it.ctUnresolvedCall) return false;
+      // 3) reason must match the legacy evidence-unavailable signature
+      const reason = String(it.reason || "");
+      const legacyReason = /session events unavailable|no session events|completion-unknown: side-effect tool-call without result \(session events unavailable\)/i.test(reason);
+      if (!legacyReason) return false;
+      // 4) unknown/absent kind with a NON-legacy reason -> fail-closed, no guess
+      if (it.schemaVersion === 2 && it.verificationKind === null && !legacyReason) return false;
+      // ---- exact legacy signature confirmed: re-run current Completion Truth ----
+      diag(`RECONCILE-LEGACY sid=${sessionId} legacy NEEDS_VERIFICATION (reason='${String(it.reason).slice(0, 80)}') -> revalidate`);
+      const ct = await completionTruth(sessionId, it);
+      if (ct.state === "clean") {
+        store.setState(sessionId, STATE.RUNNING, { note: "legacy revalidation: CT clean -> recoverable", schemaVersion: 2, verificationKind: null, ctUnresolvedCall: null, reason: null });
+        diag(`RECONCILE-LEGACY sid=${sessionId} CT clean -> RUNNING (recoverable)`);
+        return true;
+      }
+      if (ct.state === "evidence_unavailable") {
+        const retryAt = Date.now() + Math.max(10000, backoffDelay(it.ctDeferCount || 1, budgets, 0));
+        store.setState(sessionId, STATE.WAITING_NETWORK, {
+          reason: `CT-evidence-defer (migrated legacy): ${ct.detail || "events unavailable"}`,
+          nextRetryAt: retryAt,
+          ctDeferCount: (it.ctDeferCount || 0) + 1,
+          schemaVersion: 2,
+          verificationKind: "EVIDENCE_DEFER",
+          ctUnresolvedCall: null,
+        });
+        diag(`RECONCILE-LEGACY sid=${sessionId} CT evidence unavailable -> bounded defer`);
+        return true;
+      }
+      if (ct.state === "needs_verification") {
+        store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+          reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
+          schemaVersion: 2,
+          verificationKind: "UNRESOLVED_SIDE_EFFECT",
+          ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
+        });
+        diag(`RECONCILE-LEGACY sid=${sessionId} CT unresolved side effect -> stay NEEDS_VERIFICATION (fail-closed)`);
+        return false;
+      }
+      return false;
+    } catch (e) {
+      diag(`RECONCILE-LEGACY sid=${sessionId} error (${String(e.message).slice(0, 80)}) -> no migration (fail-closed)`);
+      return false;
+    }
+  }
+
   async function recoverableScan(reason) {
+    // Phase 02 R5 Refinement: before scanning recoverable intents, reconcile
+    // legacy NEEDS_VERIFICATION states (dead-end escape hatch with strict
+    // signature matching). Revalidation may promote them into the recoverable
+    // set; REAL unresolved side effects are never touched.
+    try {
+      const all = store.all();
+      for (const it of all) {
+        if (it.state === STATE.NEEDS_VERIFICATION) {
+          await reconcileLegacyVerification(it.sessionId, it);
+        }
+      }
+    } catch (e) { diag(`RECONCILE-LEGACY scan error: ${e.message}`); }
     const recoverable = store.listRecoverable();
     if (recoverable.length === 0) return;
     diag(`SCAN ${reason}: ${recoverable.length} recoverable intent(s): ${recoverable.map((i) => `${i.sessionId}[${i.state}]`).join(", ")}`);

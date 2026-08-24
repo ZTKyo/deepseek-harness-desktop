@@ -354,6 +354,17 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   }
 }
 
+// T14 (R9-4): NEW GENERATION resets autoResumeCycles budget — a long-lived
+// session whose historical cycles exceed the cap must get a fresh recovery
+// opportunity on a real restart (otherwise BUDGET-EXHAUSTED blocks auto-resume
+// and the task needs manual intervention).
+{
+  const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
+  check('T14 new-generation reset logic present', /new generation \(.*\) resets autoResumeCycles/.test(src));
+  check('T14 reset happens before budget check', /RESUME-BUDGET-RESET[\s\S]*?autoResumeCycles = 0/.test(src));
+  check('T14 reset guarded by serverGenerationSeen mismatch', /it\.serverGenerationSeen !== serverGeneration/.test(src));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

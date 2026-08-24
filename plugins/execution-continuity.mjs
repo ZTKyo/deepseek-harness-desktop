@@ -642,6 +642,20 @@ export function apply(ctx, config = {}) {
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
+    // Phase 02 R9 (R9-4): a REAL server restart is a NEW BOOT — reset the
+    // auto-resume cycle budget so a long-lived session (historical cycles
+    // accumulated across many prior boots) gets a fresh recovery opportunity.
+    // Without this, restart auto-resume fails with BUDGET-EXHAUSTED and the
+    // task can only be resumed by manual intervention (observed: session
+    // turn=46 hit budget on restart). Anti-storm semantics still hold WITHIN
+    // a single boot (cycles increment per RESUME-OK).
+    if (serverGeneration && it.serverGenerationSeen !== serverGeneration) {
+      if (it.autoResumeCycles) {
+        diag(`RESUME-BUDGET-RESET sid=${sessionId} new generation (${serverGeneration}) resets autoResumeCycles ${it.autoResumeCycles}->0`);
+        it.autoResumeCycles = 0;
+        store.persist();
+      }
+    }
     // anti-double-kick
     // Phase 02 R8 Addendum fix: cooldown must NOT be a silent one-shot dead-end —
     // write RECOVERY_QUEUED + nextRetryAt (= cooldown end) so the timer re-drives

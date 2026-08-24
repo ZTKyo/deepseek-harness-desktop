@@ -400,7 +400,9 @@ function Restart-Server([string]$reason) {
     TraceG '  RESTART COMMITTED (exact attempt: candidate -> stable -> COMMIT_READY; budget reset by Confirm-DshRestartStable)'
     return $true
     } finally {
-        Exit-DshRestartLock $restartLock
+        # Phase 02 R8 (R8-5): no restart mutex is held by Guardian (the delegated
+        # worker owns it) — nothing to release. Previously referenced an
+        # undefined $restartLock here (stale from the pre-R7 lock-holding design).
     }
 }
 

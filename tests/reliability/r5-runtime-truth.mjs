@@ -64,7 +64,7 @@ if (prov && model) {
 // 4) attestation: source (repo) vs deployed (live profile)
 const repo = 'C:/Users/Administrator/Desktop/sdeepseek harness/_release-staging';
 const live = path.join(home, '.dsh', 'profiles', 'web');
-const activePlugins = ['execution-continuity.mjs', 'openrouter-router.mjs', 'commandcode-router.mjs', 'model-registry.mjs', 'completion-truth-core.mjs', 'vision-bridge.mjs', 'capacity-resolver.mjs'];
+const activePlugins = ['execution-continuity.mjs', 'openrouter-router.mjs', 'commandcode-router.mjs', 'model-registry.mjs', 'completion-truth-core.mjs', 'vision-bridge.mjs', 'capacity-resolver.mjs', 'runtime-capacity-adapter.mjs'];
 const attest = [];
 for (const p of activePlugins) {
   const src = sha(path.join(repo, 'plugins', p));
@@ -114,10 +114,10 @@ console.log('loaded manifest serverGeneration:', loaded ? loaded.serverGeneratio
 for (const t of threeWay) console.log(t.plugin.padEnd(32), 'src=' + t.source, 'deployed=' + t.deployed, 'loaded=' + t.loaded, t.allMatch ? 'ALL-MATCH' : (t.source === t.deployed ? 'deployed=source, loaded pending/restart' : 'MISMATCH'));
 console.log('overall source==deployed==loaded:', allThreeMatch ? 'ALL MATCH (3-way)' : 'NOT-YET-ALL-MATCH (loaded manifest may predate latest deploy; restart to load)');
 console.log('');
-console.log('=== MODEL CAPACITY (registry hints via resolver) ===');
-const cap = await import('file:///' + repo.replace(/ /g, '%20') + '/plugins/capacity-resolver.mjs');
-const resolver = cap.defaultCapacityResolver();
-for (const [p, m] of [['commandcode', 'deepseek/deepseek-v4-flash'], ['opencode', 'deepseek-v4-flash'], ['openrouter', 'qwen/qwen3.7-flash'], ['openrouter', 'deepseek/deepseek-v4-flash-0731'], ['openrouter', 'claude-opus-5']]) {
-  const r = await resolver.resolve(p, m);
-  console.log((p + '/' + m).padEnd(45), 'resolvedWindow=' + r.window, 'source=' + r.source);
+console.log('=== LIVE EXACT-ROUTE CAPACITY (R8-3, from running plugin) ===');
+if (loaded && loaded.capacity) {
+  console.log('capacity source:', loaded.capacity.source, 'wired:', loaded.capacity.wired === true);
+  for (const e of (loaded.capacity.entries || [])) console.log((e.provider + '/' + e.model).padEnd(45), 'contextWindow=' + e.contextWindow, 'source=' + e.source);
+} else {
+  console.log('(no live capacity in loaded-release.json — plugin not yet booted with R8)');
 }

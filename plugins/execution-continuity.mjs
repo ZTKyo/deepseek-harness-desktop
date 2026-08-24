@@ -1305,6 +1305,31 @@ export function apply(ctx, config = {}) {
               loadedManifest.plugins[p] = { sha256: crypto.createHash("sha256").update(fs.readFileSync(fp)).digest("hex") };
             } catch { loadedManifest.plugins[p] = { sha256: null }; }
           }
+          // Phase 02 R8 (R8-3): LIVE exact-route capacity probe — wire the
+          // official ctx.llm.resolveModelInfo (async) via the adapter and record
+          // the REAL runtime capacity for the active route + candidates. This is
+          // evidence that the runtime path is genuinely wired (source=runtime),
+          // not registry hints.
+          loadedManifest.capacity = { source: "none", entries: [] };
+          try {
+            const { makeRuntimeCapacityResolverLoose } = await import("./runtime-capacity-adapter.mjs");
+            const wired = makeRuntimeCapacityResolverLoose(ctx);
+            const resolver = (await import("./capacity-resolver.mjs")).createCapacityResolver({ runtimeResolve: wired.wired ? wired.runtimeResolve : null });
+            const routes = [
+              { provider: "commandcode", model: "deepseek/deepseek-v4-flash" },
+              { provider: "opencode", model: "deepseek-v4-flash" },
+              { provider: "openrouter", model: "qwen/qwen3.7-flash" },
+            ];
+            const entries = [];
+            for (const rt of routes) {
+              try {
+                const r = await resolver.resolve(rt.provider, rt.model);
+                entries.push({ provider: rt.provider, model: rt.model, contextWindow: r.window, source: r.source });
+              } catch { entries.push({ provider: rt.provider, model: rt.model, contextWindow: null, source: "error" }); }
+            }
+            loadedManifest.capacity = { source: wired.wired ? "runtime" : "hint", wired: wired.wired, entries };
+            diag(`LIVE-CAPACITY wired=${wired.wired} ${JSON.stringify(entries)}`);
+          } catch (e) { diag(`LIVE-CAPACITY error: ${String(e.message).slice(0, 120)}`); }
           const mf = path.join(local, "DSHHarness", "state", "loaded-release.json");
           fs.mkdirSync(path.dirname(mf), { recursive: true });
           const tmp = mf + ".tmp";

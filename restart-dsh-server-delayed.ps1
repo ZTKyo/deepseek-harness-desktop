@@ -270,10 +270,24 @@ $stableSec = if ($env:DSH_RESTART_STABLE_WINDOW_SEC) { [int]$env:DSH_RESTART_STA
 Write-Log ("stable window: waiting {0}s before commit" -f $stableSec)
 Start-Sleep -Seconds $stableSec
 
-# Re-verify after the window: readiness + COMMIT_READY.
+# Phase 02 R6 (R5-B2): bounded terminal grace for boot-edge fluctuation — a
+# transient api_unready at the stable re-check must NOT immediately FAILED a
+# healthy server (observed 13:54: server 22032 reached HTTP200+COMMIT_READY
+# shortly after a re-check timeout). Retry the readiness+COMMIT_READY probe a
+# bounded number of times; only a PERSISTENT failure becomes FAILED.
 $ready2 = Test-DshReadiness -Port $Port -RequireWebSockets
 Write-Log ("stable re-check readiness: {0} error={1}" -f $ready2.State, $ready2.Error)
-if ($ready2.State -ne 'client_ready') { throw "stable re-check failed: $($ready2.State)" }
+$graceMax = 3
+$graceSleep = 10
+$graceCount = 0
+while ($ready2.State -ne 'client_ready' -and $graceCount -lt $graceMax) {
+    $graceCount++
+    Write-Log ("boot grace: re-check not ready ({0}), retry {1}/{2} in {3}s" -f $ready2.State, $graceCount, $graceMax, $graceSleep)
+    Start-Sleep -Seconds $graceSleep
+    $ready2 = Test-DshReadiness -Port $Port -RequireWebSockets
+    Write-Log ("boot grace re-check: {0} error={1}" -f $ready2.State, $ready2.Error)
+}
+if ($ready2.State -ne 'client_ready') { throw "stable re-check failed after grace: $($ready2.State)" }
 
 # COMMIT_READY: full runtime surface (process identity + host.describe + session.list
 # + events.mux/host + renderer + stable window + light probe). Budget resets ONLY here.

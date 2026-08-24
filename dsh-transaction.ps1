@@ -284,8 +284,35 @@ function Invoke-DshTransaction {
         # Phase 02 R5 (R4-B2): if the restart attempt did NOT reach a COMMITTED
         # terminal state (boot_failed), do NOT let a generic COMMIT_READY sweep
         # the transaction into COMMITTED — fail the transaction instead.
+        # Phase 02 R6 (R5-B2): BOOT_FAILED must journal a record AND roll back
+        # the applied change (restore checkpoint + exact-terminal restart), so a
+        # half-applied change never lingers silently.
         if ($faultClass -eq 'boot_failed') {
-            return [pscustomobject]@{ TransactionId = $transactionId; FinalState = 'BOOT_FAILED'; Verify = 'restart-terminal-not-committed'; LastGood = $null }
+            $rollbackResult = Restore-DshTransactionCheckpoint -CheckpointDir $tx.dir -ProfileRoot $ProfileRoot
+            if ($RestartOnApply) {
+                $rs = Join-Path $root 'restart-dsh-server-delayed.ps1'
+                if (Test-Path $rs) {
+                    $rollbackAttempt = [guid]::NewGuid().ToString('N')
+                    $rsArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -DelaySeconds 0 -Port $Port -AttemptId $rollbackAttempt"
+                    Start-Process powershell -ArgumentList $rsArgs -WindowStyle Hidden | Out-Null
+                    $waitArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$rs`" -WaitAttempt $rollbackAttempt -TimeoutSec 180 -Port $Port"
+                    $wb = Start-Process powershell -ArgumentList $waitArgs -WindowStyle Hidden -Wait -PassThru
+                    if ($wb.ExitCode -ne 0) { $faultClass = 'boot_failed_rollback_restart_failed' }
+                }
+            }
+            $dshVerAfter = ''
+            try { $dshVerAfter = ((& dsh --version 2>$null) -join '').Trim() } catch { $dshVerAfter = '' }
+            Add-DshTxRecord @{
+                transactionId = $transactionId; label = $Label; startedAt = $startedAt
+                finishedAt = (Get-Date -Format 'o'); generationBefore = $tx.generationBefore
+                generationAfter = (Get-DshGenerationId -Port $Port); dshVersionBefore = $tx.dshVersionBefore
+                dshVersionAfter = $dshVerAfter
+                checkpointDir = $tx.dir; files = $tx.files
+                hashBefore = $tx.files; hashAfter = $tx.files; faultClass = $faultClass
+                verifyResult = 'restart-terminal-not-committed'; rollbackResult = $rollbackResult; finalState = 'BOOT_FAILED'
+                lastGood = $null
+            }
+            return [pscustomobject]@{ TransactionId = $transactionId; FinalState = 'BOOT_FAILED'; Verify = 'restart-terminal-not-committed'; Rollback = $rollbackResult; LastGood = $null }
         }
         $gate = Test-DshTransactionCommitReady -Port $Port -StableWindowSec $StableWindowSec -SkipLightProbe:$SkipLightProbe
         $verifyResult = $gate.Stage

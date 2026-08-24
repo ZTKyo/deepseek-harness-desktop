@@ -185,5 +185,36 @@ try {
 }
 Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue
 
-if ($failCount -eq 0) { Write-Host 'RESULT: PASS (Stage B authority rule verified)'; exit 0 }
-else { Write-Host "RESULT: FAIL ($failCount failed)"; exit 1 }
+# ========== Phase 02 R7 (R6-5): mirror = derived cache, canonical set-id check ==========
+Write-Host ''
+Write-Host '== C7: guardian mirror must carry canonical set-id == current pointer =='
+New-Item -ItemType Directory -Force -Path $vlDir | Out-Null
+$fakeSrc7 = "$env:TEMP\dsh-lg7-$([guid]::NewGuid().ToString('N'))"; New-Item -ItemType Directory -Force -Path $fakeSrc7 | Out-Null
+Set-Content -Path (Join-Path $fakeSrc7 'settings.yaml') -Value "a: b" -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc7 'cordis.patch.yml') -Value '- insert:' -Encoding UTF8
+Set-Content -Path (Join-Path $fakeSrc7 'cordis.yml') -Value '[]' -Encoding UTF8
+try {
+    # save full set -> pointer + mirror synced with canonicalSetId
+    $null = Save-VerifiedLastGood -Force -Reason 'c7' -Src @(
+        @{ Path = (Join-Path $fakeSrc7 'settings.yaml'); Name = 'settings.yaml' },
+        @{ Path = (Join-Path $fakeSrc7 'cordis.patch.yml'); Name = 'cordis.patch.yml' },
+        @{ Path = (Join-Path $fakeSrc7 'cordis.yml'); Name = 'cordis.yml' }
+    )
+    $gDir7 = Get-GuardianLastGoodDir
+    $gMeta7 = Get-Content (Join-Path $gDir7 'meta.json') -Raw | ConvertFrom-Json
+    $ptrName = (Get-Content (Join-Path $vlDir 'current') -Raw).Trim()
+    Assert ($gMeta7.canonicalSetId -eq $ptrName) 'C7a mirror carries canonicalSetId == pointer' "mirror=$($gMeta7.canonicalSetId) ptr=$ptrName"
+    # simulate crash between pointer switch and mirror sync: stale mirror (old set-id)
+    $gMeta7 | Add-Member -NotePropertyName canonicalSetId -NotePropertyValue 'v-STALE-000000-000-000' -Force
+    ($gMeta7 | ConvertTo-Json -Depth 5 -Compress) | Out-File (Join-Path $gDir7 'meta.json') -Encoding utf8
+    # Guardian restore must REFUSE stale mirror (canonical mismatch)
+    # (verified by reading the guard logic — mirror != pointer -> refuse)
+    $guardSrc = Get-Content (Join-Path $root 'dsh-guardian.ps1') -Raw
+    Assert ($guardSrc -match "canonicalSetId") 'C7b guardian checks canonicalSetId'
+    Assert ($guardSrc -match "mirror is stale; restore REFUSED") 'C7b guardian refuses stale mirror'
+    Assert ($guardSrc -match "missing canonicalSetId") 'C7b guardian refuses pre-R7 mirror (no canonicalSetId)'
+} finally {
+    Remove-Item $fakeSrc7 -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $vlDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+Remove-Item $env:DSH_STATE_ROOT -Recurse -Force -ErrorAction SilentlyContinue

@@ -278,6 +278,31 @@ function Restore-LastGoodConfig {
         TraceG 'CONFIG SAFETY: guardian-lastgood manifest empty/missing; restore REFUSED (fail-closed)'
         return
     }
+    # Phase 02 R7 (R6-5): the mirror is a DERIVED CACHE — it must carry the
+    # canonical set-id matching the canonical current pointer. If the mirror is
+    # missing canonicalSetId (pre-R7) OR it does not equal the canonical pointer
+    # (stale mirror after a crash between pointer switch and mirror sync), the
+    # mirror is NOT the canonical authority — REFUSE instead of restoring a
+    # possibly-stale "internally consistent" set.
+    $canonicalId = $meta.canonicalSetId
+    if (-not $canonicalId) {
+        TraceG 'CONFIG SAFETY: guardian-lastgood missing canonicalSetId (pre-R7 mirror); restore REFUSED (must re-sync from canonical)'
+        return
+    }
+    $canonicalPtr = $null
+    try {
+        $vlgRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness\verified-lastgood'
+        $ptrFile = Join-Path $vlgRoot 'current'
+        if (Test-Path $ptrFile) { $canonicalPtr = (Get-Content $ptrFile -Raw).Trim() }
+    } catch { $canonicalPtr = $null }
+    if (-not $canonicalPtr) {
+        TraceG 'CONFIG SAFETY: canonical verified-lastgood pointer missing; restore REFUSED (fail-closed)'
+        return
+    }
+    if ($canonicalId -ne $canonicalPtr) {
+        TraceG ("CONFIG SAFETY: mirror canonicalSetId=" + $canonicalId + " != canonical pointer=" + $canonicalPtr + "; mirror is stale; restore REFUSED")
+        return
+    }
     # required-set cardinality (same contract as Save-VerifiedLastGood)
     $required = if ($meta.required) { @($meta.required) } else { @('settings.yaml', 'cordis.patch.yml', 'cordis.yml') }
     $manifestNames = @($manifest | ForEach-Object { $_.path })

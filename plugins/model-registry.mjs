@@ -27,6 +27,7 @@
 // ---------------------------------------------------------------------------
 const CONTEXT_WINDOW = {
   'deepseek/deepseek-v4-flash-0731': 1310720,
+  'deepseek/deepseek-v4-flash': 1310720,
   'deepseek-v4-flash': 1000000,
   'deepseek-v4-flash-vision-exp': 1000000,
   'deepseek-v4-pro': 1000000,

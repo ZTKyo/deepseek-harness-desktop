@@ -26,6 +26,7 @@ import {
   newState, applyTurnBoundary, applyManualSwitch, resolvePreferred,
   decideRequestModel, decideFallback, classifyFailure, normalizeModel, snapshot,
 } from './commandcode-router-core.mjs';
+import { getContextWindow } from './model-registry.mjs';
 
 export const name = 'commandcode-router';
 
@@ -82,6 +83,21 @@ export function apply(ctx) {
   };
 
   loadInspectorBridge(ctx);
+
+  // Phase 02 R5 (R4-B4): CommandCode is a first-class recovery consumer — it
+  // listens for EC's typed recovery requirement (same bridge as openrouter) and
+  // applies it on the next commandcode request. The Router remains the sole
+  // model decision authority for the requirement.
+  ctx.on('ec/recovery-requirement', (payload) => {
+    try {
+      const sid = payload?.sessionId ?? payload?.session?.id ?? '?';
+      const st = getState(sid);
+      st.recoveryRequirement = payload?.requirement || null;
+      if (st.recoveryRequirement) {
+        logDiag(sid, { type: 'ec-recovery-requirement', reason: st.recoveryRequirement.reason });
+      }
+    } catch (e) { /* non-fatal */ }
+  });
 
   // ── 可选：为 api.commandcode.ai 注入 ZDR 头（与 agentrouter-wire 同手法） ──
   // 只在显式开启时包装 fetch；默认完全不碰全局 fetch。
@@ -160,7 +176,38 @@ export function apply(ctx) {
 
       // Command Code provider/v1 无文档化的 reasoning_effort 参数 → 一律剥离，避免 400
       const { reasoningEffort: _effort, ...rest } = resolved;
-      return { ...rest, provider: PROVIDER, model: requestModel };
+      // Phase 02 R5 (R4-B4): consume EC's recovery requirement (typed bridge).
+      // needLargerContext -> strictly-larger capacity comparison (never a blind
+      // pick); other requirement types (image/reasoning) map to known families.
+      let finalModel = requestModel;
+      if (st.recoveryRequirement) {
+        const req = st.recoveryRequirement;
+        st.recoveryRequirement = null; // consume (ack) once
+        if (req.needLargerContext === true) {
+          const candidates = [MUSE, DEEPSEEK].filter(Boolean);
+          const curWin = getContextWindow(finalModel);
+          let best = null; let bestWin = 0;
+          for (const c of candidates) {
+            const cw = getContextWindow(c);
+            if (cw === null || cw === undefined) continue;
+            if (curWin !== null && curWin !== undefined && cw <= curWin) continue;
+            if (cw > bestWin) { best = c; bestWin = cw; }
+          }
+          if (best && best !== finalModel) {
+            logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: best, ctx: 'needLargerContext', fromWin: curWin, toWin: bestWin });
+            finalModel = best;
+          } else {
+            logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: finalModel, ctx: 'needLargerContext-no-larger', fromWin: curWin });
+          }
+        } else if (req.modalities && req.modalities.includes('image')) {
+          logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: MUSE, ctx: 'image-required' });
+          finalModel = MUSE;
+        } else if (req.reason && /reasoning_protocol/i.test(req.reason)) {
+          logDiag(sid, { type: 'ec-requirement-apply', reason: req.reason, from: finalModel, to: DEEPSEEK, ctx: 'reasoning' });
+          finalModel = DEEPSEEK;
+        }
+      }
+      return { ...rest, provider: PROVIDER, model: finalModel };
     } catch (e) {
       // 路由失败绝不阻断请求：auto 兜底到 DeepSeek，其余原样放过
       logDiag(sid, { type: 'route-error', error: String(e && e.message) });

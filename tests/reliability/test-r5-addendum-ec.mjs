@@ -94,13 +94,15 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T3 session-activity-only NOT accepted as liveness', !/zombie running reconciled/.test(src), 'old zombie marker removed');
 }
 
-// T10 (R6 R5-B4): legacy migration ONLY for schemaVersion<2 — a schema2
-// manual-review state (incl. cap-exhausted) must NOT auto-migrate on boot.
+// T10 (R6 R5-B4 + R7 R6-2): legacy migration ONLY for schemaVersion<2; and the
+// liveness cap now enters CT-GATED recovery (not a dead-end FAILED_FATAL).
 {
   const src = fs.readFileSync(new URL('../../plugins/execution-continuity.mjs', import.meta.url), 'utf8');
   check('T10 schema2 NEVER auto-migrates', /it\.schemaVersion === 2\) return false/.test(src));
   check('T10 livenessUnknownCount bounded', /livenessUnknownCount/.test(src));
-  check('T10 liveness cap -> FAILED_FATAL manual review', /liveness-unknown beyond/.test(src));
+  check('T10 liveness cap -> CT-gated recovery (not dead-end FAILED_FATAL)', /ctGatedRecovery/.test(src) && /no goal progress beyond cap/.test(src));
+  check('T10 CT-gated has clean/defer/unresolved branches', /runCtGate/.test(src) && /UNRESOLVED_SIDE_EFFECT/.test(src));
+  check('T10 goal-missing -> LIVENESS recheck (no one-shot dead-end)', /goal projection missing/.test(src) && /nextRetryAt/.test(src));
 }
 
 // T4: real NEEDS_VERIFICATION (unresolved side-effect call) is NEVER relaxed —

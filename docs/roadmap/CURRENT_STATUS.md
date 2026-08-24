@@ -8,7 +8,7 @@
 | Phase | 名称 | 状态 | Waiting For | 报告路径 |
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R5.md |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `AWAITING_REVIEW` | EXTERNAL_REVIEW | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R6.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | — | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -20,24 +20,24 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（R5 修复完成）
+## Phase 02 执行上下文（R6 修复完成）
 
-- **Reviewer Round 4 Verdict：CHANGES_REQUIRED**（2026-08-24）
-- **修复分支**: `fix/phase02-review-r5`（PR #21，10 commits）
+- **Reviewer Round 5 Verdict：CHANGES_REQUIRED**（2026-08-24）
+- **修复分支**: `fix/phase02-review-r6`（PR #22，8 commits）
 
-### 5 BLOCKING + Addendum + Refinement 全部完成
-- B1 Test Isolation（ProfileRoot + true before/after deny）
-- B2 Process Authority（generation 全量校验 + RestartAndWait + hourly 保留）
-- B3 LastGood atomic（versioned set + pointer + hash-validated restore）
-- B4 EC→Router bridge（exact capacity + single-owner + CommandCode consumer）
-- B5 Model facts（unknown context fail-closed + runtime truth + attestation）
-- Addendum：generation 非空 fail-closed / zombie reconciliation / transient CT defer
-- Refinement：legacy NEEDS_VERIFICATION migration（真实 RESUME-OK）+ goal-scoped liveness
+### 6 BLOCKING 全部完成
+- B1 Test Isolation（StageE TxRoot + StageC 真 pre/post + 0-delta）
+- B2 Process Authority（Guardian 复用 exact attempt + BOOT_FAILED journal/rollback + boot grace）
+- B3 LastGood required-set（full-set 检查 + cardinality + 禁 legacy copy）
+- B4 Liveness state machine（grace/recheck + generation identity + schema2 no-migrate）
+- B5 Capacity truth（可注入 exact route resolver，runtime 权威）
+- B6 preset config truth + loaded attestation + CI Level2 状态机测试
 
-### R4 判定更新
-- RestartAndWait exact terminal：真实 PASS
-- Production generation binding：真实 PASS（非空 generation + COMMITTED）
-- Hourly crash history：真实 PASS
+### R5 判定更新
+- RestartAndWait exact terminal：真实 PASS（保留）
+- legacy NEEDS_VERIFICATION → RESUME-OK（保留）
+- **有效 compaction 配置**：active preset thresholdRatio=0.6 / retainRatio=0.2 / maxTokens=32768（真实读取，修正 0.8/0.16）
+- **source==deployed 7/7 MATCH**；loaded attestation 诚实 flag
 - Post-restart task recovery：**真实 PASS**（legacy migration → RESUME-OK，goal rounds 0→4）
 
 ### 关键修复（R5）

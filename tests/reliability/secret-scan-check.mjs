@@ -27,14 +27,16 @@ const PATTERNS = [
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '_research', '_checkpoint']);
-// The scanner itself and its fixture-proof test contain intentional test
-// patterns (that is how the gate proves it blocks real-looking secrets).
-const SKIP_FILES = new Set(['secret-scan-check.mjs', 'test-secret-scan-fixtures.mjs']);
+// Only this scanner is skipped (its PATTERNS are regexes, not literals).
+const SKIP_FILES = new Set(['secret-scan-check.mjs']);
 // SH-R2: exact known-fake literals that appear in CI workflow self-tests.
 // EXACT strings only — never prefixes (a prefix rule would whitelist real keys).
+// Assembled by concatenation on purpose so that NO secret-shaped literal exists
+// in this source: both scan layers (this one and the PowerShell pattern scan in
+// CI Level 1) then stay clean without any path exemption.
 const CI_MOCK_LITERALS = [
-  'sk-abcdefghijklmnopqrstuvwxyz123456789', // ci-level4.yml config-parse self-test
-  'TEST-12345',                              // secret-gate probe value
+  'sk-' + 'abcdefghijklmnopqrstuvwxyz123456789', // ci-level4.yml config-parse self-test
+  'TEST-' + '12345',                             // secret-gate probe value
 ];
 
 function walk(dir, depth = 0) {

@@ -99,9 +99,8 @@ EC 日志（两次 cold boot 均完整恢复，恢复链不受影响）：
 
 ## 7. PR / CI / Merge
 
-- PR：`fix/shardening-r3`
-- CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- **PR #34**（`fix/shardening-r3`）→ **MERGED**，main = `1959b5b`
+- **CI**：Level 1 Static gate PASS（1m10s）+ Level 2 Reliability PASS（1m25s）；Level 3（boot smoke）未触发属预期——本次 diff 不含其触发路径（dsh-*.ps1 / plugins/*.mjs / start-dsh-server.ps1 / cordis.patch.yml），仅 tests/workflows/docs；相关资源路径已在上一轮（PR #33）实测
 
 ## 8. Final Verdict
 
@@ -109,7 +108,7 @@ EC 日志（两次 cold boot 均完整恢复，恢复链不受影响）：
 
 ## 9. Waiting For
 
-**EXTERNAL_REVIEW** — Security-Hardening 保持 `AWAITING_REVIEW`；Reviewer APPROVED 后才由纯状态 backfill 置 `VERIFIED`，之后方可进入 P2.5。
+**EXTERNAL_REVIEW** — Security-Hardening 保持 `AWAITING_REVIEW`；Reviewer APPROVED 后才由纯状态 backfill 置 `VERIFIED`。
 
 ---
 

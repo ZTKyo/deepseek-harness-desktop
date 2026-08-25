@@ -9,8 +9,8 @@
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
-| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `IN_PROGRESS` | — | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/（待建） |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | Security-Hardening + P2.5 完成 | — |
+| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（5 项全部闭环） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_FINAL.md |
+| 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |

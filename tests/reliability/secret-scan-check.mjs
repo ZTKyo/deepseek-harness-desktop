@@ -27,10 +27,20 @@ const PATTERNS = [
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '_research', '_checkpoint']);
+// Only this scanner is skipped (its PATTERNS are regexes, not literals).
 const SKIP_FILES = new Set(['secret-scan-check.mjs']);
+// SH-R2: exact known-fake literals that appear in CI workflow self-tests.
+// EXACT strings only — never prefixes (a prefix rule would whitelist real keys).
+// Assembled by concatenation on purpose so that NO secret-shaped literal exists
+// in this source: both scan layers (this one and the PowerShell pattern scan in
+// CI Level 1) then stay clean without any path exemption.
+const CI_MOCK_LITERALS = [
+  'sk-' + 'abcdefghijklmnopqrstuvwxyz123456789', // ci-level4.yml config-parse self-test
+  'TEST-' + '12345',                             // secret-gate probe value
+];
 
 function walk(dir, depth = 0) {
-  if (depth > 6) return [];
+  if (depth > 12) return []; // TEMP fixture dirs are ~7 levels deep (C:\Users\X\AppData\Local\Temp\...)
   const out = [];
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
@@ -58,8 +68,10 @@ for (const fp of files) {
       if (p.re.test(line)) {
         // allow obvious template references like ${NOTION_TOKEN} (no literal secret)
         if (line.includes('${') && /env\.[A-Z_]+|\$\{[A-Z_]+\}/.test(line) && !/\bntn_[A-Za-z0-9]{16,}\b/.test(line)) continue;
-        // allow CI test mock keys (sk-abcdef... is clearly fake, used in workflow tests)
-        if (line.includes('sk-abcdef') || line.includes('sk-test-') || line.includes('TEST-12345')) continue;
+        // SH-R2: exempt ONLY the exact known-fake literals used by CI workflow
+        // tests. A prefix-based exemption (e.g. any "sk-abcdef*") would silently
+        // whitelist real-looking secrets and defeat the gate.
+        if (CI_MOCK_LITERALS.some((lit) => line.includes(lit))) continue;
         hits++;
         console.log(`SECRET ${p.name} @ ${path.relative(repo, fp)}:${i + 1}: ${line.trim().substring(0, 80)}`);
       }

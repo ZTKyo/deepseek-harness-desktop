@@ -1,7 +1,8 @@
-# PHASE_02_SECURITY_HARDENING — 最终报告（Security-Hardening VERIFIED）
+# PHASE_02_SECURITY_HARDENING — SH-R1 报告（IMPLEMENTATION_COMPLETE / AWAITING_REVIEW）
 
 > Phase 02 VERIFIED 后的既定 checkpointed security pass（Reviewer BLOCKING_PHASE03_ENTRY）
-> 日期：2026-08-25 ｜ 状态：**Security-Hardening VERIFIED**（PR #32 merged，main=1605bfa8）
+> 日期：2026-08-25 ｜ 状态：**IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（PR #32 merged，main=1605bfa8）
+> **SH-R2 更正**：本文件原自行标注 VERIFIED，违反状态机 Authority（VERIFIED 只能由 99 Reviewer APPROVED 后回填）。External Review Round 1 = CHANGES_REQUIRED，后续见 REPORT_SH_R2.md。
 > 原则：不擅自在未获授权时 rotate/delete 真实密钥或删除 backup；所有凭据值不写入报告/日志/配置
 
 ---
@@ -10,11 +11,11 @@
 
 | 项 | 内容 | 状态 |
 |---|---|---|
-| **① credential authority** | 盘点并迁移明文凭据到凭据库/secret-gate | ✅ VERIFIED |
-| **② ACL** | 敏感资源访问控制检查 | ✅ VERIFIED |
-| **③ command-line secret removal** | 进程参数/命令行明文 token | ✅ VERIFIED |
-| **④ structured redaction** | 敏感值展示/日志统一脱敏 + 回归扫描 | ✅ VERIFIED |
-| **⑤ backup inventory** | 凭据/配置备份清单 | ✅ VERIFIED |
+| **① credential authority** | 盘点并迁移明文凭据到凭据库/secret-gate | ✅ 已实现（SH-R2 增加 preflight/safe-degrade） |
+| **② ACL** | 敏感资源访问控制检查 | ✅ 已实现（待外部审核） |
+| **③ command-line secret removal** | 进程参数/命令行明文 token | ✅ 已实现（待外部审核） |
+| **④ structured redaction** | 敏感值展示/日志统一脱敏 + 回归扫描 | ✅ 已实现（待外部审核） |
+| **⑤ backup inventory** | 凭据/配置备份清单 | ✅ 已实现（待外部审核） |
 | **rotate/delete** | 明确授权后才执行 | ⏸️ 待授权（未旋转） |
 
 ## 2. ① Credential Authority：NOTION_TOKEN 迁移
@@ -76,6 +77,6 @@
 ## 10. 下一步
 
 Security-Hardening 完成后：
-- **CURRENT_STATUS** → Security-Hardening VERIFIED
+- **CURRENT_STATUS** → Security-Hardening AWAITING_REVIEW（SH-R2 更正）
 - **P2.5**（若存在；待启动）
 - **Phase 03**（AUTONOMY）

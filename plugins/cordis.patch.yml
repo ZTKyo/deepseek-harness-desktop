@@ -3,18 +3,26 @@
 # overrides, disables, and insert lists; `!!js` expressions allowed).
 
 # Notion MCP server: reads the user's Notion workspace via the official
-# @notionhq/notion-mcp-server (stdio). The token below is the user's own
-# private Notion integration token, stored only in this local profile file.
+# @notionhq/notion-mcp-server (stdio).
+#
+# Security-Hardening (SH-R1 / SH-R2-4): the token is NEVER stored in this file.
+# start-dsh-server.ps1 preflights the NOTION_TOKEN ref in the local credential
+# store and injects it into the host process environment only AFTER validation.
+# dsh web runs as ESM, so require() is unavailable here — only process.env.
+# When the preflight fails the variable stays unset and `disabled` below turns
+# this entry off (explicit safe-degrade) instead of loading the MCP server with
+# an empty token.
 - insert:
     - id: mcp-notion
       name: '@deepseek-ai/dsh-mcp-client'
+      disabled: !!js "!process.env.NOTION_TOKEN"
       config:
         serverName: notion
         transport: stdio
         command: npx
         args: ['-y', '@notionhq/notion-mcp-server']
         env:
-          NOTION_TOKEN: ${NOTION_TOKEN}
+          NOTION_TOKEN: !!js "process.env.NOTION_TOKEN || ''"
         toolCallTimeoutMs: 120000
         failOnStartupError: false
 

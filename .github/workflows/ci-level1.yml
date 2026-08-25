@@ -40,17 +40,16 @@ jobs:
           }
           exit $fail
 
-      - name: YAML parse (all .yml/.yaml)
+      - name: YAML parse (all .yml/.yaml, cordis !!js aware)
         shell: pwsh
         run: |
           npm install -g js-yaml 2>&1 | Out-Null
           $env:NODE_PATH = (npm root -g)   # global modules must be resolvable
-          $fail = 0
-          Get-ChildItem -Recurse -Include '*.yml','*.yaml' | Where-Object { $_.FullName -notmatch 'node_modules' } | ForEach-Object {
-            node -e "const y=require('js-yaml'),fs=require('fs');try{y.load(fs.readFileSync(process.argv[1],'utf8'));process.exit(0)}catch(e){console.error(e.message);process.exit(1)}" $_.FullName
-            if ($LASTEXITCODE -ne 0) { Write-Host "YAML FAIL: $($_.FullName)"; $script:fail = 1 }
-          }
-          exit $fail
+          # cordis patch layers legitimately use the `!!js` scalar tag, so the
+          # checker parses with a loader-compatible schema; a DEFAULT-schema
+          # parse would report a FALSE "unknown scalar tag" failure.
+          node tests\reliability\yaml-parse-check.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "YAML PARSE GATE FAIL"; exit 1 }
 
       - name: Secret / private-key scan (must block)
         shell: pwsh
@@ -73,6 +72,27 @@ jobs:
             }
           }
           exit $fail
+
+      - name: Secret scan (node secret-scan-check, second layer) + FAIL/PASS fixture proof
+        shell: pwsh
+        run: |
+          # SH-R2-3: repo-wide node scanner as a SECOND layer on top of the
+          # PowerShell pattern scan above. Every PR must run BOTH.
+          node tests\reliability\secret-scan-check.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "SECRET-SCAN-CHECK FAIL"; exit 1 }
+          Write-Host "secret-scan-check (repo): PASS"
+          # Fixture proof: real-looking secret must FAIL, ${ENV} template must PASS,
+          # exemption must be exact-literal (prefix-sharing key still FAILS).
+          node tests\reliability\test-secret-scan-fixtures.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "SECRET-SCAN FIXTURE PROOF FAIL"; exit 1 }
+          Write-Host "secret-scan fixture proof: PASS"
+
+      - name: Credential preflight / safe-degrade negative tests (SH-R2-4)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-CredentialPreflight.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "CREDENTIAL PREFLIGHT TEST FAIL"; exit 1 }
+          Write-Host "credential preflight negative tests: PASS"
 
       - name: .gitignore assertions
         shell: pwsh

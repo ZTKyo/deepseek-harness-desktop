@@ -1401,6 +1401,10 @@ export function apply(ctx, config = {}) {
               { provider: "commandcode", model: "deepseek/deepseek-v4-flash" },
               { provider: "opencode", model: "deepseek-v4-flash" },
               { provider: "openrouter", model: "qwen/qwen3.7-flash" },
+              // SH-R2 model-route verification: exact runtime capacity for the
+              // AgentRouter Opus 5 route (registry declares 1M; runtime is the
+              // authority — record the resolved truth per boot).
+              { provider: "agentrouter-anthropic", model: "claude-opus-5" },
             ];
             const entries = [];
             for (const rt of routes) {

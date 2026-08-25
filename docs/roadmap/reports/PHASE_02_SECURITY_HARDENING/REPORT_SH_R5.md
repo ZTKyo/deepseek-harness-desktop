@@ -116,7 +116,7 @@ PASS  B1b credentials DACL unchanged  dacl-identical=True
 
 - PR：`fix/shardening-r5`
 - CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- Merge SHA：**`e1a90326`**（2026-08-25 merged，PR #36）
 
 ## 8. Final Verdict
 

@@ -34,10 +34,18 @@
 #              injects -NoRestart into the worker) - used to prove the
 #              controller/worker independence and rollback without touching the
 #              live host.
+#   -KillInjection: SH-R6 fault injection - after the worker mutates the
+#              credential (removes NOTION_TOKEN), the CONTROLLER force-kills the
+#              worker (Stop-Process -Force) and asserts the CONTROLLER (the
+#              restore owner, independent of the kill target) restored the file
+#              byte-for-byte (SHA256) with DACL unchanged, before the normal
+#              host/Notion cold boot proceeds. Proves restore does NOT depend
+#              on the worker's finally.
 
 param(
     [switch]$SkipLive,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$KillInjection
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +55,50 @@ $script:fail = 0
 function Check([string]$Name, [bool]$Ok, [string]$Detail = '') {
     if ($Ok) { $script:pass++; if ($Detail) { Write-Host "PASS  $Name  $Detail" } else { Write-Host "PASS  $Name" } }
     else { $script:fail++; if ($Detail) { Write-Host "FAIL  $Name  $Detail" } else { Write-Host "FAIL  $Name" } }
+}
+
+# ---- SH-R6: the CONTROLLER is the restore owner -----------------------------
+# It captures the original bytes/SHA256/DACL BEFORE spawning the worker, so the
+# credential can be restored even if the worker (a possible DSH-tree child) is
+# hard-killed mid-mutation. NEVER touches the token value - only bytes.
+# (capture block runs after the live paths are defined below)
+
+function Restore-OriginalCredential {
+    param([switch]$Assert)
+    if ($null -ne $originalCredBytes -and $originalCredBytes.Length -gt 0) {
+        [System.IO.File]::WriteAllBytes($credsFile, $originalCredBytes)
+    }
+    if ($Assert) {
+        $shaNow = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
+        $daclNow = (icacls $credsFile 2>&1 | Out-String)
+        Check 'R1 credential SHA256 restored by CONTROLLER' ($shaNow -eq $originalCredSha) ("sha=" + $shaNow.Substring(0, 12))
+        Check 'R2 credential DACL unchanged by CONTROLLER restore' ($daclNow -eq $originalCredDacl) ('dacl-identical=' + ($daclNow -eq $originalCredDacl))
+    }
+}
+
+# ---- controller-side live probes (used by KillInjection acceptance) ----------
+function Wait-HttpReady2([int]$MaxSeconds = 90) {
+    $deadline = (Get-Date).AddSeconds($MaxSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:3080/' -UseBasicParsing -TimeoutSec 8; if ($r.StatusCode -eq 200) { return $true } } catch { }
+        Start-Sleep -Seconds 3
+    }
+    return $false
+}
+function Get-NotionMcpLoaded2 {
+    [pscustomobject]$result = @{ probe_ok = $false; notion_loaded = $false; tool_count = 0; error = '' }
+    try {
+        $procs = Get-CimInstance Win32_Process -Filter "Name='node.exe' OR Name='npx.exe' OR Name='cmd.exe'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -match 'notion-mcp-server' }
+        $list = @($procs)
+        $result.probe_ok = $true
+        $result.tool_count = $list.Count
+        $result.notion_loaded = ($list.Count -gt 0)
+        return $result
+    } catch {
+        $result.error = $_.Exception.Message
+        return $result
+    }
 }
 
 # ---- all live runtime paths, defined UP FRONT (SH-R4 fix: $preflightLog was
@@ -60,6 +112,16 @@ $preflightLog = Join-Path $env:LOCALAPPDATA 'DSHHarness\logs\credential-prefligh
 $intentsFile = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\execution-intents.json'
 $workerScript = Join-Path $here 'coldstart-gate-worker.ps1'
 $workerResult = Join-Path $env:TEMP ("coldstart-gate-result-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.json')
+
+# ---- SH-R6: capture the original credential BEFORE any mutation --------------
+$originalCredBytes = $null
+$originalCredSha = $null
+$originalCredDacl = $null
+if (Test-Path $credsFile) {
+    $originalCredBytes = [System.IO.File]::ReadAllBytes($credsFile)
+    $originalCredSha = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
+    $originalCredDacl = (icacls $credsFile 2>&1 | Out-String)
+}
 
 # ---- contract checks (always run; template file in contract mode) -----------
 if ($SkipLive -or $DryRun) {
@@ -103,14 +165,47 @@ $workerArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$workerS
     '-ResultFile', "`"$workerResult`"",
     '-Port', '3080')
 if ($DryRun) { $workerArgs += '-NoRestart' }
-# Start-Process spawns the worker as a new process. SH-R5 note: this does NOT
-# guarantee it is outside the DSH process tree; the actual guarantee is the
-# worker's try/finally (restore always runs on exit) plus the guardian's
-# orphan-lock backstop for the host itself.
+if ($KillInjection) { $workerArgs += '-WaitForKillMarker' }
+# Start-Process spawns the worker as a new process. SH-R5/R6 note: this does NOT
+# guarantee it is outside the DSH process tree; the REAL safety contract is the
+# CONTROLLER as restore owner (it captured the original bytes above and can
+# restore even if the worker is hard-killed) + the worker's try/finally as a
+# best-effort fast path + the guardian's orphan-lock backstop for the host.
 $workerProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $workerArgs -WindowStyle Hidden -PassThru
 Write-Host "worker pid=$($workerProc.Id) result=$workerResult"
 
+# ---- SH-R6 fault injection: hard-kill the worker AFTER it mutated ------------
+# The worker (with -WaitForKillMarker) removes NOTION_TOKEN, writes a marker
+# file, then parks. We force-kill it here - its finally never runs - and the
+# CONTROLLER restores the credential. This proves restore does NOT depend on
+# the worker's finally.
+if ($KillInjection) {
+    Write-Host '=== KILL INJECTION: waiting for worker mutation marker ==='
+    $killMarker = Join-Path $env:TEMP 'coldstart-kill-marker.txt'
+    $killDeadline = (Get-Date).AddSeconds(60)
+    $markerSeen = $false
+    while ((Get-Date) -lt $killDeadline) {
+        if (Test-Path $killMarker) { $markerSeen = $true; break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $markerSeen) {
+        Write-Host 'FAIL  worker did not reach mutation marker in 60s'
+        $script:fail++
+    } else {
+        # force-kill the worker (finally will NOT run)
+        Stop-Process -Id $workerProc.Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Check 'K1 worker force-killed (finally bypassed)' ($workerProc.HasExited) ("exited=" + $workerProc.HasExited)
+        # CONTROLLER restores + asserts SHA/DACL (the real safety contract)
+        Restore-OriginalCredential -Assert
+    }
+    Remove-Item -LiteralPath $killMarker -Force -ErrorAction SilentlyContinue
+}
+
 # ---- controller waits on the worker (poll result file, bounded) -------------
+# In KillInjection mode the worker was intentionally killed (restore done by
+# the CONTROLLER above), so there is no result file to wait for - skip the poll.
+if (-not $KillInjection) {
 $deadline = (Get-Date).AddMinutes(15)
 $result = $null
 while ((Get-Date) -lt $deadline) {
@@ -128,9 +223,27 @@ while ((Get-Date) -lt $deadline) {
     }
     Start-Sleep -Seconds 3
 }
+} # end: skip poll in KillInjection mode
 
-if (-not $result) {
-    Write-Host 'FAIL  worker did not produce a result within 8 minutes'
+if ($KillInjection) {
+    # KillInjection already asserted restore via R1/R2; nothing to aggregate.
+    Write-Host ''
+    Write-Host 'KILL-INJECTION MODE: worker killed, credential restored by CONTROLLER (R1/R2 above).'
+    if ($DryRun) {
+        Write-Host '(dry-run: normal cold boot acceptance skipped - no real restart)'
+    } else {
+        # SH-R6 acceptance: after the kill + controller restore, a NORMAL cold
+        # boot must still bring the host up with Notion MCP loaded (credential
+        # intact).
+        Write-Host '=== normal cold boot after kill-injection restore (acceptance) ==='
+        & $restartScript -RestartAndWait -DelaySeconds 2 -Port 3080 -TimeoutSec 240 -Reason 'sh-r6-kill-injection-restore' | Out-Null
+        $httpOk = Wait-HttpReady2 -MaxSeconds 90
+        Check 'K2 host HTTP 200 after kill-injection restore + cold boot' $httpOk ("http=" + $(if ($httpOk) { 200 } else { -1 }))
+        $probeK = Get-NotionMcpLoaded2
+        Check 'K3 mcp-notion loaded after kill-injection restore' ($probeK.probe_ok -eq $true -and $probeK.notion_loaded -eq $true) ("probe_ok=" + $probeK.probe_ok + " notion_loaded=" + $probeK.notion_loaded + " error=" + $probeK.error)
+    }
+} elseif (-not $result) {
+    Write-Host 'FAIL  worker did not produce a result within 15 minutes'
     $script:fail++
 } else {
     foreach ($item in $result.checks) {

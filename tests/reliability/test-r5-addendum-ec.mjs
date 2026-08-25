@@ -477,6 +477,48 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   globalThis.fetch = realFetch;
 }
 
+// ── SH-R6 T17: state invariant — recoverable state must NEVER coexist with
+// autoResume=false (the hidden contradiction that silently filters the intent
+// out of BOTH listRecoverable() and listDue(), stalling boot scan + timer).
+// Simulates the production race: goal complete -> COMPLETED+autoResume=false
+// -> liveness/resume success path re-writes RUNNING -> invariant must restore
+// autoResume=true so the intent stays visible to recovery.
+{
+  const ctx = makeCtx({});
+  const plugin = ecApply(ctx, { stateDir, enableAutoResume: true, serverGeneration: 'boot:R6_1' });
+  const store = plugin._test.store;
+  const sid = 'sess-r6-invariant';
+
+  // Phase 1: goal complete path (goal/changed) writes COMPLETED + autoResume=false
+  store.ensure(sid);
+  store.setState(sid, 'COMPLETED', { autoResume: false, reason: 'goal-complete' });
+  let it = store.get(sid);
+  check('T17a complete -> COMPLETED+autoResume=false (non-recoverable, allowed)', it.state === 'COMPLETED' && it.autoResume === false, `state=${it.state} autoResume=${it.autoResume}`);
+
+  // Phase 2: liveness/resume success path re-writes RUNNING (the race)
+  store.setState(sid, 'RUNNING', { note: 'resume-after-ct-clean kick accepted', nextRetryAt: null, reason: null });
+  it = store.get(sid);
+  check('T17b RUNNING after resume success -> autoResume restored TRUE (invariant)', it.autoResume === true, `state=${it.state} autoResume=${it.autoResume}`);
+
+  // Phase 3: the intent must be visible to recovery (listRecoverable + listDue)
+  const recoverable = store.listRecoverable().filter((x) => x.sessionId === sid);
+  check('T17c RUNNING+autoResume=true is in listRecoverable()', recoverable.length === 1, `recoverable=${recoverable.length}`);
+
+  // Phase 4: WAITING_USER (pending question) -> active/recovery path also restores
+  store.setState(sid, 'WAITING_USER', { autoResume: false, reason: 'pending-question' });
+  it = store.get(sid);
+  check('T17d WAITING_USER -> autoResume=false (non-recoverable, allowed)', it.autoResume === false, `autoResume=${it.autoResume}`);
+  store.setState(sid, 'RUNNING', { note: 'user answered -> active again' });
+  it = store.get(sid);
+  check('T17e RUNNING after WAITING_USER -> autoResume TRUE (invariant)', it.autoResume === true, `autoResume=${it.autoResume}`);
+  check('T17f recoverable again after re-activation', store.listRecoverable().filter((x) => x.sessionId === sid).length === 1);
+
+  // Phase 5: direct it.state assignment (goal/changed active path) stays true
+  it = store.get(sid);
+  it.state = 'RUNNING'; it.autoResume = true; // L1218 path
+  check('T17g direct active-path assignment keeps autoResume=true', store.get(sid).autoResume === true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

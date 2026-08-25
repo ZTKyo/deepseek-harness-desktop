@@ -144,9 +144,24 @@ agentrouter-anthropic/claude-opus-5    : ctx=1000000 src=runtime   <-- 本轮新
 
 ## 9. PR / CI / Merge
 
-- PR：`fix/shardening-r2`
-- CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- **PR #33**（`fix/shardening-r2`）→ **MERGED**，main = `70932de`
+- **CI Level 1/2/3 全绿**：Static + secret + syntax gate 1m8s / Reliability state machine 1m23s / DSH boot + readiness smoke 5m38s
+- Static gate 现包含：旧 PowerShell pattern scan（层1）+ node secret-scan-check（层2）+ secret-scan fixture 证明 + credential preflight negative 测试 + cordis-aware YAML gate
+
+### 9.1 本轮 CI 修复（诚实记录：由本轮改动暴露的真实问题）
+
+1. **YAML gate 假失败**：Level1 原用 DEFAULT js-yaml schema 校验所有 .yml，而 cordis patch 合法使用 `!!js` 标签 → 加入 `disabled: !!js ...` 后报 `unknown scalar tag`。改为 `tests/reliability/yaml-parse-check.mjs`（与 loader 一致的 schema，对 js-yaml interop 形状健壮，并带 strip-tag 兜底）。正反验证：含 `!!js` 的 5 个文件 PASS；真语法错仍 exit 1。
+2. **扫描器自命中**：层1 PowerShell 扫描命中新扫描器/fixture 内的假 key 字面量。**未**用路径豁免削弱任一层，而是把假 key 改为运行时拼接（源码不含密钥形状字面量）；因此 fixture 测试文件也不再被 node 扫描器跳过，同样被扫并通过。
+
+### 9.2 真实 preflight 审计日志（SH-R2-4 证据）
+
+真实 boot 产生（`%LOCALAPPDATA%\DSHHarness\logs\credential-preflight.log`）：
+
+```
+2026-08-25T06:06:53.387Z NOTION-PREFLIGHT ok ref=NOTION_TOKEN reason=ok len=50 (value not logged)
+```
+
+该文件不含明文 token（已校验）。失败路径写 `... -> mcp-notion SAFE-DEGRADE (not loaded); host boot continues`（由 30 断言测试覆盖）。
 
 ## 10. Final Verdict
 

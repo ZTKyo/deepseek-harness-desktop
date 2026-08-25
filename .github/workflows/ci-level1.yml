@@ -74,6 +74,27 @@ jobs:
           }
           exit $fail
 
+      - name: Secret scan (node secret-scan-check, second layer) + FAIL/PASS fixture proof
+        shell: pwsh
+        run: |
+          # SH-R2-3: repo-wide node scanner as a SECOND layer on top of the
+          # PowerShell pattern scan above. Every PR must run BOTH.
+          node tests\reliability\secret-scan-check.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "SECRET-SCAN-CHECK FAIL"; exit 1 }
+          Write-Host "secret-scan-check (repo): PASS"
+          # Fixture proof: real-looking secret must FAIL, ${ENV} template must PASS,
+          # exemption must be exact-literal (prefix-sharing key still FAILS).
+          node tests\reliability\test-secret-scan-fixtures.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "SECRET-SCAN FIXTURE PROOF FAIL"; exit 1 }
+          Write-Host "secret-scan fixture proof: PASS"
+
+      - name: Credential preflight / safe-degrade negative tests (SH-R2-4)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-CredentialPreflight.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "CREDENTIAL PREFLIGHT TEST FAIL"; exit 1 }
+          Write-Host "credential preflight negative tests: PASS"
+
       - name: .gitignore assertions
         shell: pwsh
         run: |

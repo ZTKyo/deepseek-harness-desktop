@@ -146,21 +146,38 @@ if ($bootMode.mode -ne 'normal') {
     Remove-Item Env:DSH_BOOT_MODE -ErrorAction SilentlyContinue
 }
 
-# --- Security-Hardening 2026-08-25: NOTION_TOKEN via env (no plaintext in config/cmdline) ---
-# dsh web 在 ESM 下 require 不可用,禁止在 cordis.patch.yml 里用 require() 动态读取。
-# 此处从凭据库 ~/.dsh/.credentials.yaml(refs 格式)提取 NOTION_TOKEN,仅注入进程环境;
-# 子进程(ProcessStartInfo UseShellExecute=$false)自动继承,secret 不进配置/命令行/Git/日志。
+# --- Security-Hardening SH-R2-4: NOTION_TOKEN via validated env injection ---
+# dsh web runs as ESM, so require() is NOT available inside cordis.patch.yml:
+# the secret must arrive through the process environment, never as plaintext in
+# config / command line / Git / logs.
+#
+# SH-R2-4 hardening: the value is validated by a dedicated preflight helper
+# BEFORE the host starts. On any failure (source missing/unreadable, ref
+# missing, empty, malformed) we DO NOT inject an empty token and we DO NOT
+# silently continue: NOTION_TOKEN stays unset, which makes the mcp-notion entry
+# disable itself (cordis.patch.yml: disabled: !!js "!process.env.NOTION_TOKEN").
+# That is an explicit, observable safe-degrade instead of a half-initialised MCP.
 $env:NOTION_TOKEN = $null
-$credsFile = Join-Path $env:USERPROFILE '.dsh\.credentials.yaml'
-if (Test-Path $credsFile) {
+$preflightHelper = Join-Path $root 'dsh-credential-preflight.ps1'
+if (Test-Path $preflightHelper) {
     try {
-        $credsRaw = Get-Content $credsFile -Raw -Encoding UTF8
-        if ($credsRaw -match '(?m)^\s*NOTION_TOKEN:\s*"?([^"\r\n]+)"?') {
-            $env:NOTION_TOKEN = $Matches[1].Trim()
+        . $preflightHelper
+        $ntnPre = Invoke-DshNotionPreflight
+        # auditable decision line (no secret value) - hidden-window console output
+        # alone is not auditable after the fact
+        $null = Write-DshPreflightResultLog -Result $ntnPre
+        if ($ntnPre.Ok) {
+            $env:NOTION_TOKEN = Get-DshCredentialRefValue -Name 'NOTION_TOKEN'
+            Write-Host ("NOTION-PREFLIGHT ok ref={0} len={1} (value not logged)" -f $ntnPre.Ref, $ntnPre.Length)
+        } else {
+            Write-Warning ("NOTION-PREFLIGHT FAIL reason={0} ref={1} -> mcp-notion SAFE-DEGRADE (not loaded); host boot continues" -f $ntnPre.Reason, $ntnPre.Ref)
         }
     } catch {
-        Write-Warning "start-dsh-server: NOTION_TOKEN env 注入失败: $($_.Exception.Message)"
+        Write-Warning ("NOTION-PREFLIGHT ERROR {0} -> mcp-notion SAFE-DEGRADE (not loaded); host boot continues" -f $_.Exception.Message)
+        try { $null = Write-DshPreflightLog -Message ('NOTION-PREFLIGHT ERROR ' + $_.Exception.Message + ' -> mcp-notion SAFE-DEGRADE (not loaded)') } catch { }
     }
+} else {
+    Write-Warning "NOTION-PREFLIGHT helper missing (dsh-credential-preflight.ps1) -> mcp-notion SAFE-DEGRADE (not loaded)"
 }
 
 # Use dsh-launcher.js to spawn the server detached (bypasses cmd.exe which

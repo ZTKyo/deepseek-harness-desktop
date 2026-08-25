@@ -64,14 +64,18 @@ for (const fp of files) {
   const lines = content.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    // Fragment-level sanitisation (SH-R3): exempt ONLY the exact matched mock
+    // literal / ${ENV} template segment, NOT the whole line. If the same line
+    // also carries a REAL secret-shaped token elsewhere, that token must still
+    // be reported (a whole-line continue would bypass it).
+    let probe = line;
+    for (const lit of CI_MOCK_LITERALS) {
+      probe = probe.split(lit).join('');
+    }
+    // blank out ${ENV} template references (keep the rest of the line scannable)
+    probe = probe.replace(/\$\{[A-Za-z_][A-Za-z0-9_.]*\}/g, '');
     for (const p of PATTERNS) {
-      if (p.re.test(line)) {
-        // allow obvious template references like ${NOTION_TOKEN} (no literal secret)
-        if (line.includes('${') && /env\.[A-Z_]+|\$\{[A-Z_]+\}/.test(line) && !/\bntn_[A-Za-z0-9]{16,}\b/.test(line)) continue;
-        // SH-R2: exempt ONLY the exact known-fake literals used by CI workflow
-        // tests. A prefix-based exemption (e.g. any "sk-abcdef*") would silently
-        // whitelist real-looking secrets and defeat the gate.
-        if (CI_MOCK_LITERALS.some((lit) => line.includes(lit))) continue;
+      if (p.re.test(probe)) {
         hits++;
         console.log(`SECRET ${p.name} @ ${path.relative(repo, fp)}:${i + 1}: ${line.trim().substring(0, 80)}`);
       }

@@ -29,8 +29,10 @@ function loadYamlModule() {
 
 const yamlModule = loadYamlModule();
 if (!yamlModule) {
-  console.log('YAML CHECK SKIPPED: js-yaml not resolvable');
-  process.exit(0);
+  // SH-R3-3: FAIL-CLOSED. A security/CI gate that silently skips when its
+  // parser is unavailable proves nothing; the job must fail loudly instead.
+  console.log('YAML CHECK FAILED: js-yaml not resolvable (fail-closed, no SKIP)');
+  process.exit(1);
 }
 
 // js-yaml is shipped in several interop shapes depending on version and how it
@@ -43,8 +45,9 @@ function normaliseYaml(mod) {
 }
 const yaml = normaliseYaml(yamlModule);
 if (typeof yaml.load !== 'function') {
-  console.log('YAML CHECK SKIPPED: js-yaml load() unavailable');
-  process.exit(0);
+  // SH-R3-3: FAIL-CLOSED (same reasoning as above - never SKIP a gate).
+  console.log('YAML CHECK FAILED: js-yaml load() unavailable (fail-closed, no SKIP)');
+  process.exit(1);
 }
 
 // cordis-compatible schema: `!!js <expr>` is a scalar carrying a loader

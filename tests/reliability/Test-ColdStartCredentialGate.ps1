@@ -4,10 +4,15 @@
 #
 # The controller (this script) is DELIBERATELY decoupled from the DSH host
 # lifetime: it spawns an INDEPENDENT worker process (Start-Process) that runs
-# the three phases. When the negative cold boot restarts/stops the DSH host,
-# the worker is NOT a child of the host, so it always survives to run
-# restore + normal cold boot. The worker persists its results to a JSON file
-# the controller waits on, and wraps every credential mutation in try/finally
+# the three phases. IMPORTANT (SH-R5): Start-Process does NOT guarantee the
+# worker is outside the DSH process tree on Windows - the child can still sit
+# under the host's job/process tree and be killed when the host restarts. The
+# reliable guarantee is: (1) the worker runs restore + normal cold boot in its
+# try/finally BEFORE any exit, and (2) if the worker itself is killed mid-way,
+# the guardian's orphan-lock backstop re-raises the host, and the credentials
+# file is restored by the worker's finally whenever the worker does exit. The
+# worker persists its results to a JSON file the controller waits on, and wraps
+# every credential mutation in try/finally
 # with a byte-for-byte restore of the original credentials file.
 #
 #   Phase A (NEGATIVE): NOTION_TOKEN removed -> restart -> require
@@ -98,8 +103,10 @@ $workerArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$workerS
     '-ResultFile', "`"$workerResult`"",
     '-Port', '3080')
 if ($DryRun) { $workerArgs += '-NoRestart' }
-# Start-Process makes the worker a sibling of THIS process (not a child of the
-# DSH server), so it survives the negative cold boot.
+# Start-Process spawns the worker as a new process. SH-R5 note: this does NOT
+# guarantee it is outside the DSH process tree; the actual guarantee is the
+# worker's try/finally (restore always runs on exit) plus the guardian's
+# orphan-lock backstop for the host itself.
 $workerProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $workerArgs -WindowStyle Hidden -PassThru
 Write-Host "worker pid=$($workerProc.Id) result=$workerResult"
 

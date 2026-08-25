@@ -79,6 +79,10 @@ function Get-NotionMcpLoaded {
 # ---- byte-for-byte credential save/restore ----------------------------------
 $originalBytes = $null
 $originalBytes = [System.IO.File]::ReadAllBytes($CredsFile)
+# SH-R5: capture the pre-mutation SHA256 and DACL so B1 can assert REAL equality
+# (not just "the token line exists") after the finally-restore.
+$originalSha256 = (Get-FileHash -LiteralPath $CredsFile -Algorithm SHA256).Hash
+$originalDaclText = (icacls $CredsFile 2>&1 | Out-String)
 
 function Write-OriginalBytes {
     if ($null -ne $originalBytes -and $originalBytes.Length -gt 0) {
@@ -213,8 +217,16 @@ try {
     Write-OriginalBytes
     Write-Host ''
     Write-Host '=== credentials file restored (byte-for-byte, finally) ==='
-    $restored = ([System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($CredsFile)) -match 'NOTION_TOKEN\s*:\s*\S')
-    Check 'B1 credentials byte-for-byte restored' $restored ''
+    # SH-R5: B1 is a REAL equality gate - compare SHA256 of the file before the
+    # mutation vs after the finally-restore (a regex "token line present" check
+    # could PASS even if the rest of the file bytes were corrupted). DACL must
+    # also be unchanged (we never touch ACLs, but prove it).
+    $shaAfter = (Get-FileHash -LiteralPath $CredsFile -Algorithm SHA256).Hash
+    $bytesEqual = ($shaAfter -eq $originalSha256)
+    Check 'B1 credentials byte-for-byte restored (SHA256 equality)' $bytesEqual ("sha=" + $shaAfter.Substring(0, 12) + "...")
+    $daclAfter = (icacls $CredsFile 2>&1 | Out-String)
+    $daclOk = ($daclAfter -eq $originalDaclText)
+    Check 'B1b credentials DACL unchanged' $daclOk ('dacl-identical=' + $daclOk)
 }
 
 # ---- Phase C: NORMAL cold boot (only when live) -----------------------------

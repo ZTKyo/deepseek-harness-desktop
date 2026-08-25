@@ -1,7 +1,7 @@
 # PHASE_02_SECURITY_HARDENING — 最终报告（Security-Hardening VERIFIED）
 
 > Phase 02 VERIFIED 后的既定 checkpointed security pass（Reviewer BLOCKING_PHASE03_ENTRY）
-> 日期：2026-08-25 ｜ 状态：**Security-Hardening VERIFIED**
+> 日期：2026-08-25 ｜ 状态：**Security-Hardening VERIFIED**（PR #32 merged，main=1605bfa8）
 > 原则：不擅自在未获授权时 rotate/delete 真实密钥或删除 backup；所有凭据值不写入报告/日志/配置
 
 ---

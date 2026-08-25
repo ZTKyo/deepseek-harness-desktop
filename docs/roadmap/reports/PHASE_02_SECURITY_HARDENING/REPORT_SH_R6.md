@@ -121,7 +121,7 @@ R2 credential DACL unchanged by CONTROLLER restore  dacl-identical=True
 
 - PR：`fix/shardening-r6`
 - CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- Merge SHA：**`ec91d26b`**（2026-08-25 merged，PR #37）
 
 ## 7. Final Verdict
 

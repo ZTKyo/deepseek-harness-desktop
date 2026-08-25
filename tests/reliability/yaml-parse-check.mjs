@@ -27,18 +27,57 @@ function loadYamlModule() {
   return null;
 }
 
-const yaml = loadYamlModule();
-if (!yaml) {
+const yamlModule = loadYamlModule();
+if (!yamlModule) {
   console.log('YAML CHECK SKIPPED: js-yaml not resolvable');
   process.exit(0);
 }
 
-// cordis-compatible schema: `!!js <expr>` is a scalar carrying a loader expression
-const jsTypes = [
-  new yaml.Type('tag:yaml.org,2002:js', { kind: 'scalar', construct: (d) => ({ __jsExpr: d }) }),
-  new yaml.Type('!js', { kind: 'scalar', construct: (d) => ({ __jsExpr: d }) }),
-];
-const schema = yaml.DEFAULT_SCHEMA.extend(jsTypes);
+// js-yaml is shipped in several interop shapes depending on version and how it
+// was installed (global + NODE_PATH under ESM can hand back a namespace whose
+// real API sits on `.default`). Normalise before touching Type/DEFAULT_SCHEMA.
+function normaliseYaml(mod) {
+  if (mod && typeof mod.load === 'function' && typeof mod.Type === 'function') return mod;
+  if (mod && mod.default && typeof mod.default.load === 'function') return mod.default;
+  return mod;
+}
+const yaml = normaliseYaml(yamlModule);
+if (typeof yaml.load !== 'function') {
+  console.log('YAML CHECK SKIPPED: js-yaml load() unavailable');
+  process.exit(0);
+}
+
+// cordis-compatible schema: `!!js <expr>` is a scalar carrying a loader
+// expression. When the installed js-yaml does not expose Type/DEFAULT_SCHEMA in
+// a usable shape, fall back to stripping the `!!js` tag before parsing - the
+// structural validation (which is what this gate is for) still holds.
+let schema = null;
+let mode = 'strip-tag-fallback';
+try {
+  if (typeof yaml.Type === 'function' && yaml.DEFAULT_SCHEMA && typeof yaml.DEFAULT_SCHEMA.extend === 'function') {
+    schema = yaml.DEFAULT_SCHEMA.extend([
+      new yaml.Type('tag:yaml.org,2002:js', { kind: 'scalar', construct: (d) => ({ __jsExpr: d }) }),
+      new yaml.Type('!js', { kind: 'scalar', construct: (d) => ({ __jsExpr: d }) }),
+    ]);
+    mode = 'custom-schema';
+  }
+} catch {
+  schema = null;
+  mode = 'strip-tag-fallback';
+}
+
+function stripJsTags(text) {
+  // `key: !!js "expr"` -> `key: "expr"` ; `key: !!js expr` -> `key: "expr"`
+  return text
+    .replace(/!!js[ \t]+(["'])/g, '$1')
+    .replace(/!!js[ \t]+([^\r\n"']\S*)/g, '"$1"')
+    .replace(/![ \t]*js[ \t]+(["'])/g, '$1');
+}
+
+function parseYaml(text) {
+  if (schema) return yaml.load(text, { schema });
+  return yaml.load(stripJsTags(text));
+}
 
 const root = process.argv[2] || process.cwd();
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build']);
@@ -68,7 +107,7 @@ for (const fp of files) {
     continue;
   }
   try {
-    yaml.load(text, { schema });
+    parseYaml(text);
     ok++;
   } catch (e) {
     console.log(`YAML FAIL: ${path.relative(root, fp)}: ${String(e.message).split('\n')[0]}`);
@@ -76,5 +115,5 @@ for (const fp of files) {
   }
 }
 
-console.log(`YAML CHECK: ${ok} ok, ${bad} failed (${files.length} files, cordis !!js aware)`);
+console.log(`YAML CHECK: ${ok} ok, ${bad} failed (${files.length} files, cordis !!js aware, mode=${mode})`);
 if (bad > 0) { process.exit(1); }

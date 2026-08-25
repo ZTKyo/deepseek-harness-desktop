@@ -94,6 +94,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "CREDENTIAL PREFLIGHT TEST FAIL"; exit 1 }
           Write-Host "credential preflight negative tests: PASS"
 
+      - name: Cold-start credential gate (SH-R3-1, contract-only in CI; live run is the release gate)
+        shell: pwsh
+        run: |
+          # In CI we run the orchestration contract (deployed patch has the
+          # safe-degrade expression, starter preflights, audit log exists).
+          # The REAL three-phase cold boot (negative -> restore -> normal) is a
+          # release/runtime gate executed on the live machine (see REPORT_SH_R3).
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-ColdStartCredentialGate.ps1 -SkipLive
+          if ($LASTEXITCODE -ne 0) { Write-Host "COLD-START CREDENTIAL GATE CONTRACT FAIL"; exit 1 }
+          Write-Host "cold-start credential gate contract: PASS"
+
       - name: .gitignore assertions
         shell: pwsh
         run: |

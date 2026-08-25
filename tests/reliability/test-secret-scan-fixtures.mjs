@@ -80,6 +80,13 @@ try {
   dirs.push(mockDir);
   const mock = runScanner(mockDir);
   check('exact CI mock literal is exempt', mock.code === 0, `exit=${mock.code}`);
+
+  // 6) SH-R3: mock + real-secret on the SAME line must still FAIL (the
+  //    exemption is fragment-level, not whole-line continue).
+  const mixedDir = fixtureDir('mixed', { 'conf.yml': 'env: "REAL=' + FAKE_SK + '", mock: "' + CI_MOCK + '"\n' });
+  dirs.push(mixedDir);
+  const mixed = runScanner(mixedDir);
+  check('mock+real same line still FAILS (fragment-level exemption)', mixed.code === 1, `exit=${mixed.code}`);
 } finally {
   for (const d of dirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
 }

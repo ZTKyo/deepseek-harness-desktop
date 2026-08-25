@@ -44,6 +44,17 @@ function Write-Log([string]$msg) {
 # ---------- WAIT MODE: block until a specific attempt reaches a terminal state ----------
 # Phase 02 R5 (R4-B2): RestartAndWait = detach a restart with a fresh attemptId,
 # then fall through to the WaitAttempt loop below for the exact terminal state.
+
+# ledger helpers (defined BEFORE the RestartAndWait branch below uses them:
+# Windows PowerShell 5.1 treats a use-before-definition call as a terminating
+# error, which broke `-RestartAndWait` when invoked from a 5.1 caller).
+function Set-AttemptState([string]$id, [string]$state, [string]$detail = '', [bool]$terminal = $false) {
+    if (-not $id) { return }
+    $f = Join-Path $attemptsDir ($id + '.json')
+    $rec = @{ attemptId = $id; port = $Port; pid = $PID; ts = (Get-Date).ToString('o'); state = $state; terminalState = if ($terminal) { $state } else { $null }; detail = $detail }
+    try { $rec | ConvertTo-Json -Compress | Set-Content $f -Encoding UTF8 } catch { Write-Log ("attempt ledger write failed: $($_.Exception.Message)") }
+}
+
 $restartAndWaitId = $null
 if ($RestartAndWait -and -not $WorkerMode -and -not $WaitAttempt) {
     $restartAndWaitId = [guid]::NewGuid().ToString('N')
@@ -92,14 +103,6 @@ if ($WaitAttempt) {
     Write-Log ("wait-attempt {0} TIMED_OUT after {1}s" -f $WaitAttempt, $TimeoutSec)
     Write-Host ("restart attempt {0} TIMED_OUT" -f $WaitAttempt)
     exit 3
-}
-
-# ledger helpers
-function Set-AttemptState([string]$id, [string]$state, [string]$detail = '', [bool]$terminal = $false) {
-    if (-not $id) { return }
-    $f = Join-Path $attemptsDir ($id + '.json')
-    $rec = @{ attemptId = $id; port = $Port; pid = $PID; ts = (Get-Date).ToString('o'); state = $state; terminalState = if ($terminal) { $state } else { $null }; detail = $detail }
-    try { $rec | ConvertTo-Json -Compress | Set-Content $f -Encoding UTF8 } catch { Write-Log ("attempt ledger write failed: $($_.Exception.Message)") }
 }
 
 # ---------- DETACH MODE: spawn the worker in an independent process ----------

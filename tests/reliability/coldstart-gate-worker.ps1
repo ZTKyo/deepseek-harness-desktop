@@ -1,11 +1,19 @@
-﻿# coldstart-gate-worker.ps1 - Phase 02 Security-Hardening SH-R4.
+﻿# coldstart-gate-worker.ps1 - Phase 02 Security-Hardening SH-R4/R6.
 #
-# INDEPENDENT worker that executes the three-phase cold-start credential gate.
-# Spawned by Test-ColdStartCredentialGate.ps1 via Start-Process, it is NOT a
-# child of the DSH host, so it survives the negative cold boot and always runs
-# restore + normal cold boot. Every credential mutation is wrapped in try/finally
-# and the credentials file is restored BYTE-FOR-BYTE from the original bytes
-# before exit on ANY failure path.
+# Worker that executes the three-phase cold-start credential gate.
+# SH-R6 correction: Start-Process does NOT guarantee this process is outside
+# the DSH job/process tree on Windows - it CAN be killed by a host restart, so
+# its try/finally is NOT a reliable restore guarantee by itself. The REAL
+# safety contract is:
+#   1. the CONTROLLER (Test-ColdStartCredentialGate.ps1, a separate process
+#      that is not the kill target) captures the original credential bytes
+#      BEFORE spawning this worker and is the restore owner (it can restore
+#      even if this worker is hard-killed);
+#   2. this worker still wraps every mutation in try/finally as a best-effort
+#      fast-path restore;
+#   3. the gate's release mode runs a fault-injection (-KillInjection) that
+#      force-kills this worker after mutation and asserts the controller
+#      restored SHA256 + DACL before any host/Notion cold boot.
 #
 # Results are written to a JSON file the controller polls:
 #   { checks: [ { name, ok, detail } ] }
@@ -18,7 +26,8 @@ param(
     [string]$RestartScript,
     [string]$ResultFile,
     [int]$Port = 3080,
-    [switch]$NoRestart
+    [switch]$NoRestart,
+    [switch]$WaitForKillMarker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -179,6 +188,20 @@ try {
     Write-Host '=== Phase A: NEGATIVE cold boot (NOTION_TOKEN removed) ==='
     $removed = Remove-CredentialRef 'NOTION_TOKEN'
     Check 'A1 credential ref removed for negative boot' $removed ''
+
+    # SH-R6 fault-injection support: after mutation, signal the controller and
+    # park. The controller force-kills this worker (finally bypassed) and then
+    # RESTORES the credential itself as the restore owner. This proves the gate
+    # does NOT depend on this worker's finally for credential safety.
+    if ($WaitForKillMarker) {
+        $killMarker = Join-Path $env:TEMP 'coldstart-kill-marker.txt'
+        [System.IO.File]::WriteAllText($killMarker, 'mutated', (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host 'KILL-MARKER written; parking until controller kills this worker'
+        # park: the controller will Stop-Process -Force us; if that never happens
+        # we exit after a bounded wait so the run cannot hang forever.
+        Start-Sleep -Seconds 120
+        Write-Host 'KILL-MARKER timeout (controller did not kill); continuing'
+    }
 
     if ($NoRestart) {
         Check 'A2 (dry-run) restart skipped, host not touched' $true ''

@@ -243,6 +243,15 @@ export class IntentStore {
     const it = this.ensure(sessionId);
     it.state = state;
     it.lastActivity = Date.now();
+    // SH-R6 invariant: a RECOVERABLE state (esp. RUNNING) must NEVER coexist
+    // with autoResume=false. That hidden contradiction filters the intent out
+    // of BOTH listRecoverable() and listDue(), producing a silent stall
+    // (boot scan + timer both idle) - exactly the 20:04 boot:23056 symptom.
+    // Enforce the invariant here so ANY writer (liveness/resume/goal-changed)
+    // that transitions into a recoverable state atomically restores autoResume.
+    if (RECOVERABLE_STATES.includes(state)) {
+      it.autoResume = true;
+    }
     Object.assign(it, extra);
     this.persist();
     return it;

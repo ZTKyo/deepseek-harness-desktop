@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
-| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `AWAITING_REVIEW` | EXTERNAL_REVIEW（Round 1 = CHANGES_REQUIRED，SH-R2 修复中） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R2.md |
+| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `AWAITING_REVIEW` | EXTERNAL_REVIEW（Round 3 = CHANGES_REQUIRED，SH-R4 已完成） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R4.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -21,12 +21,13 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（Phase 02 VERIFIED — Security-Hardening AWAITING_REVIEW / SH-R2）
+## Phase 02 执行上下文（Phase 02 VERIFIED — Security-Hardening AWAITING_REVIEW / SH-R4）
 
 - **Reviewer Verdict：Phase 02 APPROVED / VERIFIED**（R1–R11 闭环）
-- **Security-Hardening External Review Round 1：CHANGES_REQUIRED**（4 项最终收口：状态回退 / icacls 证据 / CI 接入 / preflight）
+- **Security-Hardening External Review Round 3：CHANGES_REQUIRED**（gate 脚本可重复性 / probe 结构化 / CURRENT_STATUS truth）
 - **当前 Security-Hardening 状态：AWAITING_REVIEW**（Final Verdict=IMPLEMENTATION_COMPLETE，VERIFIED 只能由 Reviewer APPROVED 后 backfill）
-- **修复分支**：`fix/shardening-r2`（SH-R2 进行中）
+- **已完成轮次**：SH-R1（实现主体，PR #32）、SH-R2（4 项，PR #33，main `70932de`/`a06e7b0`）、**SH-R3（3 项，PR #34，main `1959b5b`/`92c6774`；latest report=REPORT_SH_R3）**
+- **修复分支**：`fix/shardening-r4`（SH-R4 已完成：真实三阶段 gate 15/15、结构化 probe、restart 函数顺序修复、js-yaml 安全移除、CURRENT_STATUS truth）
 - **禁止**：rotate/delete secret（除非授权）、进入 P2.5 / Phase 03
 
 ### 路线顺序（Security-Hardening APPROVED 后）
@@ -52,16 +53,16 @@
 
 ## 当前执行位置
 
-- 当前阶段：**Security-Hardening Gate**（External Review Round 1 = CHANGES_REQUIRED；SH-R2 修复中）
-- **状态：AWAITING_REVIEW**（Final Verdict=IMPLEMENTATION_COMPLETE，见 REPORT_SH_R2.md；VERIFIED 只能由 Reviewer APPROVED 后 backfill）
-- Final Verdict：Phase 02 = **APPROVED / VERIFIED**（见 REPORT_R11.md）；Security-Hardening = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（见 REPORT_SH_R2.md）
+- 当前阶段：**Security-Hardening Gate**（External Review Round 3 = CHANGES_REQUIRED；SH-R4 修复中）
+- **状态：AWAITING_REVIEW**（Final Verdict=IMPLEMENTATION_COMPLETE，见 REPORT_SH_R3.md；VERIFIED 只能由 Reviewer APPROVED 后 backfill）
+- Final Verdict：Phase 02 = **APPROVED / VERIFIED**（见 REPORT_R11.md）；Security-Hardening = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（见 REPORT_SH_R3.md；SH-R4 完成后指 REPORT_SH_R4）
 - 等待：Reviewer 确认 Security-Hardening APPROVED → VERIFIED backfill → P2.5（若存在）→ Phase 03
-- 路线顺序：P2 VERIFIED ✅ → Security-Hardening AWAITING_REVIEW（SH-R2 修复中）→ Reviewer APPROVED → P2.5 → P3
+- 路线顺序：P2 VERIFIED ✅ → Security-Hardening AWAITING_REVIEW（SH-R4 修复中）→ Reviewer APPROVED → P2.5 → P3
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：**Security-Hardening SH-R2 修复中（External Review Round 1 = CHANGES_REQUIRED）；Reviewer APPROVED 前禁止进入 P2.5 / Phase 03。**
+当前执行位置：**Security-Hardening SH-R4 修复中（External Review Round 3 = CHANGES_REQUIRED）；Reviewer APPROVED 前禁止进入 P2.5 / Phase 03。**
 
 ## 变更日志
 
@@ -86,5 +87,9 @@
 - 2026-08-25：Phase 02 R11 完成（T16 真实 budget-epoch production-path 6 项 + CURRENT_STATUS canonical truth），状态置 AWAITING_REVIEW。
 - 2026-08-25：Phase 02 **Reviewer Verdict = APPROVED / VERIFIED**（R1–R11 全部闭环）；状态更新为 P2 VERIFIED。
 - 2026-08-25：进入 **Security-Hardening Gate**（纯文档状态回填，不修改 P2 生产代码）；Security-Hardening 完成前禁止 P2.5 / Phase 03。
-- 2026-08-25：Security-Hardening Gate 实现完成（IMPLEMENTATION_COMPLETE，当时误标 VERIFIED，SH-R2 已更正）（crash recovery 后完成：NOTION_TOKEN 迁移到 env 注入方案、ACL/command-line/redaction/backup 盘点、secret-scan 回归、冷启动验证；5/5 checklist 闭环，见 REPORT_SH_FINAL.md）；状态置 VERIFIED / awaiting review（PR #31）。Reviewer 确认前禁止 P2.5 / Phase 03。
+- 2026-08-25：Security-Hardening Gate 实现完成（IMPLEMENTATION_COMPLETE；当时误标 VERIFIED，SH-R2 已更正；crash recovery 后完成：NOTION_TOKEN 迁移到 env 注入方案、ACL/command-line/redaction/backup 盘点、secret-scan 回归、冷启动验证；5/5 checklist 闭环，见 REPORT_SH_FINAL.md）。Reviewer 确认前禁止 P2.5 / Phase 03。
 - 2026-08-25：**Security-Hardening External Review Round 1 = CHANGES_REQUIRED**（状态回退 / icacls 证据 / CI 接入 / preflight 四项）；SH-R2 完成后保持 `AWAITING_REVIEW`（见 REPORT_SH_R2.md）。
+- 2026-08-25：**SH-R2 完成（4/4）**：状态回退 AWAITING_REVIEW、真实 DACL 收紧、secret-scan 双层 CI + fixture、credential preflight/safe-degrade（PR #33，main `70932de`，回填 `a06e7b0`）；agentrouter/claude-opus-5 runtime ctx=1M 实测。
+- 2026-08-25：**Security-Hardening External Review Round 2 = CHANGES_REQUIRED**（真实 cold-start gate / mock 豁免整行 bypass / YAML fail-closed）。
+- 2026-08-25：**SH-R3 完成（3/3）**：真实三阶段 cold-start negative gate + fragment 级豁免 + YAML fail-closed（PR #34，main `1959b5b`，回填 `92c6774`；latest report=REPORT_SH_R3）。
+- 2026-08-25：**Security-Hardening External Review Round 3 = CHANGES_REQUIRED**（gate 脚本可重复性 Byte-exact rollback / probe 结构化 / CURRENT_STATUS truth）；SH-R4 最小收口进行中（分支 `fix/shardening-r4`）。

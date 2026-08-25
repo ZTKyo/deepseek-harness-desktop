@@ -146,6 +146,23 @@ if ($bootMode.mode -ne 'normal') {
     Remove-Item Env:DSH_BOOT_MODE -ErrorAction SilentlyContinue
 }
 
+# --- Security-Hardening 2026-08-25: NOTION_TOKEN via env (no plaintext in config/cmdline) ---
+# dsh web 在 ESM 下 require 不可用,禁止在 cordis.patch.yml 里用 require() 动态读取。
+# 此处从凭据库 ~/.dsh/.credentials.yaml(refs 格式)提取 NOTION_TOKEN,仅注入进程环境;
+# 子进程(ProcessStartInfo UseShellExecute=$false)自动继承,secret 不进配置/命令行/Git/日志。
+$env:NOTION_TOKEN = $null
+$credsFile = Join-Path $env:USERPROFILE '.dsh\.credentials.yaml'
+if (Test-Path $credsFile) {
+    try {
+        $credsRaw = Get-Content $credsFile -Raw -Encoding UTF8
+        if ($credsRaw -match '(?m)^\s*NOTION_TOKEN:\s*"?([^"\r\n]+)"?') {
+            $env:NOTION_TOKEN = $Matches[1].Trim()
+        }
+    } catch {
+        Write-Warning "start-dsh-server: NOTION_TOKEN env 注入失败: $($_.Exception.Message)"
+    }
+}
+
 # Use dsh-launcher.js to spawn the server detached (bypasses cmd.exe which
 # was causing the server process to die shortly after startup).
 $launcher = Join-Path $root 'dsh-launcher.js'

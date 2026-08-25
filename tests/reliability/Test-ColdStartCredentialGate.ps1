@@ -33,7 +33,13 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent (Split-Path -Parent $here)
 $restartScript = Join-Path $repoRoot 'restart-dsh-server-delayed.ps1'
 $credsFile = Join-Path $env:USERPROFILE '.dsh\.credentials.yaml'
-$patchFile = Join-Path $env:USERPROFILE '.dsh\profiles\web\cordis.patch.yml'
+# Contract mode validates the REPO template (always present in the CI checkout);
+# live mode validates the deployed profile file on this machine.
+if ($SkipLive) {
+    $patchFile = Join-Path $repoRoot 'plugins\cordis.patch.yml'
+} else {
+    $patchFile = Join-Path $env:USERPROFILE '.dsh\profiles\web\cordis.patch.yml'
+}
 
 function Get-HttpStatus([int]$Port = 3080) {
     try {
@@ -88,12 +94,15 @@ function Restore-CredentialRef([string]$Ref, [string]$RawLine) {
 
 # ---- contract checks (always run) -------------------------------------------
 $patch = Get-Content -LiteralPath $patchFile -Raw -Encoding UTF8
-Check 'deployed patch has disabled safe-degrade' ($patch -match 'disabled:\s*!!js\s*"!process\.env\.NOTION_TOKEN"') ''
-Check 'deployed patch env uses process.env' ($patch -match 'NOTION_TOKEN:\s*!!js\s*"process\.env\.NOTION_TOKEN') ''
-Check 'deployed patch has no plaintext token' (-not ($patch -match 'NOTION_TOKEN:\s*ntn_')) ''
+Check 'patch has disabled safe-degrade' ($patch -match 'disabled:\s*!!js\s*"!process\.env\.NOTION_TOKEN"') ''
+Check 'patch env uses process.env' ($patch -match 'NOTION_TOKEN:\s*!!js\s*"process\.env\.NOTION_TOKEN') ''
+Check 'patch has no plaintext token' (-not ($patch -match 'NOTION_TOKEN:\s*ntn_')) ''
 Check 'starter performs preflight before inject' (Select-String -Path (Join-Path $repoRoot 'start-dsh-server.ps1') -Pattern 'Invoke-DshNotionPreflight' -Quiet) ''
-$preflightLog = Join-Path $env:LOCALAPPDATA 'DSHHarness\logs\credential-preflight.log'
-Check 'preflight audit log exists' (Test-Path $preflightLog) ''
+$helper = Join-Path $repoRoot 'dsh-credential-preflight.ps1'
+Check 'preflight helper has auditable log function' ((Test-Path $helper) -and (Select-String -Path $helper -Pattern 'Write-DshPreflightResultLog' -Quiet)) ''
+if (-not $SkipLive) {
+    Check 'preflight audit log exists (live)' (Test-Path $preflightLog) ''
+}
 
 if ($SkipLive) {
     Write-Host ''

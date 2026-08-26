@@ -21,6 +21,12 @@ param(
     # Phase 02 R7 (R6-1): caller reason recorded in the attempt ledger (Guardian
     # passes its restart reason; SafeMode/Transaction pass theirs).
     [string]$Reason = $null,
+    # P2.5 防回归 dry-run：只做插件挂载预检（Assert-DshPluginModules），不重启。
+    # 供部署流水线在重启前调用；与 tools\install-plugin.mjs --check 互补。
+    [switch]$PreflightOnly,
+    # P2.5 preflight-only 时的配置目录覆盖（默认取真实预设/配置目录）
+    [string]$PresetDir = (Join-Path $env:USERPROFILE '.dsh\.agent-presets\autonomous'),
+    [string]$ProfileDir = (Join-Path $env:USERPROFILE '.dsh\profiles\web'),
     # Phase 02 R5 (R4-B2): one-shot "restart AND wait for exact terminal" — the
     # caller (SafeMode / Transaction / GUI) gets the detailed worker's terminal
     # state, NOT the outer wrapper's exit. Equivalent to calling with -AttemptId
@@ -39,6 +45,79 @@ New-Item -ItemType Directory -Force -Path $attemptsDir | Out-Null
 
 function Write-Log([string]$msg) {
     Add-Content $log ("{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg)
+}
+
+# ---------- P2.5 防回归预检：重启前解析插件挂载引用 ----------
+# 根因（Incident 2026-08-26 17:39-18:37）：agent.cordis.yml 挂载 './context-memory.mjs'
+# 是相对**预设目录**解析的；部署时只同步到 profiles\web，导致重启后 mount 解析失败、
+# 会话 resume 被阻断（Codex emergency recovery 只补文件，非正式闭环）。
+# 本预检在停旧服务**之前**执行：所有 'name: "./*.mjs|*.js"' 引用必须能在其配置所在
+# 目录解析到真实文件，且配置 YAML 语法有效（!!js 容忍，与 guardian Test-YamlFile 同口径）。
+# 任何缺失 → 中止本次重启（throw → finally 清锁），旧服务保持运行，不产生"装一半就重启"。
+function Assert-DshPluginModules {
+    param(
+        [string]$PresetDir = (Join-Path $env:USERPROFILE '.dsh\.agent-presets\autonomous'),
+        [string]$ProfileDir = (Join-Path $env:USERPROFILE '.dsh\profiles\web')
+    )
+    $configs = @(
+        @{ Path = (Join-Path $PresetDir 'agent.cordis.yml'); Label = 'preset agent.cordis.yml' },
+        @{ Path = (Join-Path $ProfileDir 'cordis.patch.yml'); Label = 'profile cordis.patch.yml' }
+    )
+    # 指向 js-yaml 包**目录**（require 目录 → package.json main 生效）。
+    # 教训：node process.argv 索引 = argv[0] node / argv[1] 脚本自身 / argv[2] 起才是
+    # 真实参数——probe 里 js-yaml 取 argv[2]、配置文件取 argv[3]，别再用 argv[1]。
+    $jsYamlCandidates = @(
+        (Join-Path $env:APPDATA 'npm\node_modules\js-yaml'),
+        (Join-Path $env:APPDATA 'npm\node_modules\@deepseek-ai\dsh\node_modules\js-yaml')
+    )
+    $jsYaml = $jsYamlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    foreach ($cfg in $configs) {
+        $p = $cfg.Path
+        if (-not (Test-Path $p)) { Write-Log ("preflight: {0} not present; skipping" -f $cfg.Label); continue }
+        $dir = Split-Path $p -Parent
+        $text = Get-Content $p -Raw
+        # YAML 语法校验（!!js 容忍；语义求值归 cordis）
+        if ($jsYaml) {
+            $code = 'const fs=require("fs"),y=require(process.argv[2]);try{const s=fs.readFileSync(process.argv[3],"utf8").replace(/!!js(\s+)/g,"str$1");y.load(s);console.log("OK")}catch(e){console.log("ERR: "+e.message)}'
+            $probe = Join-Path $env:TEMP ('dsh-yaml-probe-' + [guid]::NewGuid().ToString('N') + '.js')
+            Set-Content -Path $probe -Value $code -Encoding UTF8
+            $yamlOut = (& node $probe $jsYaml $p 2>$null | Out-String).Trim()
+            $nodeExit = $LASTEXITCODE
+            Remove-Item $probe -Force -ErrorAction SilentlyContinue
+            if ($nodeExit -ne 0 -or $yamlOut -notmatch '^OK') {
+                Write-Log ("preflight FAIL: {0} YAML 无效: {1}" -f $cfg.Label, $yamlOut)
+                throw ("restart preflight failed: {0} YAML 无效: {1}" -f $cfg.Label, $yamlOut)
+            }
+        } else {
+            Write-Log ("preflight warn: js-yaml not found; YAML 语法检查跳过")
+        }
+        # 解析相对模块引用（name: './xxx.mjs|.js'）
+        $refs = [regex]::Matches($text, "name:\s*['""](\./[^'""]+?\.(?:mjs|js))['""]") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+        $missing = @()
+        foreach ($r in $refs) {
+            $target = Join-Path $dir $r
+            if (-not (Test-Path $target)) { $missing += $r }
+        }
+        if ($missing.Count -gt 0) {
+            Write-Log ("preflight FAIL: {0} 挂载引用缺失文件 → {1}（重启将阻断；先运行 tools\install-plugin.mjs 同步）" -f $cfg.Label, ($missing -join ', '))
+            throw ("restart preflight failed: {0} 挂载引用缺失文件 → {1}。请先执行 node tools\install-plugin.mjs --plugin <name> 同步" -f $cfg.Label, ($missing -join ', '))
+        }
+        Write-Log ("preflight OK: {0} 相对挂载全部可解析 ({1})" -f $cfg.Label, ($refs -join ', '))
+    }
+}
+
+# P2.5 dry-run：只做插件挂载预检，不重启（供部署流水线在真正重启前调用）
+if ($PreflightOnly) {
+    try {
+        Assert-DshPluginModules -PresetDir $PresetDir -ProfileDir $ProfileDir
+        Write-Log "preflight only: PASS（未执行重启）"
+        Write-Output "PREFLIGHT PASS"
+        exit 0
+    } catch {
+        Write-Log ("preflight only: FAIL - {0}" -f $_.Exception.Message)
+        Write-Output ("PREFLIGHT FAIL: " + $_.Exception.Message)
+        exit 1
+    }
 }
 
 # ---------- WAIT MODE: block until a specific attempt reaches a terminal state ----------
@@ -184,6 +263,9 @@ $lockPayload = @{ pid = $PID; ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); p
 try { Set-Content -Path $lockFile -Value $lockPayload -Encoding UTF8 } catch { Write-Log "lock write failed: $($_.Exception.Message)" }
 
 try {
+
+# P2.5 防回归：停旧服务前先做插件挂载预检（缺失模块 → 中止，旧服务不动）
+Assert-DshPluginModules
 
 $budgetGate = Test-DshRestartAllowed
 if (-not $budgetGate.Allowed) { throw "restart budget blocked: $($budgetGate.Reason)" }

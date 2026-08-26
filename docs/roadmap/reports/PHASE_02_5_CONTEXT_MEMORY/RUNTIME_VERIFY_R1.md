@@ -5,6 +5,11 @@
 > autonomous 预设 compaction 组已插入 `context-memory` 行（enabled: true，YAML 校验通过）；
 > 单元测试 53/53 PASS；服务即将延迟重启以加载插件。
 
+> ✅ **已完成（2026-08-26）**：全部验证项执行完毕，证据汇总见 `REPORT_R1.md`。
+> 关键结果：插件真实加载并三次写盘（store v1/v2/v3）；真实数据渲染 4350 字符观察文本；
+> 53/53 单测 PASS；provider-switch 真实切换未自然发生（T6 synthetic 覆盖）；
+> token A/B 为 synthetic ratio=0.054（真实 A/B 留待跨天任务）。状态：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW。
+
 ## 重启后按序执行
 
 1. **加载确认**：`Select-String "context-memory" %LOCALAPPDATA%\DSHHarness\logs\dsh-server-3080.log`（追加模式日志）

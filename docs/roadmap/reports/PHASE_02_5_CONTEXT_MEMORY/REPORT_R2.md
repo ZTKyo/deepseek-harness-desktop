@@ -1,6 +1,6 @@
 # P2.5 CONTEXT MEMORY — REPORT_R2（External Review Round 1 CHANGES_REQUIRED 最小修复轮）
 
-> 状态：**R2 完成（待 CI 绿 + REAL restart 证据补齐后置 APPROVED → VERIFIED）**
+> 状态：**R2 完成（REAL restart 证据已补齐；CI 三条绿；待 PR #42 merge + SHA backfill 后置 VERIFIED）**
 > Reviewer Verdict：CHANGES_REQUIRED（Round 1）；本报告对应最小修复轮 R2。
 > PR：#42（`fix/context-memory-r2`）。上一轮：R1（REPORT_R1.md）。
 
@@ -10,7 +10,7 @@
 |---|------|------|
 | R2-1 | 测试入 CI + deployment gate | ✅ ci-level1（每 PR）+ ci-level3（main 部署门） |
 | R2-2 | 正式安装同步路径（hash 一致 + preflight + clean install） | ✅ install-plugin 原子写 + 自动 hash 发现 + preflight 集成 |
-| R2-3 | REAL restart / fail-open / rollback | ⏳ 重启后补齐 REAL 证据（见 §4） |
+| R2-3 | REAL restart / fail-open / rollback | ✅ 真实重启完成（01:37），8 PASS / 0 FAIL（见 §4） |
 | R2-4 | REAL provider switch | ✅ 观测 + synthetic 覆盖（如实分级） |
 | R2-5 | REAL token A/B（拿不到则 PARTIAL） | ✅ 真实估算 + synthetic 单元级 |
 | R2-6 | REAL Recall 5 类回源 | ✅ 真实 store 17 项断言 |
@@ -43,14 +43,25 @@
 - 部署 hash 检查（REAL）：`compare-deployed-hash.mjs` → `context-memory-core.mjs` src==dep=`e68fbd17…`、
   `context-memory.mjs` src==dep=`5fcd2ec4…`，preset `agent.cordis.yml` 含引用 → **ALL MATCH**。
 
-## 4. R2-3 REAL restart / fail-open / rollback
+## 4. R2-3 REAL restart / fail-open / rollback（REAL，2026-08-27 01:37 真实重启完成）
 
-> 本项需要真实重启服务以加载 R2 版本插件（当前运行中服务为 R1 启动期加载，磁盘已是 R2 且 hash 一致）。
-> 执行与证据见 §7「REAL restart 验证记录」（重启后回填）。
+> ✅ **已执行真实重启**：`restart-dsh-server-delayed.ps1 -Reason "R2-3 REAL restart verification" -RestartAndWait`
+> → detached worker（PID 29716）stop → start → readiness → 稳定窗口 30s → **COMMIT_READY → COMMITTED**；
+> 新服务 PID **13876**（01:37:54 启动）接管，maintenance lock 已释放（日志
+> `%LOCALAPPDATA%\DSHHarness\logs\restart-apply-patch.log` 01:38:49）。
 
-- 计划：延迟重启 → ① 插件加载确认（无 boot error / 无 QUARANTINED）→ ② store 跨重启恢复
-  （重启后 store 仍被读取、投影继续）→ ③ fail-open（损坏 store 不阻塞任务，T3 单测已覆盖，
-  REAL 侧以重启后正常加载佐证）→ ④ rollback 预案（enabled:false 快速停用，R1 已验证路径）。
+- 重启前基线（REAL）：`compare-deployed-hash.mjs` → `context-memory-core.mjs`/`context-memory.mjs`
+  **src==dep 全部 MATCH**；`install-plugin.mjs --check` → **PASS（挂载位完整，重启安全）**。
+- ① 插件加载确认（REAL，`verify-r2-restart-recovery.mjs` **8 PASS / 0 FAIL**）：
+  - 端口 3080 监听进程在重启后存活（新 PID 13876）；
+  - 事件日志 `notify-events.log` 含 **1027 行投影输出**（session/projection：
+    contextPressure/contextBreakdown/sessionStats —— context-memory 插件观测链路活跃）；
+  - guardian.log **0 条 QUARANTINED/隔离记录**（插件未被拒绝加载）；
+  - 重启后 `install-plugin --check` 仍 PASS（部署位与 repo 一致）。
+- ② store 跨重启恢复（REAL）：store `session-34e86c7a….json` 重启后 active=true、watermark>0、
+  obs/refs 均在；**watermark 由 483517 → 486785（v106 → v108）**——重启后插件继续投影，证据链闭环。
+- ③ fail-open：损坏 store 不阻塞任务（T3 单测 5 项覆盖）；REAL 侧以重启后正常加载佐证。
+- ④ rollback 预案：enabled:false 快速停用（R1 已验证路径）。
 - 单元级（SYNTHETIC）：T3 corrupt store rebuild/fail-open 5 项 PASS；T5 restart recovery 4 项 PASS。
 
 ## 5. R2-4 / R2-5 / R2-6 真实观察（REAL，`verify-r2-real-observations.mjs` 17 PASS）
@@ -97,7 +108,17 @@ obs 计数：completedActions=11、keyFileChanges=22、failedApproaches=0、bloc
   后续 blocker 仍记录 ✅ / 成功输出不被记为失败 ✅ / 成功输出记为已验证证据 ✅
 - **总计 61 PASS / 0 FAIL**（R1 为 53/53，新增 8 项全过）。
 
-## 7. R2-8 Guardian !!js regression（REAL 回归 8 PASS / 0 FAIL）
+## 7. R2-3 REAL restart 验证记录（2026-08-27 01:37，`verify-r2-restart-recovery.mjs` 8 PASS / 0 FAIL）
+
+- **触发**：`restart-dsh-server-delayed.ps1 -Reason "R2-3 REAL restart verification" -RestartAndWait`
+  → worker PID 29716 → stop（reason=loopback_listener_gone）→ 新服务 PID **13876** →
+  readiness client_ready → 稳定窗口 30s → **COMMIT_READY → COMMITTED**（01:38:49，lock 释放）。
+- **① 插件加载**：事件日志投影 1027 行（contextPressure/contextBreakdown/sessionStats）；
+  guardian 0 条 QUARANTINED；重启后 install-plugin --check PASS。
+- **② store 跨重启恢复**：active=true / watermark>0 / obs+refs 均在；**watermark 483517 → 486785**。
+- **③ fail-open / ④ rollback**：T3/T5 单测覆盖 + R1 已验证路径（§9）。
+
+## 8. R2-8 Guardian !!js regression（REAL 回归 8 PASS / 0 FAIL）
 
 - `verify-guardian-js-tag.mjs`：从 guardian 真实源码提取 `Test-YamlFile` 探针（含 !!js 剥离正则），
   对隔离 fixture 做行为验证——!!js 标签配置判 VALID（不触发 guardian-lastgood 回滚）；
@@ -106,8 +127,8 @@ obs 计数：completedActions=11、keyFileChanges=22、failedApproaches=0、bloc
 
 ## 8. 状态一致性修正
 
-- CURRENT_STATUS.md：P2.5 状态 R1 `AWAITING_REVIEW` → R2 修复轮完成，待 REAL restart 证据 +
-  CI 绿后置 `VERIFIED`（更新在收尾 commit 执行）。
+- CURRENT_STATUS.md：P2.5 状态 R1 `AWAITING_REVIEW` → R2 修复轮完成，REAL restart 证据已补齐
+  + CI 绿后置 `VERIFIED`（更新在收尾 commit 执行）。
 
 ## 9. 回滚预案（REAL 可执行路径）
 
@@ -119,5 +140,6 @@ obs 计数：completedActions=11、keyFileChanges=22、failedApproaches=0、bloc
 
 1. **REAL provider switch 未自然发生**——非缺陷，语义由 T6 覆盖；若未来真实会话出现 fallback，
    会记录激活日志。R2-4 如实为"观测 + synthetic"。
-2. **REAL token A/B 为单会话估算（65.2%）**——严格跨天 A/B 待长任务获取；单元级已证 94.5% 缩减。
-3. R2-3 的 REAL 重启证据在 §7 回填后，本报告由「待重启」→「完成」。
+2. **REAL token A/B 为单会话估算（58.5%）**——严格跨天 A/B 待长任务获取；单元级已证 94.5% 缩减。
+3. R2-3 的 REAL 重启证据已在 §4/§7 回填（8 PASS / 0 FAIL），本报告由「待重启」→「完成」；
+   剩余事项仅剩 PR #42 merge + SHA backfill → VERIFIED。

@@ -59,3 +59,12 @@
 - 2026-08-23（Phase 01 R1）：建立本目录，从 Live Runtime 收口插件源码；修正 notify/router/tool-output-offload 漂移。
 - 2026-08-23（Phase 01 R2）：收口精确重复——移除 plugins/ 中非 Cordis 插件的 `goal-recovery.mjs`、
   `dsh-event-notify.mjs` 副本（根目录为消费者 canonical 位置）。
+
+## P2.5 CONTEXT MEMORY 插件（2026-08-26 新增）
+
+| 插件文件 | 部署目标 (~/.dsh/profiles/web/) | 功能 |
+|---|---|---|
+| context-memory.mjs | ✅（挂载于 autonomous 预设 compaction 组：tool-output-offload 之后、compaction-basic 之前） | 上下文记忆投影（Recent Window / Observation / Reflection / Recall / provider-switch activation）；单开关 config.enabled 或 env CM_DISABLED |
+| context-memory-core.mjs | ✅ | 纯函数核心（被 context-memory.mjs import，零 IO） |
+
+测试：`tests/context-memory/verify-context-memory.mjs`。设计/审计：`docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/`。

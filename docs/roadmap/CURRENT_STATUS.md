@@ -145,3 +145,9 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
   5 笔（COMMITTED 4），演练窗恰 2 笔全 COMMITTED，零重复点火。端口属主误判坑（tailscaled 持有 3080
   非 loopback 监听行）已沉淀 KNOWN_ISSUES.md。七项 REAL Gate 证据全部就绪（①见 #43/#44 系列）；
   本节连同 P2.8/P2.9/P2.10 随下一分支 PR 入库。状态保持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R4 Gate-7 证据入库收口**：PR #45（`fix/context-memory-r4-gate7`）CI L1/L2/L3 三绿
+  → squash MERGED（merge=`7fa327a`），本行为其纯状态 backfill。入库内容：⑦kill-switch REAL 双向回滚
+  演练（§P2.10）+ ④REAL 5 类回源 v2（§P2.9）+ ⑤⑥corrupt/missing fail-open 活体字节演练（§P2.8）及
+  佐证 JSON/脚本；B3/B4 合同全关。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；
+  P3=BLOCKED 不变。

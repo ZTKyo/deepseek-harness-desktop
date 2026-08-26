@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -66,13 +67,25 @@ function sha256(p) {
   return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
-// 从 dsh 安装点找 js-yaml（guardian Find-JsYaml 同策略）
+// 从 dsh 安装点找 js-yaml（guardian Find-JsYaml 同策略；扩展候选以覆盖
+// GitHub Actions Windows runner 的 npm 全局 prefix = C:\npm\prefix 等差异）
 function findJsYaml() {
   const candidates = [
+    // 常规 npm 全局安装点
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml'),
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml'),
+    // npm root -g 的输出（npm 全局 prefix；CI runner 常为 C:\npm\prefix）
+    ...(() => { try {
+        const root = spawnSync('npm', ['root', '-g'], { encoding: 'utf8' }).stdout.trim();
+        return root ? [path.join(root, 'js-yaml')] : [];
+      } catch { return []; } })(),
+    // NODE_PATH（CI 中常见显式设置）
+    ...(process.env.NODE_PATH ? [path.join(process.env.NODE_PATH, 'js-yaml')] : []),
   ];
+  const seen = new Set();
   for (const c of candidates) {
+    if (!c || seen.has(c)) continue;
+    seen.add(c);
     try { if (fs.existsSync(path.join(c, 'package.json'))) return c; } catch {}
   }
   return null;

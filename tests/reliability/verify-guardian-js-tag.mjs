@@ -33,6 +33,24 @@ const jsyamlCandidates = [
     const prefix = process.env.npm_config_prefix || process.env.NPM_CONFIG_PREFIX;
     return prefix ? [path.join(prefix, 'node_modules', 'js-yaml', 'index.js')] : [];
   })(),
+  // `npm root -g` spawn 兜底：不依赖任何环境变量，CI 实测最可靠
+  // （install-plugin 门禁正是靠这条在 Windows runner 找到 js-yaml）。
+  // 输出即 <prefix>/node_modules；Windows 上需 npm.cmd + shell:true。
+  // 注意：npmrc 的 prefix 常写成 `${APPDATA}\npm` 这类 env 占位符，npm root
+  // 会原样输出字面量，必须手动展开 ${VAR}/$VAR 才能得到真实路径。
+  ...(() => {
+    try {
+      const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const r = spawnSync(cmd, ['root', '-g'],
+        { encoding: 'utf8', shell: process.platform === 'win32' });
+      const out = (r.stdout || '').trim();
+      if (!out) return [];
+      // expand ${APPDATA} / $APPDATA env placeholders (npmrc prefix style)
+      const expanded = out.replace(/\$\{(\w+)\}/g, (m, k) => process.env[k] || m)
+                          .replace(/\$(\w+)/g, (m, k) => process.env[k] || m);
+      return [path.join(expanded, 'js-yaml', 'index.js')];
+    } catch { return []; }
+  })(),
   // NODE_PATH 多路径（Windows 分号 / Unix 冒号，path.delimiter 处理）
   ...(process.env.NODE_PATH
     ? process.env.NODE_PATH.split(path.delimiter).map((p) => p.trim()).filter(Boolean)

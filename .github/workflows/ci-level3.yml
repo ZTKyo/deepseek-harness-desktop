@@ -122,7 +122,8 @@ jobs:
           # P2.5 R2-2: the authoritative installer's atomic-write + auto hash
           # check must hold on the deployment gate too (a broken installer is a
           # restart-blocker-class defect). Temp dirs only, never touches ~/.dsh.
-          npm install -g js-yaml 2>&1 | Out-Null
+          npm install -g js-yaml
+          if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: npm install js-yaml FAILED"; exit 1 }
           node tests\install-plugin\verify-install-plugin.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: INSTALL-PLUGIN REGRESSION FAIL"; exit 1 }
           Write-Host 'PASS: install-plugin regression on deployment gate'
@@ -134,6 +135,13 @@ jobs:
           # VALID (not INVALID, which would roll back guardian-lastgood).
           # Source-integrity + behavioral: extracts guardian's real probe code
           # and runs it against isolated fixtures.
+          # js-yaml must exist for the extracted probe to run: install it the
+          # same way the install-plugin gate does, WITHOUT swallowing failures
+          # (a silent npm failure previously left the probe with no js-yaml),
+          # and export NODE_PATH=(npm root -g) exactly like the YAML-parse gate.
+          npm install -g js-yaml
+          if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: npm install js-yaml FAILED"; exit 1 }
+          $env:NODE_PATH = (npm root -g)
           node tests\reliability\verify-guardian-js-tag.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host 'DEPLOYMENT GATE: GUARDIAN !!JS REGRESSION FAIL'; exit 1 }
           Write-Host 'PASS: guardian !!js regression on deployment gate'

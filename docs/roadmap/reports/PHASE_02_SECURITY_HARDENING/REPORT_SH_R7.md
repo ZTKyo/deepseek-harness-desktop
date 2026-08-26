@@ -126,7 +126,7 @@ K1b credential DACL unchanged by restore owner
 
 - PR：`fix/shardening-r7`
 - CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- Merge SHA：**`52176a77`**（2026-08-26 merged，PR #38）
 
 ## 8. Final Verdict
 

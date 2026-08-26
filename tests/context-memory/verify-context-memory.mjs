@@ -1,15 +1,16 @@
-// verify-context-memory.mjs —— P2.5 CONTEXT MEMORY Minimal V1 单元回归（R1）
+// verify-context-memory.mjs —— P2.5 CONTEXT MEMORY Minimal V1 单元回归（R1+R2）
 //
-// 覆盖 DESIGN_R1.md §5 验证映射的单元层：T1-T10 + 区段选择边界。
+// 覆盖 DESIGN_R1.md §5 验证映射的单元层：T1-T11（含 R2-7 false-completion 回归）。
 // MiniSession 模拟官方 surface fold 语义（含 provenance 校验），非官方代码。
-// 运行：node tests/context-memory/verify-context-memory.mjs（fail → exit 1）
+// 路径全部 repo-relative（CI 可移植）：运行 node tests/context-memory/verify-context-memory.mjs
+// （工作目录 = repo 根，或任意目录均可；fail → exit 1）
 
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const REPO = "C:/Users/Administrator/Desktop/sdeepseek harness/_release-staging";
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = await import(pathToFileURL(path.join(REPO, "plugins/context-memory-core.mjs")).href);
 const MOD_PATH = path.join(REPO, "plugins/context-memory.mjs");
 const MOD = await import(pathToFileURL(MOD_PATH).href);
@@ -391,6 +392,50 @@ section("T10: token A/B (synthetic scenario, est-tokens basis)");
   const ratio = after / baseline;
   console.log(`        [synthetic] baseline=${baseline} tok, after=${after} tok, ratio=${ratio.toFixed(3)}`);
   assert(after < baseline * 0.75, `projected surface ≥25% smaller than raw baseline (ratio=${ratio.toFixed(3)})`);
+}
+
+// ════════════════════════ T11: R2-7 false-completion 回归 ════════════════════════
+section("T11: R2-7 blocker close is evidence-linked (no false completion)");
+{
+  // 场景 A：一个真实 blocker + 后续【无关】PASS → blocker 必须保留
+  {
+    const s = new MiniSession("t11a");
+    addUser(s, "Investigate module alpha crash on startup.");
+    addToolCallPair(s, "pwsh", "Error: module alpha crashed with ENOENT at boot (exit code 1)");
+    addToolCallPair(s, "pwsh", "PASS all tests for module beta — 42 green, 0 failed");
+    const obs = CORE.buildObservation(s.events, s.surface.nodes, null);
+    assert(obs.blockers.length === 1, "A: unrelated PASS must NOT clear the blocker");
+    assert(obs.blockers[0].t.includes("alpha"), "A: blocker text still references alpha");
+  }
+  // 场景 B：真实 blocker + 后续【相关】PASS（同一主题）→ blocker 关闭
+  {
+    const s = new MiniSession("t11b");
+    addUser(s, "Fix module alpha startup crash.");
+    addToolCallPair(s, "pwsh", "Error: module alpha crashed with ENOENT at boot (exit code 1)");
+    addToolCallPair(s, "pwsh", "PASS module alpha now boots cleanly: ENOENT resolved, 0 errors");
+    const obs = CORE.buildObservation(s.events, s.surface.nodes, null);
+    assert(obs.blockers.length === 0, "B: related PASS closes the blocker");
+  }
+  // 场景 C：PASS 在前、blocker 在后 → blocker 照常记录（不回看清空）
+  {
+    const s = new MiniSession("t11c");
+    addUser(s, "Verify module gamma.");
+    addToolCallPair(s, "pwsh", "PASS module gamma checks out");
+    addToolCallPair(s, "pwsh", "Error: module delta then failed with EPERM (exit code 1)");
+    const obs = CORE.buildObservation(s.events, s.surface.nodes, null);
+    assert(obs.blockers.length === 1 && obs.blockers[0].t.includes("delta"), "C: later blocker still recorded");
+    assert(obs.verifiedEvidence.some((e) => e.t.includes("gamma")), "C: earlier PASS kept as evidence");
+  }
+  // 场景 E：R2-7 分类边界——"0 failed / 0 errors" 计数语境的成功输出不得被 RX_ERROR 吞掉
+  {
+    const s = new MiniSession("t11e");
+    addUser(s, "Run the full test suite for module omega.");
+    addToolCallPair(s, "pwsh", "PASS all tests for module omega — 42 passed, 0 failed, 0 errors");
+    const obs = CORE.buildObservation(s.events, s.surface.nodes, null);
+    assert(obs.blockers.length === 0, "E: count-context success output is NOT an error");
+    assert(obs.failedApproaches.length === 0, "E: success output not recorded as failed approach");
+    assert(obs.verifiedEvidence.some((e) => e.t.includes("omega")), "E: success output recorded as verified evidence");
+  }
 }
 
 console.log(`\n${"=".repeat(60)}`);

@@ -107,9 +107,27 @@ function Assert-DshPluginModules {
 }
 
 # P2.5 dry-run：只做插件挂载预检，不重启（供部署流水线在真正重启前调用）
+# R2-2: 预检 = YAML 语法 + 挂载引用存在性（Assert-DshPluginModules）+
+#       hash 一致性（install-plugin.mjs --check，目标位必须是 repo 当前版本，
+#       防止"文件在但内容是旧版"的重启后静默跑旧插件）。
 if ($PreflightOnly) {
     try {
         Assert-DshPluginModules -PresetDir $PresetDir -ProfileDir $ProfileDir
+        # R2-2: hash 一致校验——交给权威安装器（同一套 sha256 口径，避免第二套校验逻辑）
+        $installer = Join-Path $root 'tools\install-plugin.mjs'
+        if (Test-Path $installer) {
+            Write-Log "preflight: invoking install-plugin --check (hash 一致性)"
+            & node $installer --check --preset $PresetDir --profile $ProfileDir 2>&1 | ForEach-Object {
+                Write-Log ("install-plugin check: " + $_)
+            }
+            if ($LASTEXITCODE -ne 0) {
+                Write-Log "preflight FAIL: install-plugin --check 未通过（挂载位 hash 与 repo 不一致或缺失）"
+                throw "restart preflight failed: install-plugin --check 未通过。请先执行 node tools\install-plugin.mjs --plugin <name> 同步后再重启"
+            }
+            Write-Log "preflight OK: install-plugin --check PASS（挂载位 hash 与 repo 一致）"
+        } else {
+            Write-Log ("preflight warn: installer not found at {0}; hash check skipped" -f $installer)
+        }
         Write-Log "preflight only: PASS（未执行重启）"
         Write-Output "PREFLIGHT PASS"
         exit 0

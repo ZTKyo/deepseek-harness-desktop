@@ -10,6 +10,7 @@ on:
       - 'dsh-launcher.js'
       - 'plugins/*.mjs'
       - 'cordis.patch.yml'
+      - 'tests/context-memory/*'
   workflow_dispatch:
 
 jobs:
@@ -49,7 +50,8 @@ jobs:
             # version boots with REAL repo plugins (not an empty profile).
             $active = @(
               'completion-notify.mjs','keepalive-patch.mjs',
-              'model-selection-guard.mjs','execution-continuity.mjs'
+              'model-selection-guard.mjs','execution-continuity.mjs',
+              'context-memory.mjs'
             )
             # copy every plugin module (main + their core/helper deps) so
             # imports resolve inside the profile dir
@@ -98,6 +100,38 @@ jobs:
           }
           Write-Host 'PASS: dsh api_ready with sanitized active plugin manifest'
           Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+
+      - name: Context-memory unit regression on main-branch gate (P2.5 R2)
+        shell: pwsh
+        run: |
+          # P2.5 R2 (R2-1): the deployment gate re-runs the full context-memory
+          # unit suite (incl. R2-7 blocker-close semantics) so a regression
+          # cannot reach main even if Level 1 is skipped or re-based.
+          node tests\context-memory\verify-context-memory.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: CONTEXT-MEMORY REGRESSION FAIL"; exit 1 }
+          Write-Host 'PASS: context-memory unit regression on deployment gate'
+
+      - name: Install-plugin regression on main-branch gate (P2.5 R2-2)
+        shell: pwsh
+        run: |
+          # P2.5 R2-2: the authoritative installer's atomic-write + auto hash
+          # check must hold on the deployment gate too (a broken installer is a
+          # restart-blocker-class defect). Temp dirs only, never touches ~/.dsh.
+          npm install -g js-yaml 2>&1 | Out-Null
+          node tests\install-plugin\verify-install-plugin.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: INSTALL-PLUGIN REGRESSION FAIL"; exit 1 }
+          Write-Host 'PASS: install-plugin regression on deployment gate'
+
+      - name: Guardian !!js regression on main-branch gate (P2.5 R2-8)
+        shell: pwsh
+        run: |
+          # R2-8: guardian's Test-YamlFile must treat !!js-tagged configs as
+          # VALID (not INVALID, which would roll back guardian-lastgood).
+          # Source-integrity + behavioral: extracts guardian's real probe code
+          # and runs it against isolated fixtures.
+          node tests\reliability\verify-guardian-js-tag.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host 'DEPLOYMENT GATE: GUARDIAN !!JS REGRESSION FAIL'; exit 1 }
+          Write-Host 'PASS: guardian !!js regression on deployment gate'
 
       - name: Release identity attestation (source -> deployment manifest)
         shell: pwsh

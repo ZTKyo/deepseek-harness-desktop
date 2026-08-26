@@ -107,7 +107,7 @@ function collectModuleRefs(doc, acc = []) {
 // 校验单个配置文件：所有相对模块引用必须在其所在目录存在
 function verifyConfig(configPath) {
   const dir = path.dirname(configPath);
-  if (!fs.existsSync(configPath)) return { ok: true, skipped: 'config not present', refs: [] };
+  if (!fs.existsSync(configPath)) return { ok: true, skipped: 'config not present', refs: [], missing: [] };
   const text = fs.readFileSync(configPath, 'utf8');
   const { ok, reason, doc } = loadYamlLoose(text);
   if (!ok) return { ok: false, reason: `YAML 解析失败: ${reason}`, refs: [], missing: [] };
@@ -118,6 +118,33 @@ function verifyConfig(configPath) {
     return { ok: false, reason: `挂载引用缺失文件 → ${missing.join(', ')}（重启将阻断；请先同步）`, refs, missing, dir };
   }
   return { ok: true, refs, missing, dir };
+}
+
+// R2-2: 原子写——先写同卷 tmp 文件再 rename 覆盖，避免"复制到一半崩溃留下半文件"。
+// Windows 下 rename 覆盖已存在文件是原子的（同一卷上），这是"装一半就重启"的最后一公里防线。
+function atomicCopy(src, dst) {
+  const dir = path.dirname(dst);
+  const tmp = path.join(dir, `.${path.basename(dst)}.tmp-${process.pid}-${Date.now()}`);
+  try {
+    fs.copyFileSync(src, tmp);
+    fs.renameSync(tmp, dst);
+  } catch (e) {
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+    throw e;
+  }
+}
+
+// R2-2: 从配置文件收集所有相对挂载引用的 basename（去重），供 hash 自动校验。
+// 这样 --check / --dry-run 不指定 --plugin 时，也能发现"目标位是旧版"。
+function collectRefBasenames(configPaths) {
+  const names = new Set();
+  for (const cp of configPaths) {
+    if (!fs.existsSync(cp)) continue;
+    const r = verifyConfig(cp);
+    if (!r.ok || r.skipped) continue;
+    for (const ref of r.refs) names.add(path.basename(ref));
+  }
+  return [...names];
 }
 
 // ---- main --------------------------------------------------------------------
@@ -150,36 +177,53 @@ if (plugins.length === 0) {
   }
 }
 
-// 2) 同步到各挂载位（非 dry-run/check）
+// 2) 同步到各挂载位（非 dry-run/check）——原子写（tmp+rename）
 const targets = [presetDir, profileDir];
 if (!dryRun && !checkOnly) {
   for (const t of targets) {
     if (!fs.existsSync(t)) { fail(`目标目录不存在: ${t}`); continue; }
     for (const sf of sourceFiles) {
       const dst = path.join(t, sf.name);
-      try { fs.copyFileSync(sf.src, dst); pass(`已同步 ${sf.name} → ${path.relative(os.homedir(), dst)}`); }
+      try { atomicCopy(sf.src, dst); pass(`已同步 ${sf.name} → ${path.relative(os.homedir(), dst)} (原子写)`); }
       catch (e) { fail(`同步失败 ${dst}: ${e.message}`); }
     }
   }
 }
 
 // 3) 校验（对目标位实际文件，而非源）——永远执行
+// R2-2: 即使 sourceFiles 为空（--check 无 --plugin），也自动发现配置挂载引用做 hash 校验
 const configs = [
   { path: path.join(presetDir, 'agent.cordis.yml'), label: 'preset agent.cordis.yml' },
   { path: path.join(profileDir, 'cordis.patch.yml'), label: 'profile cordis.patch.yml' },
 ];
+// 若显式指定了 --plugin，以显式集为准；否则自动从配置发现所有挂载引用（R2-2: --check 也能做 hash 校验）
+const allSourceFiles = [...sourceFiles];
+if (sourceFiles.length === 0) {
+  const autoRefs = collectRefBasenames(configs.map((c) => c.path));
+  for (const bn of autoRefs) {
+    const src = path.join(PLUGINS_DIR, bn);
+    if (fs.existsSync(src)) {
+      const h = sha256(src);
+      allSourceFiles.push({ name: bn, src, sha: h });
+      pass(`自动发现源文件 ${bn} (${h.slice(0, 12)}…)`);
+    }
+  }
+}
 for (const c of configs) {
   const r = verifyConfig(c.path);
   if (r.skipped) { pass(`${c.label}: ${r.skipped}`); continue; }
   if (!r.ok) { fail(`${c.label}: ${r.reason}`); continue; }
   pass(`${c.label}: YAML 有效，${r.refs.length} 个相对挂载全部可解析`);
-  // 插件级核对：目标位确实存在本插件的文件（r.dir = 配置所在目录）
-  for (const sf of sourceFiles) {
-    const tgt = path.join(r.dir, sf.name);
-    if (!fs.existsSync(tgt)) { fail(`${c.label}: 目标位缺少 ${sf.name}`); continue; }
+  // 插件级核对：对每个挂载引用文件，若 repo 有同名源则对比 hash（R2-2: 自动扫描所有挂载引用）
+  for (const ref of r.refs) {
+    const refName = path.basename(ref);
+    const sf = allSourceFiles.find((f) => f.name === refName);
+    if (!sf) continue; // 非本工具管理的插件，跳过 hash 校验
+    const tgt = path.join(r.dir, refName);
+    if (!fs.existsSync(tgt)) { fail(`${c.label}: 目标位缺少 ${refName}`); continue; }
     const th = sha256(tgt);
-    if (th !== sf.sha) { fail(`${c.label}: ${sf.name} 校验和不一致（目标位是旧版？重新同步）`); }
-    else { pass(`${c.label}: ${sf.name} 与 repo 一致`); }
+    if (th !== sf.sha) { fail(`${c.label}: ${refName} 校验和不一致（目标位=${th.slice(0,12)}…，源=${sf.sha.slice(0,12)}…；是旧版？重新同步）`); }
+    else { pass(`${c.label}: ${refName} 与 repo 一致`); }
   }
 }
 

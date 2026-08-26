@@ -1,0 +1,617 @@
+﻿[
+ {
+  "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4\\logs\\a5976fc9-b173-4ac3-a334-86eba1c719ae.jsonl.zstd",
+  "frames": 74,
+  "rawTailBytes": 0,
+  "totalLines": 208,
+  "parsed": 208,
+  "bad": 0,
+  "eventShapeKeys": [
+   "type",
+   "seq",
+   "time",
+   "data"
+  ],
+  "distinctRoutes": [
+   "openrouter/stealth/ox-alpha"
+  ],
+  "headerCount": 1,
+  "usageCount": 17,
+  "typeCounts": {
+   "agent/inbox/spliced": 2,
+   "approval/policy": 1,
+   "assistant/chunk": 74,
+   "assistant/message": 8,
+   "permission/preset": 1,
+   "reasoning-chunks": 19,
+   "request/context": 1,
+   "request/header": 1,
+   "sandbox/mode": 1,
+   "session/end-seed": 1,
+   "session/title": 1,
+   "step/end": 9,
+   "step/start": 9,
+   "subagent/descriptor": 1,
+   "text-chunks": 8,
+   "tool-call-chunks": 40,
+   "tool/call": 12,
+   "tool/result": 12,
+   "turn/end": 1,
+   "turn/start": 1,
+   "user/message": 4
+  },
+  "switches": [],
+  "pairStats": {
+   "eqPairs": 8,
+   "neqPairs": 8
+  },
+  "crossings": [],
+  "usageFirst3": [
+   {
+    "seq": 318,
+    "time": 1787731660749,
+    "src": "chunk",
+    "input": 41938,
+    "cR": 4800,
+    "cW": 0,
+    "out": 306,
+    "pressure": 46738,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 320,
+    "time": 1787731660750,
+    "src": "message",
+    "turn": 1,
+    "step": 1,
+    "input": 41938,
+    "cR": 4800,
+    "cW": 0,
+    "out": 306,
+    "pressure": 46738,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 580,
+    "time": 1787731674691,
+    "src": "chunk",
+    "input": 1287,
+    "cR": 46720,
+    "cW": 0,
+    "out": 257,
+    "pressure": 48007,
+    "route": "openrouter/stealth/ox-alpha"
+   }
+  ],
+  "usageLast3": [
+   {
+    "seq": 2152,
+    "src": "chunk",
+    "pressure": 55538,
+    "input": 306,
+    "cR": 55232,
+    "cW": 0,
+    "out": 149,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 2154,
+    "turn": 1,
+    "step": 8,
+    "src": "message",
+    "pressure": 55538,
+    "input": 306,
+    "cR": 55232,
+    "cW": 0,
+    "out": 149,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 2159,
+    "src": "chunk",
+    "pressure": 0,
+    "input": 0,
+    "cR": 0,
+    "cW": 0,
+    "out": 0,
+    "route": "openrouter/stealth/ox-alpha"
+   }
+  ]
+ },
+ {
+  "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4\\logs\\f3083abc-5016-4b47-a592-702d1ef73d19.jsonl.zstd",
+  "frames": 565,
+  "rawTailBytes": 0,
+  "totalLines": 1029,
+  "parsed": 1029,
+  "bad": 0,
+  "eventShapeKeys": [
+   "type",
+   "seq",
+   "time",
+   "data"
+  ],
+  "distinctRoutes": [
+   "openrouter/stealth/ox-alpha"
+  ],
+  "headerCount": 1,
+  "usageCount": 76,
+  "typeCounts": {
+   "agent/inbox/spliced": 2,
+   "approval/policy": 1,
+   "assistant/chunk": 279,
+   "assistant/message": 38,
+   "compaction/prune": 9,
+   "permission/preset": 1,
+   "reasoning-chunks": 222,
+   "request/context": 1,
+   "request/header": 1,
+   "sandbox/mode": 1,
+   "session/end-seed": 1,
+   "session/title": 1,
+   "step/end": 38,
+   "step/start": 38,
+   "subagent/descriptor": 1,
+   "text-chunks": 53,
+   "tool-call-chunks": 226,
+   "tool/call": 50,
+   "tool/result": 59,
+   "turn/end": 1,
+   "turn/start": 1,
+   "user/message": 4
+  },
+  "switches": [],
+  "pairStats": {
+   "eqPairs": 38,
+   "neqPairs": 37
+  },
+  "crossings": [],
+  "usageFirst3": [
+   {
+    "seq": 332,
+    "time": 1787731784356,
+    "src": "chunk",
+    "input": 12903,
+    "cR": 33856,
+    "cW": 0,
+    "out": 320,
+    "pressure": 46759,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 334,
+    "time": 1787731784358,
+    "src": "message",
+    "turn": 1,
+    "step": 1,
+    "input": 12903,
+    "cR": 33856,
+    "cW": 0,
+    "out": 320,
+    "pressure": 46759,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 659,
+    "time": 1787731805979,
+    "src": "chunk",
+    "input": 12431,
+    "cR": 36608,
+    "cW": 0,
+    "out": 324,
+    "pressure": 49039,
+    "route": "openrouter/stealth/ox-alpha"
+   }
+  ],
+  "usageLast3": [
+   {
+    "seq": 16540,
+    "turn": 1,
+    "step": 37,
+    "src": "message",
+    "pressure": 102127,
+    "input": 943,
+    "cR": 101184,
+    "cW": 0,
+    "out": 7466,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 17108,
+    "src": "chunk",
+    "pressure": 109632,
+    "input": 7552,
+    "cR": 102080,
+    "cW": 0,
+    "out": 565,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 17110,
+    "turn": 1,
+    "step": 38,
+    "src": "message",
+    "pressure": 109632,
+    "input": 7552,
+    "cR": 102080,
+    "cW": 0,
+    "out": 565,
+    "route": "openrouter/stealth/ox-alpha"
+   }
+  ]
+ },
+ {
+  "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4\\logs\\session-2331e290-ebe5-4fa0-8864-fe560407b656.jsonl.zstd",
+  "frames": 1173,
+  "rawTailBytes": 0,
+  "totalLines": 1846,
+  "parsed": 1846,
+  "bad": 0,
+  "eventShapeKeys": [
+   "type",
+   "seq",
+   "time",
+   "data"
+  ],
+  "distinctRoutes": [
+   "commandcode/deepseek/deepseek-v4-flash"
+  ],
+  "headerCount": 3,
+  "usageCount": 112,
+  "typeCounts": {
+   "agent/inbox/spliced": 12,
+   "approval/policy": 1,
+   "assistant/chunk": 500,
+   "assistant/message": 57,
+   "compaction/prune": 3,
+   "permission/preset": 1,
+   "reasoning-chunks": 460,
+   "request/context": 1,
+   "request/header": 3,
+   "sandbox/mode": 1,
+   "session/end-seed": 1,
+   "session/title": 1,
+   "session/title-llm-request": 1,
+   "step/end": 58,
+   "step/start": 58,
+   "text-chunks": 149,
+   "todo/write": 2,
+   "tool-call-chunks": 392,
+   "tool/call": 61,
+   "tool/result": 64,
+   "turn/end": 4,
+   "turn/start": 4,
+   "user/message": 8,
+   "web/deepseek-search-llm-request": 3
+  },
+  "switches": [],
+  "pairStats": {
+   "eqPairs": 56,
+   "neqPairs": 55
+  },
+  "crossings": [],
+  "usageFirst3": [
+   {
+    "seq": 816,
+    "time": 1787766975253,
+    "src": "chunk",
+    "input": 9820,
+    "cR": 37376,
+    "cW": 0,
+    "out": 472,
+    "pressure": 47196,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "seq": 818,
+    "time": 1787766975254,
+    "src": "message",
+    "turn": 2,
+    "step": 1,
+    "input": 9820,
+    "cR": 37376,
+    "cW": 0,
+    "out": 472,
+    "pressure": 47196,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "seq": 1646,
+    "time": 1787766984774,
+    "src": "chunk",
+    "input": 2981,
+    "cR": 47104,
+    "cW": 0,
+    "out": 885,
+    "pressure": 50085,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   }
+  ],
+  "usageLast3": [
+   {
+    "seq": 30752,
+    "turn": 4,
+    "step": 8,
+    "src": "message",
+    "pressure": 99835,
+    "input": 123,
+    "cR": 99712,
+    "cW": 0,
+    "out": 340,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "seq": 31081,
+    "src": "chunk",
+    "pressure": 100194,
+    "input": 98,
+    "cR": 100096,
+    "cW": 0,
+    "out": 323,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "seq": 31083,
+    "turn": 4,
+    "step": 9,
+    "src": "message",
+    "pressure": 100194,
+    "input": 98,
+    "cR": 100096,
+    "cW": 0,
+    "out": 323,
+    "route": "commandcode/deepseek/deepseek-v4-flash"
+   }
+  ]
+ },
+ {
+  "file": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4\\logs\\session-34e86c7a-c982-4ded-90fa-1511021ffda7.jsonl.zstd",
+  "frames": 29329,
+  "rawTailBytes": 0,
+  "totalLines": 40317,
+  "parsed": 40317,
+  "bad": 0,
+  "eventShapeKeys": [
+   "type",
+   "seq",
+   "time",
+   "data"
+  ],
+  "distinctRoutes": [
+   "openrouter/stealth/ox-alpha",
+   "commandcode/deepseek/deepseek-v4-flash",
+   "bai/deepseek-v4-flash",
+   "zhipu/glm-5.3-flash"
+  ],
+  "headerCount": 13,
+  "usageCount": 1768,
+  "typeCounts": {
+   "agent/inbox/spliced": 92,
+   "approval/policy": 1,
+   "assistant/chunk": 8529,
+   "assistant/message": 844,
+   "compaction/prune": 217,
+   "goal/change": 33,
+   "llm/retry": 67,
+   "llm/retry-started": 67,
+   "permission/preset": 1,
+   "reasoning-chunks": 16702,
+   "request/context": 8,
+   "request/header": 13,
+   "sandbox/mode": 1,
+   "session/end-seed": 4,
+   "session/title": 1,
+   "step/end": 860,
+   "step/start": 861,
+   "text-chunks": 3001,
+   "todo/write": 22,
+   "tool-call-chunks": 6665,
+   "tool/call": 950,
+   "tool/result": 1007,
+   "turn/end": 27,
+   "turn/start": 28,
+   "user/message": 307,
+   "web/deepseek-search-llm-request": 8
+  },
+  "switches": [
+   {
+    "atSeq": 91626,
+    "from": "openrouter/stealth/ox-alpha",
+    "to": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "atSeq": 166932,
+    "from": "commandcode/deepseek/deepseek-v4-flash",
+    "to": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "atSeq": 169431,
+    "from": "openrouter/stealth/ox-alpha",
+    "to": "bai/deepseek-v4-flash"
+   },
+   {
+    "atSeq": 290691,
+    "from": "bai/deepseek-v4-flash",
+    "to": "commandcode/deepseek/deepseek-v4-flash"
+   },
+   {
+    "atSeq": 532852,
+    "from": "commandcode/deepseek/deepseek-v4-flash",
+    "to": "zhipu/glm-5.3-flash"
+   },
+   {
+    "atSeq": 546940,
+    "from": "zhipu/glm-5.3-flash",
+    "to": "bai/deepseek-v4-flash"
+   },
+   {
+    "atSeq": 554814,
+    "from": "bai/deepseek-v4-flash",
+    "to": "zhipu/glm-5.3-flash"
+   }
+  ],
+  "pairStats": {
+   "eqPairs": 880,
+   "neqPairs": 887
+  },
+  "crossings": [
+   {
+    "betweenRoutes": "openrouter/stealth/ox-alpha -> commandcode/deepseek/deepseek-v4-flash",
+    "prevPressure": 39088,
+    "curPressure": 43303,
+    "eq": false,
+    "grewBy": 4215,
+    "pairTurnStep": "5/1 -> undefined/undefined",
+    "seqs": [
+     91142,
+     94016
+    ]
+   },
+   {
+    "betweenRoutes": "commandcode/deepseek/deepseek-v4-flash -> openrouter/stealth/ox-alpha",
+    "prevPressure": 80312,
+    "curPressure": 78375,
+    "eq": false,
+    "grewBy": -1937,
+    "pairTurnStep": "8/76 -> undefined/undefined",
+    "seqs": [
+     166924,
+     169398
+    ]
+   },
+   {
+    "betweenRoutes": "openrouter/stealth/ox-alpha -> bai/deepseek-v4-flash",
+    "prevPressure": 0,
+    "curPressure": 38583,
+    "eq": false,
+    "grewBy": 38583,
+    "pairTurnStep": "undefined/undefined -> undefined/undefined",
+    "seqs": [
+     169416,
+     170744
+    ]
+   },
+   {
+    "betweenRoutes": "bai/deepseek-v4-flash -> commandcode/deepseek/deepseek-v4-flash",
+    "prevPressure": 0,
+    "curPressure": 57408,
+    "eq": false,
+    "grewBy": 57408,
+    "pairTurnStep": "undefined/undefined -> undefined/undefined",
+    "seqs": [
+     290680,
+     294558
+    ]
+   },
+   {
+    "betweenRoutes": "commandcode/deepseek/deepseek-v4-flash -> zhipu/glm-5.3-flash",
+    "prevPressure": 68354,
+    "curPressure": 74445,
+    "eq": false,
+    "grewBy": 6091,
+    "pairTurnStep": "20/61 -> undefined/undefined",
+    "seqs": [
+     532844,
+     536811
+    ]
+   },
+   {
+    "betweenRoutes": "zhipu/glm-5.3-flash -> bai/deepseek-v4-flash",
+    "prevPressure": 0,
+    "curPressure": 72708,
+    "eq": false,
+    "grewBy": 72708,
+    "pairTurnStep": "undefined/undefined -> undefined/undefined",
+    "seqs": [
+     546929,
+     547623
+    ]
+   },
+   {
+    "betweenRoutes": "bai/deepseek-v4-flash -> zhipu/glm-5.3-flash",
+    "prevPressure": 65299,
+    "curPressure": 63903,
+    "eq": false,
+    "grewBy": -1396,
+    "pairTurnStep": "27/1 -> undefined/undefined",
+    "seqs": [
+     554805,
+     557322
+    ]
+   }
+  ],
+  "usageFirst3": [
+   {
+    "seq": 909,
+    "time": 1787731381825,
+    "src": "chunk",
+    "input": 47236,
+    "cR": 0,
+    "cW": 0,
+    "out": 907,
+    "pressure": 47236,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 911,
+    "time": 1787731381826,
+    "src": "message",
+    "turn": 1,
+    "step": 1,
+    "input": 47236,
+    "cR": 0,
+    "cW": 0,
+    "out": 907,
+    "pressure": 47236,
+    "route": "openrouter/stealth/ox-alpha"
+   },
+   {
+    "seq": 920,
+    "time": 1787731386524,
+    "src": "chunk",
+    "input": 0,
+    "cR": 0,
+    "cW": 0,
+    "out": 0,
+    "pressure": 0,
+    "route": "openrouter/stealth/ox-alpha"
+   }
+  ],
+  "usageLast3": [
+   {
+    "seq": 599495,
+    "turn": 28,
+    "step": 21,
+    "src": "message",
+    "pressure": 69007,
+    "input": 2767,
+    "cR": 66240,
+    "cW": 0,
+    "out": 2497,
+    "route": "zhipu/glm-5.3-flash"
+   },
+   {
+    "seq": 599597,
+    "src": "chunk",
+    "pressure": 68026,
+    "input": 68026,
+    "cR": 0,
+    "cW": 0,
+    "out": 375,
+    "route": "zhipu/glm-5.3-flash"
+   },
+   {
+    "seq": 599599,
+    "turn": 28,
+    "step": 22,
+    "src": "message",
+    "pressure": 68026,
+    "input": 68026,
+    "cR": 0,
+    "cW": 0,
+    "out": 375,
+    "route": "zhipu/glm-5.3-flash"
+   }
+  ]
+ }
+]

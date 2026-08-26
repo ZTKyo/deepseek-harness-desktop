@@ -10,7 +10,7 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `REVIEW_FIXES_COMPLETE`（R2 完成，REAL restart 已验） | PR #42 merge + SHA backfill → VERIFIED | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R2.md |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（R2 完成，REAL restart 已验，PR #42 MERGED） | —（Approved pending Round 2） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R2.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -25,17 +25,18 @@
 ## 当前执行位置
 
 Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #40 merged）。
-下一个执行位置 = **P2.5 CONTEXT MEMORY**（Session Continuity）。
+P2.5 CONTEXT MEMORY = **VERIFIED**（R2 修复轮完成，PR #42 MERGED merge=`1cad4c6`，SHA backfill 完成）。
+下一个执行位置 = **Phase 03（AUTONOMY）**，等待 External Review Round 2 APPROVED 后正式启动。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
 - P2.5 完成后 → Phase 03（AUTONOMY）。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态
 
-- **状态：IMPLEMENTATION_COMPLETE / REVIEW_FIXES_COMPLETE**（R2，2026-08-27；REAL restart 证据已补齐，
-  待 PR #42 merge + SHA backfill 后置 VERIFIED）
+- **状态：VERIFIED**（R2 修复轮完成，2026-08-27；PR #42 MERGED merge=`1cad4c6`，SHA backfill 完成；
+  等待 External Review Round 2 APPROVED 后正式进入 Phase 03）
 - **latest report**：`docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R2.md`
-- **PR**：PR #42（`fix/context-memory-r2`，10 commits，MERGEABLE）；R1 = PR #41（已 MERGED）
+- **PR**：PR #42（`fix/context-memory-r2`，11 commits，MERGED merge=`1cad4c6`）；R1 = PR #41（已 MERGED）
 - **实现**：`plugins/context-memory{,-core}.mjs`（Recent Window / Observation / Reflection / Recall / Provider-switch activation）
 - **验证**：R1 53/53 → R2 修复轮 **61 PASS**；R2-3 REAL restart **8 PASS / 0 FAIL**（01:37 真实重启，
   新 PID 13876，store watermark 483517→486785，guardian 0 QUARANTINED）；R2-6 REAL Recall 17 PASS；
@@ -72,14 +73,15 @@ Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #4
 
 ## 路线（Security-Hardening APPROVED 后）
 1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
-2. **P2.5 CONTEXT MEMORY** ✅ 实施完成 + R2 修复轮完成（PR #42，REAL restart 已验证；merge 后置 VERIFIED）
-3. **Phase 03**（AUTONOMY）
+2. **P2.5 CONTEXT MEMORY** ✅ 实施完成 + R2 修复轮完成 + PR #42 MERGED（merge=`1cad4c6`，SHA backfill 完成）→ **VERIFIED**
+3. **Phase 03**（AUTONOMY）— 等待 External Review Round 2 APPROVED 后启动
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**P2.5 CONTEXT MEMORY**（R2 修复轮完成 = REVIEW_FIXES_COMPLETE，REAL restart 8 PASS 已验；
-剩余事项：PR #42 merge → SHA backfill → 置 VERIFIED → 进入 Phase 03）。
+当前执行位置：**P2.5 CONTEXT MEMORY = VERIFIED**（R2 修复轮完成，REAL restart 8 PASS 已验，
+PR #42 MERGED merge=`1cad4c6`，SHA backfill 完成；剩余事项：External Review Round 2 APPROVED →
+正式进入 Phase 03）。
 
 ## 变更日志
 
@@ -96,4 +98,4 @@ Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #4
 - 2026-08-25：Phase 02 **Reviewer Verdict = APPROVED / VERIFIED**（R1–R11 全部闭环）；状态更新为 P2 VERIFIED。
 - 2026-08-25：进入 **Security-Hardening Gate**；实现完成（env 注入 / ACL 收紧 / secret-scan 双层 / preflight safe-degrade / 5.1 restart 修复 / isolated credential source / EC state invariant / credential source coherence / fail-closed A5 / legacy KillInjection 归档）；Round 1-9 **APPROVED**（PR #32-#40，PR #40 merge 5ba4363d，backfill df195923）。当前 **VERIFIED**（纯状态 backfill，Review Round 9 = APPROVED）。
 - 2026-08-26：进入 **P2.5 CONTEXT MEMORY**；R1 实施完成（AUDIT → DESIGN → 实现 `context-memory{,-core}.mjs` → 53/53 回归 → 真实运行时验证 REAL）；提交 PR #41（`fix/context-memory-r1`），状态置 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。未进入 P3，未触碰 Security-Hardening。
-- 2026-08-27：P2.5 **R2 修复轮完成**（Review Round 1 CHANGES_REQUIRED → R2-1..R2-8 全部闭环）：测试入 CI（ci-level1/level3）、install-plugin 原子写 + 自动 hash 发现 + preflight 集成（15 PASS）、真实重启加载 R2 插件（01:37，restart-apply-patch 日志 COMMITTED；8 PASS / 0 FAIL；store watermark 483517→486785）、REAL Recall 17 PASS、R2-7 false-completion/context-rot 修复（61 PASS）、guardian !!js regression（8 PASS）。PR #42（`fix/context-memory-r2`，10 commits，MERGEABLE）。状态置 **REVIEW_FIXES_COMPLETE**，待 merge + SHA backfill → VERIFIED → Phase 03。
+- 2026-08-27：P2.5 **R2 修复轮完成**（Review Round 1 CHANGES_REQUIRED → R2-1..R2-8 全部闭环）：测试入 CI（ci-level1/level3）、install-plugin 原子写 + 自动 hash 发现 + preflight 集成（15 PASS）、真实重启加载 R2 插件（01:37，restart-apply-patch 日志 COMMITTED；8 PASS / 0 FAIL；store watermark 483517→486785）、REAL Recall 17 PASS、R2-7 false-completion/context-rot 修复（61 PASS）、guardian !!js regression（8 PASS）。PR #42（`fix/context-memory-r2`，11 commits）**CI 3/3 全绿 → squash MERGED（merge=`1cad4c6`）→ SHA backfill 完成**。状态置 **VERIFIED**，等待 External Review Round 2 APPROVED 后正式进入 Phase 03。

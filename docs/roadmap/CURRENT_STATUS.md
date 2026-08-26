@@ -157,3 +157,9 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
   风险登记册 #5）；② 残留「严格同任务跨天配对」（登记册 #4）。证据文档 §P2.10 总结句已同步收窄为
   ①②④⑤⑥⑦ 六门闭环。正式报告 `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`（18 节 §0–§17）
   已按此口径出具。状态不变：**AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **REPORT_R4 收口终态**：PR #46（`fix/context-memory-r4-report`）CI L1/L2/L3 三绿
+  → squash MERGED（merge=`d2ca98e`），本行为其纯状态 backfill。入库内容：正式报告
+  `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`（§0–§17 共 18 节，③如实 PARTIAL）+ §P2.10 总结句收窄
+  + 更正条目。至此 R4 全部产出齐备于 main；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；
+  P3=BLOCKED 不变。

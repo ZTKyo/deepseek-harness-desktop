@@ -289,19 +289,24 @@ try {
         Check 'A3 probe succeeded (probe_ok=true)' ($probe.probe_ok -eq $true) ("probe_ok=" + $probe.probe_ok + " error=" + $probe.error)
         Check 'A4 mcp-notion NOT loaded (notion_loaded=false)' ($probe.probe_ok -eq $true -and $probe.notion_loaded -eq $false) ("notion_loaded=" + $probe.notion_loaded + " tool_count=" + $probe.tool_count)
 
-        # SH-R8: A5 is BASELINE-AWARE - only assert NO NEW FAILED_FATAL was
-        # introduced by this gate (pre-existing legacy FAILED_FATAL intents in
-        # the store must not pollute the result).
-        $chainOk = $true
+        # SH-R8/R9: A5 is BASELINE-AWARE and FAIL-CLOSED. It returns a
+        # structured result { store_probe_ok, new_fatal_count } and only PASSES
+        # when the store is READABLE and NO NEW FAILED_FATAL was introduced.
+        # A missing/unreadable store is a FAIL (never default to true - without
+        # the store we cannot claim "recovery chain unaffected").
+        $storeProbeOk = $false
+        $newFatalCount = -1
         if (Test-Path $IntentsFile) {
             try {
                 $j = Get-Content -LiteralPath $IntentsFile -Raw | ConvertFrom-Json
                 $currentFatal = @($j.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' } | ForEach-Object { $_.Name })
                 $newFatal = @($currentFatal | Where-Object { $_ -notin $baselineFatalSet })
-                $chainOk = ($newFatal.Count -eq 0)
-            } catch { $chainOk = $false }
+                $newFatalCount = $newFatal.Count
+                $storeProbeOk = $true
+            } catch { $storeProbeOk = $false; $newFatalCount = -1 }
         }
-        Check 'A5 recovery chain unaffected (no NEW FAILED_FATAL vs baseline)' $chainOk ('new=' + $(if (Test-Path $IntentsFile) { @($j.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' } | ForEach-Object { $_.Name } | Where-Object { $_ -notin $baselineFatalSet }).Count } else { 'n/a' }))
+        $a5Pass = ($storeProbeOk -eq $true -and $newFatalCount -eq 0)
+        Check 'A5 recovery chain unaffected (FAIL-CLOSED: store readable AND no NEW FAILED_FATAL)' $a5Pass ("store_probe_ok=" + $storeProbeOk + " new_fatal_count=" + $newFatalCount)
 
         $preLog = Get-Content -LiteralPath $PreflightLog -Tail 6 -ErrorAction SilentlyContinue | Out-String
         Check 'A6 preflight audit log records SAFE-DEGRADE' ($preLog -match 'SAFE-DEGRADE') ('tail has SAFE-DEGRADE: ' + ($preLog -match 'SAFE-DEGRADE'))

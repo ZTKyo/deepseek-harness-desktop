@@ -142,6 +142,34 @@ try {
     $threw2 = $false
     try { $null = Write-DshPreflightLog -Message 'probe' -LogPath 'Z:\definitely\missing\path\x.log' } catch { $threw2 = $true }
     Check 'log failure does not throw (boot never blocked)' (-not $threw2) ''
+
+    # --- 15) SH-R9 source coherence: preflight + value read use the SAME -------
+    # effective path; override does not cause a cross-source split, and the
+    # default (no override) still reads canonical only.
+    # Build an override file that IS valid (contains a valid NOTION_TOKEN) and
+    # differs from the canonical file content, then verify that BOTH the
+    # preflight verdict and the value read resolve to the override, never the
+    # canonical file. We compare the LENGTH (or a marker) rather than the value
+    # (secrets stay out of the transcript).
+    $overrideVal = Join-Path $tmpRoot 'override-valid\.credentials.yaml'
+    New-Item -ItemType Directory -Force -Path (Split-Path $overrideVal) | Out-Null
+    $overrideFake = 'ntn_' + ('y' * 50)  # valid shape, DISTINCT length from canonical fake (48) so cross-source is detectable
+    Set-Content -LiteralPath $overrideVal -Value ("version: 1`r`nrefs:`r`n  NOTION_TOKEN: " + $overrideFake + "`r`n") -Encoding UTF8
+    $ovPre = Invoke-DshNotionPreflight -CredentialsPath $overrideVal
+    Check 'T15 override preflight Ok=true (valid source)' ($ovPre.Ok -eq $true) ("len=" + $ovPre.Length)
+    $ovVal = Get-DshCredentialRefValue -Name 'NOTION_TOKEN' -CredentialsPath $overrideVal
+    Check 'T15 override value read from SAME source (len matches preflight)' ($ovVal.Length -eq $ovPre.Length) ("valLen=" + $ovVal.Length + " preLen=" + $ovPre.Length)
+    # canonical fake is len 48; a cross-source read would show 48, not 54
+    Check 'T15 override read did NOT fall through to canonical (no cross-source split)' ($ovVal.Length -eq $overrideFake.Length) ("override=" + $ovVal.Length + " expected=" + $overrideFake.Length + " canonical=" + $fake.Length)
+    # default (no override): preflight + read resolve to the canonical file
+    $defPre = Invoke-DshNotionPreflight -CredentialsPath $okVal
+    $defVal = Get-DshCredentialRefValue -Name 'NOTION_TOKEN' -CredentialsPath $okVal
+    Check 'T15 default canonical preflight + read same source' ($defVal.Length -eq $defPre.Length -and $defVal.Length -eq $fake.Length) ("len=" + $defVal.Length)
+    # starter contract: when DSH_CREDENTIALS_PATH is set, both the preflight call
+    # AND the value read must pass the same override path (source coherence)
+    $starterSc = Get-Content -LiteralPath (Join-Path $repoRoot 'start-dsh-server.ps1') -Raw -Encoding UTF8
+    Check 'T15 starter passes override path to BOTH preflight and value read' ($starterSc -match 'Invoke-DshNotionPreflight -CredentialsPath \$effectiveCredPath' -and $starterSc -match 'Get-DshCredentialRefValue -Name .NOTION_TOKEN. -CredentialsPath \$effectiveCredPath') ''
+    Check 'T15 starter resolves effective path ONCE' (($starterSc -match '\$effectiveCredPath = if \(\$env:DSH_CREDENTIALS_PATH\)')) ''
 } finally {
     Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
 }

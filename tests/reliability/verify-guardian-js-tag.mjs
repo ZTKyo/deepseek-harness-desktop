@@ -25,6 +25,20 @@ import { spawnSync } from 'node:child_process';
 const root = path.resolve(process.argv[2] || process.cwd());
 const GUARDIAN = path.join(root, 'dsh-guardian.ps1');
 const jsyamlCandidates = [
+  // npm_config_prefix（GH Actions setup-node 在 Windows runner 显式设为
+  // C:\npm\prefix）：它是 prefix 根，npm 全局模块根 = <prefix>/node_modules
+  // （与 install-plugin.mjs npmGlobalModulesRoot 同策略；少拼 node_modules
+  // 会找不到 js-yaml —— CI 实测踩坑）。
+  ...(() => {
+    const prefix = process.env.npm_config_prefix || process.env.NPM_CONFIG_PREFIX;
+    return prefix ? [path.join(prefix, 'node_modules', 'js-yaml', 'index.js')] : [];
+  })(),
+  // NODE_PATH 多路径（Windows 分号 / Unix 冒号，path.delimiter 处理）
+  ...(process.env.NODE_PATH
+    ? process.env.NODE_PATH.split(path.delimiter).map((p) => p.trim()).filter(Boolean)
+        .map((p) => path.join(p, 'js-yaml', 'index.js'))
+    : []),
+  // 常规 npm 全局安装点（本机 dsh 安装点）
   path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml', 'index.js'),
   path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml', 'index.js'),
 ];

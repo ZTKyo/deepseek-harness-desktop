@@ -151,3 +151,9 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
   演练（§P2.10）+ ④REAL 5 类回源 v2（§P2.9）+ ⑤⑥corrupt/missing fail-open 活体字节演练（§P2.8）及
   佐证 JSON/脚本；B3/B4 合同全关。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；
   P3=BLOCKED 不变。
+
+- 更正（2026-08-27，同日）：此前深夜条目所述「七项 REAL Gate 证据全部就绪」表述过宽。
+  实况：**③ COMPLETION QUALITY 跨会话 A/B verdict 维持 PARTIAL**（需独立评测系统，红线禁止本轮私建，
+  风险登记册 #5）；② 残留「严格同任务跨天配对」（登记册 #4）。证据文档 §P2.10 总结句已同步收窄为
+  ①②④⑤⑥⑦ 六门闭环。正式报告 `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`（18 节 §0–§17）
+  已按此口径出具。状态不变：**AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。

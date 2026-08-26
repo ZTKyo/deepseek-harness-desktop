@@ -142,7 +142,7 @@ RESULT: 61 PASS / 0 FAIL   （含 T2 单开关停用×2 变体、T3 损坏 store
 >  Tailscale 接口面行（fd7a:/100.x）；dsh 属主判定必须过滤 LocalAddress==127.0.0.1 并交叉核对
 >  进程 cmdline/generation/启动时间。
 
-**SUMMARY：R2 合同 B4 全关（fail-open REAL 半边见 P2.8 + 本节 REAL 重启半边）。至此 Round-3 七项 REAL Gate 证据全部就绪（① 见 #43/#44 系列）。**
+**SUMMARY：R2 合同 B4 全关（fail-open REAL 半边见 P2.8 + 本节 REAL 重启半边）。Round-3 七门中 ①②④⑤⑥⑦ 证据全部入库（① 见 #43/#44 系列）；③ COMPLETION QUALITY verdict 维持 PARTIAL——需独立评测系统、红线禁止私建（风险登记册 #5），如实不宣称关闭。**
 
 > 本节与本文件 P2.8/P2.9 新增内容随同一分支提交；状态仍为 AWAITING_REVIEW，仅补证据、不改治理状态。
 

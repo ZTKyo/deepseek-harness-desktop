@@ -11,6 +11,11 @@ on:
       - 'plugins/*.mjs'
       - 'cordis.patch.yml'
       - 'tests/context-memory/*'
+      - 'tests/install-plugin/*'
+      - 'tests/reliability/*'
+      - 'tools/install-plugin.mjs'
+      - 'docs/roadmap/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:

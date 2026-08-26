@@ -84,7 +84,7 @@ PASS  C2 mcp-notion loaded after restore (probe_ok=true notion_loaded=true)
 
 - PR：`fix/shardening-r8`
 - CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- Merge SHA：**`6a0dbf72`**（2026-08-26 merged，PR #39）
 
 ## 7. Final Verdict
 

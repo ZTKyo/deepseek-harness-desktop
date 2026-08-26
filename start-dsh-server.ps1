@@ -162,7 +162,16 @@ $preflightHelper = Join-Path $root 'dsh-credential-preflight.ps1'
 if (Test-Path $preflightHelper) {
     try {
         . $preflightHelper
-        $ntnPre = Invoke-DshNotionPreflight
+        # SH-R8: isolated credential source support - when DSH_CREDENTIALS_PATH
+        # is set (cold-start gate negative phase), the preflight reads that
+        # file instead of the canonical ~/.dsh/.credentials.yaml, so the gate
+        # can exercise the safe-degrade path WITHOUT mutating the real
+        # credential store. Absent the env var, behaviour is unchanged.
+        $ntnPre = if ($env:DSH_CREDENTIALS_PATH) {
+            Invoke-DshNotionPreflight -CredentialsPath $env:DSH_CREDENTIALS_PATH
+        } else {
+            Invoke-DshNotionPreflight
+        }
         # auditable decision line (no secret value) - hidden-window console output
         # alone is not auditable after the fact
         $null = Write-DshPreflightResultLog -Result $ntnPre

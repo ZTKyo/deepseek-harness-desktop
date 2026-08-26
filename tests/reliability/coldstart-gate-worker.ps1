@@ -86,13 +86,75 @@ function Get-NotionMcpLoaded {
     }
 }
 
-# ---- byte-for-byte credential save/restore ----------------------------------
+# ---- SH-R8: isolated credential source (canonical NEVER mutated) -------------
+function Make-IsolatedCredential([string]$OutPath) {
+    # Copy the canonical credentials file to a temp path with NOTION_TOKEN
+    # removed, using the dsh-bundled js-yaml (same approach as the old
+    # Remove-CredentialRef but on a COPY - the canonical file stays untouched).
+    $savedEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $tmpJs = Join-Path $env:TEMP ("cred-iso-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.cjs')
+    $scriptBody = @"
+const fs = require('fs');
+const { createRequire } = require('module');
+const require2 = createRequire(process.cwd() + '/');
+let yaml = null;
+const candidates = [
+  process.env.APPDATA ? process.env.APPDATA.replace(/\\/g,'/') + '/npm/node_modules/@deepseek-ai/dsh/node_modules/js-yaml' : null,
+  process.env.APPDATA ? process.env.APPDATA.replace(/\\/g,'/') + '/npm/node_modules/js-yaml' : null,
+  'js-yaml'
+];
+for (const c of candidates) { if (!c) continue; try { yaml = require2(c); if (yaml && typeof yaml.load === 'function') break; } catch (e) {} }
+if (!yaml || typeof yaml.load !== 'function') { console.error('JSYAML-UNAVAILABLE'); process.exit(2); }
+if (!process.env.CRED_FILE || !process.env.OUT_FILE) { console.error('ENV-MISSING'); process.exit(3); }
+const src = fs.readFileSync(process.env.CRED_FILE, 'utf8').replace(/^\uFEFF/, '');
+const doc = yaml.load(src);
+if (!doc || typeof doc !== 'object') { console.error('NOT-YAML'); process.exit(4); }
+delete doc.NOTION_TOKEN;
+if (doc.refs) delete doc.refs.NOTION_TOKEN;
+const out = yaml.dump(doc, { lineWidth: -1, noRefs: true }).replace(/\n$/, '') + '\n';
+fs.writeFileSync(process.env.OUT_FILE, out, 'utf8');
+console.log('OK');
+"@
+    [System.IO.File]::WriteAllText($tmpJs, $scriptBody, (New-Object System.Text.UTF8Encoding($false)))
+    $exit = -1
+    try {
+        $env:CRED_FILE = $CredsFile
+        $env:OUT_FILE = $OutPath
+        $nodeOut = & node $tmpJs 2>&1 | Out-String
+        $exit = $LASTEXITCODE
+        if ($exit -ne 0) { Write-Host "cred-iso node exit=$exit out=$($nodeOut.Trim())" }
+    } catch {
+        Write-Host "cred-iso wrapper threw: $($_.Exception.Message)"
+        $exit = 1
+    } finally {
+        Remove-Item Env:CRED_FILE -ErrorAction SilentlyContinue
+        Remove-Item Env:OUT_FILE -ErrorAction SilentlyContinue
+        $ErrorActionPreference = $savedEAP
+    }
+    Remove-Item -LiteralPath $tmpJs -Force -ErrorAction SilentlyContinue
+    if ($exit -ne 0 -or -not (Test-Path $OutPath)) { return $false }
+    # self-check: isolated copy has version+refs but NO NOTION_TOKEN
+    $check = [System.IO.File]::ReadAllText($OutPath)
+    $ok = ($check -match '(?m)^version: 1') -and ($check -match '(?m)^refs:') -and (-not ($check -match 'NOTION_TOKEN'))
+    return $ok
+}
 $originalBytes = $null
 $originalBytes = [System.IO.File]::ReadAllBytes($CredsFile)
 # SH-R5: capture the pre-mutation SHA256 and DACL so B1 can assert REAL equality
 # (not just "the token line exists") after the finally-restore.
 $originalSha256 = (Get-FileHash -LiteralPath $CredsFile -Algorithm SHA256).Hash
 $originalDaclText = (icacls $CredsFile 2>&1 | Out-String)
+
+# SH-R8: A5 baseline - FAILED_FATAL intents that already exist before the gate
+# starts (legacy history) are NOT caused by this gate and must not fail A5.
+$baselineFatalSet = @()
+if (Test-Path $IntentsFile) {
+    try {
+        $bj = Get-Content -LiteralPath $IntentsFile -Raw | ConvertFrom-Json
+        $baselineFatalSet = @($bj.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' } | ForEach-Object { $_.Name })
+    } catch { $baselineFatalSet = @() }
+}
 
 function Write-OriginalBytes {
     if ($null -ne $originalBytes -and $originalBytes.Length -gt 0) {
@@ -182,27 +244,28 @@ console.log('OK');
     return $ok
 }
 
-# ---- main guarded body: credential mutation inside try/finally ---------------
+# ---- main guarded body: credential isolation inside try/finally ---------------
 try {
-    # ---- Phase A: NEGATIVE cold boot ----------------------------------------
+    # ---- Phase A: NEGATIVE cold boot (isolated credential source) -------------
+    # SH-R8: the negative boot uses an ISOLATED credential source - a temp copy
+    # of the canonical file with NOTION_TOKEN removed - and points the host at
+    # it via DSH_CREDENTIALS_PATH. The CANONICAL .credentials.yaml is NEVER
+    # mutated, so there is nothing to restore afterwards; the restore-owner /
+    # guaranteed-restore machinery is no longer needed for credential safety.
     Write-Host ''
-    Write-Host '=== Phase A: NEGATIVE cold boot (NOTION_TOKEN removed) ==='
-    $removed = Remove-CredentialRef 'NOTION_TOKEN'
-    Check 'A1 credential ref removed for negative boot' $removed ''
+    Write-Host '=== Phase A: NEGATIVE cold boot (isolated credential source) ==='
+    $isoPath = Join-Path $env:TEMP ("coldstart-iso-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.yaml')
+    $canonicalShaBefore = (Get-FileHash -LiteralPath $CredsFile -Algorithm SHA256).Hash
+    $canonicalDaclBefore = (icacls $CredsFile 2>&1 | Out-String)
+    $isoMade = Make-IsolatedCredential -OutPath $isoPath
+    Check 'A1 isolated credential source created (canonical untouched)' $isoMade ("iso=" + $isoPath)
+    $env:DSH_CREDENTIALS_PATH = $isoPath
 
-    # SH-R6 fault-injection support: after mutation, signal the controller and
-    # park. The controller force-kills this worker (finally bypassed) and then
-    # RESTORES the credential itself as the restore owner. This proves the gate
-    # does NOT depend on this worker's finally for credential safety.
     if ($WaitForKillMarker) {
-        # SH-R7: use the run-id scoped marker path passed by the controller (a
-        # fixed marker path could let a stale marker from a crashed run trigger
-        # an early kill + false PASS).
+        # SH-R7: run-id scoped marker (kept for the kill-injection harness)
         $markerPath = if ($KillMarker) { $KillMarker } else { Join-Path $env:TEMP 'coldstart-kill-marker.txt' }
-        [System.IO.File]::WriteAllText($markerPath, 'mutated', (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($markerPath, 'isolated', (New-Object System.Text.UTF8Encoding($false)))
         Write-Host 'KILL-MARKER written; parking until controller kills this worker'
-        # park: the controller will Stop-Process -Force us; if that never happens
-        # we exit after a bounded wait so the run cannot hang forever.
         Start-Sleep -Seconds 120
         Write-Host 'KILL-MARKER timeout (controller did not kill); continuing'
     }
@@ -211,7 +274,7 @@ try {
         Check 'A2 (dry-run) restart skipped, host not touched' $true ''
         Check 'A3 (dry-run) skip probe' $true ''
     } else {
-        & $RestartScript -RestartAndWait -DelaySeconds 2 -Port $Port -TimeoutSec 240 -Reason 'sh-r4-negative-boot' | Out-Null
+        & $RestartScript -RestartAndWait -DelaySeconds 2 -Port $Port -TimeoutSec 240 -Reason 'sh-r8-negative-boot' | Out-Null
         # Poll for readiness (a cold boot of npx-hosted MCP servers is slow; the
         # guardian may also be re-raising the host if the restart attempt itself
         # hit a process_none/starter-exit-2 race). The negative contract requires
@@ -226,41 +289,48 @@ try {
         Check 'A3 probe succeeded (probe_ok=true)' ($probe.probe_ok -eq $true) ("probe_ok=" + $probe.probe_ok + " error=" + $probe.error)
         Check 'A4 mcp-notion NOT loaded (notion_loaded=false)' ($probe.probe_ok -eq $true -and $probe.notion_loaded -eq $false) ("notion_loaded=" + $probe.notion_loaded + " tool_count=" + $probe.tool_count)
 
-        $chainOk = $false
+        # SH-R8: A5 is BASELINE-AWARE - only assert NO NEW FAILED_FATAL was
+        # introduced by this gate (pre-existing legacy FAILED_FATAL intents in
+        # the store must not pollute the result).
+        $chainOk = $true
         if (Test-Path $IntentsFile) {
             try {
                 $j = Get-Content -LiteralPath $IntentsFile -Raw | ConvertFrom-Json
-                $bad = @($j.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' })
-                $chainOk = ($bad.Count -eq 0)
+                $currentFatal = @($j.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' } | ForEach-Object { $_.Name })
+                $newFatal = @($currentFatal | Where-Object { $_ -notin $baselineFatalSet })
+                $chainOk = ($newFatal.Count -eq 0)
             } catch { $chainOk = $false }
         }
-        Check 'A5 recovery chain unaffected (no FAILED_FATAL intents)' $chainOk ''
+        Check 'A5 recovery chain unaffected (no NEW FAILED_FATAL vs baseline)' $chainOk ('new=' + $(if (Test-Path $IntentsFile) { @($j.intents.PSObject.Properties | Where-Object { $_.Value.state -eq 'FAILED_FATAL' } | ForEach-Object { $_.Name } | Where-Object { $_ -notin $baselineFatalSet }).Count } else { 'n/a' }))
 
         $preLog = Get-Content -LiteralPath $PreflightLog -Tail 6 -ErrorAction SilentlyContinue | Out-String
         Check 'A6 preflight audit log records SAFE-DEGRADE' ($preLog -match 'SAFE-DEGRADE') ('tail has SAFE-DEGRADE: ' + ($preLog -match 'SAFE-DEGRADE'))
     }
 } finally {
-    # ---- ALWAYS restore the credentials file byte-for-byte before exiting ----
-    Write-OriginalBytes
+    # SH-R8: the CANONICAL credential is never mutated (isolated source used),
+    # so B1 asserts it is byte-for-byte UNCHANGED vs the pre-run snapshot, and
+    # DACL unchanged. Also clear the DSH_CREDENTIALS_PATH env override and the
+    # temp isolated copy.
+    Remove-Item Env:DSH_CREDENTIALS_PATH -ErrorAction SilentlyContinue
     Write-Host ''
-    Write-Host '=== credentials file restored (byte-for-byte, finally) ==='
-    # SH-R5: B1 is a REAL equality gate - compare SHA256 of the file before the
-    # mutation vs after the finally-restore (a regex "token line present" check
-    # could PASS even if the rest of the file bytes were corrupted). DACL must
-    # also be unchanged (we never touch ACLs, but prove it).
+    Write-Host '=== canonical credential verified UNCHANGED (isolated source used) ==='
     $shaAfter = (Get-FileHash -LiteralPath $CredsFile -Algorithm SHA256).Hash
     $bytesEqual = ($shaAfter -eq $originalSha256)
-    Check 'B1 credentials byte-for-byte restored (SHA256 equality)' $bytesEqual ("sha=" + $shaAfter.Substring(0, 12) + "...")
+    Check 'B1 canonical credential byte-for-byte UNCHANGED (SHA256 equality)' $bytesEqual ("sha=" + $shaAfter.Substring(0, 12) + "...")
     $daclAfter = (icacls $CredsFile 2>&1 | Out-String)
     $daclOk = ($daclAfter -eq $originalDaclText)
-    Check 'B1b credentials DACL unchanged' $daclOk ('dacl-identical=' + $daclOk)
+    Check 'B1b canonical credential DACL unchanged' $daclOk ('dacl-identical=' + $daclOk)
+    if (Test-Path $isoPath) { Remove-Item -LiteralPath $isoPath -Force -ErrorAction SilentlyContinue }
 }
 
 # ---- Phase C: NORMAL cold boot (only when live) -----------------------------
 if (-not $NoRestart) {
     Write-Host ''
-    Write-Host '=== Phase C: NORMAL cold boot (credential present) ==='
-    & $RestartScript -RestartAndWait -DelaySeconds 2 -Port $Port -TimeoutSec 240 -Reason 'sh-r4-normal-boot' | Out-Null
+    Write-Host '=== Phase C: NORMAL cold boot (canonical credential) ==='
+    # SH-R8: clear the isolated-source override so the normal boot reads the
+    # CANONICAL credentials (Notion must load with the real token).
+    Remove-Item Env:DSH_CREDENTIALS_PATH -ErrorAction SilentlyContinue
+    & $RestartScript -RestartAndWait -DelaySeconds 2 -Port $Port -TimeoutSec 240 -Reason 'sh-r8-normal-boot' | Out-Null
     $httpReady2 = Wait-HttpReady -MaxSeconds 40
     $status2 = if ($httpReady2) { 200 } else { -1 }
     Check 'C1 host HTTP 200 after normal cold boot' ($status2 -eq 200) ("http=" + $status2)

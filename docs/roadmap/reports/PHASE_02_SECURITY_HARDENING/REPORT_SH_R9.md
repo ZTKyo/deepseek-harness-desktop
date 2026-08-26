@@ -106,7 +106,7 @@ canonical SHA before==after。
 
 - PR：`fix/shardening-r9`
 - CI：Level 1/2/3（PR 创建后运行）
-- Merge SHA：待 merge 后回填
+- Merge SHA：**`5ba4363d`**（2026-08-26 merged，PR #40）
 
 ## 8. Final Verdict
 

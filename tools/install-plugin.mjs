@@ -69,16 +69,30 @@ function sha256(p) {
 
 // 从 dsh 安装点找 js-yaml（guardian Find-JsYaml 同策略；扩展候选以覆盖
 // GitHub Actions Windows runner 的 npm 全局 prefix = C:\npm\prefix 等差异）
+function npmGlobalModulesRoot() {
+  // 1) 环境变量：GH Actions setup-node 显式设置 npm_config_prefix（Windows
+  //    runner 上 = C:\npm\prefix），npm 自身也会在脚本环境继承它。零 spawn、
+  //    最可靠，优先。
+  if (process.env.npm_config_prefix) return process.env.npm_config_prefix;
+  // 2) 解析 npm 命令取 root -g。注意 Windows 上 Node 的 spawnSync 不解析
+  //    PATHEXT：裸 'npm' 会 ENOENT，必须用 'npm.cmd' 且 shell:true 让
+  //    cmd.exe 解析。Unix 直接 'npm'。
+  try {
+    const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const r = spawnSync(cmd, ['root', '-g'],
+      { encoding: 'utf8', shell: process.platform === 'win32' });
+    const out = (r.stdout || '').trim();
+    return out || null;
+  } catch { return null; }
+}
+
 function findJsYaml() {
   const candidates = [
-    // 常规 npm 全局安装点
+    // npm 全局 prefix 下（npm root -g 输出即 <prefix>/node_modules）
+    ...(() => { const root = npmGlobalModulesRoot(); return root ? [path.join(root, 'js-yaml')] : []; })(),
+    // 常规 npm 全局安装点（%APPDATA%\npm —— 本机 dsh 安装点）
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml'),
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml'),
-    // npm root -g 的输出（npm 全局 prefix；CI runner 常为 C:\npm\prefix）
-    ...(() => { try {
-        const root = spawnSync('npm', ['root', '-g'], { encoding: 'utf8' }).stdout.trim();
-        return root ? [path.join(root, 'js-yaml')] : [];
-      } catch { return []; } })(),
     // NODE_PATH（CI 中常见显式设置）
     ...(process.env.NODE_PATH ? [path.join(process.env.NODE_PATH, 'js-yaml')] : []),
   ];

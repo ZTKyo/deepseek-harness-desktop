@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
-| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `AWAITING_REVIEW` | EXTERNAL_REVIEW（Round 6 = CHANGES_REQUIRED，SH-R7 修复中） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R6.md |
+| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `AWAITING_REVIEW` | EXTERNAL_REVIEW（Round 7 = CHANGES_REQUIRED，SH-R8 修复中） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R7.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -21,13 +21,13 @@
 - **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
 - 详见 `AI_CONTEXT.md`（冲突裁决原则）
 
-## Phase 02 执行上下文（Phase 02 VERIFIED — Security-Hardening AWAITING_REVIEW / SH-R7）
+## Phase 02 执行上下文（Phase 02 VERIFIED — Security-Hardening AWAITING_REVIEW / SH-R8）
 
 - **Reviewer Verdict：Phase 02 APPROVED / VERIFIED**（R1–R11 闭环）
-- **Security-Hardening External Review Round 6：CHANGES_REQUIRED**（setState invariant 顺序 / cold-start restore owner 独立性 / CURRENT_STATUS truth）
+- **Security-Hardening External Review Round 7：CHANGES_REQUIRED**（restore-owner 跨 restart 独立性 / A5 baseline-aware / CURRENT_STATUS post-merge truth）
 - **当前 Security-Hardening 状态：AWAITING_REVIEW**（Final Verdict=IMPLEMENTATION_COMPLETE，VERIFIED 只能由 Reviewer APPROVED 后 backfill）
-- **已完成轮次**：SH-R1（实现主体，PR #32）、SH-R2（4 项，PR #33，main `70932de`/`a06e7b0`）、**SH-R3（3 项，PR #34，main `1959b5b`/`92c6774`）**、**SH-R4（3 项，PR #35，main `c9f18f9`/`585e5e8`）**、**SH-R5（3 项，PR #36，main `e1a90326`/`18c6136`）**、**SH-R6（3 项，PR #37，main `ec91d26b`/`74f894d`）**
-- **修复分支**：`fix/shardening-r7`（SH-R7 修复中）
+- **已完成轮次**：SH-R1（实现主体，PR #32）、SH-R2（4 项，PR #33，main `70932de`/`a06e7b0`）、**SH-R3（3 项，PR #34，main `1959b5b`/`92c6774`）**、**SH-R4（3 项，PR #35，main `c9f18f9`/`585e5e8`）**、**SH-R5（3 项，PR #36，main `e1a90326`/`18c6136`）**、**SH-R6（3 项，PR #37，main `ec91d26b`/`74f894d`）**、**SH-R7（3 项，PR #38，main `52176a77`/`4b1f9dd`）**
+- **修复分支**：`fix/shardening-r8`（SH-R8 修复中）
 - **禁止**：rotate/delete secret（除非授权）、进入 P2.5 / Phase 03
 
 ### 路线顺序（Security-Hardening APPROVED 后）
@@ -53,16 +53,16 @@
 
 ## 当前执行位置
 
-- 当前阶段：**Security-Hardening Gate**（External Review Round 6 = CHANGES_REQUIRED；SH-R7 修复中）
+- 当前阶段：**Security-Hardening Gate**（External Review Round 7 = CHANGES_REQUIRED；SH-R8 修复中）
 - **状态：AWAITING_REVIEW**（Final Verdict=IMPLEMENTATION_COMPLETE，见 REPORT_SH_R4.md；VERIFIED 只能由 Reviewer APPROVED 后 backfill）
 - Final Verdict：Phase 02 = **APPROVED / VERIFIED**（见 REPORT_R11.md）；Security-Hardening = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（见 REPORT_SH_R6.md）
 - 等待：Reviewer 确认 Security-Hardening APPROVED → VERIFIED backfill → P2.5（若存在）→ Phase 03
-- 路线顺序：P2 VERIFIED ✅ → Security-Hardening AWAITING_REVIEW（SH-R7 修复中）→ Reviewer APPROVED → P2.5 → P3
+- 路线顺序：P2 VERIFIED ✅ → Security-Hardening AWAITING_REVIEW（SH-R8 修复中）→ Reviewer APPROVED → P2.5 → P3
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion「02｜SIMPLIFY」页面 → 从未完成步骤继续。
-当前执行位置：**Security-Hardening SH-R7 修复中（External Review Round 6 = CHANGES_REQUIRED）；Reviewer APPROVED 前禁止进入 P2.5 / Phase 03。**
+当前执行位置：**Security-Hardening SH-R8 修复中（External Review Round 7 = CHANGES_REQUIRED）；Reviewer APPROVED 前禁止进入 P2.5 / Phase 03。**
 
 ## 变更日志
 

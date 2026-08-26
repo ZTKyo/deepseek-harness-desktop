@@ -37,6 +37,10 @@ SH-R9 live posture 三项 PASS。证据：evidence/R3_RUNTIME_EVIDENCE.md；报�
 状态维持 AWAITING_REVIEW（merge 后仅 SHA backfill）。
 **Merge 记录**：PR #43 squash=`107433e`（CI：reliability / static+secret / boot smoke 全绿），
 main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW**，等待 External Review Round 3。
+**R4 补充证据 Merge 记录**：PR #44 squash=`601d425`（CI 三项全绿；docs/evidence only，
+13 文件：真实 token A/B + 锚点回源/去重审计 + 风险登记册终版 + P2.7 kill-switch/fail-open
+部署字节复验 61 PASS / 0 FAIL，全程零重启）；main HEAD=601d425。状态不变，仍为
+**AWAITING_REVIEW**，等待 External Review Round 3。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
 - P2.5 完成后 → Phase 03（AUTONOMY）。
@@ -120,3 +124,4 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
 - 2026-08-26：进入 **P2.5 CONTEXT MEMORY**；R1 实施完成（AUDIT → DESIGN → 实现 `context-memory{,-core}.mjs` → 53/53 回归 → 真实运行时验证 REAL）；提交 PR #41（`fix/context-memory-r1`），状态置 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。未进入 P3，未触碰 Security-Hardening。
 - 2026-08-27：P2.5 **R2 修复轮完成**（Review Round 1 CHANGES_REQUIRED → R2-1..R2-8 全部闭环）：测试入 CI（ci-level1/level3）、install-plugin 原子写 + 自动 hash 发现 + preflight 集成（15 PASS）、真实重启加载 R2 插件（01:37，restart-apply-patch 日志 COMMITTED；8 PASS / 0 FAIL；store watermark 483517→486785）、REAL Recall 17 PASS、R2-7 false-completion/context-rot 修复（61 PASS）、guardian !!js regression（8 PASS）。PR #42（`fix/context-memory-r2`，11 commits）**CI 3/3 全绿 → squash MERGED（merge=`1cad4c6`）→ SHA backfill 完成**。状态置 **VERIFIED**，等待 External Review Round 2 APPROVED 后正式进入 Phase 03。
 - 2026-08-27：**External Review Round 2 = CHANGES_REQUIRED**。Reviewer 认定 `be76a559` 的 VERIFIED 标记未经 Reviewer 授权（Harness 不得代替外部 Reviewer 宣布 VERIFIED/APPROVED/闭环）；**Governance correction**：总览表 / 当前执行位置 / Phase 状态 / 路线 / 恢复指令全部纠正为 `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`，历史记录保留不改写。Round 2 认可 R2-1/R2-2/R2-7/R2-8 修复与 Authority 边界；新 BLOCKERs（REAL provider switch、真实 OFF/ON Token A/B + Completion Quality、5 类精确回源、corrupt/missing fail-open、kill-switch rollback、仓库内脱敏 evidence snapshot、SH-R9 live posture 最小核对）→ 进入 **R3 Evidence Closure**；P3 = BLOCKED BY P2.5 REVIEW。
+- 2026-08-27：P2.5 **R4 运行时补充验证完成**（External Review 收口补充项）：真实跨会话 OFF-era vs ON-era token A/B（每轮注入 ≈100–180 tok 替代多 K 投影回放）、锚点回源对账（注入头↔store refs↔RAW 尾部逐条一致、零双写）、观察头去重审计 PASS、风险登记册终版 5 条（含 2 条本轮新发现同步 KNOWN_ISSUES.md）、kill-switch fail-open 部署字节复验（live SHA256==repo 字节 + agent.cordis.yml 挂载活体自证冷加载，免重启零中断，61 PASS / 0 FAIL）。PR #44 CI 三绿 → squash MERGED（=`601d425`），本行为其纯状态 backfill。状态维持 **AWAITING_REVIEW**；证据：`docs/roadmap/evidence/R4_P25_VERIFICATION_EVIDENCE.md` + `R4_RUNTIME_EVIDENCE.md`。

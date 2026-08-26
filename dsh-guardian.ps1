@@ -457,7 +457,10 @@ function Test-YamlFile([string]$path) {
     $node = (Get-Command node -ErrorAction SilentlyContinue).Source
     if (-not $y -or -not $node -or -not (Test-Path $path)) { return $null }   # unknown -> don't touch
     try {
-        $code = "const fs=require('fs'),y=require(process.argv[1]);try{y.load(fs.readFileSync(process.argv[2],'utf8'));console.log('OK')}catch(e){console.log('ERR')}"
+        # P2.5 fix (2026-08-26): cordis 配置使用 !!js 标签（SH-R2 起 NOTION_TOKEN 走 env 注入），
+        # 默认 schema 会误判为 INVALID 并回滚 lastgood（曾把加固版打回明文 token 旧版）。
+        # 守护只做"语法守卫"，故解析前剥掉 !!js 类型标签再 load（语义求值仍归 cordis）。
+$code = 'const fs=require(''fs''),y=require(process.argv[1]);try{const s=fs.readFileSync(process.argv[2],''utf8'').replace(/!!js(\s+)/g,''str$1'');y.load(s);console.log(''OK'')}catch(e){console.log(''ERR'')}'
         $out = & $node -e $code $y $path 2>&1 | Out-String
         if ($out -match 'OK') { return $true }
         if ($out -match 'ERR') { return $false }

@@ -2,7 +2,8 @@
 
 > 状态：**R3 完成（REAL 证据收口 103 PASS / 0 FAIL）；PHASE 维持 IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（等待 External Review Round 3 独立裁决）**
 > Reviewer Verdict 背景：Round 2 = CHANGES_REQUIRED；本轮为治理纠正 + R3-1…R3-8 证据收口，**不自称 VERIFIED**——该状态仅可由外部 Reviewer 写入。
-> PR：本分支 `fix/context-memory-r3`。上一轮：R2（REPORT_R2.md）。
+> PR：`fix/context-memory-r3` → **PR #43 MERGED（squash=`107433e`，CI 三项全绿）**；此后仅状态类 backfill。
+> 上一轮：R2（REPORT_R2.md）。
 
 ## 1. 本轮目标与验收对照
 

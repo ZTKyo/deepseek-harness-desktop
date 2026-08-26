@@ -35,6 +35,8 @@ External Reviewer 未 APPROVED 前把 P2.5 写成 VERIFIED——该状态无 Rev
 （active=true 持久化，R2"未自然发生"缺口补强）；token A/B 三点序列在档；
 SH-R9 live posture 三项 PASS。证据：evidence/R3_RUNTIME_EVIDENCE.md；报告：REPORT_R3.md。
 状态维持 AWAITING_REVIEW（merge 后仅 SHA backfill）。
+**Merge 记录**：PR #43 squash=`107433e`（CI：reliability / static+secret / boot smoke 全绿），
+main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW**，等待 External Review Round 3。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
 - P2.5 完成后 → Phase 03（AUTONOMY）。

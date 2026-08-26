@@ -24,6 +24,11 @@ import { spawnSync } from 'node:child_process';
 
 const root = path.resolve(process.argv[2] || process.cwd());
 const GUARDIAN = path.join(root, 'dsh-guardian.ps1');
+// js-yaml 4.x/5.x 的 main 是 ./dist/js-yaml.cjs.js，**没有 index.js**（3.x 才有）。
+// 探针用 require(process.argv[1])，传目录即可按 package.json main 解析；
+// 硬编码 <dir>/index.js 会让 4.x/5.x 全 miss（CI 实测：npm install -g js-yaml
+// 成功但脚本仍报 not resolvable）。候选一律指向 js-yaml **目录**，
+// 用 package.json 存在性校验（与 tools/install-plugin.mjs findJsYaml 同策略）。
 const jsyamlCandidates = [
   // npm_config_prefix（GH Actions setup-node 在 Windows runner 显式设为
   // C:\npm\prefix）：它是 prefix 根，npm 全局模块根 = <prefix>/node_modules
@@ -31,7 +36,7 @@ const jsyamlCandidates = [
   // 会找不到 js-yaml —— CI 实测踩坑）。
   ...(() => {
     const prefix = process.env.npm_config_prefix || process.env.NPM_CONFIG_PREFIX;
-    return prefix ? [path.join(prefix, 'node_modules', 'js-yaml', 'index.js')] : [];
+    return prefix ? [path.join(prefix, 'node_modules', 'js-yaml')] : [];
   })(),
   // `npm root -g` spawn 兜底：不依赖任何环境变量，CI 实测最可靠
   // （install-plugin 门禁正是靠这条在 Windows runner 找到 js-yaml）。
@@ -48,25 +53,30 @@ const jsyamlCandidates = [
       // expand ${APPDATA} / $APPDATA env placeholders (npmrc prefix style)
       const expanded = out.replace(/\$\{(\w+)\}/g, (m, k) => process.env[k] || m)
                           .replace(/\$(\w+)/g, (m, k) => process.env[k] || m);
-      return [path.join(expanded, 'js-yaml', 'index.js')];
+      return [path.join(expanded, 'js-yaml')];
     } catch { return []; }
   })(),
   // NODE_PATH 多路径（Windows 分号 / Unix 冒号，path.delimiter 处理）
   ...(process.env.NODE_PATH
     ? process.env.NODE_PATH.split(path.delimiter).map((p) => p.trim()).filter(Boolean)
-        .map((p) => path.join(p, 'js-yaml', 'index.js'))
+        .map((p) => path.join(p, 'js-yaml'))
     : []),
   // 常规 npm 全局安装点（本机 dsh 安装点）
-  path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml', 'index.js'),
-  path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml', 'index.js'),
+  path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml'),
+  path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml'),
 ];
-let jsyaml = jsyamlCandidates.find((p) => fs.existsSync(p));
+function hasPackageJson(dir) {
+  try { return fs.existsSync(path.join(dir, 'package.json')); } catch { return false; }
+}
+let jsyaml = jsyamlCandidates.find(hasPackageJson);
 if (!jsyaml && process.env.LOCALAPPDATA) {
   // npx cache scan (same strategy as guardian Find-JsYaml)
   const npxRoot = path.join(process.env.LOCALAPPDATA, 'npm-cache', '_npx');
   if (fs.existsSync(npxRoot)) {
-    const found = findFile(npxRoot, 'index.js', 6);
-    if (found && /js-yaml/i.test(found)) jsyaml = found;
+    // 找 js-yaml 的 package.json（4.x/5.x 包内没有 index.js；找到后回退到目录）
+    const found = findFile(npxRoot, 'package.json', 6);
+    // 仅接受路径含 js-yaml 目录段的（避免误匹配别的包的 package.json）
+    if (found && found.split(path.sep).includes('js-yaml')) jsyaml = path.dirname(found);
   }
 }
 

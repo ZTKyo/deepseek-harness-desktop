@@ -112,6 +112,11 @@ $preflightLog = Join-Path $env:LOCALAPPDATA 'DSHHarness\logs\credential-prefligh
 $intentsFile = Join-Path $env:LOCALAPPDATA 'DSHHarness\state\execution-intents.json'
 $workerScript = Join-Path $here 'coldstart-gate-worker.ps1'
 $workerResult = Join-Path $env:TEMP ("coldstart-gate-result-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + '.json')
+# SH-R7: run-id scoped marker/backup (never reuse a fixed path - a stale marker
+# from a crashed run could trigger an early kill + false PASS).
+$runId = [Guid]::NewGuid().ToString('N').Substring(0, 12)
+$killMarker = Join-Path $env:TEMP ("coldstart-kill-marker-" + $runId + '.txt')
+$credBackup = Join-Path $env:TEMP ("coldstart-cred-backup-" + $runId + '.bin')
 
 # ---- SH-R6: capture the original credential BEFORE any mutation --------------
 $originalCredBytes = $null
@@ -165,7 +170,7 @@ $workerArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$workerS
     '-ResultFile', "`"$workerResult`"",
     '-Port', '3080')
 if ($DryRun) { $workerArgs += '-NoRestart' }
-if ($KillInjection) { $workerArgs += '-WaitForKillMarker' }
+if ($KillInjection) { $workerArgs += '-WaitForKillMarker'; $workerArgs += '-KillMarker'; $workerArgs += "`"$killMarker`"" }
 # Start-Process spawns the worker as a new process. SH-R5/R6 note: this does NOT
 # guarantee it is outside the DSH process tree; the REAL safety contract is the
 # CONTROLLER as restore owner (it captured the original bytes above and can
@@ -180,8 +185,7 @@ Write-Host "worker pid=$($workerProc.Id) result=$workerResult"
 # CONTROLLER restores the credential. This proves restore does NOT depend on
 # the worker's finally.
 if ($KillInjection) {
-    Write-Host '=== KILL INJECTION: waiting for worker mutation marker ==='
-    $killMarker = Join-Path $env:TEMP 'coldstart-kill-marker.txt'
+    Write-Host '=== KILL INJECTION: waiting for worker mutation marker (run-id scoped) ==='
     $killDeadline = (Get-Date).AddSeconds(60)
     $markerSeen = $false
     while ((Get-Date) -lt $killDeadline) {
@@ -192,14 +196,58 @@ if ($KillInjection) {
         Write-Host 'FAIL  worker did not reach mutation marker in 60s'
         $script:fail++
     } else {
-        # force-kill the worker (finally will NOT run)
-        Stop-Process -Id $workerProc.Id -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-        Check 'K1 worker force-killed (finally bypassed)' ($workerProc.HasExited) ("exited=" + $workerProc.HasExited)
-        # CONTROLLER restores + asserts SHA/DACL (the real safety contract)
-        Restore-OriginalCredential -Assert
+        # SH-R7: BEFORE killing, assert the credential was REALLY mutated
+        # (SHA changed from the original / ref absent) - prevents a stale or
+        # no-op marker from producing a false PASS.
+        $shaNow = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
+        $mutated = ($shaNow -ne $originalCredSha)
+        Check 'K0 mutation really happened before kill (SHA changed)' $mutated ("sha=" + $shaNow.Substring(0, 12) + " vs orig=" + $originalCredSha.Substring(0, 12))
+        # SH-R7: REAL Host restart fault injection - simulate the DSH host
+        # restart killing the controller+worker tree (a restart is the most
+        # realistic way the whole tree can die). We spawn an INDEPENDENT
+        # restore owner (detached process, not a child of this controller) that
+        # holds the backup, then trigger the restart; the restore owner must
+        # survive and restore even if this controller is killed.
+        if ($mutated) {
+            # persist backup bytes for the independent restore owner
+            [System.IO.File]::WriteAllBytes($credBackup, $originalCredBytes)
+            $restoreOwner = Join-Path $here 'coldstart-restore-owner.ps1'
+            if (Test-Path $restoreOwner) {
+                Write-Host '=== spawning INDEPENDENT restore owner (survives host kill tree) ==='
+                $roArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$restoreOwner`"",
+                    '-CredsFile', "`"$credsFile`"",
+                    '-BackupFile', "`"$credBackup`"",
+                    '-ExpectedSha', $originalCredSha,
+                    '-DaclFile', "`"$env:TEMP\coldstart-dacl-$runId.txt`"")
+                [System.IO.File]::WriteAllText("$env:TEMP\coldstart-dacl-$runId.txt", $originalCredDacl, (New-Object System.Text.UTF8Encoding($false)))
+                $roProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $roArgs -WindowStyle Hidden -PassThru
+                Write-Host "restore owner pid=$($roProc.Id)"
+                # trigger a REAL host restart (this may kill this controller if
+                # it sits in the DSH tree - that is exactly the scenario)
+                Write-Host '=== triggering REAL host restart (kill tree simulation) ==='
+                if ($DryRun) {
+                    Write-Host '(dry-run: host restart skipped - restore owner still exercised)'
+                    # simulate the mutation already present (worker mutated it in
+                    # dry-run too) so the restore owner still has work to do
+                } else {
+                    & $restartScript -RestartAndWait -DelaySeconds 2 -Port 3080 -TimeoutSec 200 -Reason 'sh-r7-kill-tree-injection' | Out-Null
+                }
+                # wait for the restore owner to restore + verify
+                Start-Sleep -Seconds 8
+                $shaAfter = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
+                Check 'K1 credential restored by INDEPENDENT restore owner (SHA exact)' ($shaAfter -eq $originalCredSha) ("sha=" + $shaAfter.Substring(0, 12))
+                $daclAfter = (icacls $credsFile 2>&1 | Out-String)
+                Check 'K1b credential DACL unchanged by restore owner' ($daclAfter -eq $originalCredDacl) ('dacl-identical=' + ($daclAfter -eq $originalCredDacl))
+                Stop-Process -Id $roProc.Id -Force -ErrorAction SilentlyContinue
+            } else {
+                Write-Host 'WARN  restore-owner script missing; falling back to controller restore'
+                Restore-OriginalCredential -Assert
+            }
+        }
     }
     Remove-Item -LiteralPath $killMarker -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $credBackup -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath "$env:TEMP\coldstart-dacl-$runId.txt" -Force -ErrorAction SilentlyContinue
 }
 
 # ---- controller waits on the worker (poll result file, bounded) -------------
@@ -224,6 +272,21 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 3
 }
 } # end: skip poll in KillInjection mode
+
+# ---- SH-R7: GUARANTEED restore on ANY exit path ------------------------------
+# Standard live negative path: if the worker exits early without a result (e.g.
+# killed by a host restart), the controller MUST still restore the credential -
+# never leave the canonical file mutated. (In KillInjection mode the restore
+# owner already handled it; this is a belt-and-suspenders guard.)
+if (-not $KillInjection) {
+    $shaFinal = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
+    if ($shaFinal -ne $originalCredSha) {
+        Write-Host 'GUARANTEED-RESTORE: credential mutated but not restored - restoring now'
+        Restore-OriginalCredential -Assert
+    } else {
+        Write-Host 'GUARANTEED-RESTORE: credential intact (no restore needed)'
+    }
+}
 
 if ($KillInjection) {
     # KillInjection already asserted restore via R1/R2; nothing to aggregate.

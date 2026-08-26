@@ -519,6 +519,45 @@ const storePath = path.join(stateDir, 'execution-intents.json');
   check('T17g direct active-path assignment keeps autoResume=true', store.get(sid).autoResume === true);
 }
 
+// ── SH-R7 T18: ADVERSARIAL invariant gate - even an explicit
+// { autoResume: false } in extra must NOT create a recoverable state with
+// autoResume=false (setState normalizes AFTER merging extra).
+{
+  const ctx = makeCtx({});
+  const plugin = ecApply(ctx, { stateDir, enableAutoResume: true, serverGeneration: 'boot:R7_1' });
+  const store = plugin._test.store;
+  const recoverableStates = ['RUNNING', 'WAITING_NETWORK', 'WAITING_PROVIDER', 'RECOVERY_QUEUED', 'INTERRUPTED_BY_RESTART'];
+  for (const st of recoverableStates) {
+    const sid = `sess-r7-adversarial-${st}`;
+    store.ensure(sid);
+    // the adversarial call: explicit autoResume:false in extra
+    store.setState(sid, st, { autoResume: false, reason: 'adversarial' });
+    const it = store.get(sid);
+    check(`T18 ${st} + extra.autoResume=false -> autoResume normalized TRUE`, it.autoResume === true, `state=${it.state} autoResume=${it.autoResume}`);
+    // and it must remain visible to recovery
+    check(`T18 ${st} visible in listRecoverable()`, store.listRecoverable().filter((x) => x.sessionId === sid).length === 1);
+  }
+  // RETRYING: autoResume is normalized TRUE too, but listRecoverable() EXCLUDES
+  // RETRYING by design (P0: the retry handler owns it; boot scan/timer must not
+  // concurrently resume it) - so assert normalization + exclusion separately.
+  {
+    const sid = 'sess-r7-adversarial-RETRYING';
+    store.ensure(sid);
+    store.setState(sid, 'RETRYING', { autoResume: false, reason: 'adversarial' });
+    const it = store.get(sid);
+    check('T18 RETRYING + extra.autoResume=false -> autoResume normalized TRUE', it.autoResume === true, `autoResume=${it.autoResume}`);
+    check('T18 RETRYING excluded from listRecoverable() (design: handler owns retry)', store.listRecoverable().filter((x) => x.sessionId === sid).length === 0);
+  }
+  // non-recoverable states must KEEP autoResume=false (extra respected)
+  for (const [st, sid] of [['COMPLETED', 'sess-r7-nr-complete'], ['WAITING_USER', 'sess-r7-nr-waituser'], ['USER_PAUSED', 'sess-r7-nr-paused']]) {
+    store.ensure(sid);
+    store.setState(sid, st, { autoResume: false });
+    const it = store.get(sid);
+    check(`T18 ${st} keeps autoResume=false (non-recoverable)`, it.autoResume === false, `autoResume=${it.autoResume}`);
+    check(`T18 ${st} NOT in listRecoverable()`, store.listRecoverable().filter((x) => x.sessionId === sid).length === 0);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(stateDir, { recursive: true, force: true });
 if (fail > 0) { console.log('R5 ADDENDUM EC TEST FAILED'); process.exit(1); }

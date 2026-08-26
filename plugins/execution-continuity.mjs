@@ -243,16 +243,19 @@ export class IntentStore {
     const it = this.ensure(sessionId);
     it.state = state;
     it.lastActivity = Date.now();
-    // SH-R6 invariant: a RECOVERABLE state (esp. RUNNING) must NEVER coexist
-    // with autoResume=false. That hidden contradiction filters the intent out
-    // of BOTH listRecoverable() and listDue(), producing a silent stall
-    // (boot scan + timer both idle) - exactly the 20:04 boot:23056 symptom.
-    // Enforce the invariant here so ANY writer (liveness/resume/goal-changed)
-    // that transitions into a recoverable state atomically restores autoResume.
+    Object.assign(it, extra);
+    // SH-R6/R7 invariant (normalize AFTER merge so extra cannot override):
+    // a RECOVERABLE state (esp. RUNNING) must NEVER coexist with
+    // autoResume=false. That hidden contradiction filters the intent out of
+    // BOTH listRecoverable() and listDue(), producing a silent stall (boot
+    // scan + timer both idle) - exactly the 20:04 boot:23056 symptom. Merging
+    // extra FIRST then normalizing means even an explicit
+    // { autoResume: false } in extra cannot create the contradiction for a
+    // recoverable state. (Non-recoverable states like USER_PAUSED /
+    // WAITING_USER / COMPLETED keep whatever extra set.)
     if (RECOVERABLE_STATES.includes(state)) {
       it.autoResume = true;
     }
-    Object.assign(it, extra);
     this.persist();
     return it;
   }

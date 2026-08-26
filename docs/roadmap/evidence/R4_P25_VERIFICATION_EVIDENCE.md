@@ -1,5 +1,8 @@
 # P2.5 Context-Memory 运行时验证证据（R4-2 / R4-4 / R4-5 · 2026-08-27）
 
+> 承载文档说明：本文件即总控计划所述 R4 REAL ACCEPTANCE EVIDENCE 的单一载体（不另建同名第二份证据文件）；
+> 18 节级总报告按 Round-3 实况演进为本目录证据集 + docs/roadmap/CURRENT_STATUS.md 变更日志，命名差异已如实登记于变更日志。
+
 > 生产会话只读取证。方法链与上一份《R4 运行时证据》（2026-08-26，设计依据）同源：
 > 自研多帧 zstd 解码器逐帧无损解码 `~/.dsh/sessions/**/session.jsonl.zstd`，全程零写入生产文件。
 
@@ -55,7 +58,8 @@ message 级 100% 非零可用。
 ## 工具链固化
 
 解码器 `cm-r4-log-decoder.mjs`（多帧感知、只读）、统计 `cm-r4-route-stats.mjs`、
-回源对账 `cm-r4-anchor.mjs` / `cm-r4-correlate.mjs`、幂等 `cm-r4-dedupe.mjs` ——
+回源对账 `cm-r4-anchor.mjs` / `cm-r4-correlate.mjs`、幂等 `cm-r4-dedupe.mjs`、
+fail-open 活体演练 `cm-r4-failopen-live.mjs`、5 类回源 v2 `cm-r4-recall5.mjs` ——
 均在本目录，node>=22 原生 zlib，无第三方依赖。
 
 ## P2.6 风险登记册（终版，2026-08-27）
@@ -91,4 +95,54 @@ RESULT: 61 PASS / 0 FAIL   （含 T2 单开关停用×2 变体、T3 损坏 store
 
 结论：R3 门禁通过版本原样在产线执行；kill-switch 与 fail-open 行为今日再次实证 PASS。
 未对运行中服务做任何重启或配置变更（服务中断预告纪律：本次操作全程零中断）。
+
+## P2.8 REAL corrupt/missing fail-open 活体字节演练（B · 2026-08-27）
+
+- 对象：LIVE store 原始字节（SHA256 前缀 `9fbb42766ab70df4` 存档记录）；仅在临时目录副本上
+  受控破坏，活体文件零改动（输出自带 `mutatedLiveFile:false` 自证），全程零重启。
+- 算法权威：`validateStore` / `emptyObs` / `buildObservation` 直接 import 自正在运行的插件源
+  （deployed bytes，与本轮 SHA256 复验一致），非复刻规则。
+- 5 臂结果：半截 JSON / 非 JSON / schemaVersion 错误 → 三类损坏全部判废（usable=false）
+  → 重建路径可用（rebuildDemo skeletonValid=true、观察头可渲染）；缺失文件 →
+  `FRESH_LEARN_FROM_RAW_SESSION`（从原始会话确定性重学）；未破坏对照 → ACCEPT。
+- 结论：R2 合同 B4 中 corrupt/missing fail-open 的 REAL 半边闭环。
+  佐证原件：`R4_FAILOPEN_LIVE_20260827.json`（脱敏）+ `cm-r4-failopen-live.mjs`。
+
+## P2.9 REAL 5 类精确回源审计 v2（A · 官方提取路径，2026-08-27）
+
+- 方法升级：claim 文本经**部署版** `messageOfEvent` / `recursiveText` 提取（tool/result 嵌套块
+  一并被递归覆盖，与生产 recall 字节同源）；needle 按“…”截断符切分空白归一化，对全量
+  Official Session raw log（zstd 多帧无损解码 51,772 行 / 16,432 事件 / seq 0–679,541）做
+  **全语料逐字校验**（非窗口采样，排除采样间隙漏配）。
+- 结果：C1 goal / C2 error / C3 toolout / C4 filechg 四类 claim 全部逐字回源
+  （C2 精确命中 seq=667615 与该 claim 自身 ref seq 对齐；C1 有 174 个历史事件共同佐证）；
+  C5 refs 时序单调、三窗口抽样 present=3/3。storeVersion==log 头部最大版本（195）一致。
+- **SUMMARY：RECALL 5/5 ALL-CLASS-PASS（exit=0）→ R2 合同 B3 关闭。**
+  佐证原件：`R4_RECALL5_20260827.json`（脱敏，excerpt 已掩码）+ `cm-r4-recall5.mjs`。
+
+## P2.10 REAL kill-switch 双向回滚演练 · 四段闭环（⑦Gate-7，2026-08-27 04:53–05:02）
+
+>- 方式：enabled:false 落盘 → 正式通道 restart-dsh-server-delayed.ps1 -RestartAndWait
+>  真实重启 → 同一 session 无缝续跑 → enabled:true 回切 → 二次真实重启 → 注入回归。
+>  两腿均有官方 attempt ledger COMMITTED 记录：OFF-leg `94988ebcc1054202915a09a403d5d369`
+>  @ 2026-08-27T04:55:05+08:00；ON-leg `2777bf9655a94aedb5a78f23f280caaa` @ 05:02:01+08:00。
+>- OFF-leg 过程铁证（restart worker 日志）：核验旧服 loopback PID 22596（02:19:24 起）→
+>  04:53:49 停止 → 新服 PID 27540 于 04:53:51 启动（generation `639234032317218804_27540`）
+>  → 30s 稳定窗 → COMMITTED（预算重置、维护锁正常释放）。停机窗内 agent 工具流按预期中断
+>  并自动续接，goal 会话保持 active；guardian 孤儿锁接管未被触发（不需要）。
+>- ON-leg：目标行行号定位翻回 true（前后 sha16 `9DBCAA662B0CBE8B`→`85289DF4241238FE`，
+>  文件内另一处无关 enabled:false 未受影响），post-flip 结构校验通过后二次重启：新服 PID 28968
+>  （05:00:45 起），COMMITTED 后 HTTP /=200。防呆有效案例：一次校验器语法自伤被 throw 正确
+>  拦截、未触发重启——校验门在故障方向同样按设计工作。
+>- 插件复活正证：恢复后 `[context-memory observation]` 注入头即时回归且版本计数继续演进
+>  （v212/v213、sourceRange 推进）——开关终态=开启。
+>- duplicate-side-effect audit 终值：当日 attempt ledger 共 5 笔（COMMITTED 4），本演练窗口
+>  恰好 2 笔且全部 COMMITTED —— 零重复点火、零孤儿实例。
+>- 观测勘误（沉淀至工作区 KNOWN_ISSUES.md）：端口 3080 存在多监听行，tailscaled.exe 持有
+>  Tailscale 接口面行（fd7a:/100.x）；dsh 属主判定必须过滤 LocalAddress==127.0.0.1 并交叉核对
+>  进程 cmdline/generation/启动时间。
+
+**SUMMARY：R2 合同 B4 全关（fail-open REAL 半边见 P2.8 + 本节 REAL 重启半边）。至此 Round-3 七项 REAL Gate 证据全部就绪（① 见 #43/#44 系列）。**
+
+> 本节与本文件 P2.8/P2.9 新增内容随同一分支提交；状态仍为 AWAITING_REVIEW，仅补证据、不改治理状态。
 

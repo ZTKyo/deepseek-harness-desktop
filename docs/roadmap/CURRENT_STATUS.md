@@ -62,7 +62,10 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
   - B1 REAL provider switch 未执行（`lastRoute=null`=PASS 不被接受）→ R3 受控真实切换
   - B2 Token A/B 非 A/B（store 字节数≠usage tokens），Completion Quality 缺失，65.2%/58.5% 矛盾 → R3 真实 OFF/ON 对照
   - B3 REAL Recall 未真正回源 raw Session（ref 是数字≠PROVEN）→ R3 五类精确回源
+    〔✅ CLOSED 2026-08-27 深夜：v2 RECALL 5/5 ALL-CLASS-PASS，见变更日志与 evidence/R4_RECALL5_20260827.json〕
   - B4 corrupt/missing fail-open 与 kill-switch rollback 未真实执行 → R3 真实受控测试
+    〔fail-open 半边 ✅ CLOSED：活体字节演练 evidence/R4_FAILOPEN_LIVE_20260827.json；
+    kill-switch 真实重启回滚仍 OPEN〕
   - EVIDENCE：01:37 restart 降为 REPORTED REAL，需仓库内脱敏 snapshot → evidence/R3_RUNTIME_EVIDENCE.md
   - SH-R9 live posture 最小核对（非 SH-R10）
 - **边界**：未进入 P3；不触碰 Security-Hardening（仅 live posture 只读核对）；观察者角色不变
@@ -125,3 +128,20 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
 - 2026-08-27：P2.5 **R2 修复轮完成**（Review Round 1 CHANGES_REQUIRED → R2-1..R2-8 全部闭环）：测试入 CI（ci-level1/level3）、install-plugin 原子写 + 自动 hash 发现 + preflight 集成（15 PASS）、真实重启加载 R2 插件（01:37，restart-apply-patch 日志 COMMITTED；8 PASS / 0 FAIL；store watermark 483517→486785）、REAL Recall 17 PASS、R2-7 false-completion/context-rot 修复（61 PASS）、guardian !!js regression（8 PASS）。PR #42（`fix/context-memory-r2`，11 commits）**CI 3/3 全绿 → squash MERGED（merge=`1cad4c6`）→ SHA backfill 完成**。状态置 **VERIFIED**，等待 External Review Round 2 APPROVED 后正式进入 Phase 03。
 - 2026-08-27：**External Review Round 2 = CHANGES_REQUIRED**。Reviewer 认定 `be76a559` 的 VERIFIED 标记未经 Reviewer 授权（Harness 不得代替外部 Reviewer 宣布 VERIFIED/APPROVED/闭环）；**Governance correction**：总览表 / 当前执行位置 / Phase 状态 / 路线 / 恢复指令全部纠正为 `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`，历史记录保留不改写。Round 2 认可 R2-1/R2-2/R2-7/R2-8 修复与 Authority 边界；新 BLOCKERs（REAL provider switch、真实 OFF/ON Token A/B + Completion Quality、5 类精确回源、corrupt/missing fail-open、kill-switch rollback、仓库内脱敏 evidence snapshot、SH-R9 live posture 最小核对）→ 进入 **R3 Evidence Closure**；P3 = BLOCKED BY P2.5 REVIEW。
 - 2026-08-27：P2.5 **R4 运行时补充验证完成**（External Review 收口补充项）：真实跨会话 OFF-era vs ON-era token A/B（每轮注入 ≈100–180 tok 替代多 K 投影回放）、锚点回源对账（注入头↔store refs↔RAW 尾部逐条一致、零双写）、观察头去重审计 PASS、风险登记册终版 5 条（含 2 条本轮新发现同步 KNOWN_ISSUES.md）、kill-switch fail-open 部署字节复验（live SHA256==repo 字节 + agent.cordis.yml 挂载活体自证冷加载，免重启零中断，61 PASS / 0 FAIL）。PR #44 CI 三绿 → squash MERGED（=`601d425`），本行为其纯状态 backfill。状态维持 **AWAITING_REVIEW**；证据：`docs/roadmap/evidence/R4_P25_VERIFICATION_EVIDENCE.md` + `R4_RUNTIME_EVIDENCE.md`。
+- 2026-08-27（深夜）：P2.5 **R4 补充证据 A/B 双闭环（本地已固化，待随下个分支 PR 入库）**：
+  ④REAL 5 类精确回源 v2 = **RECALL 5/5 ALL-CLASS-PASS**（官方提取路径 messageOfEvent/recursiveText +
+  全语料逐字校验，排除采样间隙；C2 精确命中 seq 与 claim 自身 ref 对齐）→ 合同 B3 关闭；
+  ⑤⑥REAL corrupt/missing fail-open 于活体 store 字节副本（SHA256 存档、`mutatedLiveFile:false`、
+  零重启）：corrupt×3 判废→重建路径可渲染 / missing→FRESH_LEARN_FROM_RAW_SESSION / 对照 ACCEPT。
+  证据：`evidence/R4_RECALL5_20260827.json`、`evidence/R4_FAILOPEN_LIVE_20260827.json`
+  + `cm-r4-{recall5,failopen-live}.mjs`（详见 R4_P25_VERIFICATION_EVIDENCE.md §P2.8/§P2.9）。
+  剩余 OPEN：⑦kill-switch 真实重启回滚（已于紧随其后完成，见下一条）、报告归档与分支/PR/CI 收尾。
+
+- 2026-08-27（深夜后段）：P2.5 R4 **⑦kill-switch REAL 双向回滚演练闭环 → 合同 B4 全关**：
+  enabled:false → 真实重启（ledger 94988ebc… 04:55:05 COMMITTED；旧服 PID 22596 停止 / 新服 PID 27540 04:53:51 起）
+  → 同一 session 无缝续跑（工具流按预期中断并自动续接，guardian 免接管）→ enabled:true 回切
+  （sha16 9DBCAA662B0CBE8B→85289DF4241238FE，行级定位零误伤）→ 二次真实重启（ledger 2777bf96… 05:02:01
+  COMMITTED，新服 PID 28968）→ 注入头回归（v212/v213）为插件复活活体正证。副作用审计：当日 ledger
+  5 笔（COMMITTED 4），演练窗恰 2 笔全 COMMITTED，零重复点火。端口属主误判坑（tailscaled 持有 3080
+  非 loopback 监听行）已沉淀 KNOWN_ISSUES.md。七项 REAL Gate 证据全部就绪（①见 #43/#44 系列）；
+  本节连同 P2.8/P2.9/P2.10 随下一分支 PR 入库。状态保持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。

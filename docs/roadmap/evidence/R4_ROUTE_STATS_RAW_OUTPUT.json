@@ -1,0 +1,124 @@
+﻿[
+ {
+  "file": "a5976fc9-b173-4ac3-a334-86eba1c719ae.jsonl.zstd",
+  "events": 208,
+  "maxSeq": 2162,
+  "routes": {
+   "openrouter/stealth/ox-alpha": {
+    "samples": 8,
+    "nonZeroPressure": 8,
+    "usablePct": 100,
+    "avgPressure": 52086,
+    "medianPressure": 54259,
+    "p95Pressure": 55538,
+    "avgStepGrowth": 1257,
+    "avgCacheReadShare": "87%"
+   }
+  },
+  "sampleCallConfig": {
+   "provider": "openrouter",
+   "model": "stealth/ox-alpha",
+   "maxTokens": 131072
+  },
+  "overallAvgStepGrowth": 1257
+ },
+ {
+  "file": "f3083abc-5016-4b47-a592-702d1ef73d19.jsonl.zstd",
+  "events": 1029,
+  "maxSeq": 17112,
+  "routes": {
+   "openrouter/stealth/ox-alpha": {
+    "samples": 38,
+    "nonZeroPressure": 38,
+    "usablePct": 100,
+    "avgPressure": 80125,
+    "medianPressure": 84360,
+    "p95Pressure": 102127,
+    "avgStepGrowth": 1699,
+    "avgCacheReadShare": "96%"
+   }
+  },
+  "sampleCallConfig": {
+   "provider": "openrouter",
+   "model": "stealth/ox-alpha",
+   "maxTokens": 131072
+  },
+  "overallAvgStepGrowth": 1699
+ },
+ {
+  "file": "session-2331e290-ebe5-4fa0-8864-fe560407b656.jsonl.zstd",
+  "events": 1846,
+  "maxSeq": 31085,
+  "routes": {
+   "commandcode/deepseek/deepseek-v4-flash": {
+    "samples": 56,
+    "nonZeroPressure": 56,
+    "usablePct": 100,
+    "avgPressure": 77235,
+    "medianPressure": 76799,
+    "p95Pressure": 99240,
+    "avgStepGrowth": 964,
+    "avgCacheReadShare": "98%"
+   }
+  },
+  "sampleCallConfig": {
+   "provider": "commandcode",
+   "model": "deepseek/deepseek-v4-flash",
+   "maxTokens": 384000
+  },
+  "overallAvgStepGrowth": 964
+ },
+ {
+  "file": "session-34e86c7a-c982-4ded-90fa-1511021ffda7.jsonl.zstd",
+  "events": 40317,
+  "maxSeq": 599600,
+  "routes": {
+   "openrouter/stealth/ox-alpha": {
+    "samples": 101,
+    "nonZeroPressure": 101,
+    "usablePct": 100,
+    "avgPressure": 136747,
+    "medianPressure": 148076,
+    "p95Pressure": 194868,
+    "avgStepGrowth": 2157,
+    "avgCacheReadShare": "95%"
+   },
+   "commandcode/deepseek/deepseek-v4-flash": {
+    "samples": 405,
+    "nonZeroPressure": 405,
+    "usablePct": 100,
+    "avgPressure": 58543,
+    "medianPressure": 56933,
+    "p95Pressure": 77463,
+    "avgStepGrowth": 1075,
+    "avgCacheReadShare": "88%"
+   },
+   "bai/deepseek-v4-flash": {
+    "samples": 239,
+    "nonZeroPressure": 239,
+    "usablePct": 100,
+    "avgPressure": 51174,
+    "medianPressure": 50925,
+    "p95Pressure": 64533,
+    "avgStepGrowth": 2875,
+    "avgCacheReadShare": "45%"
+   },
+   "zhipu/glm-5.3-flash": {
+    "samples": 98,
+    "nonZeroPressure": 98,
+    "usablePct": 100,
+    "avgPressure": 73758,
+    "medianPressure": 73178,
+    "p95Pressure": 88997,
+    "avgStepGrowth": 1883,
+    "avgCacheReadShare": "75%"
+   }
+  },
+  "sampleCallConfig": {
+   "provider": "openrouter",
+   "model": "stealth/ox-alpha",
+   "maxTokens": 131072
+  },
+  "overallAvgStepGrowth": 1759
+ }
+]

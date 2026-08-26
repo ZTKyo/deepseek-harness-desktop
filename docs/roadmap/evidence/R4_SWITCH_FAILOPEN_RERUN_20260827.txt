@@ -1,0 +1,89 @@
+﻿
+=== T-SEL: selectProjectionRange boundaries ===
+  PASS  long session yields a range
+  PASS  range end never splits a tool-call pair
+  PASS  window start is not an orphaned tool/result
+  PASS  range aligned to a user/message boundary
+  PASS  session shorter than window → null
+  PASS  trailing call-carrying assistant excluded from range
+
+=== T1: raw session truth unchanged (append-only, originals intact) ===
+  PASS  projection occurred
+  PASS  all pre-projection events byte-identical (no deletion/mutation)
+  PASS  log only grew (append-only)
+  PASS  replacement node cites every shadowed seq (official recall protocol)
+  PASS  shadow-price prune event recorded
+
+=== T2: single switch fully disables (config + env) ===
+  PASS  enabled:false → no hooks exported
+  PASS  enabled:false → zero listeners registered
+  PASS  CM_DISABLED env → zero listeners registered
+  PASS  enabled → pre-step registered
+
+=== T3: corrupt store → rebuild/fail-open, task continues ===
+  PASS  corrupt store does not throw
+  PASS  projection proceeds after rebuild (task not blocked)
+  PASS  rebuilt as fresh store (raw-session learning restart)
+
+=== T4: recall — 5 evidence classes traceable via refs ===
+  PASS  projected
+  PASS  every cited seq is a real earlier source event (回源可达)
+  PASS  ① 用户原话 可回源
+  PASS  ② 错误原文 可回源
+  PASS  ③ 工具原始输出 可回源
+  PASS  ④ 文件变更/patch 可回源
+  PASS  ⑤ 时间线（有序 seq 集合）可回源
+  PASS  失败方案带防重试标记（context-rot 辅助）
+
+=== T5: restart recovery (persisted store resumes; missing store rebuilds) ===
+  PASS  first life: projected v1+
+  PASS  store restored from disk (version+watermark)
+  PASS  second life: incremental projection continues (v2)
+  PASS  exactly ONE live observation snapshot on surface after restart
+
+=== T6: provider-switch activation (observer-only, never decides) ===
+  PASS  first route observed: not a switch
+  PASS  auto rewrite model change ≠ switch
+  PASS  concrete-model/provider change activates projection
+  PASS  activated → immediate projection below threshold
+  PASS  inactive + below threshold → passive (surface untouched)
+
+=== T7: bounded memory (reflection caps, single snapshot, refs ring) ===
+  PASS  per-section caps enforced
+  PASS  total size bounded (5062 ≤ 6000+overhead)
+  PASS  rendered text bounded (2449)
+  PASS  single live observation node after repeated projections (got 1)
+  PASS  refs ring bounded
+
+=== T8: no-duplicate-authority static audit ===
+  PASS  does not touch compaction 权力 ("compactNow")
+  PASS  does not touch EC/官方 retry 决策域 ("request-error")
+  PASS  does not touch Router 桥接方向 ("ec/recovery-requirement")
+  PASS  does not touch goal 恢复驱动 ("goal.resume")
+  PASS  does not touch 模型合法性裁决 ("resolveModelInfo")
+  PASS  does not touch 默认模型改写 ("agent-default-model")
+  PASS  does not touch compaction 配置域 ("thresholdRatio")
+  PASS  does not touch compaction 配置域 ("retainRatio")
+  PASS  no direct session-file access path
+
+=== T9: context rot — failed approaches marked, deduped, not revived ===
+  PASS  failed approach recorded in observation
+  PASS  duplicate failure signatures merged into ONE bullet (got 1)
+  PASS  explicit anti-retry guidance present
+
+=== T10: token A/B (synthetic scenario, est-tokens basis) ===
+        [synthetic] baseline=22337 tok, after=1228 tok, ratio=0.055
+  PASS  projected surface ≥25% smaller than raw baseline (ratio=0.055)
+
+=== T11: R2-7 blocker close is evidence-linked (no false completion) ===
+  PASS  A: unrelated PASS must NOT clear the blocker
+  PASS  A: blocker text still references alpha
+  PASS  B: related PASS closes the blocker
+  PASS  C: later blocker still recorded
+  PASS  C: earlier PASS kept as evidence
+  PASS  E: count-context success output is NOT an error
+  PASS  E: success output not recorded as failed approach
+  PASS  E: success output recorded as verified evidence
+
+============================================================
+RESULT: 61 PASS / 0 FAIL

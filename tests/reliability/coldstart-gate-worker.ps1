@@ -27,7 +27,8 @@ param(
     [string]$ResultFile,
     [int]$Port = 3080,
     [switch]$NoRestart,
-    [switch]$WaitForKillMarker
+    [switch]$WaitForKillMarker,
+    [string]$KillMarker = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -194,8 +195,11 @@ try {
     # RESTORES the credential itself as the restore owner. This proves the gate
     # does NOT depend on this worker's finally for credential safety.
     if ($WaitForKillMarker) {
-        $killMarker = Join-Path $env:TEMP 'coldstart-kill-marker.txt'
-        [System.IO.File]::WriteAllText($killMarker, 'mutated', (New-Object System.Text.UTF8Encoding($false)))
+        # SH-R7: use the run-id scoped marker path passed by the controller (a
+        # fixed marker path could let a stale marker from a crashed run trigger
+        # an early kill + false PASS).
+        $markerPath = if ($KillMarker) { $KillMarker } else { Join-Path $env:TEMP 'coldstart-kill-marker.txt' }
+        [System.IO.File]::WriteAllText($markerPath, 'mutated', (New-Object System.Text.UTF8Encoding($false)))
         Write-Host 'KILL-MARKER written; parking until controller kills this worker'
         # park: the controller will Stop-Process -Force us; if that never happens
         # we exit after a bounded wait so the run cannot hang forever.

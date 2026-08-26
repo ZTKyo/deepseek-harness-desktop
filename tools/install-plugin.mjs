@@ -72,11 +72,14 @@ function sha256(p) {
 function npmGlobalModulesRoot() {
   // 1) 环境变量：GH Actions setup-node 显式设置 npm_config_prefix（Windows
   //    runner 上 = C:\npm\prefix），npm 自身也会在脚本环境继承它。零 spawn、
-  //    最可靠，优先。
-  if (process.env.npm_config_prefix) return process.env.npm_config_prefix;
-  // 2) 解析 npm 命令取 root -g。注意 Windows 上 Node 的 spawnSync 不解析
-  //    PATHEXT：裸 'npm' 会 ENOENT，必须用 'npm.cmd' 且 shell:true 让
-  //    cmd.exe 解析。Unix 直接 'npm'。
+  //    最可靠，优先。注意 npm_config_prefix 是 **prefix 根**，npm 全局模块根 =
+  //    <prefix>/node_modules（与 `npm root -g` 输出同语义）——少拼 node_modules
+  //    会导致 js-yaml 找不到（CI 实测踩坑）。
+  const prefix = process.env.npm_config_prefix || process.env.NPM_CONFIG_PREFIX;
+  if (prefix) return path.join(prefix, 'node_modules');
+  // 2) 解析 npm 命令取 root -g（输出即 <prefix>/node_modules）。注意 Windows 上
+  //    Node 的 spawnSync 不解析 PATHEXT：裸 'npm' 会 ENOENT，必须用 'npm.cmd'
+  //    且 shell:true 让 cmd.exe 解析。Unix 直接 'npm'。
   try {
     const cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
     const r = spawnSync(cmd, ['root', '-g'],
@@ -88,13 +91,18 @@ function npmGlobalModulesRoot() {
 
 function findJsYaml() {
   const candidates = [
-    // npm 全局 prefix 下（npm root -g 输出即 <prefix>/node_modules）
+    // npm 全局 prefix 的模块根（npm_config_prefix / npm root -g 均指向 <prefix>/node_modules）
     ...(() => { const root = npmGlobalModulesRoot(); return root ? [path.join(root, 'js-yaml')] : []; })(),
     // 常规 npm 全局安装点（%APPDATA%\npm —— 本机 dsh 安装点）
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', 'js-yaml'),
     path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', 'js-yaml'),
-    // NODE_PATH（CI 中常见显式设置）
-    ...(process.env.NODE_PATH ? [path.join(process.env.NODE_PATH, 'js-yaml')] : []),
+    // NODE_PATH：Windows 分号 / Unix 冒号分隔的多路径，逐个尝试
+    ...(process.env.NODE_PATH
+      ? process.env.NODE_PATH
+          .split(process.platform === 'win32' ? ';' : ':')
+          .map((p) => p.trim()).filter(Boolean)
+          .map((p) => path.join(p, 'js-yaml'))
+      : []),
   ];
   const seen = new Set();
   for (const c of candidates) {

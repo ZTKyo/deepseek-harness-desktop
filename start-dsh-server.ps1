@@ -162,13 +162,20 @@ $preflightHelper = Join-Path $root 'dsh-credential-preflight.ps1'
 if (Test-Path $preflightHelper) {
     try {
         . $preflightHelper
-        # SH-R8: isolated credential source support - when DSH_CREDENTIALS_PATH
+        # SH-R8/R9: isolated credential source support - when DSH_CREDENTIALS_PATH
         # is set (cold-start gate negative phase), the preflight reads that
         # file instead of the canonical ~/.dsh/.credentials.yaml, so the gate
         # can exercise the safe-degrade path WITHOUT mutating the real
         # credential store. Absent the env var, behaviour is unchanged.
-        $ntnPre = if ($env:DSH_CREDENTIALS_PATH) {
-            Invoke-DshNotionPreflight -CredentialsPath $env:DSH_CREDENTIALS_PATH
+        #
+        # SH-R9 coherence fix: resolve the EFFECTIVE credential path ONCE for
+        # this boot, then use it for BOTH the preflight and the value read.
+        # Previously the preflight used the override but Get-DshCredentialRefValue
+        # read the canonical path, creating an authority split ("validate source
+        # A, inject source B"). Now both always read the same source.
+        $effectiveCredPath = if ($env:DSH_CREDENTIALS_PATH) { $env:DSH_CREDENTIALS_PATH } else { $null }
+        $ntnPre = if ($effectiveCredPath) {
+            Invoke-DshNotionPreflight -CredentialsPath $effectiveCredPath
         } else {
             Invoke-DshNotionPreflight
         }
@@ -176,8 +183,12 @@ if (Test-Path $preflightHelper) {
         # alone is not auditable after the fact
         $null = Write-DshPreflightResultLog -Result $ntnPre
         if ($ntnPre.Ok) {
-            $env:NOTION_TOKEN = Get-DshCredentialRefValue -Name 'NOTION_TOKEN'
-            Write-Host ("NOTION-PREFLIGHT ok ref={0} len={1} (value not logged)" -f $ntnPre.Ref, $ntnPre.Length)
+            if ($effectiveCredPath) {
+                $env:NOTION_TOKEN = Get-DshCredentialRefValue -Name 'NOTION_TOKEN' -CredentialsPath $effectiveCredPath
+            } else {
+                $env:NOTION_TOKEN = Get-DshCredentialRefValue -Name 'NOTION_TOKEN'
+            }
+            Write-Host ("NOTION-PREFLIGHT ok ref={0} len={1} (value not logged; source={2})" -f $ntnPre.Ref, $ntnPre.Length, $(if ($effectiveCredPath) { 'override' } else { 'canonical' }))
         } else {
             Write-Warning ("NOTION-PREFLIGHT FAIL reason={0} ref={1} -> mcp-notion SAFE-DEGRADE (not loaded); host boot continues" -f $ntnPre.Reason, $ntnPre.Ref)
         }

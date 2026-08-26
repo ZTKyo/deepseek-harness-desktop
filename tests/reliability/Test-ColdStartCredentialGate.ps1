@@ -185,69 +185,18 @@ Write-Host "worker pid=$($workerProc.Id) result=$workerResult"
 # CONTROLLER restores the credential. This proves restore does NOT depend on
 # the worker's finally.
 if ($KillInjection) {
-    Write-Host '=== KILL INJECTION: waiting for worker mutation marker (run-id scoped) ==='
-    $killDeadline = (Get-Date).AddSeconds(60)
-    $markerSeen = $false
-    while ((Get-Date) -lt $killDeadline) {
-        if (Test-Path $killMarker) { $markerSeen = $true; break }
-        Start-Sleep -Milliseconds 500
-    }
-    if (-not $markerSeen) {
-        Write-Host 'FAIL  worker did not reach mutation marker in 60s'
-        $script:fail++
-    } else {
-        # SH-R7: BEFORE killing, assert the credential was REALLY mutated
-        # (SHA changed from the original / ref absent) - prevents a stale or
-        # no-op marker from producing a false PASS.
-        $shaNow = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
-        $mutated = ($shaNow -ne $originalCredSha)
-        Check 'K0 mutation really happened before kill (SHA changed)' $mutated ("sha=" + $shaNow.Substring(0, 12) + " vs orig=" + $originalCredSha.Substring(0, 12))
-        # SH-R7: REAL Host restart fault injection - simulate the DSH host
-        # restart killing the controller+worker tree (a restart is the most
-        # realistic way the whole tree can die). We spawn an INDEPENDENT
-        # restore owner (detached process, not a child of this controller) that
-        # holds the backup, then trigger the restart; the restore owner must
-        # survive and restore even if this controller is killed.
-        if ($mutated) {
-            # persist backup bytes for the independent restore owner
-            [System.IO.File]::WriteAllBytes($credBackup, $originalCredBytes)
-            $restoreOwner = Join-Path $here 'coldstart-restore-owner.ps1'
-            if (Test-Path $restoreOwner) {
-                Write-Host '=== spawning INDEPENDENT restore owner (survives host kill tree) ==='
-                $roArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$restoreOwner`"",
-                    '-CredsFile', "`"$credsFile`"",
-                    '-BackupFile', "`"$credBackup`"",
-                    '-ExpectedSha', $originalCredSha,
-                    '-DaclFile', "`"$env:TEMP\coldstart-dacl-$runId.txt`"")
-                [System.IO.File]::WriteAllText("$env:TEMP\coldstart-dacl-$runId.txt", $originalCredDacl, (New-Object System.Text.UTF8Encoding($false)))
-                $roProc = Start-Process -FilePath 'powershell.exe' -ArgumentList $roArgs -WindowStyle Hidden -PassThru
-                Write-Host "restore owner pid=$($roProc.Id)"
-                # trigger a REAL host restart (this may kill this controller if
-                # it sits in the DSH tree - that is exactly the scenario)
-                Write-Host '=== triggering REAL host restart (kill tree simulation) ==='
-                if ($DryRun) {
-                    Write-Host '(dry-run: host restart skipped - restore owner still exercised)'
-                    # simulate the mutation already present (worker mutated it in
-                    # dry-run too) so the restore owner still has work to do
-                } else {
-                    & $restartScript -RestartAndWait -DelaySeconds 2 -Port 3080 -TimeoutSec 200 -Reason 'sh-r7-kill-tree-injection' | Out-Null
-                }
-                # wait for the restore owner to restore + verify
-                Start-Sleep -Seconds 8
-                $shaAfter = (Get-FileHash -LiteralPath $credsFile -Algorithm SHA256).Hash
-                Check 'K1 credential restored by INDEPENDENT restore owner (SHA exact)' ($shaAfter -eq $originalCredSha) ("sha=" + $shaAfter.Substring(0, 12))
-                $daclAfter = (icacls $credsFile 2>&1 | Out-String)
-                Check 'K1b credential DACL unchanged by restore owner' ($daclAfter -eq $originalCredDacl) ('dacl-identical=' + ($daclAfter -eq $originalCredDacl))
-                Stop-Process -Id $roProc.Id -Force -ErrorAction SilentlyContinue
-            } else {
-                Write-Host 'WARN  restore-owner script missing; falling back to controller restore'
-                Restore-OriginalCredential -Assert
-            }
-        }
-    }
-    Remove-Item -LiteralPath $killMarker -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $credBackup -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath "$env:TEMP\coldstart-dacl-$runId.txt" -Force -ErrorAction SilentlyContinue
+    # SH-R9: the legacy KillInjection / restore-owner path is ARCHIVED. Since
+    # SH-R8 the standard negative boot uses an ISOLATED credential source and
+    # NEVER mutates the canonical .credentials.yaml, so there is no mutation to
+    # restore and no restore-owner to verify - the whole kill/restore contract
+    # lost its meaning (K0's canonical-SHA-mutation assumption no longer holds).
+    # -KillInjection is kept as a deprecated no-op so old invocations fail
+    # loudly instead of silently doing the wrong thing.
+    Write-Host ''
+    Write-Host 'WARN  -KillInjection is DEPRECATED/ARCHIVED since SH-R9: the standard'
+    Write-Host '      gate uses an isolated credential source and never mutates the'
+    Write-Host '      canonical file, so kill/restore fault injection no longer applies.'
+    Write-Host '      See REPORT_SH_R9 for the SH-R8 isolation design.'
 }
 
 # ---- controller waits on the worker (poll result file, bounded) -------------

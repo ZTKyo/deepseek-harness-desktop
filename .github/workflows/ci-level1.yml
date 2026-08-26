@@ -40,6 +40,47 @@ jobs:
           }
           exit $fail
 
+      - name: Context-memory unit regression (P2.5, T1-T11 incl. R2-7)
+        shell: pwsh
+        run: |
+          # P2.5 R2 (R2-1): every PR must pass the context-memory unit suite
+          # (MiniSession fold semantics, recall refs, restart recovery, bounded
+          # memory, no-duplicate-authority, context rot, R2-7 blocker close).
+          # Pure node unit test: no live server, no credentials, repo-relative.
+          node tests\context-memory\verify-context-memory.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "CONTEXT-MEMORY REGRESSION FAIL"; exit 1 }
+          Write-Host "context-memory unit regression: PASS"
+
+      - name: Install-plugin regression (P2.5 R2-2 atomic write + auto hash check)
+        shell: pwsh
+        run: |
+          # P2.5 R2-2: the authoritative installer must (a) copy atomically
+          # (tmp+rename, no half-written plugin), (b) auto-discover mount refs
+          # and hash-check targets even with no --plugin, (c) integrate with the
+          # restart preflight. Temp dirs only -- never touches ~/.dsh.
+          npm install -g js-yaml
+          if ($LASTEXITCODE -ne 0) { Write-Host "npm install js-yaml FAILED"; exit 1 }
+          node tests\install-plugin\verify-install-plugin.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "INSTALL-PLUGIN REGRESSION FAIL"; exit 1 }
+          Write-Host "install-plugin regression: PASS"
+
+      - name: Guardian !!js YAML regression (P2.5 R2-8 behavioral)
+        shell: pwsh
+        run: |
+          # R2-8: guardian's Test-YamlFile must treat !!js-tagged configs as VALID
+          # (not INVALID, which would roll back guardian-lastgood). Source-integrity
+          # + behavioral: extracts guardian's real probe code and runs it against
+          # isolated fixtures. Cross-checks real ~/.dsh configs if present.
+          # js-yaml must exist for the extracted probe to run: install it WITHOUT
+          # swallowing failures (a silent npm failure leaves the probe with no
+          # js-yaml), and export NODE_PATH=(npm root -g) like the YAML-parse gate.
+          npm install -g js-yaml
+          if ($LASTEXITCODE -ne 0) { Write-Host "npm install js-yaml FAILED"; exit 1 }
+          $env:NODE_PATH = (npm root -g)
+          node tests\reliability\verify-guardian-js-tag.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "GUARDIAN !!JS REGRESSION FAIL"; exit 1 }
+          Write-Host "guardian !!js regression: PASS"
+
       - name: YAML parse (all .yml/.yaml, cordis !!js aware)
         shell: pwsh
         run: |

@@ -445,11 +445,24 @@ $configFiles = @(
 $lastGoodDir = Join-Path $dataRoot 'guardian-lastgood'
 try { New-Item -ItemType Directory -Force -Path $lastGoodDir | Out-Null } catch {}
 function Find-JsYaml {
-    foreach ($p in @(
+    # P2.5 R2-8 fix (2026-08-26): 增加 npm_config_prefix 分支（GH Actions Windows
+    # runner 的 setup-node 显式设 npm_config_prefix=C:\npm\prefix；它是 prefix 根，
+    # npm 全局模块根 = <prefix>/node_modules —— 少拼 node_modules 会找不到）。
+    # 优先级：env prefix > NODE_PATH（分号/冒号分隔）> APPDATA 常规安装点 > npx 缓存。
+    $candidates = @()
+    if ($env:npm_config_prefix -or $env:NPM_CONFIG_PREFIX) {
+        $p = if ($env:npm_config_prefix) { $env:npm_config_prefix } else { $env:NPM_CONFIG_PREFIX }
+        $candidates += (Join-Path $p 'node_modules\js-yaml\index.js')
+    }
+    if ($env:NODE_PATH) {
+        $candidates += @($env:NODE_PATH -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object { Join-Path $_ 'js-yaml\index.js' })
+    }
+    $candidates += @(
         (Join-Path $env:APPDATA 'npm\node_modules\js-yaml\index.js'),
         (Join-Path $env:APPDATA 'npm\node_modules\@deepseek-ai\dsh\node_modules\js-yaml\index.js'),
         (Get-ChildItem (Join-Path $env:LOCALAPPDATA 'npm-cache\_npx') -Directory -Recurse -Filter index.js -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'js-yaml' } | Select-Object -First 1 -ExpandProperty FullName)
-    )) { if (Test-Path $p) { return $p } }
+    )
+    foreach ($p in $candidates) { if ($p -and (Test-Path $p)) { return $p } }
     return $null
 }
 function Test-YamlFile([string]$path) {

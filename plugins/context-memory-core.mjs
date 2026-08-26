@@ -117,8 +117,23 @@ function keysRelated(a, b) {
   return a === b || a.startsWith(b) || b.startsWith(a);
 }
 
+/** 判断 PASS 文本是否与 blocker 文本证据相关（保守：共享 ≥2 个 >3 字符 token 或前缀关系）。 */
+function isRelatedEvidence(blockerText, passText) {
+  const a = normKey(blockerText), b = normKey(passText);
+  if (keysRelated(a, b)) return true;
+  const ta = a.split(' ').filter(w => w.length > 3);
+  const tb = new Set(b.split(' ').filter(w => w.length > 3));
+  let hits = 0;
+  for (const w of ta) if (tb.has(w) && (++hits) >= 2) return true;
+  return false;
+}
+
 const RX_ERROR = /\b(error|failed|failure|exception|traceback|enoent|eacces|eperm|exit code[: ]+\d+|cannot find|denied|timeout(?:d)?\b)/i;
 const RX_PASS = /\b(pass(?:ed)?|success(?:ful)?|verified|all tests?\b|✅)\b/i;
+// R2-7 分层分类：工具输出通常以结果词开头，先看开头信号词再全局匹配，
+// 避免 "PASS ... 0 failed / 0 errors" 这类带否定计数语境的成功输出被 RX_ERROR 误吞。
+const RX_ERROR_LEAD = /^\s*(error|fail(?:ed|ure)?|exception|traceback|enoent|eacces|eperm|cannot find|denied|fatal)\b/i;
+const RX_PASS_LEAD = /^\s*(pass(?:ed|ing)?|ok\b|success|verified|✅|all tests? (?:pass|ok))\b/i;
 const RX_FILEWRITE = /(^|\n)(diff --git|\+\+\+ |created |created\b|updated |modified |written|saved to )/i;
 const RX_RUNTIME = /(localhost|127\.0\.0\.1):\d+|(?:^|\s)version[:= ]\S+/i;
 
@@ -144,15 +159,17 @@ export function buildObservation(events, nodeSeqs, prevObs) {
     if (evt.type === 'tool/result') {
       const sample = ellipsize(text, 240);
       const ref = seq;
-      if (RX_ERROR.test(text)) {
+      if (RX_ERROR_LEAD.test(text) || (!RX_PASS_LEAD.test(text) && RX_ERROR.test(text))) {
         pushUnique(obs.failedApproaches, { t: sample, why: firstMatchLine(text, RX_ERROR), refs: [ref] });
         obs.blockers = [{ t: sample, refs: [ref] }]; // 最新错误即当前 blocker 候选
         continue;
       }
-      if (RX_PASS.test(text)) {
+      if (RX_PASS_LEAD.test(text) || RX_PASS.test(text)) {
         pushUnique(obs.verifiedEvidence, { t: sample, refs: [ref] });
-        // 有新验证证据 → 之前的 blocker 视为缓解（清空候选）
-        if (obs.blockers.length === 1) obs.blockers = [];
+        // R2-7：只有 PASS 与当前 blocker 证据相关时才保守关闭 blocker；
+        // 无关的后续 PASS（如另一模块测试成功）不得清空未解决 blocker（防 false completion）。
+        const cur = obs.blockers[obs.blockers.length - 1];
+        if (cur && isRelatedEvidence(cur.t, text)) obs.blockers = [];
         pushUnique(obs.completedActions, { t: sample, refs: [ref] });
         continue;
       }

@@ -143,6 +143,12 @@ IMPLEMENTATION_COMPLETE。
   单一事实载体：`reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_F_FINAL_VERACITY_CLOSURE.md`；
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 10 的重新审核**；P3=BLOCKED 不变；
   未改生产代码/配置、零重启；未标 VERIFIED。
+- **R5.1-F MERGE BACKFILL（2026-08-28）**：PR #56 merge = `f745865`（CI 三项全绿：
+  DSH boot + readiness smoke 4m40s / Reliability state machine tests 1m27s / Static + secret + syntax
+  gate 1m1s）；R5.1-F FINAL VERACITY CLOSURE 已入库 main（CURRENT_STATUS R5.1-F 行 + REPORT_R5 §22
+  + R5_1_F_FINAL_VERACITY_CLOSURE.md 单一事实载体 + V6 证据 ×2）；状态维持
+  IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（Waiting For: External Review Round 10 的重新审核）。
+  未改生产代码、零重启。
 
 ## Phase 02 Security-Hardening 最终状态
 

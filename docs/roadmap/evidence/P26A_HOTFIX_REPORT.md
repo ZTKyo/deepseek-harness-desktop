@@ -69,3 +69,8 @@
   本热修期间其存档/checkpoint 完好（R5 证据与 live store 未被触碰）。
 - P2.6-A 状态置 **DONE / VERIFIED-PENDING-REVIEW**（自证验收全绿；权威 APPROVED 待外部 Reviewer）。
 - 未进入 P3；未新增第二 Authority；未触碰 Official Core 代码。
+- **Route 覆盖披露**：本热修全部 REAL 验证经 **BAI 路由**完成（主力 deepseek-v4-flash）。
+  CommandCode 路由（settings.yaml 第三处同参 compat 门控，L160 区域）使用同一 pi-ai 校验器
+  与同一启动加载机制，配置身份一致；今晚未做其专用客户端链路的活线探测——「至少两个
+  DeepSeek-compatible route/adapter 实测」合同按 02.6 页原文归属正式 REPORT_R1 范围，
+  随 Failure Taxonomy / classifier 一并验收，不在本热修内冒认。

@@ -79,10 +79,33 @@ IMPLEMENTATION_COMPLETE。
   - R5-2 REAL missing projection 集成测试：真实 Web 实例，state 移走→自动重建（version=3, watermark=443），零损伤
   - R5-3 Gate-7 REAL kill-switch drill 四腿全绿（baseline/failopen/envkill/missing）— 16/16 rounds, 4/4 OK
   - R5-4 Completion Quality OFF/ON checklist：NO MATERIAL REGRESSION（代理指标；独立评测系统仍 INCONCLUSIVE）
+    ※ 2026-08-27 晚 R5.1-C V4 复核：V3 口径 MATERIAL_REGRESSION 系**审查回声污染假象**（见时间线 R5.1-C 条目），
+    校正口径 NO_MATERIAL_REGRESSION（echo-excluded）
   - R5-5 SH-R9 只读 posture 9 项：ALL PASS（无 STOP）
   - R5-6 CURRENT_STATUS.md canonical 清理（本条目）
 - **状态维持**：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（不越权改 VERIFIED）
 - **边界**：未进入 P3；不触碰 Security-Hardening（仅 live posture 只读核对）；观察者角色不变
+- **R5.1-C FINAL FACTUAL CLOSURE（2026-08-27，External Review Round 7 = CHANGES_REQUIRED 后收口）**：
+  仅按 Round 7 要求做 3 项 blocker 的事实收口，不新增指标、不建评测系统（Reviewer 明令）：
+  - **(A) Completion Quality V4 契约版**：按 Round 7 固定字段清单生成 **17 项 task-quality 固定字段
+    OFF/ON 对照表**（可观察字段给真值，不可观察字段一律 `N/A / NOT OBSERVABLE`，不脑补）；verdict
+    改为三值 `REGRESSED / NO MATERIAL REGRESSION / INCONCLUSIVE`（预注册阈值：ON echo-excluded
+    per-1k > OFF × 2 才 REGRESSED）。结果 **NO MATERIAL REGRESSION**（echo-excluded per-1k OFF=0
+    ON=0；最长 ON 主 CM 会话 34e86c7a 91.7k 事件 0/0 命中）。V3 的 MATERIAL_REGRESSION 判定已注明为
+    **审查回声污染假象**（V3 是 incident-rate 表非 task-quality 比较，其 OFF=0 规则使任何 ON 命中都
+    自动触发 REGRESSION；44 起 ON 命中全部集中于 a144fe3f：23 PROTO=P2.6-A 已修复缺陷类历史 +
+    21 QUOTA=GLM 外部 429）。载体：`evidence/r5-completion-quality-v4-20260827-r7c/R5_COMPLETION_QUALITY_V4.json`
+    + 生成器 `make-r5-completion-quality-v4.mjs`（解码与命中链与 V2/V3 字节级一致）。
+  - **(B) Security-Hardening 四组 live 字段复核**：guardian recent cycles（EXT-4）、credential
+    same-source chain（EXT-5）、repo+worktree live secret scan（EXT-6）、hardened-config identity
+    snapshot-eq（EXT-7）——SH9 V4 复跑 **16/16 PASS**，无 STOP。载体：`evidence/R5_SH9_POSTURE_V4.json`。
+  - **(C) Canonical 前向路线统一（CURRENT_STATUS ↔ Notion Master/02.5/02.6/02.75/03）**：
+    `P2.5 → 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（TODO；硬前置=P2.5 外部 VERIFIED）→
+    Phase 02.75 SUPERVISOR（TODO；硬前置=P2.6 VERIFIED）→ Phase 03 AUTONOMY（TODO；前置=02.5 +
+    02.75 VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON`。与 Master 页 2026-08-27 路线更新、
+    02.6 页 Gate、02.75 页 Gate、P3 页前置一致。
+  - Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭；Reviewer 只判断「Context Memory 是否
+    造成 material task-quality regression」，证据以 V4 固定字段表为准。
 
 ## Phase 02 Security-Hardening 最终状态
 
@@ -254,3 +277,19 @@ IMPLEMENTATION_COMPLETE。
   L1/L2/L3 三绿 → squash MERGED（=`5cb495b`），本行为其纯状态 backfill；Notion 02.5 canonical 页
   已于合并前同轮同步（Round 7 口径）。状态维持 **AWAITING_REVIEW / Waiting For=External Review
   Round 7 的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-C Completion Quality V4 复核（Round 7 收口，审查回声污染校正）**：
+  (A) V4 生成器 `evidence/make-r5-completion-quality-v4.mjs` 与 V3 逐字节对齐 matcher/表结构/预注册
+  三选一规则，新增**事件类型归因**（incidentEventTypes）＋**echo 排除校正口径**（pooledClean /
+  adjustedVerdict），输出 `evidence/r5-completion-quality-v4-20260827-235912/R5_COMPLETION_QUALITY_V4.json`；
+  (B) **raw 口径复现 V3 判定**：ON pooled per-1k 0.5719 > OFF 0 × 2 → MATERIAL_REGRESSION（355 日志 740k 事件；
+  OFF 2 长会话 115190 事件 0 命中 / ON 2 长会话 115412 事件 66 命中，全部集中于 a144fe3f 34+32）；
+  (C) **echo 排除后 = NO_MATERIAL_REGRESSION**：a144fe3f 全部 66 个命中的事件类型 100% 为
+  assistant/chunk|assistant/message|tool/call|tool/result（26/20/12/8），抽样 seq 89107-206761 显示
+  assistant reasoning 文本或 tool/result 回显**旧日志内容**（如 seq 94605 reasoning 块自述 V1 遇
+  reasoning_content 400；R5.1-B era-scan 脚本创建 seq 89114/90081/90792 落在命中区段内）→ 审查活动
+  本身把触发串回灌进当前活跃会话日志（观测者效应）；排除后 ON pooled per-1k=0；
+  (D) 校正结论：**V3 的 MATERIAL_REGRESSION 系审查回声假象**，建议 Reviewer 采纳 echo-excluded
+  口径 NO_MATERIAL_REGRESSION（34e86c7a 91.7k 事件主会话 0/0 raw & clean 不变；OFF 池 0/0 不变）；
+  最终裁定权仍在 Reviewer，登记册 #5 维持开放。
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。

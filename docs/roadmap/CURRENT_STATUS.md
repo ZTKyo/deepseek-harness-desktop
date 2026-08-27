@@ -206,3 +206,13 @@ IMPLEMENTATION_COMPLETE。
   R4 四条 era 会话两类 0 命中）。
   证据：`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`＋§18 追加于 REPORT_R5.md。
   未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-A Merge Backfill**：PR #51（`fix/context-memory-r5-1-final-evidence`）CI L1/L2/L3 三绿
+  （Static+secret+syntax PASS / Reliability PASS / Boot smoke PASS 4m49s）→ squash MERGED（merge=`1619574`），
+  本行为其纯状态 backfill。入库内容：recall verifier `SECRET_RX` 跨行桥接收窄（STRICT 活体腿复跑 7/7 ALL-PASS）、
+  双门 `FILE_PATH_RX` `<path>` 回执分支（NEG-FINAL-6 回归，负例套件 10/10）、双门精确门如实 verdict
+  （3 PASS + 2 FAIL 真阳性=登记册#8 投影噪声）、SH-R9 posture V2（9/9 PASS）、
+  Completion Quality V2 固定字段核算（355 日志/728k+ 事件只读；12:59Z 快照 PROTO=22/QUOTA=17/ECHO=814，
+  R4 四条 era 会话两类 0 命中）、REPORT_R5 §18＋`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md` 单一事实载体、
+  「P2.5→P3 残留」复查无残留。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；
+  P3=BLOCKED 不变。

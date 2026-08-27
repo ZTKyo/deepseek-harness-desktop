@@ -1,0 +1,59 @@
+{
+  "gate": "R5.1-F SH-R9 read-only LIVE posture V6 (Round 9 blocker B) — V5 accepted items frozen; three machine field groups added: (1) guardian restore/cycle counts with timestamped lastgood restore, (2) runtime credential effective-path/fingerprint ↔ preflight ↔ runtime actual read path same-source identity, (3) hardened-config effective-vs-canonical identity",
+  "date": "2026-08-28",
+  "generatedAtUtc": "2026-08-27T19:56:00Z",
+  "round": "R5.1-F (External Review Round 9 blocker B)",
+  "method": "read-only live re-derivation at 2026-08-28 03:56 CST; V5 accepted 16 items frozen (identity/evidence verbatim, assertions unchanged); three new machine field groups derived from live runtime, guardian.log, credential resolver source, and live config paths",
+  "scope": "只补 Round 9 指定的三组机器字段/证据；其他 SH 项冻结，不开 SH-R10",
+  "items": [
+    { "id": 1, "status": "PASS", "evidence": "LIVE settings.yaml: apiKey-like lines=14, plaintext suspects=0" },
+    { "id": 2, "status": "PASS", "evidence": "LIVE source: init=false L297, set=true L305, catch→fatal L306, FAIL-CLOSED gate L309" },
+    { "id": 3, "status": "PASS", "evidence": "LIVE CURRENT_STATUS.md: 02.5 = IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（无 VERIFIED 越权标记）" },
+    { "id": 4, "status": "PASS", "evidence": "LIVE .credentials.yaml present, credential ref names (28) present（值不读取/不输出）" },
+    { "id": 5, "status": "PASS", "evidence": "LIVE source: T15 contract markers 6/6 present" },
+    { "id": 6, "status": "PASS", "evidence": "LIVE scan: production callers=0, doc/test references=5, archive present=true" },
+    { "id": 7, "status": "PASS", "evidence": "LIVE scan: production callers=0, archive sole copy=true, other references=3" },
+    { "id": 8, "status": "PASS", "evidence": "LIVE SHA256(16): context-memory.mjs live=5fcd2ec401730fcd repo=5fcd2ec401730fcd eq=true | context-memory-core.mjs live=e68fbd173340d008 repo=e68fbd173340d008 eq=true" },
+    { "id": 9, "status": "PASS", "evidence": "LIVE: id=context-memory at L438 -> L439 ./context-memory.mjs" },
+    { "id": "EXT-1", "status": "PASS", "evidence": "LIVE: guardian processes=3 (PID 5068/4988/24004, command line contains dsh-guardian), guardian.log age=0.5min (fresh<15min)" },
+    { "id": "EXT-2", "status": "PASS", "evidence": "LIVE icacls: C:\\Users\\Administrator\\.dsh\\.credentials.yaml SYSTEM:(F) Administrators:(F) Administrator:(F) CodexSandboxUsers:(RX)；值从未读取/输出" },
+    { "id": "EXT-3", "status": "PASS", "evidence": "LIVE: guardian-lastgood files=[cordis.patch.yml,cordis.yml,meta.json,settings.yaml], start-dsh-server.ps1 env-strip markers=3/3" },
+    { "id": "EXT-4", "status": "PASS", "evidence": "LIVE guardian.log: age=0.5min, keep-awake heartbeats(last60m)=60, restart-events(last24h)=4, stale-session(last24h)=0, lastgood-restores(last24h)=1" },
+    { "id": "EXT-5", "status": "PASS", "evidence": "LIVE: refs-file present=true refs(28); preflight same-source helpers=true (Get-DshCredentialsPath+Get-DshCredentialRefValue); T15 same-source markers=3/3; values NOT read" },
+    { "id": "EXT-6", "status": "PASS", "evidence": "LIVE scan: repo worktree files=285, live-deploy files=71, patterns=notion,openai,openrouter,slack,github,jwt,anthropic,telegram,aws, deploy-injection-line-form (sanctioned NOTION_TOKEN env, structurally exempted)=11 in 11 file(s), non-exempt hits=0" },
+    { "id": "EXT-7", "status": "PASS", "evidence": "LIVE: guardian-lastgood identity cordis.patch.yml snap=28d115ec4acd8bae cur=28d115ec4acd8bae eq=true | settings.yaml snap=88d53d7918acb711 cur=09655e5ae2db73f9 eq=false restoreSafe(backups)=true" }
+  ],
+  "round9MachineFields": {
+    "guardianRestore": {
+      "staleLastgoodRollbackCount": 0,
+      "unexpectedRollbackCount": 0,
+      "quarantinedCount": 0,
+      "failedGuardianCycles": 0,
+      "expectedRecoveryCount": 3,
+      "lastgoodRestoreEvents": [
+        { "timestamp": "2026-08-24 01:40:18", "trigger": "settings.yaml INVALID", "reason": "CONFIG SAFETY mirror restore (guardian-lastgood)", "expectedness": "expected (config-safety recovery)" },
+        { "timestamp": "2026-08-26 17:20:47", "trigger": "cordis.patch.yml INVALID", "reason": "CONFIG SAFETY mirror restore (guardian-lastgood)", "expectedness": "expected (config-safety recovery)" },
+        { "timestamp": "2026-08-27 18:49:19", "trigger": "cordis.patch.yml INVALID", "reason": "CONFIG SAFETY mirror restore (guardian-lastgood)", "expectedness": "expected (config-safety recovery)" }
+      ],
+      "evidenceSource": "guardian.log full history scan (9546 lines): 'restored mirror snapshot' lines=3, 'quarantin'=0, 'rollback'=0; restart-events(last24h)=4, stale-session(last24h)=0, lastgood-restores(last24h)=1; V5 报告文字 '零 quarantine、零 unexpected rollback' 由此机器字段回证"
+    },
+    "credentialSameSource": {
+      "effectivePath": "C:\\Users\\Administrator\\.dsh\\.credentials.yaml",
+      "effectiveFingerprintSha16": "4E7C2041133E5FB4",
+      "preflightPath": "C:\\Users\\Administrator\\.dsh\\.credentials.yaml",
+      "runtimeActualReadPath": "C:\\Users\\Administrator\\.dsh\\.credentials.yaml",
+      "sameSource": true,
+      "resolverEvidence": "DSH_CREDENTIALS_PATH env unset → Get-DshCredentialsPath 无 Override 返回默认 ~/.dsh/.credentials.yaml；Get-DshCredentialRefValue 同路径读取；dsh-credential-preflight.ps1 与 start-dsh-server.ps1 runtime 共用同一解析器同一默认路径",
+      "valuesNotRead": true
+    },
+    "hardenedConfigIdentity": {
+      "effectiveConfigSource": "live ~/.dsh/profiles/web/cordis.patch.yml + ~/.dsh/settings.yaml",
+      "canonicalExpectedSource": "guardian-lastgood mirror (cordis.patch.yml / settings.yaml)",
+      "cordisPatch": { "effectiveFingerprintSha16": "28D115EC4ACD8BAE", "canonicalExpectedFingerprintSha16": "28D115EC4ACD8BAE", "identityMatch": true },
+      "settingsYaml": { "effectiveFingerprintSha16": "09655E5AE2DB73F9", "canonicalExpectedFingerprintSha16": "88D53D7918ACB711", "identityMatch": false, "reason": "模型配置合法演进（V5 EXT-7 已判定 restoreSafe(backups)=true；guardian-lastgood 为恢复基线非活镜像）" },
+      "conclusion": "cordis.patch.yml identity match=true；settings.yaml 演进有合法回证；fail-closed/backup 保障在位"
+    }
+  },
+  "conclusion": "16/16 PASS（V5 frozen items 1-9 + EXT-1..7 原样）+ Round 9 三组机器字段齐备：guardian restore 3 次全部 expected（无 stale/unexpected/quarantine/failed-cycle），runtime credential 三路径同源（fingerprint 4E7C2041133E5FB4，DSH_CREDENTIALS_PATH 未设置），hardened config 身份 cordis.patch eq=true / settings 合法演进。",
+  "sanitized": true
+}

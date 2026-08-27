@@ -298,5 +298,50 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
 - 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 9 的重新审核**；
   P3=BLOCKED 不变；未改生产代码/配置、零重启；未标 VERIFIED。
 
+## §22 R5.1-F 追加：Round 9 三 blocker 最小事实收口（2026-08-28）
+
+> 单一事实载体见 `docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_F_FINAL_VERACITY_CLOSURE.md`。
+> 不改 §0–§21 已载结论。仅按 External Review Round 9 三 blocker 做最小事实收口。
+
+### §22.1 (A) Completion Quality V6 — V4 真值纠正，verdict=INCONCLUSIVE
+
+- V5 误写四会话 `toolErrors/llmRetries/userContinue=0`，与已审核 V4 fixed-field 数据冲突；
+  V6 逐会话纠正为 V4 真实值（定义/note 原样保留）：
+  toolErrors = 355/40/111/19；providerErrors =（9e3b29bb）T26/R1/TO22/S3、（11c7aa70）T2、
+  （34e86c7a）R73/T13/TO40、（a144fe3f）TO3/S23；llmRetries = 52/2/126/26；
+  userContinue = 111/7/74/11（词法代理）；a144fe3f 的 incidents 41/39 系审查回声（V4 已裁不采）。
+- Round 9 合同：不重扫日志、不新 evaluator、不新 rate/score → **verdict=INCONCLUSIVE**
+  （既有 report/PR/CI 仅证明阶段最终 COMPLETED + 回证链，无法严格排除 material regression；
+  不再声明 NO MATERIAL REGRESSION；acceptance 逐项回放等不可观测字段如实 N/A）。
+- 载体：`evidence/r5-completion-quality-v6-20260828-r9c/R5_COMPLETION_QUALITY_V6.json`。
+
+### §22.2 (B) SH-R9 posture V6 — 三组机器字段补全
+
+- **16/16 PASS**（V5 frozen items 1-9 + EXT-1..7 断言原样冻结）+ Round 9 三组机器字段：
+  (1) **guardian restore 全史**：guardian.log 9546 行扫描，lastgood restore 3 次全带时间戳
+  （2026-08-24 01:40:18 settings INVALID / 2026-08-26 17:20:47 cordis.patch INVALID /
+  2026-08-27 18:49:19 cordis.patch.yml INVALID→mirror restore），全部为预期 CONFIG SAFETY 恢复；
+  **stale-lastgood-rollback=0、unexpected-rollback=0、quarantine=0、failed-guardian-cycles=0**；
+  restart-24h=4、stale-24h=0、lastgood-restores-24h=1；guardian 进程 3（PID 5068/4988/24004）、
+  log age=0.5min。
+  (2) **凭据同源链**：effective=preflight=runtime 实际读取路径全 =
+  `C:\Users\Administrator\.dsh\.credentials.yaml`（sha16=`4E7C2041133E5FB4`）；
+  DSH_CREDENTIALS_PATH 未设置 → resolver 默认同源；值未读取/未输出。
+  (3) **配置身份**：cordis.patch.yml live==lastgood `28D115EC4ACD8BAE` eq=true；
+  settings.yaml live `09655E5AE2DB73F9`≠lastgood `88D53D7918ACB711`（模型配置合法演进，restoreSafe(backups)=true）。
+- 载体：`evidence/r5-sh9-posture-v6-20260828-r9c/R5_SH9_POSTURE_V6.json`。
+
+### §22.3 (C) Notion 02.5 页 canonical 修正
+
+- patch `4bcdd4b0`（P3 AUTONOMY：BLOCKED BY P2.5 REVIEW）→
+  `P2.6 BLOCKED BY P2.5 REVIEW / P2.75 BLOCKED BY P2.6 / P3 BLOCKED BY P2.75`；
+- patch `41e27d89`（Waiting For: External Review Round 6）→ `当前 Waiting For = External Review Round 10（R5.1-F 已提交）`；
+- 02.5 页尾追加 R5.1-F 状态段（与 Master 页 2026-08-27 路线及 CURRENT_STATUS L13 同口径）。
+
+### §22.4 治理
+
+- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 10 的重新审核**；
+  P3=BLOCKED 不变；未改生产代码/配置、零重启；未标 VERIFIED；Registry #5 维持开放（不由本代理 gate 关闭）。
+
 ---
-*End of REPORT_R5 (§21 appended by R5.1-D)*
+*End of REPORT_R5 (§22 appended by R5.1-F)*

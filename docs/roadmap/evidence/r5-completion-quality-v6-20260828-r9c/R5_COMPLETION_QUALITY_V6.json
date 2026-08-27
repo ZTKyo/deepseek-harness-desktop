@@ -1,0 +1,115 @@
+{
+  "gate": "R5.1-F Completion Quality V6 — Round 9 blocker A veracity correction (2026-08-28)",
+  "date": "2026-08-28",
+  "generatedAtUtc": "2026-08-27T19:55:00Z",
+  "round": "R5.1-F (External Review Round 9 blocker A)",
+  "round9Contract": "禁止新分析/新 metric/新 evaluator/重扫日志；只把 V5 中与 V4 冲突的数字纠正为 V4 真实已知值；无法回证的 acceptance/false-completion/manual-intervention 保留 N/A；若基于现有事实仍无法严格排除 material task-quality regression，最终 verdict 必须改为 INCONCLUSIVE",
+  "verdictRule": "无自动 rate/per-1k/×2/echoExcluded 计算参与；纯真值纠正 + 诚实三态 verdict（NO MATERIAL REGRESSION / INCONCLUSIVE / REGRESSION），由 Reviewer 裁决",
+  "methodParity": "复用 V4 已审核的 fixed-field 数据（V4 comparisonTable 四会话已知值），不重扫日志、不新解码、不新计算任何 rate/score",
+  "scanScope": "仅对照 V4 comparisonTable 四会话已知字段；未扫描新日志",
+  "snapshotNote": "V6 = V5 的纯真值纠正版本：V5 曾将 V4 已记录的真实 toolErrors/llmRetries/userContinue 误写为 0（Round 9 指出与 V4 冲突），V6 逐会话纠正为 V4 真实值；观测方法零改动",
+  "comparisonTable": [
+    {
+      "sessionId": "session-9e3b29bb-3f36-4659-9162-18ad928a7f49",
+      "era": "OFF",
+      "longSession": true,
+      "events": 75363,
+      "v5Claimed": { "toolErrors": 0, "llmRetries": 0, "userContinue": 0 },
+      "v4Truth": {
+        "toolErrors": 355,
+        "providerErrors": { "TRANSPORT": 26, "RATE_LIMIT": 1, "TIMEOUT": 22, "SERVER": 3 },
+        "llmRetries": 52,
+        "userContinue": 111
+      },
+      "correction": "V5 误写 0；现纠正为 V4 真实值。toolErrors=355 为 tool/result 携带 [exit code: N>=1] 失败标记的事件计数（V4 note：含探索性运行期间的预期失败）；providerErrors 为 llm/retry failure.code 分布（provider 侧，V4 note：非 Context Memory 归因）；llmRetries 为 llm/retry 事件计数；userContinue 为词法 继续/continue 等用户文本代理计数（非语义验证）。V4 定义与 note 原样保留。",
+      "acceptanceCriteriaTotal": "N/A / NOT OBSERVABLE",
+      "acceptanceCriteriaPassed": "N/A / NOT OBSERVABLE",
+      "finalVerifier": "N/A / NOT OBSERVABLE（逐 turn acceptance 回放不可观测）；阶段级回证 = 既有 report/PR/CI",
+      "falseCompletion": "N/A（无独立判定事件；已由 R5 双门 verifier 及 Gate-7 四腿覆盖）",
+      "duplicateSideEffects": "0（R5 §9 duplicate-side-effect audit 终值）",
+      "manualInterventions": "N/A / NOT OBSERVABLE（日志无法区分人工/自动 turn）",
+      "incidents": { "PROTOCOL_CONFIG_LOAD_INCIDENT": 0, "PROVIDER_QUOTA": 0 },
+      "completionState": { "lastReason": "aborted", "distribution": { "completed": 44, "error": 28, "interrupted": 47, "aborted": 11, "blocked": 1 } },
+      "finalTaskOutcome": { "lastGoalOperation": "pause", "lastTurnEndReason": "aborted" }
+    },
+    {
+      "sessionId": "session-11c7aa70-d26b-4acb-9d3a-f63c996ff83d",
+      "era": "OFF",
+      "longSession": true,
+      "events": 39827,
+      "v5Claimed": { "toolErrors": 0, "llmRetries": 0, "userContinue": 0 },
+      "v4Truth": {
+        "toolErrors": 40,
+        "providerErrors": { "TRANSPORT": 2 },
+        "llmRetries": 2,
+        "userContinue": 7
+      },
+      "correction": "V5 误写 0；现纠正为 V4 真实值。定义与 note 同 session-9e3b29bb 的 V4 原注，原样保留。",
+      "acceptanceCriteriaTotal": "N/A / NOT OBSERVABLE",
+      "acceptanceCriteriaPassed": "N/A / NOT OBSERVABLE",
+      "finalVerifier": "N/A / NOT OBSERVABLE（逐 turn acceptance 回放不可观测）；阶段级回证 = 既有 report/PR/CI",
+      "falseCompletion": "N/A（无独立判定事件；已由 R5 双门 verifier 及 Gate-7 四腿覆盖）",
+      "duplicateSideEffects": "0（R5 §9 duplicate-side-effect audit 终值）",
+      "manualInterventions": "N/A / NOT OBSERVABLE（日志无法区分人工/自动 turn）",
+      "incidents": { "PROTOCOL_CONFIG_LOAD_INCIDENT": 0, "PROVIDER_QUOTA": 0 },
+      "completionState": { "lastReason": "error", "distribution": { "completed": 21, "interrupted": 1, "aborted": 4, "error": 2 } },
+      "finalTaskOutcome": { "lastGoalOperation": "N/A", "lastTurnEndReason": "error" }
+    },
+    {
+      "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+      "era": "ON",
+      "longSession": true,
+      "events": 91694,
+      "v5Claimed": { "toolErrors": 0, "llmRetries": 0, "userContinue": 0 },
+      "v4Truth": {
+        "toolErrors": 111,
+        "providerErrors": { "RATE_LIMIT": 73, "TRANSPORT": 13, "TIMEOUT": 40 },
+        "llmRetries": 126,
+        "userContinue": 74
+      },
+      "correction": "V5 误写 0；现纠正为 V4 真实值。定义与 note 同 V4 原注，原样保留。",
+      "acceptanceCriteriaTotal": "N/A / NOT OBSERVABLE",
+      "acceptanceCriteriaPassed": "N/A / NOT OBSERVABLE",
+      "finalVerifier": "N/A / NOT OBSERVABLE（逐 turn acceptance 回放不可观测）；阶段级回证 = 既有 report/PR/CI",
+      "falseCompletion": "N/A（无独立判定事件；已由 R5 双门 verifier 及 Gate-7 四腿覆盖）",
+      "duplicateSideEffects": "0（R5 §9 duplicate-side-effect audit 终值）",
+      "manualInterventions": "N/A / NOT OBSERVABLE（日志无法区分人工/自动 turn）",
+      "incidents": { "PROTOCOL_CONFIG_LOAD_INCIDENT": 0, "PROVIDER_QUOTA": 0 },
+      "completionState": { "lastReason": "aborted", "distribution": { "completed": 15, "error": 29, "interrupted": 5, "aborted": 3 } },
+      "finalTaskOutcome": { "lastGoalOperation": "resume", "lastTurnEndReason": "aborted" }
+    },
+    {
+      "sessionId": "session-a144fe3f-1042-4466-b70b-a10642fae037",
+      "era": "ON",
+      "longSession": true,
+      "events": 26411,
+      "v5Claimed": { "toolErrors": 0, "llmRetries": 0, "userContinue": 0 },
+      "v4Truth": {
+        "toolErrors": 19,
+        "providerErrors": { "TIMEOUT": 3, "SERVER": 23 },
+        "llmRetries": 26,
+        "userContinue": 11
+      },
+      "correction": "V5 误写 0；现纠正为 V4 真实值。定义与 note 同 V4 原注，原样保留。V4 对该会话的 PROTOCOL_CONFIG_LOAD_INCIDENT=41 / PROVIDER_QUOTA=39 系审查回声（V4 已裁决为 review-echo，不采为降级证据）；V6 不重算、不新判定，仅登记 V4 已知值。",
+      "acceptanceCriteriaTotal": "N/A / NOT OBSERVABLE",
+      "acceptanceCriteriaPassed": "N/A / NOT OBSERVABLE",
+      "finalVerifier": "N/A / NOT OBSERVABLE（逐 turn acceptance 回放不可观测）；阶段级回证 = 既有 report/PR/CI",
+      "falseCompletion": "N/A（无独立判定事件；已由 R5 双门 verifier 及 Gate-7 四腿覆盖）",
+      "duplicateSideEffects": "0（R5 §9 duplicate-side-effect audit 终值）",
+      "manualInterventions": "N/A / NOT OBSERVABLE（日志无法区分人工/自动 turn）",
+      "incidents": { "PROTOCOL_CONFIG_LOAD_INCIDENT": 41, "PROVIDER_QUOTA": 39 },
+      "completionState": { "lastReason": "completed", "distribution": { "completed": 4, "aborted": 2, "error": 5 } },
+      "finalTaskOutcome": { "lastGoalOperation": "resume", "lastTurnEndReason": "completed" }
+    }
+  ],
+  "pooledRollups": {
+    "OFF": { "longSessions": 2, "events": 115190 },
+    "ON": { "longSessions": 2, "events": 118105 },
+    "note": "V4 原值仅登记；按 Round 9 合同不用于任何 rate/verdict 计算"
+  },
+  "verdict": "INCONCLUSIVE",
+  "verdictReason": "V5 将 V4 已记录的真实 tool/provider error、llmRetries、userContinue 误写为 0，构成与已审核 V4 fixed-field 数据的事实冲突。纠正后四代表会话存在真实 toolErrors（355/40/111/19）、providerErrors（含 RATE_LIMIT/TIMEOUT/SERVER/TRANSPORT 分布）、llmRetries（52/2/126/26）、userContinue（111/7/74/11，词法代理）。既有 report/PR/CI 能证明阶段最终完成（COMPLETED + merge + CI green + 阶段报告回证），但在 Round 9 合同约束（禁止重扫日志、禁止新 evaluator、禁止新 rate/score）下，无法用现有事实严格排除 Context Memory 与这些执行期错误的 material 关联 → 按 Round 9 明确指示，最终 verdict 必须为 INCONCLUSIVE。",
+  "honestyNote": "本 artifact 不再声明 NO MATERIAL REGRESSION，不再声称四会话真实 error/retry/continue=0；acceptance 逐项回放、false-completion 独立判定、manual-intervention 区分仍不可观测，如实 N/A。",
+  "registry5": "维持开放（独立评测体系），不由本代理 gate 关闭",
+  "sanitized": true
+}

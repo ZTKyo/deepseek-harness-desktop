@@ -41,7 +41,7 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
 13 文件：真实 token A/B + 锚点回源/去重审计 + 风险登记册终版 + P2.7 kill-switch/fail-open
 部署字节复验 61 PASS / 0 FAIL，全程零重启）；main HEAD=601d425。状态不变，仍为
 **AWAITING_REVIEW**，等待 External Review Round 4。
-**R5 Evidence Closure（2026-08-27，本地已固化，待随 PR 入库）**：R5-1 STRICT Recall Verifier
+**R5 Evidence Closure（2026-08-27，已随 PR #47 入库）**：R5-1 STRICT Recall Verifier
 7/7+CHAIN ALL-PASS ＋ R5-2 REAL missing projection 集成测试 ok ＋ R5-3 Gate-7 四腿全绿 ＋
 R5-4 Completion Quality checklist（NO MATERIAL REGRESSION）＋ R5-5 SH-R9 posture 9 PASS ＋
 R5-6 CURRENT_STATUS 清理。证据：evidence/R5_P25_FINAL_GATE_EVIDENCE.md；报告：REPORT_R5.md。
@@ -59,7 +59,7 @@ R5-6 CURRENT_STATUS 清理。证据：evidence/R5_P25_FINAL_GATE_EVIDENCE.md；�
   VERIFIED / APPROVED）。本轮保留历史事实，新增本 correction，状态回退为 AWAITING_REVIEW。
 - **latest report**：`docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`
   （R5 证据见 `docs/roadmap/evidence/R5_P25_FINAL_GATE_EVIDENCE.md`）
-- **PR**：PR #42（R2, merge=`1cad4c6`）、PR #44（R4, merge=`601d425`）、PR #45（R4 Gate-7, merge=`7fa327a`）、PR #46（R4 报告, merge=`d2ca98e`）
+- **PR**：PR #42（R2, merge=`1cad4c6`）、PR #44（R4, merge=`601d425`）、PR #45（R4 Gate-7, merge=`7fa327a`）、PR #46（R4 报告, merge=`d2ca98e`）、PR #47（R5 Evidence Closure, merge=`cc5d01d`）
 - **实现**：`plugins/context-memory{,-core}.mjs`（Recent Window / Observation / Reflection / Recall / Provider-switch activation）
 - **EVIDENCE（R5 收口，2026-08-27）**：
   - R5-1 STRICT Recall Verifier：节点模式 legacy 2300+ 全驳回，活体快照 7/7+CHAIN ALL-PASS（storeVersion=237）
@@ -174,3 +174,10 @@ R5-6 CURRENT_STATUS 清理。证据：evidence/R5_P25_FINAL_GATE_EVIDENCE.md；�
   CURRENT_STATUS.md canonical 清理。证据：`evidence/R5_P25_FINAL_GATE_EVIDENCE.md`；报告：
   `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`（18 节 §0–§17）。状态维持 **AWAITING_REVIEW /
   Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5 Evidence Closure Merge**：PR #47（`fix/context-memory-r5-final`）CI L1/L2/L3 三绿
+  （静态+secret+syntax / Windows Reliability / Harness smoke）→ squash MERGED（merge=`cc5d01d`），
+  本行为其纯状态 backfill。入库内容：STRICT recall verifier（`tests/context-memory/recall-verifier.mjs`）、
+  Gate-7 演练（runner/webdriver/probe）、R5 证据（`evidence/R5_COMPLETION_QUALITY.json` 等）、
+  REPORT_R5.md、T12 回归。期间修复 probe.mjs BOM（shebang 前 UTF-8 BOM 致 CI 语法门禁失败）。
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。

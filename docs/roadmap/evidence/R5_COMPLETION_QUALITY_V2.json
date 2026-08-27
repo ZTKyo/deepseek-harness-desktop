@@ -1,6 +1,8 @@
 {
  "gate": "R5.1-A completion-quality V2 — fixed-field failure accounting over OFF/ON era production logs",
  "date": "2026-08-27",
+ "generatedAtUtc": "2026-08-27T12:59:16.974Z",
+ "captureNote": "point-in-time snapshot: active sessions keep appending events after this run; totals are exact as of generatedAtUtc",
  "method": {
   "decoding": "self-written multi-frame zstd walker, per-frame lossless decode, zero writes to production files",
   "countingUnit": "event-level JSON records (o.seq unique); no cross-event pairing collapse",
@@ -14,18 +16,18 @@
  "scanScope": {
   "sessionsRoot": "~/.dsh/sessions",
   "logsScanned": 355,
-  "totalEventsDecoded": 727909
+  "totalEventsDecoded": 728953
  },
  "totalsAllLogs": {
-  "PROTOCOL_CONFIG_LOAD_INCIDENT": 21,
-  "PROVIDER_QUOTA": 15,
-  "outOfScopeTextEcho": 801
+  "PROTOCOL_CONFIG_LOAD_INCIDENT": 22,
+  "PROVIDER_QUOTA": 17,
+  "outOfScopeTextEcho": 814
  },
  "eraRollups": {
   "ON": {
    "labeledLogsConsidered": 4,
-   "PROTOCOL_CONFIG_LOAD_INCIDENT": 21,
-   "PROVIDER_QUOTA": 15
+   "PROTOCOL_CONFIG_LOAD_INCIDENT": 22,
+   "PROVIDER_QUOTA": 17
   },
   "OFF": {
    "labeledLogsConsidered": 3,
@@ -121,12 +123,12 @@
    "era": [
     "ON"
    ],
-   "events": 11589,
+   "events": 12633,
    "incidents": {
-    "PROTOCOL_CONFIG_LOAD_INCIDENT": 20,
-    "PROVIDER_QUOTA": 15
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 21,
+    "PROVIDER_QUOTA": 17
    },
-   "outOfScopeTextEcho": 8,
+   "outOfScopeTextEcho": 21,
    "sampleSeqs": {
     "PROTOCOL_CONFIG_LOAD_INCIDENT": [
      89107,

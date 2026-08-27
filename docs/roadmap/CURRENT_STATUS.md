@@ -202,6 +202,7 @@ IMPLEMENTATION_COMPLETE。
   如实为 `3 PASS + 2 FAIL`：剩余 FAIL 为生产 store 投影像素噪声的真阳性拦截
   （todo-receipt ×2、无错误措辞目录清单 ×1；登记册 #8），插件分类策略修订不在本轮授权。
   「P2.5→P3 残留」全库复查无残留。SH-R9 posture V2 = 9/9 PASS；
-  Completion Quality V2 全库 355 日志只读核算（PROTO=21/QUOTA=15/ECHO=801，四条 era 会话两类 0 命中）。
+  Completion Quality V2 全库 355 日志只读核算（12:59Z 快照：PROTO=22/QUOTA=17/ECHO=814，
+  R4 四条 era 会话两类 0 命中）。
   证据：`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`＋§18 追加于 REPORT_R5.md。
   未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。

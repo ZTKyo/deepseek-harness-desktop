@@ -184,7 +184,7 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
 | 链路 | PASS_raw_side_effect_chain（1012213→1027575→1029605，dups=0） |
 | 负例套件 | 10/10（+NEG-FINAL-6 回归） |
 | SH-R9 posture V2 | 9/9 PASS（plaintext suspect=0） |
-| Completion Quality V2 | 全库 355 日志 727k 事件只读核算：PROTO=21 / QUOTA=15 / TEXT-ECHO=801 单列；R4 四条 era 会话两类 0 命中 |
+| Completion Quality V2 | 全库 355 日志 728k+ 事件只读核算（generatedAtUtc=2026-08-27T12:59Z 快照）：PROTO=22 / QUOTA=17 / TEXT-ECHO=814 单列；R4 四条 era 会话两类 0 命中 |
 
 ### §18.3 工件与治理
 

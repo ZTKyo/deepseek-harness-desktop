@@ -73,8 +73,11 @@ norm(event) 修复后 = "top-level-shape: version:: | refs:: | MIMO_API_KEY:: pa
 
 ## 5 完成质量 V2 固定字段要点（详见对应 JSON）
 
-- 全库 355 条会话日志、727k+ 事件只读解码：`PROTOCOL_CONFIG_LOAD_INCIDENT`=21、`PROVIDER_QUOTA`=15（均为事件级计数，generatedAtUtc 快照语义）；
-  四条 R4 A/B era 长会话两类均 **0 命中**；纯 "rate limit" 文案回声（无字面码）单列为 outOfScopeTextEcho=801，不并入任一固定字段。
+- 全库 355 条会话日志、728k+ 事件只读解码。以 generatedAtUtc=`2026-08-27T12:59:16Z` 快照为准：
+  `PROTOCOL_CONFIG_LOAD_INCIDENT`=22、`PROVIDER_QUOTA`=17、`outOfScopeTextEcho`=814（均为事件级计数）。
+  快照语义：活跃会话在本轮工作期间持续追加事件，总数随时间自然增长——工件以 generatedAtUtc 为准，
+  文档引用不再另行追改。四条 R4 A/B era 长会话两类均 **0 命中**；纯 "rate limit" 文案回声
+  （无字面 HTTP 码）单列，不并入任一固定字段。
 - 工件零原文输出（仅计数与整数 seq 样本），secret 零落盘。
 
 ## 6 边界与治理不变声明

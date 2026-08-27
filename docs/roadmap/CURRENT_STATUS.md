@@ -123,6 +123,12 @@ IMPLEMENTATION_COMPLETE。
   （Master/Orchestrator/02.5/02.6/02.75/03）active 文案统一为 `P2.5 VERIFIED → 02.6（硬前置=02.5
   VERIFIED）→ 02.75（硬前置=02.6 VERIFIED）→ P3（前置=P2.75 VERIFIED）`；REPORT_R5 追加 §20/§21。
   未改生产代码、零重启。
+- **R5.1-E MERGE BACKFILL（2026-08-28）**：PR #55 merge = `8bb4265`（CI 三项全绿：
+  DSH boot + readiness smoke 5m21s / Reliability state machine tests 1m24s / Static + secret + syntax
+  gate 1m10s）；Round 9 canonical route unification 已入库 main（总览表 02.6/02.75 行 + P3 前置修正
+  「Phase 02.75 外部 VERIFIED 后启动」+ Waiting For 统一 Round 9 + REPORT_R5 §21）；状态维持
+  IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（Waiting For: External Review Round 9 的重新审核）。
+  未改生产代码、零重启。
 
 ## Phase 02 Security-Hardening 最终状态
 

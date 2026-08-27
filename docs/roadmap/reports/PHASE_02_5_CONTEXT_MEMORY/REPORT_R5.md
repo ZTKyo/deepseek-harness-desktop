@@ -344,4 +344,42 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
   P3=BLOCKED 不变；未改生产代码/配置、零重启；未标 VERIFIED；Registry #5 维持开放（不由本代理 gate 关闭）。
 
 ---
-*End of REPORT_R5 (§22 appended by R5.1-F)*
+
+## §23 R5.1-G 追加：Round 10 APPROVED — PURE STATUS BACKFILL（2026-08-28）
+
+> 依据 99｜Reviewer Feedback 页 **External Review Round 10 Verdict = APPROVED**（2026-08-28；
+> canonical main=`326a6a42`，R5.1-F PR #56 head=`702fb812` squash merge=`f745865`，CI L1/L2/L3 全绿）。
+> 授权仅为 **PURE STATUS BACKFILL**：不改历史 evidence、不重跑 REAL Gate、不再允许 Round 11。
+> 未改生产代码/配置、零重启。
+
+### §23.1 Verdict 承接
+
+- Round 10 = **APPROVED**：Phase 02.5 CONTEXT MEMORY 外部验收通过。
+- Completion Quality V6 **INCONCLUSIVE** 被明确接受（非 blocker；评测体系转 HARDENING/DEBT，不重开 P2.5）。
+- SH-R9 V6 **ACCEPTED**，无 Runtime/Security blocker。
+- Canonical / Notion **ACCEPTED**：GitHub 前向链已为 P2.5 VERIFIED → 02.6 → 02.75 → P3。
+
+### §23.2 状态 backfill（本 backfill 实际改动）
+
+1. **CURRENT_STATUS.md**：P2.5 状态 `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW` → **`VERIFIED`**
+   （External Review Round 10 = APPROVED，2026-08-28）；Waiting For 清空；02.6 行 Waiting For 更新为
+   「02.5 已 VERIFIED → 02.6 为下一 Phase（FULL 仍 TODO）」；当前执行位置/恢复指令/路线同步；变更日志追加。
+2. **Notion 02.5 页**：latest review → Round 10 APPROVED、Status=VERIFIED；清理 active stale Round 8/Round 9 waiting 文案。
+3. **REPORT_R5 §23（本段）** + R5_1_F 载体指针更新为 Round 10 verdict。
+4. **Last Good 术语口径修正（NON-BLOCKING / status-backfill 一并修正）**：V6 posture 把
+   `guardian-lastgood mirror` 写成 `canonicalExpectedSource` 不准确——源码 Authority 明确
+   **verified-lastgood/current 才是 Health-Verified Last Good Authority**；guardian-lastgood 是由
+   Save-VerifiedLastGood 同步的 **RESTORE MIRROR / DERIVED CACHE**，Guardian 在 restore 前还必须校验
+   mirror 的 canonicalSetId == verified-lastgood current pointer，否则 fail-closed REFUSE。本次仅改文档口径：
+   `live ~/.dsh/settings.yaml / profiles = current effective config`；
+   `verified-lastgood/current = canonical Last Good`；`guardian-lastgood = restore mirror`。
+   不重跑 SH、不开 SH-R10、不修改生产代码。
+
+### §23.3 治理
+
+- P2.5 = **VERIFIED**（External Review Round 10 = APPROVED，2026-08-28）；P2.5 封板，不再允许 Round 11。
+- **Phase 02.6 RETRY SEMANTICS 为下一 Phase**（FULL 仍 TODO；P2.6-A 热修已独立 APPROVED）；P2.75/P3 继续 BLOCKED。
+- Registry #5（独立评测体系）维持开放为 HARDENING/DEBT，不由本代理 gate 关闭。
+
+---
+*End of REPORT_R5 (§22 appended by R5.1-F；§23 appended by R5.1-G Round 10 APPROVED backfill)*

@@ -1,0 +1,54 @@
+{
+  "leg": "missing",
+  "ok": true,
+  "serverAlive": true,
+  "workdirOk": true,
+  "missingMoved": true,
+  "missingRebuilt": true,
+  "stateOk": true,
+  "evidence": {
+    "rebuiltStore": {
+      "file": "session-a3e43a98-aa53-419c-a444-6c83befc6630.json",
+      "schemaVersion": 1,
+      "sessionId": "session-a3e43a98-aa53-419c-a444-6c83befc6630",
+      "version": 3,
+      "active": false,
+      "watermark": 443,
+      "refs": 3,
+      "obsKeys": [
+        "goal",
+        "completedActions",
+        "verifiedEvidence",
+        "keyFileChanges",
+        "failedApproaches",
+        "blockers",
+        "runtimeFacts"
+      ]
+    },
+    "stashDirs": [
+      "state.moved-1787804689114",
+      "state.moved-1787804737922"
+    ],
+    "sameSessionStash": "state.moved-1787804737922",
+    "workdirFiles": [
+      "a.txt",
+      "b.txt",
+      "c.txt",
+      "d.txt"
+    ],
+    "taskComplete": true,
+    "sessionDirs": [
+      {
+        "dir": "--C-Users-Administrator-Desktop-sdeepseek~0020harness-_release-staging-tests-context-memory-gate7-legs-missing-workdir--",
+        "files": []
+      }
+    ],
+    "zeroDamage": {
+      "oldStoreRenamedNotDeleted": true,
+      "oldStoreRecoverableBytes": 1185,
+      "sameSessionContinue": true,
+      "watermarkProgressed": true,
+      "refsAccumulated": true
+    }
+  }
+}

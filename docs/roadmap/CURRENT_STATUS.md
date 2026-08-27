@@ -106,6 +106,9 @@ IMPLEMENTATION_COMPLETE。
     02.6 页 Gate、02.75 页 Gate、P3 页前置一致。
   - Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭；Reviewer 只判断「Context Memory 是否
     造成 material task-quality regression」，证据以 V4 固定字段表为准。
+- **R5.1-C MERGE BACKFILL（2026-08-27）**：PR #53 squash MERGED = `fedfeb7`（CI 三项全绿：
+  DSH boot + readiness smoke / Reliability state machine tests / Static + secret + syntax gate）；
+  证据已入库 main；状态维持 IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（Waiting For: Round 8）。
 
 ## Phase 02 Security-Hardening 最终状态
 

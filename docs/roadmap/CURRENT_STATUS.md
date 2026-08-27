@@ -46,6 +46,19 @@ main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW
 R5-4 Completion Quality checklist（NO MATERIAL REGRESSION）＋ R5-5 SH-R9 posture 9 PASS ＋
 R5-6 CURRENT_STATUS 清理。证据：evidence/R5_P25_FINAL_GATE_EVIDENCE.md；报告：REPORT_R5.md。
 状态维持 **AWAITING_REVIEW**。
+**P2.6-A EMERGENCY HOTFIX（2026-08-27，独立闭环）**：DeepSeek thinking 模式
+`reasoning_content` 400 Runtime Blocker——External Reviewer（新总控窗口）独立外审 **APPROVED**
+（判据 A–K 全过；本地实锤：settings.yaml 三处 compat 门控 L24/L161/L192、重启前备份
+`_backup-p26-compat-load-20260827-180711\settings.yaml` 同参门控在位、dsh-server-3080.log
+证实 boot 05:00:45 pid=28968 < 门控在盘 ≤18:07 < 受控重启 18:14:52 pid=20420、
+`@deepseek-ai/dsh-llm-pi-ai/lib/index.js` L494–506 compat 校验代码与报告一致）。
+PR #49 转 READY 后 squash MERGED=`9cff3839e0eddcb58d2c4d9008ad105e76c90803`，main HEAD=`9cff383`
+（零生产代码改动，6 文件全在 docs/roadmap/evidence/）。
+**P2.6-A = APPROVED / MERGED；reasoning_content Runtime Blocker CLOSED。Phase 02.6 FULL = TODO**
+（1310 QUOTA_EXHAUSTED / 1305 PROVIDER_OVERLOADED / Failure Classifier / retry budget /
+Router fallback+defer / reasoning formal regression matrix / CommandCode route / --no-open
+均未开始）；硬前置不变：Phase 02.5 外部 VERIFIED 后方可启动。禁止把 P2.6 写成 VERIFIED 或
+IMPLEMENTATION_COMPLETE。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
 - P2.5 完成后 → Phase 03（AUTONOMY）。

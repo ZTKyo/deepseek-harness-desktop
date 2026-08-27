@@ -194,5 +194,29 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
   插件策略轮处理，不阻塞本轮证据收口。
 - 治理不变：未改生产插件代码；零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**。
 
+## §19 R5.1-B 追加：Round 6 四 blocker 最小收口轮（2026-08-27）
+
+> 单一事实载体见 `docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_B_FINAL_GATE_CLOSURE.md`。
+> 不改 §0–§18 已载结论。只登记 Round 6 授权范围内的收口事实与全部偏差。
+
+### §19.1 四 blocker 状态
+
+| Blocker | 结果 | 载体 |
+|---|---|---|
+| A. C2 ORIGINAL_ERROR_RECORD provenance | 全库只读普查 5 store：4/5 含合法 error-backed claim（59271 git-fatal / 102834 PS-format / 131416 cannot-edit / **52405 timeout**）；代表 c4cc512e refs=[52405] 双门 PASS；**production 无需修改，PROVENANCE_GAP 不触发** | `R5_RECALL5_EXACT_V3.json`（5/5 REPRESENTATIVE PASS）+ `R5_1B_RECALL_V3_EVIDENCE.md` |
+| B. Completion Quality V3 固定字段 OFF/ON 长会话对照 | 每会话对照表（355 日志 733k 事件，长会话=≥10k 事件）：OFF 2 长会话 115190 事件 0 命中；ON 2 长会话 108619 事件 44 命中。**预注册三选一规则输出 = MATERIAL_REGRESSION**（对 PROTO-only 口径同样成立）；归属分析：44 起全部集中于 a144fe3f（23 PROTO=P2.6-A 已修复缺陷类 + 21 QUOTA=GLM 外部 429）与 5cd0722e（1 PROTO）；**最长 ON 主 CM 会话 34e86c7a（91.7k 事件）0/0**。最终裁定权在 Reviewer；登记册 #5（独立评测体系）维持开放 | `R5_COMPLETION_QUALITY_V3.json` + 生成器 `make-r5-completion-quality-v3.mjs` |
+| C. SH-R9 当前时点只读 LIVE posture V3 | **12/12 PASS**（9 项 SH-R9 canonical 全部运行时现场重导出，另加 EXT-1 Guardian 活性 / EXT-2 凭据 DACL / EXT-3 hardened config）；V2 的沿用式判定由 V3 现场复核取代 | `R5_SH9_POSTURE_V3.json` + 生成器 `make-r5-sh9-posture-v3.mjs` |
+| D. GitHub + Notion canonical 路线同步 | GitHub：本报告 §19 + closure 文档 + CURRENT_STATUS 经 `fix/context-memory-r5-1-b-final-gate` 分支 PR 入库；Notion canonical 路线页 P2.5 状态同步（见 closure 文档 §Notion 同步记录） | 见 closure 文档 |
+
+### §19.2 本轮新增工程事实
+
+- **Final Semantic NEG 接入现有 CI L1**：`ci-level1.yml` 新增 step「Final semantic NEG regression (P2.5 R5.1, synthetic 10-case dual-gate)」，直跑 `docs/roadmap/evidence/make-r5-recall-final-neg.mjs`（纯合成 fixtures，零 live 数据/凭据）；本地基线 10/10 PASS。
+- **偏差登记（如实）**：R5.1-B 首批工件（`R5_RECALL5_EXACT_V3.json`、`R5_1B_RECALL_V3_EVIDENCE.md`、`make-r5-recall5-exact-v3.mjs`）随 Round 6 合同收口以直推 main 提交 `3ea14d9` 入库（沿用 R5.1-A backfill 之后的仓库先例），未走分支+PR；其余本轮变更（CI 接线、V3 posture、V3 completion-quality、§19、closure 文档、CURRENT_STATUS、Notion 同步证据）经 `fix/context-memory-r5-1-b-final-gate` 分支 PR 走完整 CI 流程。此偏差不改变任何生产文件。
+
+### §19.3 治理
+
+- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变；未自称 VERIFIED/APPROVED。
+- 未重跑已 ACCEPTED 的 Gate7 四腿/kill-switch/provider switch/token A/B；未重设计 CM；未建第二套评测系统；未开 SH-R10。
+
 ---
-*End of REPORT_R5 (§18 appended by R5.1-A)*
+*End of REPORT_R5 (§19 appended by R5.1-B)*

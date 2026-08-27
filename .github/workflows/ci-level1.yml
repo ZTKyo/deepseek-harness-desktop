@@ -51,6 +51,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "CONTEXT-MEMORY REGRESSION FAIL"; exit 1 }
           Write-Host "context-memory unit regression: PASS"
 
+      - name: Final semantic NEG regression (P2.5 R5.1, synthetic 10-case dual-gate)
+        shell: pwsh
+        run: |
+          # R5.1: the recall dual-gate (strict × semantic) must reject every
+          # artifact class flagged in external review (injection-wrapped goal,
+          # error-record without error evidence, todo noise dressed as file
+          # evidence, prose paths, missing chain tail) while legal provenance
+          # still passes. Pure synthetic fixtures: zero live data, zero
+          # credentials, repo-relative, self-contained imports.
+          node docs\roadmap\evidence\make-r5-recall-final-neg.mjs neg-ci-out
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINAL SEMANTIC NEG FAIL"; exit 1 }
+          Write-Host "final semantic NEG regression: 10/10 PASS"
+
       - name: Install-plugin regression (P2.5 R2-2 atomic write + auto hash check)
         shell: pwsh
         run: |

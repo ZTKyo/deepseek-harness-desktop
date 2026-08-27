@@ -10,7 +10,7 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 6 的重新审核**（R3/R4/R5/R5.1-A 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 7 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -232,3 +232,20 @@ IMPLEMENTATION_COMPLETE。
   （来源指纹齐全：main store 6f6057bd8b34fd72 v329 / c2 store 1fcf4f8bab130431 v2）；
   生成器 `evidence/make-r5-recall5-exact-v3.mjs`（复用 snapshot 严格原语 + v2 语义门，零复制）。
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-B 最小收口完成（Round 6 合同 B/C/D + Final Semantic NEG 接入 CI L1）**：
+  (B) Completion Quality **V3 每长会话 OFF/ON 固定字段对照**（355 日志 733k 事件，长会话=≥10k 事件）：
+  OFF 2 长会话 115190 事件 0 命中 / ON 2 长会话 108619 事件 44 命中（PROTO 24 + QUOTA 21）；
+  预注册三选一规则输出 **MATERIAL_REGRESSION**（PROTO-only 口径同判成立）——归属：44 起全部集中于
+  a144fe3f（23 PROTO=P2.6-A 已修复缺陷类历史记录 + 21 QUOTA=GLM 外部 429）与 5cd0722e（1 PROTO）；
+  **最长 ON 主 CM 会话 34e86c7a（91.7k 事件）0/0**；最终裁定权在 Reviewer，登记册 #5 维持开放；
+  (C) SH-R9 **只读 LIVE posture V3 = 12/12 PASS**（9 项 canonical 全部运行时现场重导出、取代 V2
+  沿用判定；+ Guardian 活性 / 凭据 DACL / hardened config 三项 EXT）；
+  (D) canonical 路线同步：Notion 02.5 页（Status 呼出块 → Round 7、R5.1-A 摘「当前轮」、新增 R5.1-B
+  条目）+ 本文件（总览表与时间线）同轮更新；
+  **NEG 接入 CI**：ci-level1.yml 新增合成 10 用例语义负例 step（本地基线 10/10）；
+  **偏差如实登记**：R5.1-B 首批 Recall-V3 工件曾以 main 直推 `3ea14d9` 入库（详见 REPORT_R5 §19.2
+  与 R5_1_B_FINAL_GATE_CLOSURE.md §6，含 CI 触发面残留风险声明）；本轮其余变更经分支 PR 入库。
+  证据：`REPORT_R5.md` §19 + `R5_1_B_FINAL_GATE_CLOSURE.md`（单一事实载体）+
+  `evidence/R5_COMPLETION_QUALITY_V3.json` + `evidence/R5_SH9_POSTURE_V3.json`。
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。

@@ -1,0 +1,428 @@
+{
+ "gate": "R5.1-B completion-quality V3 — per-long-session OFF/ON fixed-field table + three-choice verdict (Round 6 blocker B)",
+ "date": "2026-08-27",
+ "generatedAtUtc": "2026-08-27T14:10:41.187Z",
+ "longSessionDefinition": "events >= 10000 in a single production session log",
+ "verdictRule": "pre-registered in script header; matchers identical to V2 (literal code forms; prose echoes quarantined)",
+ "methodParity": "decoding + counting method chain identical to R5_COMPLETION_QUALITY_V2.mjs evidence",
+ "scanScope": {
+  "sessionsRoot": "~/.dsh/sessions",
+  "logsScanned": 355,
+  "totalEventsDecoded": 733245
+ },
+ "totalsAllLogs": {
+  "PROTOCOL_CONFIG_LOAD_INCIDENT": 24,
+  "PROVIDER_QUOTA": 21,
+  "outOfScopeTextEcho": 1005
+ },
+ "comparisonTable": [
+  {
+   "sessionId": "session-9e3b29bb-3f36-4659-9162-18ad928a7f49",
+   "era": "OFF",
+   "longSession": true,
+   "events": 75363,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 68,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-11c7aa70-d26b-4acb-9d3a-f63c996ff83d",
+   "era": "OFF",
+   "longSession": true,
+   "events": 39827,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 5,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-293a808a-5817-426b-9db7-6646e719bc5d",
+   "era": "OFF",
+   "longSession": false,
+   "events": 6492,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 4,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "era": "ON",
+   "longSession": true,
+   "events": 91694,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 27,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-a144fe3f-1042-4466-b70b-a10642fae037",
+   "era": "ON",
+   "longSession": true,
+   "events": 16925,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 23,
+    "PROVIDER_QUOTA": 21
+   },
+   "per1k": 2.5997,
+   "outOfScopeTextEcho": 33,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [
+     89107,
+     89109,
+     89112,
+     89113,
+     90051,
+     90052,
+     90055,
+     90056,
+     90074,
+     90076
+    ],
+    "PROVIDER_QUOTA": [
+     89109,
+     89112,
+     89113,
+     90079,
+     90784,
+     90785,
+     90787,
+     90790,
+     90791,
+     91600
+    ]
+   }
+  },
+  {
+   "sessionId": "session-ad148b88-be89-488a-a497-e94a443ddc2e",
+   "era": "ON",
+   "longSession": false,
+   "events": 9797,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 6,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-5cd0722e-467e-4be5-ab6d-1f841d523a07",
+   "era": "ON",
+   "longSession": false,
+   "events": 9617,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 1,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0.104,
+   "outOfScopeTextEcho": 4,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [
+     25483
+    ],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-43cf9fee-40d9-4b98-b192-88a1ef2d6867",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 20991,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 5,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-a65a56d3-f9c5-437b-bc37-de91363523e2",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 20347,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 14,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-439a2e3d-6235-4855-9e32-3dc4c04fbbad",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 17801,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 15,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-cea9ce58-c4e5-4ec5-b30d-0fc330eb59e7",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 17621,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 12,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-9605af9c-4094-4c3a-9104-e327c9c9404f",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 16466,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 21,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-a3c07646-b47c-4cb4-8c30-3dcd2185ce7f",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 16082,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 9,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-90fab800-997e-4658-949d-3a7b1d91987b",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 15520,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 11,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-fc1adee8-2a07-4b30-bd4a-caa06675c2d6",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 15464,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 7,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-7de23231-b064-43c4-94aa-a5207df8ccd8",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 14356,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 7,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-f316dc8c-79c8-4d08-a0b3-b7249b4fa5c4",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 14091,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 28,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-7df5f489-8ad7-4ae2-96b5-493b1009f7fb",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 13739,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 2,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-574e3a8e-5d40-4e5c-b9d9-b55604de337c",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 13726,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 2,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-75c0ef73-ead1-4ff3-9157-da0110bf23dc",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 13023,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 1,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-f532aac8-d3b3-4953-9479-1613841f19e6",
+   "era": "UNLABELED",
+   "longSession": true,
+   "events": 12500,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "outOfScopeTextEcho": 37,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  }
+ ],
+ "attributionAnalysis": {
+  "note": "pre-registered verdict stands under BOTH interpretations (combined PROTO+QUOTA and PROTO-only) — OFF=0 makes any ON incident a rule hit; robustness stated explicitly",
+  "sessionsWithIncidents": [
+   {
+    "sessionId": "session-a144fe3f-1042-4466-b70b-a10642fae037",
+    "era": "ON",
+    "events": 16925,
+    "PROTO": 23,
+    "QUOTA": 21
+   },
+   {
+    "sessionId": "session-5cd0722e-467e-4be5-ab6d-1f841d523a07",
+    "era": "ON",
+    "events": 9617,
+    "PROTO": 1,
+    "QUOTA": 0
+   }
+  ],
+  "context": {
+   "PROTOCOL_CONFIG_LOAD_INCIDENT": "reasoning_content+400 protocol incidents = the P2.6-A EMERGENCY hotfix bug class (fix merged earlier in P2.5; occurrences are historical in-session records)",
+   "PROVIDER_QUOTA": "GLM-family 429 rate limits = external provider-side events, independent of the CM plugin OFF/ON toggle",
+   "primaryCmOnSession": "session-34e86c7a (longest ON session, CM active throughout): PROTO=0 QUOTA=0 across its full log"
+  }
+ },
+ "pooledRollups": {
+  "OFF": {
+   "longSessions": 2,
+   "events": 115190,
+   "incidents": 0,
+   "per1k": 0
+  },
+  "ON": {
+   "longSessions": 2,
+   "events": 108619,
+   "incidents": 44,
+   "per1k": 0.4051
+  }
+ },
+ "verdict": {
+  "value": "MATERIAL_REGRESSION",
+  "reason": "ON pooled per-1k 0.4051 > OFF pooled per-1k 0 × 2 (pre-registered threshold)"
+ },
+ "carryover": {
+  "v2Artifact": "R5_COMPLETION_QUALITY_V2.json (aggregate fixed-field accounting, 12:59Z snapshot)",
+  "v1ChecklistVerdict": "NO MATERIAL REGRESSION (proxy checklist, R5-4)",
+  "registryNote": "registry #5 (independent evaluation system) remains open and is NOT closed by this proxy-metric gate"
+ },
+ "sanitized": true
+}

@@ -192,7 +192,7 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
   `R5_RECALL_FINAL_NEG.json`(10 用例)、`R5_SH9_POSTURE_V2.json`、`R5_COMPLETION_QUALITY_V2.json`。
 - 登记册补充 #8（信息级）：生产 store 观测投影像素噪声（todo 目录清单类）——由后续
   插件策略轮处理，不阻塞本轮证据收口。
-- 治理不变：未改生产插件代码；零重启；状态维持 **AWAITING_REVIEW**。
+- 治理不变：未改生产插件代码；零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**。
 
 ---
 *End of REPORT_R5 (§18 appended by R5.1-A)*

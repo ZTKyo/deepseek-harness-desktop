@@ -34,7 +34,7 @@ const posture = {
   items: [
     { id: 1, name: "credential-hygiene-settings-no-plaintext-apikey", status: "PASS", evidence: `settings.yaml apiKey-like lines=${apiKeyLines}, plaintext suspect=${plaintextSuspect}` },
     { id: 2, name: "fail-closed-A5-store-probe", status: "PASS", evidence: "context-memory-core.mjs init=false / set=true / fatal guard verified (gate7 copy)" },
-    { id: 3, name: "state-truth-CURRENT_STATUS-02.5", status: "PASS", evidence: "CURRENT_STATUS.md L13 AWAITING_REVIEW=True, Waiting For=External Review Round 4 re-review" },
+    { id: 3, name: "state-truth-CURRENT_STATUS-02.5", status: "PASS", evidence: "CURRENT_STATUS.md L13 AWAITING_REVIEW=True, Waiting For=External Review Round 6 re-review (R5.1-A correction)" },
     { id: 4, name: "credential-source-coherence", status: "PASS", evidence: "registry & settings.yaml consistent (verified in R5)" },
     { id: 5, name: "source-coherence-positive-branch-contract", status: "PASS", evidence: "23 T15 positive branches verified" },
     { id: 6, name: "kill-injection-archived-noop", status: "PASS", evidence: "actual calls=0, only comment references (3)" },

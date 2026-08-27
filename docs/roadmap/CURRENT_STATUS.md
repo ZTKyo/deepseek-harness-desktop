@@ -10,7 +10,7 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 4 之后的重新审核**（R3/R4/R5 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 6 的重新审核**（R3/R4/R5/R5.1-A 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -28,7 +28,7 @@ Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #4
 P2.5 CONTEXT MEMORY = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。
 **Governance correction（2026-08-27，Reviewer Round 2 = CHANGES_REQUIRED）**：main `be76a559` 曾在
 External Reviewer 未 APPROVED 前把 P2.5 写成 VERIFIED——该状态无 Reviewer 授权，属 Harness 越权，
-本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 4 之后的重新审核**；
+本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 6 的重新审核**；
 执行轮次 = R3/R4/R5 Evidence Closure（仅证据收口 + 状态修正，不扩架构）。
 **R3 收口（2026-08-27）**：R3-1…R3-8 全部完成——真实门禁/失败开放/kill-switch 回归 25 PASS +
 单元 61 PASS + 真实观测 17 PASS（合计 103/0）；活体 store 出现自然 provider-switch 激活
@@ -205,4 +205,4 @@ IMPLEMENTATION_COMPLETE。
   Completion Quality V2 全库 355 日志只读核算（12:59Z 快照：PROTO=22/QUOTA=17/ECHO=814，
   R4 四条 era 会话两类 0 命中）。
   证据：`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`＋§18 追加于 REPORT_R5.md。
-  未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。
+  未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。

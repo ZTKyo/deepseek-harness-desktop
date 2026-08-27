@@ -83,4 +83,4 @@ norm(event) 修复后 = "top-level-shape: version:: | refs:: | MIMO_API_KEY:: pa
 ## 6 边界与治理不变声明
 
 - 未改 `plugins/context-memory{,-core}.mjs` 生产代码；未触碰 Official Core；未重启 3080 服务；全程零生产文件写入。
-- 状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后重新审核**；P3=BLOCKED 不变。
+- 状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。

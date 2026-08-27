@@ -1,0 +1,63 @@
+{
+  "gate": "GATE-7",
+  "title": "context-memory kill-switch dual-leg + fail-open drill (REAL web instance)",
+  "status": "PASS",
+  "date": "2026-08-27",
+  "environment": {
+    "instance": "isolated dsh web server per leg (DSH_HOME override)",
+    "ports": { "baseline": 3188, "failopen": 3189, "envkill": 3190 },
+    "driver": "webdriver.mjs (real HTTP RPC multi-turn session)",
+    "rounds_per_leg": 4,
+    "model_route": "provider=bai model=deepseek-v4-flash (REAL, verified HTTP 200)",
+    "note_model_fix": "original leg default zhipu/glm-5.3-flash returned HTTP 429 (quota exhausted 2026-09-03 reset) -> empty responses -> agent could not act. Switched to bai/deepseek-v4-flash, the same provider/model production uses. Verified live."
+  },
+  "legs": {
+    "baseline": {
+      "ok": true,
+      "sessionId": "session-c8ac32b5-2498-4780-ba01-b5d3acb2000b",
+      "rounds_settled": [true, true, true, true],
+      "workdirOk": true,
+      "files_created": ["a.txt", "b.txt", "c.txt", "d.txt"],
+      "stateOk": true,
+      "stateFiles": ["session-c8ac32b5-2498-4780-ba01-b5d3acb2000b.json"],
+      "serverAlive": true,
+      "evidence": "context-memory active: exactly one store file per session; agent completed 4 real prompt rounds end-to-end"
+    },
+    "failopen": {
+      "ok": true,
+      "sessionId": "session-8b8eb539-cda1-419f-a2f0-055b92ddc6b7",
+      "rounds_settled": [true, true, true, true],
+      "workdirOk": true,
+      "files_created": ["a.txt", "b.txt", "c.txt", "d.txt"],
+      "stateOk": true,
+      "stateFiles": ["session-8b8eb539-cda1-419f-a2f0-055b92ddc6b7.json"],
+      "failopenSeeded": true,
+      "failopenRecovered": true,
+      "serverAlive": true,
+      "evidence": "corrupt store file seeded BEFORE first prompt; plugin did not block the task, rebuilt store (version>=1, sessionId matches), agent completed all rounds"
+    },
+    "envkill": {
+      "ok": true,
+      "sessionId": "session-ae0c7634-9479-4f8b-82af-65c38e2e4d2c",
+      "rounds_settled": [true, true, true, true],
+      "workdirOk": true,
+      "files_created": ["a.txt", "b.txt", "c.txt", "d.txt"],
+      "stateOk": true,
+      "stateFiles": [],
+      "serverAlive": true,
+      "evidence": "CM_DISABLED=true env kill-switch: zero store files despite active session and full task completion"
+    }
+  },
+  "conclusion": {
+    "kill_switch_env": "PASS (envkill: 0 store files)",
+    "fail_open_corrupt": "PASS (failopen: corrupt seed -> no block -> auto rebuild)",
+    "injection_active": "PASS (baseline: store built, session continues)",
+    "real_session": "PASS (real dsh web instance, real model route, real multi-turn prompts)",
+    "model_route_fix": "bai/deepseek-v4-flash verified working; zhipu quota-exhausted root cause documented"
+  },
+  "artifacts": {
+    "driver": "gate7/webdriver.mjs",
+    "leg_homes": "gate7/legs/{baseline,failopen,envkill}/home",
+    "logs": "gate7/legs/{baseline,failopen,envkill}/webdriver-run.log"
+  }
+}

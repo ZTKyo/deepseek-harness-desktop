@@ -438,6 +438,79 @@ section("T11: R2-7 blocker close is evidence-linked (no false completion)");
   }
 }
 
+// ═════════════════ T12: R5-1 STRICT recall verifier (NEG-1..5 + controls) ═════════════════
+section("T12: R5-1 STRICT recall verifier — matchedSeq∈claim.refs + type match + text support (no corpus rescue)");
+{
+  const RV = await import(pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "recall-verifier.mjs")).href);
+  // fixture events with deployed data shapes (user/message, tool/result, assistant/message)
+  const ev = [];
+  const add = (type, data) => { ev.push({ seq: ev.length, type, data }); return ev[ev.length - 1].seq; };
+  add("user/message", { role: "user", id: "u0", content: [{ type: "text", text: "Investigate module alpha crash on startup." }], source: { kind: "user" } });
+  add("tool/result", { message: { role: "user", id: "t1", content: [{ type: "tool-result", content: [{ type: "text", text: "UNIQ-ALPHA-7F3 signal line produced while verifying task nine." }] }] } });
+  add("tool/result", { message: { role: "user", id: "t2", content: [{ type: "tool-result", content: [{ type: "text", text: "DUP-BRAVO-42 result recorded for batch step." }] }] } });
+  add("assistant/message", { turn: 1, step: 1, message: { role: "assistant", id: "a3", content: [{ type: "text", text: "Step done." }], source: { kind: "model", provider: "p", model: "m" } } });
+  add("tool/result", { message: { role: "user", id: "t4", content: [{ type: "tool-result", content: [{ type: "text", text: "DUP-BRAVO-42 result recorded for batch step." }] }] } });
+  add("tool/result", { message: { role: "user", id: "t5", content: [{ type: "tool-result", content: [{ type: "text", text: "Totally unrelated gamma evidence ends here." }] }] } });
+
+  const mkClaim = (section, t, refs, index = 0) => ({ section, text: t, refs, index });
+
+  // POSITIVE control: own-ref exact backing passes.
+  {
+    const r = RV.resolveClaim(mkClaim("goal", "Investigate module alpha crash on startup.", [0]), ev, CORE);
+    assert(r.ok && r.reason === "PASS_refs_exact", "POS: own-ref exact backing → PASS_refs_exact");
+    assert(r.hits.includes(0) && !r.multihit, "POS: single-hit diagnostics");
+  }
+  // NEG-1: text exists ONLY at another seq; cited ref cannot support it.
+  {
+    const r = RV.resolveClaim(mkClaim("completedActions", "UNIQ-ALPHA-7F3 signal line produced while verifying task nine.", [2]), ev, CORE);
+    assert(!r.ok && r.reason === "FAIL_text_not_supported_by_own_ref", `NEG-1: mismatched backing rejected (got ${r.reason})`);
+  }
+  // NEG-2: duplicated text exists elsewhere ({2,4}); cited ref 5 cannot support it and the
+  // corpus MUST NOT rescue — strict verdict reports that legacy rescue was even available.
+  {
+    const r = RV.resolveClaim(mkClaim("completedActions", "DUP-BRAVO-42 result recorded for batch step.", [5]), ev, CORE);
+    assert(!r.ok && r.reason === "FAIL_text_not_supported_by_own_ref", `NEG-2: own-ref backing required (got ${r.reason})`);
+    assert(r.corpusCouldRescue === true && r.hits.includes(2) && r.hits.includes(4),
+      "NEG-2: diagnostic proves legacy corpus-rescue WOULD have passed — strict verifier refuses");
+  }
+  // NEG-3: class/type mismatch — goal claim backed by a tool/result carrying identical words.
+  {
+    const r = RV.resolveClaim(mkClaim("goal", "Totally unrelated gamma evidence ends here.", [5]), ev, CORE);
+    assert(!r.ok && r.reason === "FAIL_type_mismatch", `NEG-3: type confusion rejected (got ${r.reason})`);
+  }
+  // NEG-4: ghost text supported nowhere in corpus.
+  {
+    const r = RV.resolveClaim(mkClaim("verifiedEvidence", "GHOST-DELTA-99 never existed in any output.", [5]), ev, CORE);
+    assert(!r.ok && r.reason.startsWith("FAIL_"), `NEG-4: fabricated claim rejected (got ${r.reason})`);
+  }
+  // NEG-5: legitimate duplicate WITH correct own-ref → PASS but multihit flagged; empty refs → hard fail.
+  {
+    const r = RV.resolveClaim(mkClaim("completedActions", "DUP-BRAVO-42 result recorded for batch step.", [2], 3), ev, CORE);
+    assert(r.ok && r.multihit === true && r.hits.length === 2, "NEG-5a: correct own-ref in duplicated corpus → PASS + multihit flag");
+    const r2 = RV.resolveClaim(mkClaim("completedActions", "DUP-BRAVO-42 result recorded for batch step.", []), ev, CORE);
+    assert(!r2.ok && r2.reason === "FAIL_empty_refs", "NEG-5b: empty refs hard-fails");
+  }
+  // Aggregate end-to-end controls incl. chain + timeline.
+  {
+    const goodStore = {
+      schemaVersion: 1, sessionId: "syn", version: 3, active: true, watermark: 1, lastRoute: { provider: "p", model: "m" },
+      obs: {},
+      refs: [{ v: 1, startSeq: 3, endSeq: 0, at: 1 }, { v: 2, startSeq: 5, endSeq: 1, at: 2 }],
+      goal: { t: "Investigate module alpha crash on startup.", refs: [0] },
+      completedActions: [{ t: "DUP-BRAVO-42 result recorded for batch step.", refs: [2] }],
+      verifiedEvidence: [{ t: "Totally unrelated gamma evidence ends here.", refs: [5] }],
+      keyFileChanges: [], failedApproaches: [], blockers: [], runtimeFacts: [],
+    };
+    const badStore = JSON.parse(JSON.stringify(goodStore));
+    badStore.completedActions = [{ t: "UNIQ-ALPHA-7F3 signal line produced while verifying task nine.", refs: [2] }];
+    const good = RV.runStrictRecall({ events: ev, store: goodStore, core: CORE });
+    const bad = RV.runStrictRecall({ events: ev, store: badStore, core: CORE });
+    assert(good.ok === true, `POS-e2e: consistent store → STRICT ALL-PASS (got ${good.SUMMARY})`);
+    assert(bad.ok === false && bad.classes.some((c) => c.results.some((x) => x.reason === "FAIL_text_not_supported_by_own_ref")),
+      "NEG-e2e: planted mismatch forces overall FAIL");
+  }
+}
+
 console.log(`\n${"=".repeat(60)}`);
 console.log(`RESULT: ${passCount} PASS / ${failCount} FAIL`);
 process.exit(failCount ? 1 : 0);

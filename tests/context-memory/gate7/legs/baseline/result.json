@@ -1,0 +1,13 @@
+{
+  "leg": "baseline",
+  "smoke": false,
+  "envKill": false,
+  "exitCodeOrSignal": 0,
+  "timedOut": false,
+  "elapsedMs": 54275,
+  "stateDirExists": true,
+  "stateFiles": [],
+  "sessionFiles": [
+    "--C-Users-Administrator-Desktop-sdeepseek~0020harness-_release-staging-tests-context-memory-gate7-legs-baseline-workdir--/session-64691d1a-2e57-4d05-8299-2e8388b71e83/session.jsonl.zstd"
+  ]
+}

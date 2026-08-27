@@ -1,0 +1,102 @@
+{
+ "gate": "R5-4 completion-quality OFF/ON auditable checklist",
+ "date": "2026-08-27",
+ "legs": [
+  {
+   "name": "baseline",
+   "ok": true,
+   "settled": "4/4",
+   "serverAlive": true,
+   "stateOk": true,
+   "stateFiles": 1
+  },
+  {
+   "name": "failopen",
+   "ok": true,
+   "settled": "4/4",
+   "serverAlive": true,
+   "stateOk": true,
+   "stateFiles": 1
+  },
+  {
+   "name": "envkill",
+   "ok": true,
+   "settled": "4/4",
+   "serverAlive": true,
+   "stateOk": true,
+   "stateFiles": 0
+  },
+  {
+   "name": "missing",
+   "ok": true,
+   "settled": "4/4",
+   "serverAlive": true,
+   "stateOk": true,
+   "stateFiles": 1,
+   "zeroDamage": {
+    "oldStoreRenamedNotDeleted": true,
+    "oldStoreRecoverableBytes": 1185,
+    "sameSessionContinue": true,
+    "watermarkProgressed": true,
+    "refsAccumulated": true
+   }
+  }
+ ],
+ "audits": [
+  {
+   "id": 1,
+   "item": "per-turn-agent-valid-output",
+   "rule": "usage usable rate >= 99%",
+   "value": "100%",
+   "detail": "1,846 valid messages, message-level 100% non-zero usage",
+   "status": "PASS"
+  },
+  {
+   "id": 2,
+   "item": "task-completion-rate-gate7",
+   "rule": "all rounds settled=true",
+   "value": "16/16 rounds_settled=true",
+   "detail": "legs=baseline,failopen,envkill,missing",
+   "status": "PASS"
+  },
+  {
+   "id": 3,
+   "item": "no-error-injection-or-abort",
+   "rule": "serverAlive + stateOk all legs",
+   "value": "4/4 legs serverAlive=true, stateOk=true",
+   "detail": "no uncaught exception",
+   "status": "PASS"
+  },
+  {
+   "id": 4,
+   "item": "off-on-comparison",
+   "rule": "ON lower than OFF same family",
+   "value": "ON 56,933 tok (-86.5% vs OFF 422,693)",
+   "detail": "median token pressure, usage basis",
+   "status": "PASS"
+  },
+  {
+   "id": 5,
+   "item": "zero-side-effect",
+   "rule": "envkill 0 store files + missing zeroDamage",
+   "value": "envkill stateFiles=0",
+   "detail": "missing zeroDamage={\"oldStoreRenamedNotDeleted\":true,\"oldStoreRecoverableBytes\":1185,\"sameSessionContinue\":true,\"watermarkProgressed\":true,\"refsAccumulated\":true}",
+   "status": "PASS"
+  },
+  {
+   "id": 6,
+   "item": "current-status-truth-consistency",
+   "rule": "02.5 = AWAITING_REVIEW",
+   "value": "AWAITING_REVIEW=True",
+   "detail": "CURRENT_STATUS.md L13",
+   "status": "PASS"
+  }
+ ],
+ "verdict": {
+  "summary": "NO MATERIAL REGRESSION",
+  "note": "ON mode task completion 100%, output usable rate 100%, token pressure -86.5%, no error/abort/side-effect. Proxy quality checklist, NOT an independent evaluation system (registry #5 remains INCONCLUSIVE).",
+  "auditsPass": 6,
+  "auditsTotal": 6
+ },
+ "sanitized": true
+}

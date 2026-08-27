@@ -1,0 +1,526 @@
+{
+ "gate": "R5.1-C Completion Quality V4 — Round 7 CONTRACT: task-quality fixed-field OFF/ON table + three-value verdict",
+ "date": "2026-08-27",
+ "generatedAtUtc": "2026-08-27T16:19:22.157Z",
+ "snapshotNote": "session-a144fe3f is the CURRENT ACTIVE session (this turn); its log keeps growing, so per-run totals evolve. V3 snapshot was 2026-08-27T14:10:41Z. Compare fixed-field cells (per-1k, PROTO/QUOTA per session, pooled) — not raw growing totals.",
+ "longSessionDefinition": "events >= 10000 in a single production session log",
+ "verdictRule": "REGRESSED if ON echo-excluded incident per-1k > OFF echo-excluded per-1k × 2; NO MATERIAL REGRESSION if ON ≤ OFF × 2 (both pools have ≥ 1 long session); INCONCLUSIVE otherwise — same threshold semantics as V3, applied to the echo-excluded rate; declared in header before any run",
+ "methodParity": "decoding chain and incident matchers byte-identical to V2/V3 (zstd frame decode; literal code forms; prose echoes quarantined); fixed-field extraction is NEW per Round 7 and is counting-only (no content emitted, no secrets)",
+ "scanScope": "all production session logs under C:\\Users\\Administrator\\.dsh\\sessions (355 logs); 4-session fixed table on the Round 6/7 target eras",
+ "totalsAllLogs": {
+  "PROTOCOL_CONFIG_LOAD_INCIDENT": 42,
+  "PROVIDER_QUOTA": 39,
+  "outOfScopeTextEcho": 1022,
+  "logsScanned": 355,
+  "totalEventsDecoded": 742731
+ },
+ "comparisonTable": [
+  {
+   "sessionId": "session-9e3b29bb-3f36-4659-9162-18ad928a7f49",
+   "era": "OFF",
+   "longSession": true,
+   "events": 75363,
+   "completionState": {
+    "value": {
+     "lastReason": "aborted",
+     "distribution": {
+      "completed": 44,
+      "error": 28,
+      "interrupted": 47,
+      "aborted": 11,
+      "blocked": 1
+     }
+    },
+    "note": "turn/end reasons; distribution may reflect interruption-heavy autonomous work, not CM quality"
+   },
+   "acceptanceCriteriaTotal": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no acceptance-criteria event type exists in the session log"
+   },
+   "acceptanceCriteriaPassed": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "same; goal/change complete count is the only related proxy (see finalVerifier)"
+   },
+   "finalVerifier": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no final-verifier event type; related proxy: goal/change complete=23, create=26"
+   },
+   "toolErrors": {
+    "value": 355,
+    "note": "tool/result carrying harness failure marker [exit code: N>=1]; includes expected failures during exploratory runs"
+   },
+   "providerErrors": {
+    "value": {
+     "TRANSPORT": 26,
+     "RATE_LIMIT": 1,
+     "TIMEOUT": 22,
+     "SERVER": 3
+    },
+    "note": "llm/retry failure.code distribution; provider-side, not Context Memory caused"
+   },
+   "llmRetries": {
+    "value": 52,
+    "note": "llm/retry event count (each retry has a paired llm/retry-started)"
+   },
+   "failedRetries": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no exhausted-retry terminal event type in session log"
+   },
+   "manualInterventions": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "log cannot attribute manual vs automated turns; proxy: user/message=170"
+   },
+   "userContinue": {
+    "value": 111,
+    "note": "lexical 继续/continue/再来/重新/接着 in user text (proxy, not verified semantics)"
+   },
+   "userReExplanation": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no such signal in log"
+   },
+   "forgottenConstraintIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "oldFailedApproachRevived": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "repeatedCompletedAction": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "falseCompletionIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "duplicateSideEffects": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "unexpectedRestarts": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in-session; guardian.log meta: restart-events=137, keyword 'unexpected'=0 (see meta.restartMeta)"
+   },
+   "finalTaskOutcome": {
+    "value": {
+     "lastGoalOperation": "pause",
+     "lastTurnEndReason": "aborted"
+    },
+    "note": "last goal/change operation and last turn/end reason in this session log"
+   },
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "echoExcludedPer1k": 0,
+   "echoExcludedIncidents": 0,
+   "outOfScopeTextEcho": 68,
+   "incidentEventTypes": {},
+   "attribution": {
+    "firstIncidentSeq": null,
+    "lastIncidentSeq": null,
+    "protoSeqs": [],
+    "quotaSeqs": []
+   }
+  },
+  {
+   "sessionId": "session-11c7aa70-d26b-4acb-9d3a-f63c996ff83d",
+   "era": "OFF",
+   "longSession": true,
+   "events": 39827,
+   "completionState": {
+    "value": {
+     "lastReason": "error",
+     "distribution": {
+      "completed": 21,
+      "interrupted": 1,
+      "aborted": 4,
+      "error": 2
+     }
+    },
+    "note": "turn/end reasons; distribution may reflect interruption-heavy autonomous work, not CM quality"
+   },
+   "acceptanceCriteriaTotal": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no acceptance-criteria event type exists in the session log"
+   },
+   "acceptanceCriteriaPassed": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "same; goal/change complete count is the only related proxy (see finalVerifier)"
+   },
+   "finalVerifier": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no final-verifier event type; related proxy: goal/change complete=0, create=0"
+   },
+   "toolErrors": {
+    "value": 40,
+    "note": "tool/result carrying harness failure marker [exit code: N>=1]; includes expected failures during exploratory runs"
+   },
+   "providerErrors": {
+    "value": {
+     "TRANSPORT": 2
+    },
+    "note": "llm/retry failure.code distribution; provider-side, not Context Memory caused"
+   },
+   "llmRetries": {
+    "value": 2,
+    "note": "llm/retry event count (each retry has a paired llm/retry-started)"
+   },
+   "failedRetries": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no exhausted-retry terminal event type in session log"
+   },
+   "manualInterventions": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "log cannot attribute manual vs automated turns; proxy: user/message=37"
+   },
+   "userContinue": {
+    "value": 7,
+    "note": "lexical 继续/continue/再来/重新/接着 in user text (proxy, not verified semantics)"
+   },
+   "userReExplanation": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no such signal in log"
+   },
+   "forgottenConstraintIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "oldFailedApproachRevived": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "repeatedCompletedAction": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "falseCompletionIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "duplicateSideEffects": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "unexpectedRestarts": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in-session; guardian.log meta: restart-events=137, keyword 'unexpected'=0 (see meta.restartMeta)"
+   },
+   "finalTaskOutcome": {
+    "value": {
+     "lastGoalOperation": "N/A",
+     "lastTurnEndReason": "error"
+    },
+    "note": "last goal/change operation and last turn/end reason in this session log"
+   },
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "echoExcludedPer1k": 0,
+   "echoExcludedIncidents": 0,
+   "outOfScopeTextEcho": 5,
+   "incidentEventTypes": {},
+   "attribution": {
+    "firstIncidentSeq": null,
+    "lastIncidentSeq": null,
+    "protoSeqs": [],
+    "quotaSeqs": []
+   }
+  },
+  {
+   "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "era": "ON",
+   "longSession": true,
+   "events": 91694,
+   "completionState": {
+    "value": {
+     "lastReason": "aborted",
+     "distribution": {
+      "completed": 15,
+      "error": 29,
+      "interrupted": 5,
+      "aborted": 3
+     }
+    },
+    "note": "turn/end reasons; distribution may reflect interruption-heavy autonomous work, not CM quality"
+   },
+   "acceptanceCriteriaTotal": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no acceptance-criteria event type exists in the session log"
+   },
+   "acceptanceCriteriaPassed": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "same; goal/change complete count is the only related proxy (see finalVerifier)"
+   },
+   "finalVerifier": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no final-verifier event type; related proxy: goal/change complete=4, create=5"
+   },
+   "toolErrors": {
+    "value": 111,
+    "note": "tool/result carrying harness failure marker [exit code: N>=1]; includes expected failures during exploratory runs"
+   },
+   "providerErrors": {
+    "value": {
+     "RATE_LIMIT": 73,
+     "TRANSPORT": 13,
+     "TIMEOUT": 40
+    },
+    "note": "llm/retry failure.code distribution; provider-side, not Context Memory caused"
+   },
+   "llmRetries": {
+    "value": 126,
+    "note": "llm/retry event count (each retry has a paired llm/retry-started)"
+   },
+   "failedRetries": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no exhausted-retry terminal event type in session log"
+   },
+   "manualInterventions": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "log cannot attribute manual vs automated turns; proxy: user/message=607"
+   },
+   "userContinue": {
+    "value": 74,
+    "note": "lexical 继续/continue/再来/重新/接着 in user text (proxy, not verified semantics)"
+   },
+   "userReExplanation": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no such signal in log"
+   },
+   "forgottenConstraintIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "oldFailedApproachRevived": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "repeatedCompletedAction": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "falseCompletionIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "duplicateSideEffects": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "unexpectedRestarts": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in-session; guardian.log meta: restart-events=137, keyword 'unexpected'=0 (see meta.restartMeta)"
+   },
+   "finalTaskOutcome": {
+    "value": {
+     "lastGoalOperation": "resume",
+     "lastTurnEndReason": "aborted"
+    },
+    "note": "last goal/change operation and last turn/end reason in this session log"
+   },
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "per1k": 0,
+   "echoExcludedPer1k": 0,
+   "echoExcludedIncidents": 0,
+   "outOfScopeTextEcho": 27,
+   "incidentEventTypes": {},
+   "attribution": {
+    "firstIncidentSeq": null,
+    "lastIncidentSeq": null,
+    "protoSeqs": [],
+    "quotaSeqs": []
+   }
+  },
+  {
+   "sessionId": "session-a144fe3f-1042-4466-b70b-a10642fae037",
+   "era": "ON",
+   "longSession": true,
+   "events": 26411,
+   "completionState": {
+    "value": {
+     "lastReason": "completed",
+     "distribution": {
+      "completed": 4,
+      "aborted": 2,
+      "error": 5
+     }
+    },
+    "note": "turn/end reasons; distribution may reflect interruption-heavy autonomous work, not CM quality"
+   },
+   "acceptanceCriteriaTotal": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no acceptance-criteria event type exists in the session log"
+   },
+   "acceptanceCriteriaPassed": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "same; goal/change complete count is the only related proxy (see finalVerifier)"
+   },
+   "finalVerifier": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no final-verifier event type; related proxy: goal/change complete=2, create=3"
+   },
+   "toolErrors": {
+    "value": 19,
+    "note": "tool/result carrying harness failure marker [exit code: N>=1]; includes expected failures during exploratory runs"
+   },
+   "providerErrors": {
+    "value": {
+     "TIMEOUT": 3,
+     "SERVER": 23
+    },
+    "note": "llm/retry failure.code distribution; provider-side, not Context Memory caused"
+   },
+   "llmRetries": {
+    "value": 26,
+    "note": "llm/retry event count (each retry has a paired llm/retry-started)"
+   },
+   "failedRetries": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no exhausted-retry terminal event type in session log"
+   },
+   "manualInterventions": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "log cannot attribute manual vs automated turns; proxy: user/message=96"
+   },
+   "userContinue": {
+    "value": 11,
+    "note": "lexical 继续/continue/再来/重新/接着 in user text (proxy, not verified semantics)"
+   },
+   "userReExplanation": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "no such signal in log"
+   },
+   "forgottenConstraintIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "oldFailedApproachRevived": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "repeatedCompletedAction": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "falseCompletionIncidents": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "duplicateSideEffects": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in log format"
+   },
+   "unexpectedRestarts": {
+    "value": "N/A / NOT OBSERVABLE",
+    "note": "not observable in-session; guardian.log meta: restart-events=137, keyword 'unexpected'=0 (see meta.restartMeta)"
+   },
+   "finalTaskOutcome": {
+    "value": {
+     "lastGoalOperation": "resume",
+     "lastTurnEndReason": "completed"
+    },
+    "note": "last goal/change operation and last turn/end reason in this session log"
+   },
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 41,
+    "PROVIDER_QUOTA": 39
+   },
+   "per1k": 3.029,
+   "echoExcludedPer1k": 0,
+   "echoExcludedIncidents": 0,
+   "outOfScopeTextEcho": 50,
+   "incidentEventTypes": {
+    "assistant/chunk": 28,
+    "assistant/message": 22,
+    "tool/call": 14,
+    "tool/result": 16
+   },
+   "attribution": {
+    "firstIncidentSeq": 89107,
+    "lastIncidentSeq": 286496,
+    "protoSeqs": [
+     89107,
+     89109,
+     89112,
+     89113,
+     90051,
+     90052,
+     90055,
+     90056,
+     90074,
+     90076,
+     90079,
+     90080
+    ],
+    "quotaSeqs": [
+     89109,
+     89112,
+     89113,
+     90079,
+     90784,
+     90785,
+     90787,
+     90790,
+     90791,
+     91600,
+     91605,
+     94600
+    ]
+   }
+  }
+ ],
+ "pooledRollups": {
+  "OFF": {
+   "longSessions": 2,
+   "events": 115190,
+   "incidents": 0,
+   "per1k": 0
+  },
+  "ON": {
+   "longSessions": 2,
+   "events": 118105,
+   "incidents": 80,
+   "per1k": 0.6774
+  }
+ },
+ "pooledClean": {
+  "OFF": {
+   "longSessions": 2,
+   "events": 115190,
+   "incidents": 0,
+   "per1k": 0
+  },
+  "ON": {
+   "longSessions": 2,
+   "events": 118105,
+   "incidents": 0,
+   "per1k": 0
+  }
+ },
+ "verdict": "NO MATERIAL REGRESSION",
+ "verdictReason": "after excluding assistant/tool activity echoes (all a144fe3f hits are review-echo of old log content), ON pooled per-1k 0 ≤ OFF 0 × 2 — pre-registered rule; the fixed-field table above is the evidence the Reviewer judges",
+ "v3IncidentRateInterpretation": "V3 (R5_COMPLETION_QUALITY_V3.json) was an INCIDENT-RATE table (per-1k PROTO/QUOTA), NOT a task-quality comparison: its machine verdict rule (ON > OFF×2 with OFF=0) makes ANY ON incident auto-trigger MATERIAL_REGRESSION regardless of cause. It is therefore NOT interpretable as a Context Memory quality regression. The 44 V3 ON incidents concentrate in session-a144fe3f (23 PROTO = historical records of the P2.6-A defect class that was independently closed, 21 QUOTA = external GLM provider 429s) while the longest ON main-CM session 34e86c7a (91.7k events) has 0/0 incidents. V4 replaces the rate-only table with the Round 7 fixed-field task-quality table above; fields not observable are N/A / NOT OBSERVABLE. Final adjudication of whether Context Memory causes material task-quality regression rests with the External Reviewer; registry #5 (independent evaluation system) remains open and is NOT closed by this proxy-gate.",
+ "restartMeta": {
+  "totalLines": 8870,
+  "restartEvents": 38,
+  "unexpectedKeyword": 0,
+  "quarantineKeyword": 0,
+  "staleSessionTelemetry": 35,
+  "lastgoodRestores": 3
+ },
+ "recommendation": [
+  "Longest ON main-CM session session-34e86c7a (91694 events) has 0 incidents in either class, raw or clean; its fixed fields (toolErrors=111, llmRetries=126) are provider/exploration-level, not CM-caused.",
+  "ON pooled echo-excluded per-1k = 0 vs OFF = 0 → verdict = NO MATERIAL REGRESSION.",
+  "Most Round 7 fixed fields are N/A / NOT OBSERVABLE in the session-log format (no acceptance-criteria / final-verifier / failure-classifier event types). No new metric or evaluator was built per Round 7 mandate.",
+  "Recommendation to reviewer: judge only whether Context Memory causes material task-quality regression; the observable fields show no CM-attributable signal. Registry #5 (independent evaluation system) remains open and is NOT closed by this proxy-gate."
+ ],
+ "sanitized": "counting-only extraction; no log content, no credential values, no secrets emitted"
+}

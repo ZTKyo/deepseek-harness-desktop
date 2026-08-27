@@ -1,0 +1,88 @@
+{
+ "gate": "R5.1-B SH-R9 read-only LIVE posture V3 (Round 6 blocker C) — every item re-derived at run time",
+ "date": "2026-08-27",
+ "generatedAtUtc": "2026-08-27T14:19:58.371Z",
+ "method": "V3 = live re-verification (files/processes/ACL/hashes read at run time); V2 carried forward several stored verdicts — V3 supersedes",
+ "scope": "9 canonical SH-R9 items + 3 EXT live items (guardian / DACL / hardened config) per R5.1-B contract",
+ "items": [
+  {
+   "id": 1,
+   "name": "credential-hygiene-settings-no-plaintext-apikey",
+   "status": "PASS",
+   "evidence": "LIVE settings.yaml: apiKey-like lines=14, plaintext suspects=0"
+  },
+  {
+   "id": 2,
+   "name": "fail-closed-A5-store-probe",
+   "status": "PASS",
+   "evidence": "LIVE source: init=false L297, set=true L305, catch→fatal L306, FAIL-CLOSED gate L309"
+  },
+  {
+   "id": 3,
+   "name": "state-truth-CURRENT_STATUS",
+   "status": "PASS",
+   "evidence": "LIVE: | 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review R | | Phase | 名称 | 状态 | Waiting For | 报告路径 |"
+  },
+  {
+   "id": 4,
+   "name": "credential-source-coherence",
+   "status": "PASS",
+   "evidence": "LIVE .credentials.yaml present, credential ref names (28): MIMO_API_KEY,DEEPSEEK_OPENCODE_API_KEY,OPENCODE_API_KEY,GMAIL_USER,GMAIL_APP_PASSWORD,GMAIL_USER2,GMAIL_APP_PASSWORD2,GMAIL_USER3,GMAIL_APP_PASSWORD3,TELEGRAM_BOT_TOKEN,TELEGRAM_PROXY,EMAIL_PROXY,SECRET_GATE_TEST,SG_PROBE,OPENROUTER_MANAGEMENT_KEY,OPENROUTER_API_KEY,AGENTROUTER_API_KEY,CMD_API_KEY,BAI_API_KEY,OPENWRT_LUCI_PASSWORD,ZENMUX_API_KEY,DSH_REMOTE_AUTH_USER,DSH_REMOTE_AUTH_PASS,XFYUN_APISECRET,NOTION_TOKEN,PSU_EDU_PASSWORD,EMPERO_API_KEY,ZHIPU_API_KEY; values NOT read"
+  },
+  {
+   "id": 5,
+   "name": "source-coherence-positive-branch-contract",
+   "status": "PASS",
+   "evidence": "LIVE source: T15 contract markers 6/6 present"
+  },
+  {
+   "id": 6,
+   "name": "kill-injection-archived-noop",
+   "status": "PASS",
+   "evidence": "LIVE scan: production callers=0, doc/test references=4, archive present=true"
+  },
+  {
+   "id": 7,
+   "name": "restore-owner-archived",
+   "status": "PASS",
+   "evidence": "LIVE scan: production callers=0, archive sole copy=true, other references=2"
+  },
+  {
+   "id": 8,
+   "name": "deploy-byte-verify-live-eq-repo",
+   "status": "PASS",
+   "evidence": "LIVE SHA256(16): context-memory.mjs live=5fcd2ec401730fcd repo=5fcd2ec401730fcd eq=true | context-memory-core.mjs live=e68fbd173340d008 repo=e68fbd173340d008 eq=true"
+  },
+  {
+   "id": 9,
+   "name": "mount-chain-agent-cordis-context-memory",
+   "status": "PASS",
+   "evidence": "LIVE: id=context-memory at L438 -> L439 ./context-memory.mjs"
+  },
+  {
+   "id": "EXT-1",
+   "name": "guardian-liveness-live",
+   "status": "PASS",
+   "evidence": "LIVE: guardian processes=3, guardian.log age=1min (fresh<15min)"
+  },
+  {
+   "id": "EXT-2",
+   "name": "credentials-dacl-hardened",
+   "status": "PASS",
+   "evidence": "LIVE icacls entries: C:\\Users\\Administrator\\.dsh\\.credentials.yaml WIN-20250120CBH\\CodexSandboxUsers:(I)(RX) NT AUTHORITY\\SYSTEM:(I)(F) BUILTIN\\Administrators:(I)(F) WIN-20250120CBH\\Administrator:(I)(F) Successfully processed 1 files; Failed processing 0 files"
+  },
+  {
+   "id": "EXT-3",
+   "name": "hardened-config-lastgood-and-envstrip",
+   "status": "PASS",
+   "evidence": "LIVE: guardian-lastgood files=[cordis.patch.yml,cordis.yml,meta.json,settings.yaml], start-dsh-server.ps1 env-strip markers=3/3"
+  }
+ ],
+ "conclusion": {
+  "pass": 12,
+  "fail": 0,
+  "total": 12,
+  "stop": "NO STOP ITEMS"
+ },
+ "sanitized": "credential values never read or emitted; ACL entries and ref names only"
+}

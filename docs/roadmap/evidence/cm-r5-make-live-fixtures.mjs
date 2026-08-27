@@ -63,7 +63,7 @@ const stCopy = path.join(outDir, "live-store.json");
 fs.copyFileSync(storeFile, stCopy);
 
 console.log("[3/3] running STRICT verifier ...");
-const { runStrictRecall } = await import(new URL("./recall-verifier.mjs", import.meta.url).href);
+const { runStrictRecall } = await import(new URL("./cm-r5-recall-verifier-snapshot.mjs", import.meta.url).href);
 const core = await import(new URL("file:///" + coreFile.replace(/\\/g, "/")).href);
 const store = JSON.parse(fs.readFileSync(stCopy, "utf8"));
 const t0 = Date.now();

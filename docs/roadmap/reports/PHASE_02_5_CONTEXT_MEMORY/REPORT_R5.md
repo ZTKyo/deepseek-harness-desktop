@@ -144,6 +144,7 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
 | 5 | completion quality 独立评测系统未建立 | — | INCONCLUSIVE 保持 | 红线禁止私建；checklist 提供代理判定 NO MATERIAL REGRESSION |
 | 6 | STRICT verifier legacy 2300+ 全驳回（拒真率 0） | — | 已验证 | 节点模式零误判 |
 | 7 | missing 腿 state.moved-* 时间戳命名 | 信息 | 已登记·设计如此 | 搜索需通配 `state.moved-*` |
+| 8 | 生产 store 观测投影像素噪声（todo-receipt/目录清单混入 keyFileChanges、blockers） | 低 | R5.1-A 登记·不阻塞 | 双门如实拦截；插件投影分类策略由后续轮处理（§18.3） |
 
 > 登记册 #4/#5 沿袭 R3/R4；#6/#7 为本轮 R5 新登记。均不阻塞 AWAITING_REVIEW 状态下的 External Review。
 
@@ -156,5 +157,42 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
 - 验收判定：若 Reviewer 认可 R5 六项证据（尤其 R5-2 REAL missing 集成测试 ok 与 R5-4 checklist verdict），可对 R5 证据给 APPROVED；P2.5 正式 VERIFIED 须由 Reviewer 宣布，Harness 不越权。
 - P3（AUTONOMY）在 P2.5 获 Reviewer 正式 APPROVED 后解锁。
 
+## §18 R5.1-A 追加：最终证据修正轮（2026-08-27）
+
+> 本节为 R5 报告在活体复跑暴露两个验证器假阴性缺陷后的修正附录；单一事实载体见
+> `docs/roadmap/evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`。不改 §0–§17 已载结论，
+> 仅登记判定口径升级与复跑结果。
+
+### §18.1 缺陷与修复
+
+1. **SECRET_RX 掩码跨行不对称**（验证器层假阴性）：分隔类吞 `\n` 把事件侧跨行普通词
+   当凭证打码而声明侧不打码 ⇒ strict 门对 `runtimeFacts[7]`（回源完备）误报
+   `FAIL_text_not_supported_by_own_ref`。已收窄正则排除换行桥接；同行真凭证打码行为不变。
+2. **FILE_PATH_RX 空格路径不可 token 化**（双门生成器层假阴性）：工作区目录名本身含空格
+   （`sdeepseek harness`），DSH 写文件标准回执 `<path>C:\...\R5_P25_FINAL_GATE_EVIDENCE.md</path>`
+   无法命中路径签名 ⇒ 被误判 `FAIL_no_file_op_signature`。新增 `<path>` 标签包路径分支；
+   自由文本裸带空格路径不因此放宽（NEG-FINAL-5 保持驳回）。
+3. **「P2.5→P3 残留」全库复查**：docs/roadmap 下 9 处「进入 P3」命中均为合规否定表述，
+   无越权跳转残留；CURRENT_STATUS 状态字段维持 AWAITING_REVIEW 正值——无需改写存量。
+
+### §18.2 修正后复跑证据
+
+| 门 | 结果 |
+|---|---|
+| STRICT 活体腿 | **7/7 ALL-PASS** + timeline/chain PASS（25MB 真实日志重解码，storeVersion=329） |
+| 双门精确门 v2 | C1/C3/C5 PASS；C2=FAIL(1)、C4=FAIL(2) 均为**真阳性**：生产 store 投影含 todo-receipt 与无错误措辞目录清单各数条——语义门如实拦截，正体现 Round-4 要求的鉴别力；投影分类策略修订超出本轮授权（不重设计约束），如实落档 |
+| 链路 | PASS_raw_side_effect_chain（1012213→1027575→1029605，dups=0） |
+| 负例套件 | 10/10（+NEG-FINAL-6 回归） |
+| SH-R9 posture V2 | 9/9 PASS（plaintext suspect=0） |
+| Completion Quality V2 | 全库 355 日志 728k+ 事件只读核算（generatedAtUtc=2026-08-27T12:59Z 快照）：PROTO=22 / QUOTA=17 / TEXT-ECHO=814 单列；R4 四条 era 会话两类 0 命中 |
+
+### §18.3 工件与治理
+
+- 新增/更新工件：`R5_RECALL_STRICT_LIVE_20260827.json`（覆写）、`R5_RECALL5_EXACT_V2.json`、
+  `R5_RECALL_FINAL_NEG.json`(10 用例)、`R5_SH9_POSTURE_V2.json`、`R5_COMPLETION_QUALITY_V2.json`。
+- 登记册补充 #8（信息级）：生产 store 观测投影像素噪声（todo 目录清单类）——由后续
+  插件策略轮处理，不阻塞本轮证据收口。
+- 治理不变：未改生产插件代码；零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**。
+
 ---
-*End of REPORT_R5*
+*End of REPORT_R5 (§18 appended by R5.1-A)*

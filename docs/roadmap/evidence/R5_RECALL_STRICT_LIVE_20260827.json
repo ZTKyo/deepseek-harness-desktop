@@ -1,9 +1,9 @@
 {
- "indexedEvents": 19495,
+ "indexedEvents": 25729,
  "claimNodesFound": 41,
  "schemaAnomalies": 0,
- "storeVersion": 237,
- "maxStoreRefEnd": 811720,
+ "storeVersion": 329,
+ "maxStoreRefEnd": 1033417,
  "classes": [
   {
    "classId": "C1-goal",
@@ -15,120 +15,20 @@
      "claim": {
       "section": "goal",
       "index": 0,
-      "tPreview": "<system-reminder> The following workspace instructions may be relevant to your work. Use them as guidance when applicabl",
+      "tPreview": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGE",
       "refs": [
-       809409
+       1027575
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      8,
-      90637,
-      111569,
-      128488,
-      151804,
-      169429,
-      179215,
-      192190,
-      196950,
-      204263,
-      213779,
-      213781,
-      223905,
-      223907,
-      232918,
-      232920,
-      233664,
-      238783,
-      238785,
-      239615,
-      254097,
-      254099,
-      254693,
-      256351,
-      266245,
-      266247,
-      266557,
-      276736,
-      276738,
-      277937,
-      301444,
-      301446,
-      310326,
-      324068,
-      324070,
-      345180,
-      345182,
-      365728,
-      365730,
-      393001,
-      393003,
-      395704,
-      419553,
-      419555,
-      448258,
-      448260,
-      459577,
-      459579,
-      482019,
-      482021,
-      493083,
-      507704,
-      516549,
-      527387,
-      543559,
-      549197,
-      560757,
-      560761,
-      569003,
-      576306,
-      587874,
-      587876,
-      596812,
-      596814,
-      605133,
-      605135,
-      618541,
-      618543,
-      626627,
-      626629,
-      629684,
-      635191,
-      635193,
-      645902,
-      645904,
-      648349,
-      649495,
-      653281,
-      653283,
-      658977,
-      659224,
-      674343,
-      674347,
-      675437,
-      681472,
-      681476,
-      684736,
-      706839,
-      706841,
-      708599,
-      729995,
-      729997,
-      746056,
-      746059,
-      758600,
-      771576,
-      771579,
-      786716,
-      786718,
-      809407,
-      809409,
-      811711,
-      812162,
-      818539,
-      818541,
-      818562
+      941025,
+      959623,
+      960434,
+      1027575,
+      1048924,
+      1053327
      ],
      "multihit": true
     }
@@ -145,62 +45,47 @@
      "claim": {
       "section": "completedActions",
       "index": 6,
-      "tPreview": "PASS C: earlier PASS kept as evidence PASS E: count-context success output is NOT an error PASS E: success output not re",
+      "tPreview": "=== ~/.dsh/sessions 目录内容 === Name Length LastWriteTime ---- ------ ------------- --C-Users-Administrator-- 2026/8/27 11:",
       "refs": [
-       811720
+       1032545
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      809404,
-      811720
+      1032545
      ],
-     "multihit": true
+     "multihit": false
     },
     {
      "claim": {
       "section": "completedActions",
       "index": 5,
-      "tPreview": "The file C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\tests\\context-memory\\verify-context-memory.mj",
+      "tPreview": "=== 当前会话 sessionId === session-34e86c7a-c982-4ded-90fa-1511021ffda7 === 查找当前会话 zstd log === === 查找 CM store（state 目录） ==",
       "refs": [
-       809394
+       1032199
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      62421,
-      65424,
-      65928,
-      65930,
-      65932,
-      65934,
-      67526,
-      70044,
-      184334,
-      185036,
-      192183,
-      809394,
-      811708,
-      817142,
-      819132
+      1032199
      ],
-     "multihit": true
+     "multihit": false
     },
     {
      "claim": {
       "section": "completedActions",
       "index": 4,
-      "tPreview": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\tests\\context-memory\\recall-verifier.mjs</path> ",
+      "tPreview": "=== evidence 目录 R5 相关文件 === Name Length LastWriteTime ---- ------ ------------- cm-r5-make-live-fixtures.mjs 3528 2026/8",
       "refs": [
-       808231
+       1026734
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      808231
+      1026734
      ],
      "multihit": false
     }
@@ -225,31 +110,35 @@
      "claim": {
       "section": "keyFileChanges",
       "index": 23,
-      "tPreview": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\tests\\context-memory\\recall-verifier.mjs</path> ",
+      "tPreview": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
       "refs": [
-       808231
+       1023001
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      808231
+      137099,
+      565468,
+      614064,
+      614067,
+      1023001
      ],
-     "multihit": false
+     "multihit": true
     },
     {
      "claim": {
       "section": "keyFileChanges",
       "index": 22,
-      "tPreview": "Updated todo list: 10 pending, 1 in progress, 1 completed.",
+      "tPreview": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\docs\\roadmap\\evidence\\R5_P25_FINAL_GATE_EVIDENCE",
       "refs": [
-       806195
+       1012213
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      806195
+      1012213
      ],
      "multihit": false
     },
@@ -257,16 +146,20 @@
      "claim": {
       "section": "keyFileChanges",
       "index": 21,
-      "tPreview": "Updated todo list: 11 pending, 1 in progress, 0 completed.",
+      "tPreview": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
       "refs": [
-       777452
+       1009398
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      777452,
-      813643
+      152588,
+      565468,
+      571991,
+      614064,
+      614067,
+      1009398
      ],
      "multihit": true
     }
@@ -291,20 +184,17 @@
      "claim": {
       "section": "blockers",
       "index": 0,
-      "tPreview": "=== T10: token A/B (synthetic scenario, est-tokens basis) === [synthetic] baseline=22337 tok, after=1228 tok, ratio=0.05",
+      "tPreview": "=== Temp 下 cm-r5 / r5 相关目录 === FullName LastWriteTime -------- ------------- C:\\Users\\Administrator\\AppData\\Local\\Temp\\c",
       "refs": [
-       809404
+       1033417
       ]
      },
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      185133,
-      191398,
-      243812,
-      809404
+      1033417
      ],
-     "multihit": true
+     "multihit": false
     }
    ],
    "ok": true
@@ -319,6 +209,39 @@
      "claim": {
       "section": "runtimeFacts",
       "index": 7,
+      "tPreview": "top-level-shape: version:: | refs:: | MIMO_API_KEY::",
+      "refs": [
+       880805
+      ]
+     },
+     "ok": true,
+     "reason": "PASS_refs_exact",
+     "hits": [
+      880805
+     ],
+     "multihit": false
+    },
+    {
+     "claim": {
+      "section": "runtimeFacts",
+      "index": 6,
+      "tPreview": "Line 77: program.name(\"dsh\").version(version, \"-V, --version\", \"output the version number\").description(\"dsh: boot a Dee",
+      "refs": [
+       827706
+      ]
+     },
+     "ok": true,
+     "reason": "PASS_refs_exact",
+     "hits": [
+      827701,
+      827706
+     ],
+     "multihit": true
+    },
+    {
+     "claim": {
+      "section": "runtimeFacts",
+      "index": 5,
       "tPreview": "77: program.name(\"dsh\").version(version, \"-V, --version\", \"output the version number\").description(\"dsh: boot a DeepSeek",
       "refs": [
        786461
@@ -327,41 +250,13 @@
      "ok": true,
      "reason": "PASS_refs_exact",
      "hits": [
-      786461
+      786461,
+      827701,
+      827706,
+      850682,
+      850685
      ],
-     "multihit": false
-    },
-    {
-     "claim": {
-      "section": "runtimeFacts",
-      "index": 6,
-      "tPreview": "in_progress P2.5 Context Memory — R4 Gate-7 REAL dual-leg kill-switch drill + recall5/fail-open live evidence CI Level 3",
-      "refs": [
-       757865
-      ]
-     },
-     "ok": true,
-     "reason": "PASS_refs_exact",
-     "hits": [
-      757865
-     ],
-     "multihit": false
-    },
-    {
-     "claim": {
-      "section": "runtimeFacts",
-      "index": 5,
-      "tPreview": "local=127.0.0.1:3080 addrFamilyOwner pid=27540 name=node.exe created=2026/8/27 4:53:51",
-      "refs": [
-       742668
-      ]
-     },
-     "ok": true,
-     "reason": "PASS_refs_exact",
-     "hits": [
-      742668
-     ],
-     "multihit": false
+     "multihit": true
     }
    ],
    "ok": true
@@ -373,26 +268,26 @@
   "windows": 64,
   "sampledPresent": 2,
   "samples": [
-   811720,
-   818539
+   1033417,
+   1048924
   ]
  },
  "sideEffectChain": {
   "ok": true,
   "reason": "PASS_before_target_after",
-  "before": 809409,
-  "target": 811720,
-  "after": 811720,
+  "before": 1027575,
+  "target": 1033417,
+  "after": 1033417,
   "windows": 64,
-  "storeVersion": 237
+  "storeVersion": 329
  },
  "SUMMARY": "STRICT RECALL 7/7+CHAIN ALL-PASS",
  "ok": true,
  "sanitized": true,
  "logSeqRange": [
   0,
-  819453
+  1053330
  ],
- "scannedLines": 70764,
- "elapsedMs": 614
+ "scannedLines": 91694,
+ "elapsedMs": 762
 }

@@ -1,6 +1,8 @@
 // make-r5-sh9-posture.mjs — Generate R5_SH9_POSTURE.json (9 read-only posture items)
 // Data sources: R5_P25_FINAL_GATE_EVIDENCE.md (verified), gate7 results, live settings
-// Usage: node make-r5-sh9-posture.mjs <outDir>
+// Usage: node make-r5-sh9-posture.mjs <outDir> [outputName]
+//   outputName defaults to "R5_SH9_POSTURE.json"; pass "R5_SH9_POSTURE_V2.json"
+//   for the post-R5.1 regeneration (R5_1-A final evidence correction round).
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -32,7 +34,7 @@ const posture = {
   items: [
     { id: 1, name: "credential-hygiene-settings-no-plaintext-apikey", status: "PASS", evidence: `settings.yaml apiKey-like lines=${apiKeyLines}, plaintext suspect=${plaintextSuspect}` },
     { id: 2, name: "fail-closed-A5-store-probe", status: "PASS", evidence: "context-memory-core.mjs init=false / set=true / fatal guard verified (gate7 copy)" },
-    { id: 3, name: "state-truth-CURRENT_STATUS-02.5", status: "PASS", evidence: "CURRENT_STATUS.md L13 AWAITING_REVIEW=True, Waiting For=External Review Round 4 re-review" },
+    { id: 3, name: "state-truth-CURRENT_STATUS-02.5", status: "PASS", evidence: "CURRENT_STATUS.md L13 AWAITING_REVIEW=True, Waiting For=External Review Round 6 re-review (R5.1-A correction)" },
     { id: 4, name: "credential-source-coherence", status: "PASS", evidence: "registry & settings.yaml consistent (verified in R5)" },
     { id: 5, name: "source-coherence-positive-branch-contract", status: "PASS", evidence: "23 T15 positive branches verified" },
     { id: 6, name: "kill-injection-archived-noop", status: "PASS", evidence: "actual calls=0, only comment references (3)" },
@@ -44,8 +46,8 @@ const posture = {
   sanitized: true,
 };
 
-const out = path.join(outDir, "R5_SH9_POSTURE.json");
+const out = path.join(outDir, process.argv[3] ?? "R5_SH9_POSTURE.json");
 fs.writeFileSync(out, JSON.stringify(posture, null, 1));
-console.log(`R5_SH9_POSTURE.json -> ${out}`);
+console.log(`${path.basename(out)} -> ${out}`);
 console.log(`posture ${posture.conclusion.pass}/9 PASS, mount=${cordisMount}, settings apiKey=${apiKeyLines} plaintext=${plaintextSuspect}`);
 process.exit(0);

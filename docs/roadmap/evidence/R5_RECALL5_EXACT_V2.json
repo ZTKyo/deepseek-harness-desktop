@@ -1,0 +1,342 @@
+{
+ "spec": "P2.6 R5.1-A recall v2 — dual-gate strict×semantic, honest packaging",
+ "generatedAt": "2026-08-27T12:33:14.290Z",
+ "generator": "make-r5-recall5-exact-v2.mjs",
+ "strictPrimitives": "cm-r5-recall-verifier-snapshot.mjs (resolveClaim/containment/checkTimeline)",
+ "sourceLog": {
+  "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+  "logPathRedacted": "",
+  "decodedEvents": 25729
+ },
+ "inputHashes": {
+  "logSha256": "ea1b283e6490416e4c80212f281d99e418e3593e3e2634408fdd2a3bda4a5637",
+  "storeSha256": "6f6057bd8b34fd72bb302f93b18ade348af3310141d11e7ee01d21e9c854b583"
+ },
+ "storeMeta": {
+  "version": 329,
+  "watermark": 1033417,
+  "active": true,
+  "refsCount": 64
+ },
+ "counts": {
+  "walked": 41,
+  "classesSampled": 9
+ },
+ "classes": [
+  {
+   "classId": "C1",
+   "label": "USER_ORIGINAL_WORDING",
+   "sections": [
+    "goal"
+   ],
+   "poolSize": 1,
+   "sampled": 1,
+   "verdict": "PASS",
+   "items": [
+    {
+     "class": "C1",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "goal[0]",
+     "claim": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGES_REQUIRED）：不重设计/不扩架构/不建第二套系统/不开SH-R10/不进P3/不重跑长时*** 修 Recall Verifier 假阳性（match…",
+     "refs": [
+      "1027575"
+     ],
+     "matchedSeq": [
+      "1027575"
+     ],
+     "eventType": "user/message",
+     "semanticType": "USER_WORDING",
+     "excerptOrFingerprint": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGES_REQUIRED）：不重设计/不扩架构/不建第二套系统/不开SH-R10/不…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true,
+      "hits": 6
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "finalResult": "PASS"
+    }
+   ]
+  },
+  {
+   "classId": "C2",
+   "label": "ORIGINAL_ERROR_RECORD",
+   "sections": [
+    "failedApproaches",
+    "blockers"
+   ],
+   "poolSize": 1,
+   "sampled": 1,
+   "verdict": "FAIL",
+   "items": [
+    {
+     "class": "C2",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "blockers[0]",
+     "claim": "=== Temp 下 cm-r5 / r5 相关目录 === FullName LastWriteTime -------- ------------- C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4 2026/8/27 3:38:05 C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r5 2026/8/27…",
+     "refs": [
+      "1033417"
+     ],
+     "matchedSeq": [
+      "1033417"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "ERROR_RECORD",
+     "excerptOrFingerprint": "=== Temp 下 cm-r5 / r5 相关目录 === FullName LastWriteTime -------- ------------- C:\\Users\\Administrator\\AppData\\Local\\Temp\\cm-r4 2026/8/27 3:38:05 C:\\Users\\Administ…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false,
+      "hits": 1
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_claim_lacks_error_evidence",
+      "failRef": 1033417
+     },
+     "finalResult": "FAIL"
+    }
+   ]
+  },
+  {
+   "classId": "C3",
+   "label": "TOOL_RUNTIME_EVIDENCE",
+   "sections": [
+    "completedActions",
+    "runtimeFacts",
+    "verifiedEvidence"
+   ],
+   "poolSize": 15,
+   "sampled": 3,
+   "verdict": "PASS",
+   "items": [
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "runtimeFacts[7]",
+     "claim": "top-level-shape: version:: | refs:: | MIMO_API_KEY::",
+     "refs": [
+      "880805"
+     ],
+     "matchedSeq": [
+      "880805"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "top-level-shape: version:: | refs:: | MIMO_*** key names: has ZHIPU: false",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false,
+      "hits": 1
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "finalResult": "PASS"
+    },
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "completedActions[6]",
+     "claim": "=== ~/.dsh/sessions 目录内容 === Name Length LastWriteTime ---- ------ ------------- --C-Users-Administrator-- 2026/8/27 11:30:01 --C-Users-Administrator-Desktop-deepseek~0020~8BFB~4E66-- 2026/8/20 10:13:…",
+     "refs": [
+      "1032545"
+     ],
+     "matchedSeq": [
+      "1032545"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "=== ~/.dsh/sessions 目录内容 === Name Length LastWriteTime ---- ------ ------------- --C-Users-Administrator-- 2026/8/27 11:30:01 --C-Users-Administrator-Desktop-de…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false,
+      "hits": 1
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "finalResult": "PASS"
+    },
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "runtimeFacts[6]",
+     "claim": "Line 77: program.name(\"dsh\").version(version, \"-V, --version\", \"output the version number\").description(\"dsh: boot a DeepSeek Harness profile — an ordered stac…",
+     "refs": [
+      "827706"
+     ],
+     "matchedSeq": [
+      "827706"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "Found 150 matches C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js Line 77: program.name(\"dsh\").version(version, \"-V, --versi…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true,
+      "hits": 2
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "finalResult": "PASS"
+    }
+   ]
+  },
+  {
+   "classId": "C4",
+   "label": "PATCH_FILE_EVIDENCE",
+   "sections": [
+    "keyFileChanges"
+   ],
+   "poolSize": 24,
+   "sampled": 3,
+   "verdict": "FAIL",
+   "items": [
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[23]",
+     "claim": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
+     "refs": [
+      "1023001"
+     ],
+     "matchedSeq": [
+      "1023001"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true,
+      "hits": 5
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1023001
+     },
+     "finalResult": "FAIL"
+    },
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[22]",
+     "claim": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\docs\\roadmap\\evidence\\R5_P25_FINAL_GATE_EVIDENCE.md</path> <type>file</type> <content> Created file </content>",
+     "refs": [
+      "1012213"
+     ],
+     "matchedSeq": [
+      "1012213"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\docs\\roadmap\\evidence\\R5_P25_FINAL_GATE_EVIDENCE.md</path> <type>file</type> <content> C…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false,
+      "hits": 1
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "finalResult": "PASS"
+    },
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[21]",
+     "claim": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
+     "refs": [
+      "1009398"
+     ],
+     "matchedSeq": [
+      "1009398"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true,
+      "hits": 6
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1009398
+     },
+     "finalResult": "FAIL"
+    }
+   ]
+  },
+  {
+   "classId": "C5",
+   "label": "TIMELINE_SIDE_EFFECT",
+   "sections": [
+    "refs-windows",
+    "raw-chain"
+   ],
+   "poolSize": 64,
+   "sampled": 1,
+   "verdict": "PASS",
+   "timeline": {
+    "ok": true,
+    "reason": "PASS_monotonic_bounded_watermarked"
+   },
+   "items": [
+    {
+     "class": "C5",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "store.refs + raw-log-side-effect-chain",
+     "claim": "before < TARGET(real side effect) < after enforced on RAW event numbers",
+     "refs": [],
+     "matchedSeq": [],
+     "eventType": "user/message",
+     "semanticType": "TIMELINE_SIDE_EFFECT",
+     "excerptOrFingerprint": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGE…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_windows_and_raw_chain"
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_raw_side_effect_chain",
+      "sideEffectFamily": "CONTROLLED_OP",
+      "duplicateSideEffectCount": 0
+     },
+     "finalResult": "PASS",
+     "beforeEvent": {
+      "seq": 1012213
+     },
+     "targetEvent": {
+      "seq": 1027575
+     },
+     "afterEvent": {
+      "seq": 1029605
+     },
+     "duplicateSideEffectCount": 0
+    }
+   ]
+  }
+ ],
+ "verdictSummary": "3 PASS + 2 FAIL",
+ "ok": false,
+ "sanitized": true,
+ "note": "One or more classes FAILED under dual gate — artifact honestly reports failure."
+}

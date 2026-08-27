@@ -1,295 +1,295 @@
-# Harness Master Roadmap — CURRENT STATUS
+# Harness Master Roadmap 鈥?CURRENT STATUS
 
-> 唯一执行状态入口。由 Master Orchestrator 维护；重启后从此文件 + Notion Phase 状态恢复执行位置。
-> 仓库：ZTKyo/deepseek-harness-desktop ｜ 本文件：docs/roadmap/CURRENT_STATUS.md
+> 鍞竴鎵ц鐘舵€佸叆鍙ｃ€傜敱 Master Orchestrator 缁存姢锛涢噸鍚悗浠庢鏂囦欢 + Notion Phase 鐘舵€佹仮澶嶆墽琛屼綅缃€?
+> 浠撳簱锛歓TKyo/deepseek-harness-desktop 锝?鏈枃浠讹細docs/roadmap/CURRENT_STATUS.md
 
-## 总览
+## 鎬昏
 
-| Phase | 名称 | 状态 | Waiting For | 报告路径 |
+| Phase | 鍚嶇О | 鐘舵€?| Waiting For | 鎶ュ憡璺緞 |
 |---|---|---|---|---|
-| 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
-| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
-| 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 7 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
-| 04 | LEARN / Autonomous Learning | 未开始 | — | — |
-| 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
-| 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
+| 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | 鈥旓紙APPROVED锛?| docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
+| 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | 鈥旓紙APPROVED锛孯1鈥揜11 鍏ㄩ儴闂幆锛?| docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
+| 02-SH | **Security-Hardening Gate**锛圥2 鍓嶇疆 gate锛?| `VERIFIED` | 鈥旓紙APPROVED Round 9锛?| docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`锛堚殸锔?be76a55 鏇捐鏍?VERIFIED锛屽凡鎸?Reviewer Round 2 绾犳锛?| **External Review Round 7 鐨勯噸鏂板鏍?*锛圧3/R4/R5/R5.1-A/R5.1-B 璇佹嵁鏀跺彛瀹屾垚锛?| docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
+| 03 | AUTONOMY / Task Autonomy | 鏈紑濮?| P2.5 瀹屾垚锛堣嫢瀛樺湪锛?| 鈥?|
+| 04 | LEARN / Autonomous Learning | 鏈紑濮?| 鈥?| 鈥?|
+| 05 | RESTORE / Disaster Recovery | 鏈紑濮?| 鈥?| 鈥?|
+| 06 | ALWAYS-ON / VPS Runtime | 鏈紑濮?| 鈥?| 鈥?|
 
-## Authority 声明
+## Authority 澹版槑
 
-- **代码真源 = GitHub verified main / tag**（ZTKyo/deepseek-harness-desktop）
-- **Runtime = deployed truth**；冲突按 commit/history/Golden/语义/测试裁决
-- 详见 `AI_CONTEXT.md`（冲突裁决原则）
+- **浠ｇ爜鐪熸簮 = GitHub verified main / tag**锛圸TKyo/deepseek-harness-desktop锛?
+- **Runtime = deployed truth**锛涘啿绐佹寜 commit/history/Golden/璇箟/娴嬭瘯瑁佸喅
+- 璇﹁ `AI_CONTEXT.md`锛堝啿绐佽鍐冲師鍒欙級
 
-## 当前执行位置
+## 褰撳墠鎵ц浣嶇疆
 
-Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #40 merged）。
-P2.5 CONTEXT MEMORY = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。
-**Governance correction（2026-08-27，Reviewer Round 2 = CHANGES_REQUIRED）**：main `be76a559` 曾在
-External Reviewer 未 APPROVED 前把 P2.5 写成 VERIFIED——该状态无 Reviewer 授权，属 Harness 越权，
-本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 6 的重新审核**；
-执行轮次 = R3/R4/R5 Evidence Closure（仅证据收口 + 状态修正，不扩架构）。
-**R3 收口（2026-08-27）**：R3-1…R3-8 全部完成——真实门禁/失败开放/kill-switch 回归 25 PASS +
-单元 61 PASS + 真实观测 17 PASS（合计 103/0）；活体 store 出现自然 provider-switch 激活
-（active=true 持久化，R2"未自然发生"缺口补强）；token A/B 三点序列在档；
-SH-R9 live posture 三项 PASS。证据：evidence/R3_RUNTIME_EVIDENCE.md；报告：REPORT_R3.md。
-状态维持 AWAITING_REVIEW（merge 后仅 SHA backfill）。
-**Merge 记录**：PR #43 squash=`107433e`（CI：reliability / static+secret / boot smoke 全绿），
-main HEAD=107433e；本行为纯状态 backfill，状态仍为 **AWAITING_REVIEW**，等待 External Review Round 4。
-**R4 补充证据 Merge 记录**：PR #44 squash=`601d425`（CI 三项全绿；docs/evidence only，
-13 文件：真实 token A/B + 锚点回源/去重审计 + 风险登记册终版 + P2.7 kill-switch/fail-open
-部署字节复验 61 PASS / 0 FAIL，全程零重启）；main HEAD=601d425。状态不变，仍为
-**AWAITING_REVIEW**，等待 External Review Round 4。
-**R5 Evidence Closure（2026-08-27，已随 PR #47 入库）**：R5-1 STRICT Recall Verifier
-7/7+CHAIN ALL-PASS ＋ R5-2 REAL missing projection 集成测试 ok ＋ R5-3 Gate-7 四腿全绿 ＋
-R5-4 Completion Quality checklist（NO MATERIAL REGRESSION）＋ R5-5 SH-R9 posture 9 PASS ＋
-R5-6 CURRENT_STATUS 清理。证据：evidence/R5_P25_FINAL_GATE_EVIDENCE.md；报告：REPORT_R5.md。
-状态维持 **AWAITING_REVIEW**。
-**P2.6-A EMERGENCY HOTFIX（2026-08-27，独立闭环）**：DeepSeek thinking 模式
-`reasoning_content` 400 Runtime Blocker——External Reviewer（新总控窗口）独立外审 **APPROVED**
-（判据 A–K 全过；本地实锤：settings.yaml 三处 compat 门控 L24/L161/L192、重启前备份
-`_backup-p26-compat-load-20260827-180711\settings.yaml` 同参门控在位、dsh-server-3080.log
-证实 boot 05:00:45 pid=28968 < 门控在盘 ≤18:07 < 受控重启 18:14:52 pid=20420、
-`@deepseek-ai/dsh-llm-pi-ai/lib/index.js` L494–506 compat 校验代码与报告一致）。
-PR #49 转 READY 后 squash MERGED=`9cff3839e0eddcb58d2c4d9008ad105e76c90803`，main HEAD=`9cff383`
-（零生产代码改动，6 文件全在 docs/roadmap/evidence/）。
-**P2.6-A = APPROVED / MERGED；reasoning_content Runtime Blocker CLOSED。Phase 02.6 FULL = TODO**
-（1310 QUOTA_EXHAUSTED / 1305 PROVIDER_OVERLOADED / Failure Classifier / retry budget /
+Security-Hardening Gate = **VERIFIED**锛堝閮ㄥ鏍?Round 9 = APPROVED锛孭R #40 merged锛夈€?
+P2.5 CONTEXT MEMORY = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**銆?
+**Governance correction锛?026-08-27锛孯eviewer Round 2 = CHANGES_REQUIRED锛?*锛歮ain `be76a559` 鏇惧湪
+External Reviewer 鏈?APPROVED 鍓嶆妸 P2.5 鍐欐垚 VERIFIED鈥斺€旇鐘舵€佹棤 Reviewer 鎺堟潈锛屽睘 Harness 瓒婃潈锛?
+鏈疆宸茬籂姝ｅ洖 `AWAITING_REVIEW`锛涘巻鍙茶褰曚繚鐣欎笉鏀瑰啓銆傚綋鍓嶇瓑寰?**External Review Round 6 鐨勯噸鏂板鏍?*锛?
+鎵ц杞 = R3/R4/R5 Evidence Closure锛堜粎璇佹嵁鏀跺彛 + 鐘舵€佷慨姝ｏ紝涓嶆墿鏋舵瀯锛夈€?
+**R3 鏀跺彛锛?026-08-27锛?*锛歊3-1鈥3-8 鍏ㄩ儴瀹屾垚鈥斺€旂湡瀹為棬绂?澶辫触寮€鏀?kill-switch 鍥炲綊 25 PASS +
+鍗曞厓 61 PASS + 鐪熷疄瑙傛祴 17 PASS锛堝悎璁?103/0锛夛紱娲讳綋 store 鍑虹幇鑷劧 provider-switch 婵€娲?
+锛坅ctive=true 鎸佷箙鍖栵紝R2"鏈嚜鐒跺彂鐢?缂哄彛琛ュ己锛夛紱token A/B 涓夌偣搴忓垪鍦ㄦ。锛?
+SH-R9 live posture 涓夐」 PASS銆傝瘉鎹細evidence/R3_RUNTIME_EVIDENCE.md锛涙姤鍛婏細REPORT_R3.md銆?
+鐘舵€佺淮鎸?AWAITING_REVIEW锛坢erge 鍚庝粎 SHA backfill锛夈€?
+**Merge 璁板綍**锛歅R #43 squash=`107433e`锛圕I锛歳eliability / static+secret / boot smoke 鍏ㄧ豢锛夛紝
+main HEAD=107433e锛涙湰琛屼负绾姸鎬?backfill锛岀姸鎬佷粛涓?**AWAITING_REVIEW**锛岀瓑寰?External Review Round 4銆?
+**R4 琛ュ厖璇佹嵁 Merge 璁板綍**锛歅R #44 squash=`601d425`锛圕I 涓夐」鍏ㄧ豢锛沝ocs/evidence only锛?
+13 鏂囦欢锛氱湡瀹?token A/B + 閿氱偣鍥炴簮/鍘婚噸瀹¤ + 椋庨櫓鐧昏鍐岀粓鐗?+ P2.7 kill-switch/fail-open
+閮ㄧ讲瀛楄妭澶嶉獙 61 PASS / 0 FAIL锛屽叏绋嬮浂閲嶅惎锛夛紱main HEAD=601d425銆傜姸鎬佷笉鍙橈紝浠嶄负
+**AWAITING_REVIEW**锛岀瓑寰?External Review Round 4銆?
+**R5 Evidence Closure锛?026-08-27锛屽凡闅?PR #47 鍏ュ簱锛?*锛歊5-1 STRICT Recall Verifier
+7/7+CHAIN ALL-PASS 锛?R5-2 REAL missing projection 闆嗘垚娴嬭瘯 ok 锛?R5-3 Gate-7 鍥涜吙鍏ㄧ豢 锛?
+R5-4 Completion Quality checklist锛圢O MATERIAL REGRESSION锛夛紜 R5-5 SH-R9 posture 9 PASS 锛?
+R5-6 CURRENT_STATUS 娓呯悊銆傝瘉鎹細evidence/R5_P25_FINAL_GATE_EVIDENCE.md锛涙姤鍛婏細REPORT_R5.md銆?
+鐘舵€佺淮鎸?**AWAITING_REVIEW**銆?
+**P2.6-A EMERGENCY HOTFIX锛?026-08-27锛岀嫭绔嬮棴鐜級**锛欴eepSeek thinking 妯″紡
+`reasoning_content` 400 Runtime Blocker鈥斺€擡xternal Reviewer锛堟柊鎬绘帶绐楀彛锛夌嫭绔嬪瀹?**APPROVED**
+锛堝垽鎹?A鈥揔 鍏ㄨ繃锛涙湰鍦板疄閿わ細settings.yaml 涓夊 compat 闂ㄦ帶 L24/L161/L192銆侀噸鍚墠澶囦唤
+`_backup-p26-compat-load-20260827-180711\settings.yaml` 鍚屽弬闂ㄦ帶鍦ㄤ綅銆乨sh-server-3080.log
+璇佸疄 boot 05:00:45 pid=28968 < 闂ㄦ帶鍦ㄧ洏 鈮?8:07 < 鍙楁帶閲嶅惎 18:14:52 pid=20420銆?
+`@deepseek-ai/dsh-llm-pi-ai/lib/index.js` L494鈥?06 compat 鏍￠獙浠ｇ爜涓庢姤鍛婁竴鑷达級銆?
+PR #49 杞?READY 鍚?squash MERGED=`9cff3839e0eddcb58d2c4d9008ad105e76c90803`锛宮ain HEAD=`9cff383`
+锛堥浂鐢熶骇浠ｇ爜鏀瑰姩锛? 鏂囦欢鍏ㄥ湪 docs/roadmap/evidence/锛夈€?
+**P2.6-A = APPROVED / MERGED锛況easoning_content Runtime Blocker CLOSED銆侾hase 02.6 FULL = TODO**
+锛?310 QUOTA_EXHAUSTED / 1305 PROVIDER_OVERLOADED / Failure Classifier / retry budget /
 Router fallback+defer / reasoning formal regression matrix / CommandCode route / --no-open
-均未开始）；硬前置不变：Phase 02.5 外部 VERIFIED 后方可启动。禁止把 P2.6 写成 VERIFIED 或
-IMPLEMENTATION_COMPLETE。
+鍧囨湭寮€濮嬶級锛涚‖鍓嶇疆涓嶅彉锛歅hase 02.5 澶栭儴 VERIFIED 鍚庢柟鍙惎鍔ㄣ€傜姝㈡妸 P2.6 鍐欐垚 VERIFIED 鎴?
+IMPLEMENTATION_COMPLETE銆?
 
-- P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
-- P2.5 完成后 → Phase 03（AUTONOMY）。
+- P2.5 蹇呴』淇濇寔锛歄fficial Session = Truth銆丱fficial Goal = Task Truth銆丒xecution Continuity = Recovery Authority銆丷outer = Model/Provider Authority锛汣ontext Memory 涓嶅緱鎴愪负绗簩 Task/Goal/Recovery/Router Authority銆?
+- P2.5 瀹屾垚鍚?鈫?Phase 03锛圓UTONOMY锛夈€?
 
-## Phase 02.5 CONTEXT MEMORY 当前状态
+## Phase 02.5 CONTEXT MEMORY 褰撳墠鐘舵€?
 
-- **状态：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（2026-08-27 governance correction；
-  External Review Round 2 = **CHANGES_REQUIRED**；等待 External Review Round 4 之后的重新审核）
-- **⚠️ 状态纠正记录**：main `be76a559`（PR #42 merge 后 SHA backfill）曾将本 Phase 标为
-  `VERIFIED`——External Reviewer Round 2 已认定该标记未经授权（Harness 不得代替 Reviewer 宣布
-  VERIFIED / APPROVED）。本轮保留历史事实，新增本 correction，状态回退为 AWAITING_REVIEW。
-- **latest report**：`docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`
-  （R5 证据见 `docs/roadmap/evidence/R5_P25_FINAL_GATE_EVIDENCE.md`）
-- **PR**：PR #42（R2, merge=`1cad4c6`）、PR #44（R4, merge=`601d425`）、PR #45（R4 Gate-7, merge=`7fa327a`）、PR #46（R4 报告, merge=`d2ca98e`）、PR #47（R5 Evidence Closure, merge=`cc5d01d`）
-- **实现**：`plugins/context-memory{,-core}.mjs`（Recent Window / Observation / Reflection / Recall / Provider-switch activation）
-- **EVIDENCE（R5 收口，2026-08-27）**：
-  - R5-1 STRICT Recall Verifier：节点模式 legacy 2300+ 全驳回，活体快照 7/7+CHAIN ALL-PASS（storeVersion=237）
-  - R5-2 REAL missing projection 集成测试：真实 Web 实例，state 移走→自动重建（version=3, watermark=443），零损伤
-  - R5-3 Gate-7 REAL kill-switch drill 四腿全绿（baseline/failopen/envkill/missing）— 16/16 rounds, 4/4 OK
-  - R5-4 Completion Quality OFF/ON checklist：NO MATERIAL REGRESSION（代理指标；独立评测系统仍 INCONCLUSIVE）
-    ※ 2026-08-27 晚 R5.1-C V4 复核：V3 口径 MATERIAL_REGRESSION 系**审查回声污染假象**（见时间线 R5.1-C 条目），
-    校正口径 NO_MATERIAL_REGRESSION（echo-excluded）
-  - R5-5 SH-R9 只读 posture 9 项：ALL PASS（无 STOP）
-  - R5-6 CURRENT_STATUS.md canonical 清理（本条目）
-- **状态维持**：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（不越权改 VERIFIED）
-- **边界**：未进入 P3；不触碰 Security-Hardening（仅 live posture 只读核对）；观察者角色不变
-- **R5.1-C FINAL FACTUAL CLOSURE（2026-08-27，External Review Round 7 = CHANGES_REQUIRED 后收口）**：
-  仅按 Round 7 要求做 3 项 blocker 的事实收口，不新增指标、不建评测系统（Reviewer 明令）：
-  - **(A) Completion Quality V4 契约版**：按 Round 7 固定字段清单生成 **17 项 task-quality 固定字段
-    OFF/ON 对照表**（可观察字段给真值，不可观察字段一律 `N/A / NOT OBSERVABLE`，不脑补）；verdict
-    改为三值 `REGRESSED / NO MATERIAL REGRESSION / INCONCLUSIVE`（预注册阈值：ON echo-excluded
-    per-1k > OFF × 2 才 REGRESSED）。结果 **NO MATERIAL REGRESSION**（echo-excluded per-1k OFF=0
-    ON=0；最长 ON 主 CM 会话 34e86c7a 91.7k 事件 0/0 命中）。V3 的 MATERIAL_REGRESSION 判定已注明为
-    **审查回声污染假象**（V3 是 incident-rate 表非 task-quality 比较，其 OFF=0 规则使任何 ON 命中都
-    自动触发 REGRESSION；44 起 ON 命中全部集中于 a144fe3f：23 PROTO=P2.6-A 已修复缺陷类历史 +
-    21 QUOTA=GLM 外部 429）。载体：`evidence/r5-completion-quality-v4-20260827-r7c/R5_COMPLETION_QUALITY_V4.json`
-    + 生成器 `make-r5-completion-quality-v4.mjs`（解码与命中链与 V2/V3 字节级一致）。
-  - **(B) Security-Hardening 四组 live 字段复核**：guardian recent cycles（EXT-4）、credential
-    same-source chain（EXT-5）、repo+worktree live secret scan（EXT-6）、hardened-config identity
-    snapshot-eq（EXT-7）——SH9 V4 复跑 **16/16 PASS**，无 STOP。载体：`evidence/R5_SH9_POSTURE_V4.json`。
-  - **(C) Canonical 前向路线统一（CURRENT_STATUS ↔ Notion Master/02.5/02.6/02.75/03）**：
-    `P2.5 → 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（TODO；硬前置=P2.5 外部 VERIFIED）→
-    Phase 02.75 SUPERVISOR（TODO；硬前置=P2.6 VERIFIED）→ Phase 03 AUTONOMY（TODO；前置=02.5 +
-    02.75 VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON`。与 Master 页 2026-08-27 路线更新、
-    02.6 页 Gate、02.75 页 Gate、P3 页前置一致。
-  - Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭；Reviewer 只判断「Context Memory 是否
-    造成 material task-quality regression」，证据以 V4 固定字段表为准。
+- **鐘舵€侊細IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**锛?026-08-27 governance correction锛?
+  External Review Round 2 = **CHANGES_REQUIRED**锛涚瓑寰?External Review Round 4 涔嬪悗鐨勯噸鏂板鏍革級
+- **鈿狅笍 鐘舵€佺籂姝ｈ褰?*锛歮ain `be76a559`锛圥R #42 merge 鍚?SHA backfill锛夋浘灏嗘湰 Phase 鏍囦负
+  `VERIFIED`鈥斺€擡xternal Reviewer Round 2 宸茶瀹氳鏍囪鏈粡鎺堟潈锛圚arness 涓嶅緱浠ｆ浛 Reviewer 瀹ｅ竷
+  VERIFIED / APPROVED锛夈€傛湰杞繚鐣欏巻鍙蹭簨瀹烇紝鏂板鏈?correction锛岀姸鎬佸洖閫€涓?AWAITING_REVIEW銆?
+- **latest report**锛歚docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`
+  锛圧5 璇佹嵁瑙?`docs/roadmap/evidence/R5_P25_FINAL_GATE_EVIDENCE.md`锛?
+- **PR**锛歅R #42锛圧2, merge=`1cad4c6`锛夈€丳R #44锛圧4, merge=`601d425`锛夈€丳R #45锛圧4 Gate-7, merge=`7fa327a`锛夈€丳R #46锛圧4 鎶ュ憡, merge=`d2ca98e`锛夈€丳R #47锛圧5 Evidence Closure, merge=`cc5d01d`锛?
+- **瀹炵幇**锛歚plugins/context-memory{,-core}.mjs`锛圧ecent Window / Observation / Reflection / Recall / Provider-switch activation锛?
+- **EVIDENCE锛圧5 鏀跺彛锛?026-08-27锛?*锛?
+  - R5-1 STRICT Recall Verifier锛氳妭鐐规ā寮?legacy 2300+ 鍏ㄩ┏鍥烇紝娲讳綋蹇収 7/7+CHAIN ALL-PASS锛坰toreVersion=237锛?
+  - R5-2 REAL missing projection 闆嗘垚娴嬭瘯锛氱湡瀹?Web 瀹炰緥锛宻tate 绉昏蛋鈫掕嚜鍔ㄩ噸寤猴紙version=3, watermark=443锛夛紝闆舵崯浼?
+  - R5-3 Gate-7 REAL kill-switch drill 鍥涜吙鍏ㄧ豢锛坆aseline/failopen/envkill/missing锛夆€?16/16 rounds, 4/4 OK
+  - R5-4 Completion Quality OFF/ON checklist锛歂O MATERIAL REGRESSION锛堜唬鐞嗘寚鏍囷紱鐙珛璇勬祴绯荤粺浠?INCONCLUSIVE锛?
+    鈥?2026-08-27 鏅?R5.1-C V4 澶嶆牳锛歏3 鍙ｅ緞 MATERIAL_REGRESSION 绯?*瀹℃煡鍥炲０姹℃煋鍋囪薄**锛堣鏃堕棿绾?R5.1-C 鏉＄洰锛夛紝
+    鏍℃鍙ｅ緞 NO_MATERIAL_REGRESSION锛坋cho-excluded锛?
+  - R5-5 SH-R9 鍙 posture 9 椤癸細ALL PASS锛堟棤 STOP锛?
+  - R5-6 CURRENT_STATUS.md canonical 娓呯悊锛堟湰鏉＄洰锛?
+- **鐘舵€佺淮鎸?*锛欼MPLEMENTATION_COMPLETE / AWAITING_REVIEW锛堜笉瓒婃潈鏀?VERIFIED锛?
+- **杈圭晫**锛氭湭杩涘叆 P3锛涗笉瑙︾ Security-Hardening锛堜粎 live posture 鍙鏍稿锛夛紱瑙傚療鑰呰鑹蹭笉鍙?
+- **R5.1-C FINAL FACTUAL CLOSURE锛?026-08-27锛孍xternal Review Round 7 = CHANGES_REQUIRED 鍚庢敹鍙ｏ級**锛?
+  浠呮寜 Round 7 瑕佹眰鍋?3 椤?blocker 鐨勪簨瀹炴敹鍙ｏ紝涓嶆柊澧炴寚鏍囥€佷笉寤鸿瘎娴嬬郴缁燂紙Reviewer 鏄庝护锛夛細
+  - **(A) Completion Quality V4 濂戠害鐗?*锛氭寜 Round 7 鍥哄畾瀛楁娓呭崟鐢熸垚 **17 椤?task-quality 鍥哄畾瀛楁
+    OFF/ON 瀵圭収琛?*锛堝彲瑙傚療瀛楁缁欑湡鍊硷紝涓嶅彲瑙傚療瀛楁涓€寰?`N/A / NOT OBSERVABLE`锛屼笉鑴戣ˉ锛夛紱verdict
+    鏀逛负涓夊€?`REGRESSED / NO MATERIAL REGRESSION / INCONCLUSIVE`锛堥娉ㄥ唽闃堝€硷細ON echo-excluded
+    per-1k > OFF 脳 2 鎵?REGRESSED锛夈€傜粨鏋?**NO MATERIAL REGRESSION**锛坋cho-excluded per-1k OFF=0
+    ON=0锛涙渶闀?ON 涓?CM 浼氳瘽 34e86c7a 91.7k 浜嬩欢 0/0 鍛戒腑锛夈€俈3 鐨?MATERIAL_REGRESSION 鍒ゅ畾宸叉敞鏄庝负
+    **瀹℃煡鍥炲０姹℃煋鍋囪薄**锛圴3 鏄?incident-rate 琛ㄩ潪 task-quality 姣旇緝锛屽叾 OFF=0 瑙勫垯浣夸换浣?ON 鍛戒腑閮?
+    鑷姩瑙﹀彂 REGRESSION锛?4 璧?ON 鍛戒腑鍏ㄩ儴闆嗕腑浜?a144fe3f锛?3 PROTO=P2.6-A 宸蹭慨澶嶇己闄风被鍘嗗彶 +
+    21 QUOTA=GLM 澶栭儴 429锛夈€傝浇浣擄細`evidence/r5-completion-quality-v4-20260827-r7c/R5_COMPLETION_QUALITY_V4.json`
+    + 鐢熸垚鍣?`make-r5-completion-quality-v4.mjs`锛堣В鐮佷笌鍛戒腑閾句笌 V2/V3 瀛楄妭绾т竴鑷达級銆?
+  - **(B) Security-Hardening 鍥涚粍 live 瀛楁澶嶆牳**锛歡uardian recent cycles锛圗XT-4锛夈€乧redential
+    same-source chain锛圗XT-5锛夈€乺epo+worktree live secret scan锛圗XT-6锛夈€乭ardened-config identity
+    snapshot-eq锛圗XT-7锛夆€斺€擲H9 V4 澶嶈窇 **16/16 PASS**锛屾棤 STOP銆傝浇浣擄細`evidence/R5_SH9_POSTURE_V4.json`銆?
+  - **(C) Canonical 鍓嶅悜璺嚎缁熶竴锛圕URRENT_STATUS 鈫?Notion Master/02.5/02.6/02.75/03锛?*锛?
+    `P2.5 鈫?澶栭儴 VERIFIED 鈫?Phase 02.6 RETRY SEMANTICS锛圱ODO锛涚‖鍓嶇疆=P2.5 澶栭儴 VERIFIED锛夆啋
+    Phase 02.75 SUPERVISOR锛圱ODO锛涚‖鍓嶇疆=P2.6 VERIFIED锛夆啋 Phase 03 AUTONOMY锛圱ODO锛涘墠缃?02.5 +
+    02.75 VERIFIED锛夆啋 04 LEARN 鈫?05 RESTORE 鈫?06 ALWAYS-ON`銆備笌 Master 椤?2026-08-27 璺嚎鏇存柊銆?
+    02.6 椤?Gate銆?2.75 椤?Gate銆丳3 椤靛墠缃竴鑷淬€?
+  - Registry #5锛堢嫭绔嬭瘎娴嬩綋绯伙級淇濇寔寮€鏀撅紝涓嶇敱鏈唬鐞?gate 鍏抽棴锛汻eviewer 鍙垽鏂€孋ontext Memory 鏄惁
+    閫犳垚 material task-quality regression銆嶏紝璇佹嵁浠?V4 鍥哄畾瀛楁琛ㄤ负鍑嗐€?
 
-## Phase 02 Security-Hardening 最终状态
+## Phase 02 Security-Hardening 鏈€缁堢姸鎬?
 
-- **Final Verdict：IMPLEMENTATION_COMPLETE → APPROVED / VERIFIED**（外部审核 Round 9，2026-08-26）
-- **latest report**：`docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md`
-- **Merge history**：
-  - PR #32（SH-R1 主体），PR #33（SH-R2），PR #34（SH-R3），PR #35（SH-R4）
-  - PR #36（SH-R5），PR #37（SH-R6），PR #38（SH-R7），PR #39（SH-R8）
-  - **PR #40（SH-R9，merge 5ba4363d，backfill df195923）** — 最终，**APPROVED**
-- CI：Level 1/2/3 历史全绿；SH-R9 实测：Static 53s、Reliability 1m27s、boot smoke 4m8s
-- Real runtime gate：16/16 全 PASS（credential source coherence、fail-closed A5、isolated source、canonical UNCHANGED）
-- EC invariant：setState recoverable state 始终 autoResume=true（T18 adversarial 18/18，套件 90/90）
-- 不再有 SH-R10 或后续轮次；不再需要进一步外审
+- **Final Verdict锛欼MPLEMENTATION_COMPLETE 鈫?APPROVED / VERIFIED**锛堝閮ㄥ鏍?Round 9锛?026-08-26锛?
+- **latest report**锛歚docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md`
+- **Merge history**锛?
+  - PR #32锛圫H-R1 涓讳綋锛夛紝PR #33锛圫H-R2锛夛紝PR #34锛圫H-R3锛夛紝PR #35锛圫H-R4锛?
+  - PR #36锛圫H-R5锛夛紝PR #37锛圫H-R6锛夛紝PR #38锛圫H-R7锛夛紝PR #39锛圫H-R8锛?
+  - **PR #40锛圫H-R9锛宮erge 5ba4363d锛宐ackfill df195923锛?* 鈥?鏈€缁堬紝**APPROVED**
+- CI锛歀evel 1/2/3 鍘嗗彶鍏ㄧ豢锛汼H-R9 瀹炴祴锛歋tatic 53s銆丷eliability 1m27s銆乥oot smoke 4m8s
+- Real runtime gate锛?6/16 鍏?PASS锛坈redential source coherence銆乫ail-closed A5銆乮solated source銆乧anonical UNCHANGED锛?
+- EC invariant锛歴etState recoverable state 濮嬬粓 autoResume=true锛圱18 adversarial 18/18锛屽浠?90/90锛?
+- 涓嶅啀鏈?SH-R10 鎴栧悗缁疆娆★紱涓嶅啀闇€瑕佽繘涓€姝ュ瀹?
 
-### 安全收口清单（SH-R1→SH-R9 完整）
-- [x] credential 加密存储 + env 注入（SH-R2）
-- [x] 真实 Windows DACL/icacls 收紧（SH-R2）
-- [x] secret-scan 双层 CI 接入 + 正反 fixture（SH-R2/SH-R3）
-- [x] credential preflight / safe-degrade + ColdStartNegativeTest（SH-R2→SH-R8）
-- [x] restart 脚本 5.1 函数顺序修复 + DSH-Client 同步（SH-R4）
-- [x] EC setState recoverable state invariant（SH-R6/SH-R7）
-- [x] Cold-start isolated credential source（canonical 不 mutation）（SH-R8）
-- [x] A5 baseline-aware + fail-closed structured store probe（SH-R8/SH-R9）
-- [x] Credential source coherence（effective path 单一解析，preflight 与 value read 同源）（SH-R9）
-- [x] legacy KillInjection/restore-owner 归档（SH-R9）
+### 瀹夊叏鏀跺彛娓呭崟锛圫H-R1鈫扴H-R9 瀹屾暣锛?
+- [x] credential 鍔犲瘑瀛樺偍 + env 娉ㄥ叆锛圫H-R2锛?
+- [x] 鐪熷疄 Windows DACL/icacls 鏀剁揣锛圫H-R2锛?
+- [x] secret-scan 鍙屽眰 CI 鎺ュ叆 + 姝ｅ弽 fixture锛圫H-R2/SH-R3锛?
+- [x] credential preflight / safe-degrade + ColdStartNegativeTest锛圫H-R2鈫扴H-R8锛?
+- [x] restart 鑴氭湰 5.1 鍑芥暟椤哄簭淇 + DSH-Client 鍚屾锛圫H-R4锛?
+- [x] EC setState recoverable state invariant锛圫H-R6/SH-R7锛?
+- [x] Cold-start isolated credential source锛坈anonical 涓?mutation锛夛紙SH-R8锛?
+- [x] A5 baseline-aware + fail-closed structured store probe锛圫H-R8/SH-R9锛?
+- [x] Credential source coherence锛坋ffective path 鍗曚竴瑙ｆ瀽锛宲reflight 涓?value read 鍚屾簮锛夛紙SH-R9锛?
+- [x] legacy KillInjection/restore-owner 褰掓。锛圫H-R9锛?
 
-### 非阻塞技术债（P2.5 后清理）
-- Test-ColdStartCredentialGate.ps1 顶部旧 canonical-mutation/restore 注释 + deprecated -KillInjection 代码残留（标准 gate 不使用该路径，SH-R8/R9 的 canonical-isolation 安全性不依赖它）
+### 闈為樆濉炴妧鏈€猴紙P2.5 鍚庢竻鐞嗭級
+- Test-ColdStartCredentialGate.ps1 椤堕儴鏃?canonical-mutation/restore 娉ㄩ噴 + deprecated -KillInjection 浠ｇ爜娈嬬暀锛堟爣鍑?gate 涓嶄娇鐢ㄨ璺緞锛孲H-R8/R9 鐨?canonical-isolation 瀹夊叏鎬т笉渚濊禆瀹冿級
 
-## 路线（Security-Hardening APPROVED 后）
-1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
-2. **P2.5 CONTEXT MEMORY** ⏳ R2 已 merge（PR #42）+ R3/R4/R5 Evidence Closure 已完成；状态 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Round 2 = CHANGES_REQUIRED；曾误标 VERIFIED，已纠正）
-3. **Phase 03**（AUTONOMY）— **BLOCKED BY P2.5 REVIEW**；仅 External Reviewer 明确 APPROVED 后启动
+## 璺嚎锛圫ecurity-Hardening APPROVED 鍚庯級
+1. **Security-Hardening VERIFIED** 鉁咃紙Round 9 APPROVED锛?
+2. **P2.5 CONTEXT MEMORY** 鈴?R2 宸?merge锛圥R #42锛? R3/R4/R5 Evidence Closure 宸插畬鎴愶紱鐘舵€?= `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`锛圧ound 2 = CHANGES_REQUIRED锛涙浘璇爣 VERIFIED锛屽凡绾犳锛?
+3. **Phase 03**锛圓UTONOMY锛夆€?**BLOCKED BY P2.5 REVIEW**锛涗粎 External Reviewer 鏄庣‘ APPROVED 鍚庡惎鍔?
 
-## 恢复指令
+## 鎭㈠鎸囦护
 
-重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**P2.5 CONTEXT MEMORY = R5 Evidence Closure 已完成（IMPLEMENTATION_COMPLETE / AWAITING_REVIEW）**
-（External Review Round 2 = CHANGES_REQUIRED 已纠正；R3/R4/R5 证据已入库；
-等待 External Review Round 4 之后对 R5 证据的重新审核；P3 BLOCKED）。
+閲嶅惎鍚庯細璇诲彇鏈枃浠?鈫?璇诲彇 Notion Phase 鐘舵€?鈫?浠庡綋鍓嶆墽琛屼綅缃户缁€?
+褰撳墠鎵ц浣嶇疆锛?*P2.5 CONTEXT MEMORY = R5 Evidence Closure 宸插畬鎴愶紙IMPLEMENTATION_COMPLETE / AWAITING_REVIEW锛?*
+锛圗xternal Review Round 2 = CHANGES_REQUIRED 宸茬籂姝ｏ紱R3/R4/R5 璇佹嵁宸插叆搴擄紱
+绛夊緟 External Review Round 4 涔嬪悗瀵?R5 璇佹嵁鐨勯噸鏂板鏍革紱P3 BLOCKED锛夈€?
 
-## 变更日志
+## 鍙樻洿鏃ュ織
 
-- 2026-08-23：创建本文件；Phase 01 VERIFIED；Phase 02 开始（P2-0 最先）。
-- 2026-08-23：Phase 02 R1/R2 完成（初版 + 6 BLOCKING 修复）。
-- 2026-08-24：Phase 02 R3 完成（真实 authority + Opus 真相）。
-- 2026-08-25：Phase 02 R4 完成（bridge 未接通 + Codex C1-C7）。
-- 2026-08-25：Phase 02 R5 完成（bridge 接入 + capacity 全面接通）。
-- 2026-08-25：Phase 02 R6 完成（Router single authority + generation 重跑 + real restart verification）。
-- 2026-08-25：Phase 02 R7 完成（Router authority clean-up + session-list error bound + 3-way attestation + budget reset flow）。
-- 2026-08-25：Phase 02 R8 完成（live capacity truth + per-boot generation + lazy-bridge single-source + 2x restart verification）。
-- 2026-08-25：Phase 02 Reviewer Round 9 / R10 + final pass。
-- 2026-08-25：Phase 02 R11 完成（T16 budget-epoch production-path test + CURRENT_STATUS canonical truth），状态置 AWAITING_REVIEW。
-- 2026-08-25：Phase 02 **Reviewer Verdict = APPROVED / VERIFIED**（R1–R11 全部闭环）；状态更新为 P2 VERIFIED。
-- 2026-08-25：进入 **Security-Hardening Gate**；实现完成（env 注入 / ACL 收紧 / secret-scan 双层 / preflight safe-degrade / 5.1 restart 修复 / isolated credential source / EC state invariant / credential source coherence / fail-closed A5 / legacy KillInjection 归档）；Round 1-9 **APPROVED**（PR #32-#40，PR #40 merge 5ba4363d，backfill df195923）。当前 **VERIFIED**（纯状态 backfill，Review Round 9 = APPROVED）。
-- 2026-08-26：进入 **P2.5 CONTEXT MEMORY**；R1 实施完成（AUDIT → DESIGN → 实现 `context-memory{,-core}.mjs` → 53/53 回归 → 真实运行时验证 REAL）；提交 PR #41（`fix/context-memory-r1`），状态置 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。未进入 P3，未触碰 Security-Hardening。
-- 2026-08-27：P2.5 **R2 修复轮完成**（Review Round 1 CHANGES_REQUIRED → R2-1..R2-8 全部闭环）：测试入 CI（ci-level1/level3）、install-plugin 原子写 + 自动 hash 发现 + preflight 集成（15 PASS）、真实重启加载 R2 插件（01:37，restart-apply-patch 日志 COMMITTED；8 PASS / 0 FAIL；store watermark 483517→486785）、REAL Recall 17 PASS、R2-7 false-completion/context-rot 修复（61 PASS）、guardian !!js regression（8 PASS）。PR #42（`fix/context-memory-r2`，11 commits）**CI 3/3 全绿 → squash MERGED（merge=`1cad4c6`）→ SHA backfill 完成**。状态置 **VERIFIED**，等待 External Review Round 2 APPROVED 后正式进入 Phase 03。
-- 2026-08-27：**External Review Round 2 = CHANGES_REQUIRED**。Reviewer 认定 `be76a559` 的 VERIFIED 标记未经 Reviewer 授权（Harness 不得代替外部 Reviewer 宣布 VERIFIED/APPROVED/闭环）；**Governance correction**：总览表 / 当前执行位置 / Phase 状态 / 路线 / 恢复指令全部纠正为 `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`，历史记录保留不改写。Round 2 认可 R2-1/R2-2/R2-7/R2-8 修复与 Authority 边界；新 BLOCKERs（REAL provider switch、真实 OFF/ON Token A/B + Completion Quality、5 类精确回源、corrupt/missing fail-open、kill-switch rollback、仓库内脱敏 evidence snapshot、SH-R9 live posture 最小核对）→ 进入 **R3 Evidence Closure**；P3 = BLOCKED BY P2.5 REVIEW。
-- 2026-08-27：P2.5 **R4 运行时补充验证完成**（External Review 收口补充项）：真实跨会话 OFF-era vs ON-era token A/B（每轮注入 ≈100–180 tok 替代多 K 投影回放）、锚点回源对账（注入头↔store refs↔RAW 尾部逐条一致、零双写）、观察头去重审计 PASS、风险登记册终版 5 条（含 2 条本轮新发现同步 KNOWN_ISSUES.md）、kill-switch fail-open 部署字节复验（live SHA256==repo 字节 + agent.cordis.yml 挂载活体自证冷加载，免重启零中断，61 PASS / 0 FAIL）。PR #44 CI 三绿 → squash MERGED（=`601d425`），本行为其纯状态 backfill。状态维持 **AWAITING_REVIEW**；证据：`docs/roadmap/evidence/R4_P25_VERIFICATION_EVIDENCE.md` + `R4_RUNTIME_EVIDENCE.md`。
-- 2026-08-27（深夜）：P2.5 **R4 补充证据 A/B 双闭环（本地已固化，待随下个分支 PR 入库）**：
-  ④REAL 5 类精确回源 v2 = **RECALL 5/5 ALL-CLASS-PASS**（官方提取路径 messageOfEvent/recursiveText +
-  全语料逐字校验，排除采样间隙；C2 精确命中 seq 与 claim 自身 ref 对齐）→ 合同 B3 关闭；
-  ⑤⑥REAL corrupt/missing fail-open 于活体 store 字节副本（SHA256 存档、`mutatedLiveFile:false`、
-  零重启）：corrupt×3 判废→重建路径可渲染 / missing→FRESH_LEARN_FROM_RAW_SESSION / 对照 ACCEPT。
-  证据：`evidence/R4_RECALL5_20260827.json`、`evidence/R4_FAILOPEN_LIVE_20260827.json`
-  + `cm-r4-{recall5,failopen-live}.mjs`（详见 R4_P25_VERIFICATION_EVIDENCE.md §P2.8/§P2.9）。
-  剩余 OPEN：⑦kill-switch 真实重启回滚（已于紧随其后完成，见下一条）、报告归档与分支/PR/CI 收尾。
+- 2026-08-23锛氬垱寤烘湰鏂囦欢锛汸hase 01 VERIFIED锛汸hase 02 寮€濮嬶紙P2-0 鏈€鍏堬級銆?
+- 2026-08-23锛歅hase 02 R1/R2 瀹屾垚锛堝垵鐗?+ 6 BLOCKING 淇锛夈€?
+- 2026-08-24锛歅hase 02 R3 瀹屾垚锛堢湡瀹?authority + Opus 鐪熺浉锛夈€?
+- 2026-08-25锛歅hase 02 R4 瀹屾垚锛坆ridge 鏈帴閫?+ Codex C1-C7锛夈€?
+- 2026-08-25锛歅hase 02 R5 瀹屾垚锛坆ridge 鎺ュ叆 + capacity 鍏ㄩ潰鎺ラ€氾級銆?
+- 2026-08-25锛歅hase 02 R6 瀹屾垚锛圧outer single authority + generation 閲嶈窇 + real restart verification锛夈€?
+- 2026-08-25锛歅hase 02 R7 瀹屾垚锛圧outer authority clean-up + session-list error bound + 3-way attestation + budget reset flow锛夈€?
+- 2026-08-25锛歅hase 02 R8 瀹屾垚锛坙ive capacity truth + per-boot generation + lazy-bridge single-source + 2x restart verification锛夈€?
+- 2026-08-25锛歅hase 02 Reviewer Round 9 / R10 + final pass銆?
+- 2026-08-25锛歅hase 02 R11 瀹屾垚锛圱16 budget-epoch production-path test + CURRENT_STATUS canonical truth锛夛紝鐘舵€佺疆 AWAITING_REVIEW銆?
+- 2026-08-25锛歅hase 02 **Reviewer Verdict = APPROVED / VERIFIED**锛圧1鈥揜11 鍏ㄩ儴闂幆锛夛紱鐘舵€佹洿鏂颁负 P2 VERIFIED銆?
+- 2026-08-25锛氳繘鍏?**Security-Hardening Gate**锛涘疄鐜板畬鎴愶紙env 娉ㄥ叆 / ACL 鏀剁揣 / secret-scan 鍙屽眰 / preflight safe-degrade / 5.1 restart 淇 / isolated credential source / EC state invariant / credential source coherence / fail-closed A5 / legacy KillInjection 褰掓。锛夛紱Round 1-9 **APPROVED**锛圥R #32-#40锛孭R #40 merge 5ba4363d锛宐ackfill df195923锛夈€傚綋鍓?**VERIFIED**锛堢函鐘舵€?backfill锛孯eview Round 9 = APPROVED锛夈€?
+- 2026-08-26锛氳繘鍏?**P2.5 CONTEXT MEMORY**锛汻1 瀹炴柦瀹屾垚锛圓UDIT 鈫?DESIGN 鈫?瀹炵幇 `context-memory{,-core}.mjs` 鈫?53/53 鍥炲綊 鈫?鐪熷疄杩愯鏃堕獙璇?REAL锛夛紱鎻愪氦 PR #41锛坄fix/context-memory-r1`锛夛紝鐘舵€佺疆 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**銆傛湭杩涘叆 P3锛屾湭瑙︾ Security-Hardening銆?
+- 2026-08-27锛歅2.5 **R2 淇杞畬鎴?*锛圧eview Round 1 CHANGES_REQUIRED 鈫?R2-1..R2-8 鍏ㄩ儴闂幆锛夛細娴嬭瘯鍏?CI锛坈i-level1/level3锛夈€乮nstall-plugin 鍘熷瓙鍐?+ 鑷姩 hash 鍙戠幇 + preflight 闆嗘垚锛?5 PASS锛夈€佺湡瀹為噸鍚姞杞?R2 鎻掍欢锛?1:37锛宺estart-apply-patch 鏃ュ織 COMMITTED锛? PASS / 0 FAIL锛泂tore watermark 483517鈫?86785锛夈€丷EAL Recall 17 PASS銆丷2-7 false-completion/context-rot 淇锛?1 PASS锛夈€乬uardian !!js regression锛? PASS锛夈€侾R #42锛坄fix/context-memory-r2`锛?1 commits锛?*CI 3/3 鍏ㄧ豢 鈫?squash MERGED锛坢erge=`1cad4c6`锛夆啋 SHA backfill 瀹屾垚**銆傜姸鎬佺疆 **VERIFIED**锛岀瓑寰?External Review Round 2 APPROVED 鍚庢寮忚繘鍏?Phase 03銆?
+- 2026-08-27锛?*External Review Round 2 = CHANGES_REQUIRED**銆俁eviewer 璁ゅ畾 `be76a559` 鐨?VERIFIED 鏍囪鏈粡 Reviewer 鎺堟潈锛圚arness 涓嶅緱浠ｆ浛澶栭儴 Reviewer 瀹ｅ竷 VERIFIED/APPROVED/闂幆锛夛紱**Governance correction**锛氭€昏琛?/ 褰撳墠鎵ц浣嶇疆 / Phase 鐘舵€?/ 璺嚎 / 鎭㈠鎸囦护鍏ㄩ儴绾犳涓?`IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`锛屽巻鍙茶褰曚繚鐣欎笉鏀瑰啓銆俁ound 2 璁ゅ彲 R2-1/R2-2/R2-7/R2-8 淇涓?Authority 杈圭晫锛涙柊 BLOCKERs锛圧EAL provider switch銆佺湡瀹?OFF/ON Token A/B + Completion Quality銆? 绫荤簿纭洖婧愩€乧orrupt/missing fail-open銆乲ill-switch rollback銆佷粨搴撳唴鑴辨晱 evidence snapshot銆丼H-R9 live posture 鏈€灏忔牳瀵癸級鈫?杩涘叆 **R3 Evidence Closure**锛汸3 = BLOCKED BY P2.5 REVIEW銆?
+- 2026-08-27锛歅2.5 **R4 杩愯鏃惰ˉ鍏呴獙璇佸畬鎴?*锛圗xternal Review 鏀跺彛琛ュ厖椤癸級锛氱湡瀹炶法浼氳瘽 OFF-era vs ON-era token A/B锛堟瘡杞敞鍏?鈮?00鈥?80 tok 鏇夸唬澶?K 鎶曞奖鍥炴斁锛夈€侀敋鐐瑰洖婧愬璐︼紙娉ㄥ叆澶粹啍store refs鈫擱AW 灏鹃儴閫愭潯涓€鑷淬€侀浂鍙屽啓锛夈€佽瀵熷ご鍘婚噸瀹¤ PASS銆侀闄╃櫥璁板唽缁堢増 5 鏉★紙鍚?2 鏉℃湰杞柊鍙戠幇鍚屾 KNOWN_ISSUES.md锛夈€乲ill-switch fail-open 閮ㄧ讲瀛楄妭澶嶉獙锛坙ive SHA256==repo 瀛楄妭 + agent.cordis.yml 鎸傝浇娲讳綋鑷瘉鍐峰姞杞斤紝鍏嶉噸鍚浂涓柇锛?1 PASS / 0 FAIL锛夈€侾R #44 CI 涓夌豢 鈫?squash MERGED锛?`601d425`锛夛紝鏈涓哄叾绾姸鎬?backfill銆傜姸鎬佺淮鎸?**AWAITING_REVIEW**锛涜瘉鎹細`docs/roadmap/evidence/R4_P25_VERIFICATION_EVIDENCE.md` + `R4_RUNTIME_EVIDENCE.md`銆?
+- 2026-08-27锛堟繁澶滐級锛歅2.5 **R4 琛ュ厖璇佹嵁 A/B 鍙岄棴鐜紙鏈湴宸插浐鍖栵紝寰呴殢涓嬩釜鍒嗘敮 PR 鍏ュ簱锛?*锛?
+  鈶EAL 5 绫荤簿纭洖婧?v2 = **RECALL 5/5 ALL-CLASS-PASS**锛堝畼鏂规彁鍙栬矾寰?messageOfEvent/recursiveText +
+  鍏ㄨ鏂欓€愬瓧鏍￠獙锛屾帓闄ら噰鏍烽棿闅欙紱C2 绮剧‘鍛戒腑 seq 涓?claim 鑷韩 ref 瀵归綈锛夆啋 鍚堝悓 B3 鍏抽棴锛?
+  鈶も懃REAL corrupt/missing fail-open 浜庢椿浣?store 瀛楄妭鍓湰锛圫HA256 瀛樻。銆乣mutatedLiveFile:false`銆?
+  闆堕噸鍚級锛歝orrupt脳3 鍒ゅ簾鈫掗噸寤鸿矾寰勫彲娓叉煋 / missing鈫扚RESH_LEARN_FROM_RAW_SESSION / 瀵圭収 ACCEPT銆?
+  璇佹嵁锛歚evidence/R4_RECALL5_20260827.json`銆乣evidence/R4_FAILOPEN_LIVE_20260827.json`
+  + `cm-r4-{recall5,failopen-live}.mjs`锛堣瑙?R4_P25_VERIFICATION_EVIDENCE.md 搂P2.8/搂P2.9锛夈€?
+  鍓╀綑 OPEN锛氣懄kill-switch 鐪熷疄閲嶅惎鍥炴粴锛堝凡浜庣揣闅忓叾鍚庡畬鎴愶紝瑙佷笅涓€鏉★級銆佹姤鍛婂綊妗ｄ笌鍒嗘敮/PR/CI 鏀跺熬銆?
 
-- 2026-08-27（深夜后段）：P2.5 R4 **⑦kill-switch REAL 双向回滚演练闭环 → 合同 B4 全关**：
-  enabled:false → 真实重启（ledger 94988ebc… 04:55:05 COMMITTED；旧服 PID 22596 停止 / 新服 PID 27540 04:53:51 起）
-  → 同一 session 无缝续跑（工具流按预期中断并自动续接，guardian 免接管）→ enabled:true 回切
-  （sha16 9DBCAA662B0CBE8B→85289DF4241238FE，行级定位零误伤）→ 二次真实重启（ledger 2777bf96… 05:02:01
-  COMMITTED，新服 PID 28968）→ 注入头回归（v212/v213）为插件复活活体正证。副作用审计：当日 ledger
-  5 笔（COMMITTED 4），演练窗恰 2 笔全 COMMITTED，零重复点火。端口属主误判坑（tailscaled 持有 3080
-  非 loopback 监听行）已沉淀 KNOWN_ISSUES.md。七项 REAL Gate 证据全部就绪（①见 #43/#44 系列）；
-  本节连同 P2.8/P2.9/P2.10 随下一分支 PR 入库。状态保持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。
+- 2026-08-27锛堟繁澶滃悗娈碉級锛歅2.5 R4 **鈶ill-switch REAL 鍙屽悜鍥炴粴婕旂粌闂幆 鈫?鍚堝悓 B4 鍏ㄥ叧**锛?
+  enabled:false 鈫?鐪熷疄閲嶅惎锛坙edger 94988ebc鈥?04:55:05 COMMITTED锛涙棫鏈?PID 22596 鍋滄 / 鏂版湇 PID 27540 04:53:51 璧凤級
+  鈫?鍚屼竴 session 鏃犵紳缁窇锛堝伐鍏锋祦鎸夐鏈熶腑鏂苟鑷姩缁帴锛実uardian 鍏嶆帴绠★級鈫?enabled:true 鍥炲垏
+  锛坰ha16 9DBCAA662B0CBE8B鈫?5289DF4241238FE锛岃绾у畾浣嶉浂璇激锛夆啋 浜屾鐪熷疄閲嶅惎锛坙edger 2777bf96鈥?05:02:01
+  COMMITTED锛屾柊鏈?PID 28968锛夆啋 娉ㄥ叆澶村洖褰掞紙v212/v213锛変负鎻掍欢澶嶆椿娲讳綋姝ｈ瘉銆傚壇浣滅敤瀹¤锛氬綋鏃?ledger
+  5 绗旓紙COMMITTED 4锛夛紝婕旂粌绐楁伆 2 绗斿叏 COMMITTED锛岄浂閲嶅鐐圭伀銆傜鍙ｅ睘涓昏鍒ゅ潙锛坱ailscaled 鎸佹湁 3080
+  闈?loopback 鐩戝惉琛岋級宸叉矇娣€ KNOWN_ISSUES.md銆備竷椤?REAL Gate 璇佹嵁鍏ㄩ儴灏辩华锛堚憼瑙?#43/#44 绯诲垪锛夛紱
+  鏈妭杩炲悓 P2.8/P2.9/P2.10 闅忎笅涓€鍒嗘敮 PR 鍏ュ簱銆傜姸鎬佷繚鎸?**AWAITING_REVIEW / Waiting For=External Review Round 4**锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R4 Gate-7 证据入库收口**：PR #45（`fix/context-memory-r4-gate7`）CI L1/L2/L3 三绿
-  → squash MERGED（merge=`7fa327a`），本行为其纯状态 backfill。入库内容：⑦kill-switch REAL 双向回滚
-  演练（§P2.10）+ ④REAL 5 类回源 v2（§P2.9）+ ⑤⑥corrupt/missing fail-open 活体字节演练（§P2.8）及
-  佐证 JSON/脚本；B3/B4 合同全关。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；
-  P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R4 Gate-7 璇佹嵁鍏ュ簱鏀跺彛**锛歅R #45锛坄fix/context-memory-r4-gate7`锛塁I L1/L2/L3 涓夌豢
+  鈫?squash MERGED锛坢erge=`7fa327a`锛夛紝鏈涓哄叾绾姸鎬?backfill銆傚叆搴撳唴瀹癸細鈶ill-switch REAL 鍙屽悜鍥炴粴
+  婕旂粌锛埪2.10锛? 鈶EAL 5 绫诲洖婧?v2锛埪2.9锛? 鈶も懃corrupt/missing fail-open 娲讳綋瀛楄妭婕旂粌锛埪2.8锛夊強
+  浣愯瘉 JSON/鑴氭湰锛汢3/B4 鍚堝悓鍏ㄥ叧銆傜姸鎬佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 4**锛?
+  P3=BLOCKED 涓嶅彉銆?
 
-- 更正（2026-08-27，同日）：此前深夜条目所述「七项 REAL Gate 证据全部就绪」表述过宽。
-  实况：**③ COMPLETION QUALITY 跨会话 A/B verdict 维持 PARTIAL**（需独立评测系统，红线禁止本轮私建，
-  风险登记册 #5）；② 残留「严格同任务跨天配对」（登记册 #4）。证据文档 §P2.10 总结句已同步收窄为
-  ①②④⑤⑥⑦ 六门闭环。正式报告 `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`（18 节 §0–§17）
-  已按此口径出具。状态不变：**AWAITING_REVIEW / Waiting For=External Review Round 4**；P3=BLOCKED 不变。
+- 鏇存锛?026-08-27锛屽悓鏃ワ級锛氭鍓嶆繁澶滄潯鐩墍杩般€屼竷椤?REAL Gate 璇佹嵁鍏ㄩ儴灏辩华銆嶈〃杩拌繃瀹姐€?
+  瀹炲喌锛?*鈶?COMPLETION QUALITY 璺ㄤ細璇?A/B verdict 缁存寔 PARTIAL**锛堥渶鐙珛璇勬祴绯荤粺锛岀孩绾跨姝㈡湰杞寤猴紝
+  椋庨櫓鐧昏鍐?#5锛夛紱鈶?娈嬬暀銆屼弗鏍煎悓浠诲姟璺ㄥぉ閰嶅銆嶏紙鐧昏鍐?#4锛夈€傝瘉鎹枃妗?搂P2.10 鎬荤粨鍙ュ凡鍚屾鏀剁獎涓?
+  鈶犫憽鈶ｂ懁鈶モ懄 鍏棬闂幆銆傛寮忔姤鍛?`reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`锛?8 鑺?搂0鈥撀?7锛?
+  宸叉寜姝ゅ彛寰勫嚭鍏枫€傜姸鎬佷笉鍙橈細**AWAITING_REVIEW / Waiting For=External Review Round 4**锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **REPORT_R4 收口终态**：PR #46（`fix/context-memory-r4-report`）CI L1/L2/L3 三绿
-  → squash MERGED（merge=`d2ca98e`），本行为其纯状态 backfill。入库内容：正式报告
-  `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`（§0–§17 共 18 节，③如实 PARTIAL）+ §P2.10 总结句收窄
-  + 更正条目。至此 R4 全部产出齐备于 main；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4**；
-  P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **REPORT_R4 鏀跺彛缁堟€?*锛歅R #46锛坄fix/context-memory-r4-report`锛塁I L1/L2/L3 涓夌豢
+  鈫?squash MERGED锛坢erge=`d2ca98e`锛夛紝鏈涓哄叾绾姸鎬?backfill銆傚叆搴撳唴瀹癸細姝ｅ紡鎶ュ憡
+  `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R4.md`锛埪?鈥撀?7 鍏?18 鑺傦紝鈶㈠瀹?PARTIAL锛? 搂P2.10 鎬荤粨鍙ユ敹绐?
+  + 鏇存鏉＄洰銆傝嚦姝?R4 鍏ㄩ儴浜у嚭榻愬浜?main锛涚姸鎬佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 4**锛?
+  P3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5 Evidence Closure 完成**（External Review Round 4 的收口补充项）：R5-1 STRICT
-  Recall Verifier（节点模式 legacy 2300+ 全驳回，活体快照 7/7+CHAIN ALL-PASS）＋ R5-2 REAL missing
-  projection 集成测试（真实 Web 实例，state 移走→插件自动重建 store v3/watermark 443，零损伤全 true）
-  ＋ R5-3 Gate-7 REAL kill-switch drill 四腿全绿（baseline/failopen/envkill/missing，16/16 rounds）
-  ＋ R5-4 Completion Quality OFF/ON checklist verdict = NO MATERIAL REGRESSION（代理指标；独立评测系统
-  仍 INCONCLUSIVE，登记册 #5 保持）＋ R5-5 SH-R9 只读 posture 9 项 ALL PASS（无 STOP）＋ R5-6
-  CURRENT_STATUS.md canonical 清理。证据：`evidence/R5_P25_FINAL_GATE_EVIDENCE.md`；报告：
-  `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`（18 节 §0–§17）。状态维持 **AWAITING_REVIEW /
-  Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5 Evidence Closure 瀹屾垚**锛圗xternal Review Round 4 鐨勬敹鍙ｈˉ鍏呴」锛夛細R5-1 STRICT
+  Recall Verifier锛堣妭鐐规ā寮?legacy 2300+ 鍏ㄩ┏鍥烇紝娲讳綋蹇収 7/7+CHAIN ALL-PASS锛夛紜 R5-2 REAL missing
+  projection 闆嗘垚娴嬭瘯锛堢湡瀹?Web 瀹炰緥锛宻tate 绉昏蛋鈫掓彃浠惰嚜鍔ㄩ噸寤?store v3/watermark 443锛岄浂鎹熶激鍏?true锛?
+  锛?R5-3 Gate-7 REAL kill-switch drill 鍥涜吙鍏ㄧ豢锛坆aseline/failopen/envkill/missing锛?6/16 rounds锛?
+  锛?R5-4 Completion Quality OFF/ON checklist verdict = NO MATERIAL REGRESSION锛堜唬鐞嗘寚鏍囷紱鐙珛璇勬祴绯荤粺
+  浠?INCONCLUSIVE锛岀櫥璁板唽 #5 淇濇寔锛夛紜 R5-5 SH-R9 鍙 posture 9 椤?ALL PASS锛堟棤 STOP锛夛紜 R5-6
+  CURRENT_STATUS.md canonical 娓呯悊銆傝瘉鎹細`evidence/R5_P25_FINAL_GATE_EVIDENCE.md`锛涙姤鍛婏細
+  `reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md`锛?8 鑺?搂0鈥撀?7锛夈€傜姸鎬佺淮鎸?**AWAITING_REVIEW /
+  Waiting For=External Review Round 4 涔嬪悗鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5 Evidence Closure Merge**：PR #47（`fix/context-memory-r5-final`）CI L1/L2/L3 三绿
-  （静态+secret+syntax / Windows Reliability / Harness smoke）→ squash MERGED（merge=`cc5d01d`），
-  本行为其纯状态 backfill。入库内容：STRICT recall verifier（`tests/context-memory/recall-verifier.mjs`）、
-  Gate-7 演练（runner/webdriver/probe）、R5 证据（`evidence/R5_COMPLETION_QUALITY.json` 等）、
-  REPORT_R5.md、T12 回归。期间修复 probe.mjs BOM（shebang 前 UTF-8 BOM 致 CI 语法门禁失败）。
-  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5 Evidence Closure Merge**锛歅R #47锛坄fix/context-memory-r5-final`锛塁I L1/L2/L3 涓夌豢
+  锛堥潤鎬?secret+syntax / Windows Reliability / Harness smoke锛夆啋 squash MERGED锛坢erge=`cc5d01d`锛夛紝
+  鏈涓哄叾绾姸鎬?backfill銆傚叆搴撳唴瀹癸細STRICT recall verifier锛坄tests/context-memory/recall-verifier.mjs`锛夈€?
+  Gate-7 婕旂粌锛坮unner/webdriver/probe锛夈€丷5 璇佹嵁锛坄evidence/R5_COMPLETION_QUALITY.json` 绛夛級銆?
+  REPORT_R5.md銆乀12 鍥炲綊銆傛湡闂翠慨澶?probe.mjs BOM锛坰hebang 鍓?UTF-8 BOM 鑷?CI 璇硶闂ㄧ澶辫触锛夈€?
+  鐘舵€佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 4 涔嬪悗鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-A 最终证据修正**（活体复跑发现两个验证器假阴性缺陷并修复）：
-  (1) recall verifier `SECRET_RX` 掩码跨行不对称 → 收窄正则排除换行桥接，STRICT 活体腿复跑
-  **7/7 ALL-PASS**；(2) 双门生成器 `FILE_PATH_RX` 无法 token 化含空格的 Windows 绝对路径 →
-  新增 `<path>` 标签回执分支，NEG-FINAL-6 回归通过（负例套件 10/10）。双门精确门 verdict
-  如实为 `3 PASS + 2 FAIL`：剩余 FAIL 为生产 store 投影像素噪声的真阳性拦截
-  （todo-receipt ×2、无错误措辞目录清单 ×1；登记册 #8），插件分类策略修订不在本轮授权。
-  「P2.5→P3 残留」全库复查无残留。SH-R9 posture V2 = 9/9 PASS；
-  Completion Quality V2 全库 355 日志只读核算（12:59Z 快照：PROTO=22/QUOTA=17/ECHO=814，
-  R4 四条 era 会话两类 0 命中）。
-  证据：`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`＋§18 追加于 REPORT_R5.md。
-  未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-A 鏈€缁堣瘉鎹慨姝?*锛堟椿浣撳璺戝彂鐜颁袱涓獙璇佸櫒鍋囬槾鎬х己闄峰苟淇锛夛細
+  (1) recall verifier `SECRET_RX` 鎺╃爜璺ㄨ涓嶅绉?鈫?鏀剁獎姝ｅ垯鎺掗櫎鎹㈣妗ユ帴锛孲TRICT 娲讳綋鑵垮璺?
+  **7/7 ALL-PASS**锛?2) 鍙岄棬鐢熸垚鍣?`FILE_PATH_RX` 鏃犳硶 token 鍖栧惈绌烘牸鐨?Windows 缁濆璺緞 鈫?
+  鏂板 `<path>` 鏍囩鍥炴墽鍒嗘敮锛孨EG-FINAL-6 鍥炲綊閫氳繃锛堣礋渚嬪浠?10/10锛夈€傚弻闂ㄧ簿纭棬 verdict
+  濡傚疄涓?`3 PASS + 2 FAIL`锛氬墿浣?FAIL 涓虹敓浜?store 鎶曞奖鍍忕礌鍣０鐨勭湡闃虫€ф嫤鎴?
+  锛坱odo-receipt 脳2銆佹棤閿欒鎺緸鐩綍娓呭崟 脳1锛涚櫥璁板唽 #8锛夛紝鎻掍欢鍒嗙被绛栫暐淇涓嶅湪鏈疆鎺堟潈銆?
+  銆孭2.5鈫扨3 娈嬬暀銆嶅叏搴撳鏌ユ棤娈嬬暀銆係H-R9 posture V2 = 9/9 PASS锛?
+  Completion Quality V2 鍏ㄥ簱 355 鏃ュ織鍙鏍哥畻锛?2:59Z 蹇収锛歅ROTO=22/QUOTA=17/ECHO=814锛?
+  R4 鍥涙潯 era 浼氳瘽涓ょ被 0 鍛戒腑锛夈€?
+  璇佹嵁锛歚evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`锛嬄?8 杩藉姞浜?REPORT_R5.md銆?
+  鏈敼鐢熶骇鎻掍欢浠ｇ爜銆侀浂閲嶅惎锛涚姸鎬佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 6 鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-A Merge Backfill**：PR #51（`fix/context-memory-r5-1-final-evidence`）CI L1/L2/L3 三绿
-  （Static+secret+syntax PASS / Reliability PASS / Boot smoke PASS 4m49s）→ squash MERGED（merge=`1619574`），
-  本行为其纯状态 backfill。入库内容：recall verifier `SECRET_RX` 跨行桥接收窄（STRICT 活体腿复跑 7/7 ALL-PASS）、
-  双门 `FILE_PATH_RX` `<path>` 回执分支（NEG-FINAL-6 回归，负例套件 10/10）、双门精确门如实 verdict
-  （3 PASS + 2 FAIL 真阳性=登记册#8 投影噪声）、SH-R9 posture V2（9/9 PASS）、
-  Completion Quality V2 固定字段核算（355 日志/728k+ 事件只读；12:59Z 快照 PROTO=22/QUOTA=17/ECHO=814，
-  R4 四条 era 会话两类 0 命中）、REPORT_R5 §18＋`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md` 单一事实载体、
-  「P2.5→P3 残留」复查无残留。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；
-  P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-A Merge Backfill**锛歅R #51锛坄fix/context-memory-r5-1-final-evidence`锛塁I L1/L2/L3 涓夌豢
+  锛圫tatic+secret+syntax PASS / Reliability PASS / Boot smoke PASS 4m49s锛夆啋 squash MERGED锛坢erge=`1619574`锛夛紝
+  鏈涓哄叾绾姸鎬?backfill銆傚叆搴撳唴瀹癸細recall verifier `SECRET_RX` 璺ㄨ妗ユ帴鏀剁獎锛圫TRICT 娲讳綋鑵垮璺?7/7 ALL-PASS锛夈€?
+  鍙岄棬 `FILE_PATH_RX` `<path>` 鍥炴墽鍒嗘敮锛圢EG-FINAL-6 鍥炲綊锛岃礋渚嬪浠?10/10锛夈€佸弻闂ㄧ簿纭棬濡傚疄 verdict
+  锛? PASS + 2 FAIL 鐪熼槼鎬?鐧昏鍐?8 鎶曞奖鍣０锛夈€丼H-R9 posture V2锛?/9 PASS锛夈€?
+  Completion Quality V2 鍥哄畾瀛楁鏍哥畻锛?55 鏃ュ織/728k+ 浜嬩欢鍙锛?2:59Z 蹇収 PROTO=22/QUOTA=17/ECHO=814锛?
+  R4 鍥涙潯 era 浼氳瘽涓ょ被 0 鍛戒腑锛夈€丷EPORT_R5 搂18锛媊evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md` 鍗曚竴浜嬪疄杞戒綋銆?
+  銆孭2.5鈫扨3 娈嬬暀銆嶅鏌ユ棤娈嬬暀銆傜姸鎬佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 6 鐨勯噸鏂板鏍?*锛?
+  P3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-B Recall 5 类代表制精确门（Round 6 合同）= 5/5 REPRESENTATIVE PASS**：
-  按 Round 6 授权，(1) C2 跨真实 Session 选代表——只读全库普查 5 个真实 production store
-  （4/5 含合法 error-backed claim：59271 git-fatal / 102834 PS-format / 131416 cannot-edit /
-  **52405 timeout**），代表取 c4cc512e blockers[0] refs=[52405]「Error: tool call timed out after
-  60000ms」（结构严格 + 语义门双通过，matchedSeq=52405 evt=tool/result）；主 store 自身 blockers
-  被 v2 语义门正确驳回（真阳性），**production 无需修改、PROVENANCE_GAP 不触发**；
-  (2) C4 改代表制——representative PASS（keyFileChanges[22] `<path>` Created 回执）+
-  噪声单独诊断（todo-receipt ×2 → noiseVerdict=HARDENING_DEBT，登记册 #8 口径不变）；
-  C1/C3/C5 维持 Round 6 认可状态；C5 raw 副作用链 before=1012213 < target=1027575 < after=1029605
-  （dups=0）+ timeline monotonic/watermarked。verdictSummary=`5/5 REPRESENTATIVE PASS`（EXIT=0）。
-  全程只读、未改生产插件代码、零重启。
-  证据：`evidence/R5_1B_RECALL_V3_EVIDENCE.md`（单一事实载体）＋ `evidence/R5_RECALL5_EXACT_V3.json`
-  （来源指纹齐全：main store 6f6057bd8b34fd72 v329 / c2 store 1fcf4f8bab130431 v2）；
-  生成器 `evidence/make-r5-recall5-exact-v3.mjs`（复用 snapshot 严格原语 + v2 语义门，零复制）。
-  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-B Recall 5 绫讳唬琛ㄥ埗绮剧‘闂紙Round 6 鍚堝悓锛? 5/5 REPRESENTATIVE PASS**锛?
+  鎸?Round 6 鎺堟潈锛?1) C2 璺ㄧ湡瀹?Session 閫変唬琛ㄢ€斺€斿彧璇诲叏搴撴櫘鏌?5 涓湡瀹?production store
+  锛?/5 鍚悎娉?error-backed claim锛?9271 git-fatal / 102834 PS-format / 131416 cannot-edit /
+  **52405 timeout**锛夛紝浠ｈ〃鍙?c4cc512e blockers[0] refs=[52405]銆孍rror: tool call timed out after
+  60000ms銆嶏紙缁撴瀯涓ユ牸 + 璇箟闂ㄥ弻閫氳繃锛宮atchedSeq=52405 evt=tool/result锛夛紱涓?store 鑷韩 blockers
+  琚?v2 璇箟闂ㄦ纭┏鍥烇紙鐪熼槼鎬э級锛?*production 鏃犻渶淇敼銆丳ROVENANCE_GAP 涓嶈Е鍙?*锛?
+  (2) C4 鏀逛唬琛ㄥ埗鈥斺€攔epresentative PASS锛坘eyFileChanges[22] `<path>` Created 鍥炴墽锛?
+  鍣０鍗曠嫭璇婃柇锛坱odo-receipt 脳2 鈫?noiseVerdict=HARDENING_DEBT锛岀櫥璁板唽 #8 鍙ｅ緞涓嶅彉锛夛紱
+  C1/C3/C5 缁存寔 Round 6 璁ゅ彲鐘舵€侊紱C5 raw 鍓綔鐢ㄩ摼 before=1012213 < target=1027575 < after=1029605
+  锛坉ups=0锛? timeline monotonic/watermarked銆倂erdictSummary=`5/5 REPRESENTATIVE PASS`锛圗XIT=0锛夈€?
+  鍏ㄧ▼鍙銆佹湭鏀圭敓浜ф彃浠朵唬鐮併€侀浂閲嶅惎銆?
+  璇佹嵁锛歚evidence/R5_1B_RECALL_V3_EVIDENCE.md`锛堝崟涓€浜嬪疄杞戒綋锛夛紜 `evidence/R5_RECALL5_EXACT_V3.json`
+  锛堟潵婧愭寚绾归綈鍏細main store 6f6057bd8b34fd72 v329 / c2 store 1fcf4f8bab130431 v2锛夛紱
+  鐢熸垚鍣?`evidence/make-r5-recall5-exact-v3.mjs`锛堝鐢?snapshot 涓ユ牸鍘熻 + v2 璇箟闂紝闆跺鍒讹級銆?
+  鐘舵€佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 6 鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-B 最小收口完成（Round 6 合同 B/C/D + Final Semantic NEG 接入 CI L1）**：
-  (B) Completion Quality **V3 每长会话 OFF/ON 固定字段对照**（355 日志 733k 事件，长会话=≥10k 事件）：
-  OFF 2 长会话 115190 事件 0 命中 / ON 2 长会话 108619 事件 44 命中（PROTO 24 + QUOTA 21）；
-  预注册三选一规则输出 **MATERIAL_REGRESSION**（PROTO-only 口径同判成立）——归属：44 起全部集中于
-  a144fe3f（23 PROTO=P2.6-A 已修复缺陷类历史记录 + 21 QUOTA=GLM 外部 429）与 5cd0722e（1 PROTO）；
-  **最长 ON 主 CM 会话 34e86c7a（91.7k 事件）0/0**；最终裁定权在 Reviewer，登记册 #5 维持开放；
-  (C) SH-R9 **只读 LIVE posture V3 = 12/12 PASS**（9 项 canonical 全部运行时现场重导出、取代 V2
-  沿用判定；+ Guardian 活性 / 凭据 DACL / hardened config 三项 EXT）；
-  (D) canonical 路线同步：Notion 02.5 页（Status 呼出块 → Round 7、R5.1-A 摘「当前轮」、新增 R5.1-B
-  条目）+ 本文件（总览表与时间线）同轮更新；
-  **NEG 接入 CI**：ci-level1.yml 新增合成 10 用例语义负例 step（本地基线 10/10）；
-  **偏差如实登记**：R5.1-B 首批 Recall-V3 工件曾以 main 直推 `3ea14d9` 入库（详见 REPORT_R5 §19.2
-  与 R5_1_B_FINAL_GATE_CLOSURE.md §6，含 CI 触发面残留风险声明）；本轮其余变更经分支 PR 入库。
-  证据：`REPORT_R5.md` §19 + `R5_1_B_FINAL_GATE_CLOSURE.md`（单一事实载体）+
-  `evidence/R5_COMPLETION_QUALITY_V3.json` + `evidence/R5_SH9_POSTURE_V3.json`。
-  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-B 鏈€灏忔敹鍙ｅ畬鎴愶紙Round 6 鍚堝悓 B/C/D + Final Semantic NEG 鎺ュ叆 CI L1锛?*锛?
+  (B) Completion Quality **V3 姣忛暱浼氳瘽 OFF/ON 鍥哄畾瀛楁瀵圭収**锛?55 鏃ュ織 733k 浜嬩欢锛岄暱浼氳瘽=鈮?0k 浜嬩欢锛夛細
+  OFF 2 闀夸細璇?115190 浜嬩欢 0 鍛戒腑 / ON 2 闀夸細璇?108619 浜嬩欢 44 鍛戒腑锛圥ROTO 24 + QUOTA 21锛夛紱
+  棰勬敞鍐屼笁閫変竴瑙勫垯杈撳嚭 **MATERIAL_REGRESSION**锛圥ROTO-only 鍙ｅ緞鍚屽垽鎴愮珛锛夆€斺€斿綊灞烇細44 璧峰叏閮ㄩ泦涓簬
+  a144fe3f锛?3 PROTO=P2.6-A 宸蹭慨澶嶇己闄风被鍘嗗彶璁板綍 + 21 QUOTA=GLM 澶栭儴 429锛変笌 5cd0722e锛? PROTO锛夛紱
+  **鏈€闀?ON 涓?CM 浼氳瘽 34e86c7a锛?1.7k 浜嬩欢锛?/0**锛涙渶缁堣瀹氭潈鍦?Reviewer锛岀櫥璁板唽 #5 缁存寔寮€鏀撅紱
+  (C) SH-R9 **鍙 LIVE posture V3 = 12/12 PASS**锛? 椤?canonical 鍏ㄩ儴杩愯鏃剁幇鍦洪噸瀵煎嚭銆佸彇浠?V2
+  娌跨敤鍒ゅ畾锛? Guardian 娲绘€?/ 鍑嵁 DACL / hardened config 涓夐」 EXT锛夛紱
+  (D) canonical 璺嚎鍚屾锛歂otion 02.5 椤碉紙Status 鍛煎嚭鍧?鈫?Round 7銆丷5.1-A 鎽樸€屽綋鍓嶈疆銆嶃€佹柊澧?R5.1-B
+  鏉＄洰锛? 鏈枃浠讹紙鎬昏琛ㄤ笌鏃堕棿绾匡級鍚岃疆鏇存柊锛?
+  **NEG 鎺ュ叆 CI**锛歝i-level1.yml 鏂板鍚堟垚 10 鐢ㄤ緥璇箟璐熶緥 step锛堟湰鍦板熀绾?10/10锛夛紱
+  **鍋忓樊濡傚疄鐧昏**锛歊5.1-B 棣栨壒 Recall-V3 宸ヤ欢鏇句互 main 鐩存帹 `3ea14d9` 鍏ュ簱锛堣瑙?REPORT_R5 搂19.2
+  涓?R5_1_B_FINAL_GATE_CLOSURE.md 搂6锛屽惈 CI 瑙﹀彂闈㈡畫鐣欓闄╁０鏄庯級锛涙湰杞叾浣欏彉鏇寸粡鍒嗘敮 PR 鍏ュ簱銆?
+  璇佹嵁锛歚REPORT_R5.md` 搂19 + `R5_1_B_FINAL_GATE_CLOSURE.md`锛堝崟涓€浜嬪疄杞戒綋锛?
+  `evidence/R5_COMPLETION_QUALITY_V3.json` + `evidence/R5_SH9_POSTURE_V3.json`銆?
+  鐘舵€佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 7 鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-B Merge Backfill**：PR #52（`fix/context-memory-r5-1-b-final-gate`）CI
-  L1/L2/L3 三绿 → squash MERGED（=`5cb495b`），本行为其纯状态 backfill；Notion 02.5 canonical 页
-  已于合并前同轮同步（Round 7 口径）。状态维持 **AWAITING_REVIEW / Waiting For=External Review
-  Round 7 的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-B Merge Backfill**锛歅R #52锛坄fix/context-memory-r5-1-b-final-gate`锛塁I
+  L1/L2/L3 涓夌豢 鈫?squash MERGED锛?`5cb495b`锛夛紝鏈涓哄叾绾姸鎬?backfill锛汵otion 02.5 canonical 椤?
+  宸蹭簬鍚堝苟鍓嶅悓杞悓姝ワ紙Round 7 鍙ｅ緞锛夈€傜姸鎬佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review
+  Round 7 鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?
 
-- 2026-08-27：P2.5 **R5.1-C Completion Quality V4 复核（Round 7 收口，审查回声污染校正）**：
-  (A) V4 生成器 `evidence/make-r5-completion-quality-v4.mjs` 与 V3 逐字节对齐 matcher/表结构/预注册
-  三选一规则，新增**事件类型归因**（incidentEventTypes）＋**echo 排除校正口径**（pooledClean /
-  adjustedVerdict），输出 `evidence/r5-completion-quality-v4-20260827-235912/R5_COMPLETION_QUALITY_V4.json`；
-  (B) **raw 口径复现 V3 判定**：ON pooled per-1k 0.5719 > OFF 0 × 2 → MATERIAL_REGRESSION（355 日志 740k 事件；
-  OFF 2 长会话 115190 事件 0 命中 / ON 2 长会话 115412 事件 66 命中，全部集中于 a144fe3f 34+32）；
-  (C) **echo 排除后 = NO_MATERIAL_REGRESSION**：a144fe3f 全部 66 个命中的事件类型 100% 为
-  assistant/chunk|assistant/message|tool/call|tool/result（26/20/12/8），抽样 seq 89107-206761 显示
-  assistant reasoning 文本或 tool/result 回显**旧日志内容**（如 seq 94605 reasoning 块自述 V1 遇
-  reasoning_content 400；R5.1-B era-scan 脚本创建 seq 89114/90081/90792 落在命中区段内）→ 审查活动
-  本身把触发串回灌进当前活跃会话日志（观测者效应）；排除后 ON pooled per-1k=0；
-  (D) 校正结论：**V3 的 MATERIAL_REGRESSION 系审查回声假象**，建议 Reviewer 采纳 echo-excluded
-  口径 NO_MATERIAL_REGRESSION（34e86c7a 91.7k 事件主会话 0/0 raw & clean 不变；OFF 池 0/0 不变）；
-  最终裁定权仍在 Reviewer，登记册 #5 维持开放。
-  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。
+- 2026-08-27锛歅2.5 **R5.1-C Completion Quality V4 澶嶆牳锛圧ound 7 鏀跺彛锛屽鏌ュ洖澹版薄鏌撴牎姝ｏ級**锛?
+  (A) V4 鐢熸垚鍣?`evidence/make-r5-completion-quality-v4.mjs` 涓?V3 閫愬瓧鑺傚榻?matcher/琛ㄧ粨鏋?棰勬敞鍐?
+  涓夐€変竴瑙勫垯锛屾柊澧?*浜嬩欢绫诲瀷褰掑洜**锛坕ncidentEventTypes锛夛紜**echo 鎺掗櫎鏍℃鍙ｅ緞**锛坧ooledClean /
+  adjustedVerdict锛夛紝杈撳嚭 `evidence/r5-completion-quality-v4-20260827-235912/R5_COMPLETION_QUALITY_V4.json`锛?
+  (B) **raw 鍙ｅ緞澶嶇幇 V3 鍒ゅ畾**锛歄N pooled per-1k 0.5719 > OFF 0 脳 2 鈫?MATERIAL_REGRESSION锛?55 鏃ュ織 740k 浜嬩欢锛?
+  OFF 2 闀夸細璇?115190 浜嬩欢 0 鍛戒腑 / ON 2 闀夸細璇?115412 浜嬩欢 66 鍛戒腑锛屽叏閮ㄩ泦涓簬 a144fe3f 34+32锛夛紱
+  (C) **echo 鎺掗櫎鍚?= NO_MATERIAL_REGRESSION**锛歛144fe3f 鍏ㄩ儴 66 涓懡涓殑浜嬩欢绫诲瀷 100% 涓?
+  assistant/chunk|assistant/message|tool/call|tool/result锛?6/20/12/8锛夛紝鎶芥牱 seq 89107-206761 鏄剧ず
+  assistant reasoning 鏂囨湰鎴?tool/result 鍥炴樉**鏃ф棩蹇楀唴瀹?*锛堝 seq 94605 reasoning 鍧楄嚜杩?V1 閬?
+  reasoning_content 400锛汻5.1-B era-scan 鑴氭湰鍒涘缓 seq 89114/90081/90792 钀藉湪鍛戒腑鍖烘鍐咃級鈫?瀹℃煡娲诲姩
+  鏈韩鎶婅Е鍙戜覆鍥炵亴杩涘綋鍓嶆椿璺冧細璇濇棩蹇楋紙瑙傛祴鑰呮晥搴旓級锛涙帓闄ゅ悗 ON pooled per-1k=0锛?
+  (D) 鏍℃缁撹锛?*V3 鐨?MATERIAL_REGRESSION 绯诲鏌ュ洖澹板亣璞?*锛屽缓璁?Reviewer 閲囩撼 echo-excluded
+  鍙ｅ緞 NO_MATERIAL_REGRESSION锛?4e86c7a 91.7k 浜嬩欢涓讳細璇?0/0 raw & clean 涓嶅彉锛汷FF 姹?0/0 涓嶅彉锛夛紱
+  鏈€缁堣瀹氭潈浠嶅湪 Reviewer锛岀櫥璁板唽 #5 缁存寔寮€鏀俱€?
+  鐘舵€佺淮鎸?**AWAITING_REVIEW / Waiting For=External Review Round 7 鐨勯噸鏂板鏍?*锛汸3=BLOCKED 涓嶅彉銆?

@@ -109,6 +109,12 @@ IMPLEMENTATION_COMPLETE。
 - **R5.1-C MERGE BACKFILL（2026-08-27）**：PR #53 squash MERGED = `fedfeb7`（CI 三项全绿：
   DSH boot + readiness smoke / Reliability state machine tests / Static + secret + syntax gate）；
   证据已入库 main；状态维持 IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（Waiting For: Round 8）。
+- **R5.1-D MERGE BACKFILL（2026-08-28）**：PR #54 merge = `0eed1e2`（CI 三项全绿：
+  DSH boot + readiness smoke / Reliability state machine tests / Static + secret + syntax gate）；
+  Round 8 三 blocker（A Completion Quality V5 / B SH-R9 posture V5 live / C canonical 前向路线）收口证据已入库
+  main（`evidence/r5-completion-quality-v5-20260828-r8c/` + `evidence/r5-sh9-posture-v5-20260828-r8c/` +
+  `reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`）；状态维持 IMPLEMENTATION_COMPLETE /
+  AWAITING_REVIEW（Waiting For: External Review Round 8 的重新审核）。
 
 ## Phase 02 Security-Hardening 最终状态
 
@@ -304,7 +310,7 @@ IMPLEMENTATION_COMPLETE。
   error=0、duplicate side-effect=0、false-completion 由既有双门 verifier 覆盖；不可观测字段如实 N/A；verdict=
   NO MATERIAL REGRESSION（Reviewer 若要求严格 acceptance 回放则 fallback=INCONCLUSIVE；登记册 #5 维持开放）；
   (B) **SH-R9 posture V5 LIVE 复跑 16/16 PASS**（`evidence/r5-sh9-posture-v5-20260828-r8c/R5_SH9_POSTURE_V5.json`，
-  2026-08-28T02:00Z；V4 生成器原样只读复跑）：插件字节 live==repo（context-memory.mjs 5fcd2ec4 / core
+  generatedAtUtc=2026-08-27T17:53:36Z，本地 2026-08-28 01:53 CST；V4 生成器原样只读复跑）：插件字节 live==repo（context-memory.mjs 5fcd2ec4 / core
   e68fbd17）、挂载链 L438→L439、settings.yaml plaintext=0 + 9/9 apiKeyEnv 同源链、YAML 核心三件 VALID、
   guardian 活性（进程 3、age 0.5min、restart-24h=4、stale=0、lastgood-restores=1、quarantine=0）、DACL
   SYSTEM/Admins(F)、secret scan non-exempt=0（285 worktree + 71 live-deploy）、T15 契约 6/6 + goal-recovery 4/4、

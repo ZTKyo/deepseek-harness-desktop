@@ -194,3 +194,14 @@ IMPLEMENTATION_COMPLETE。
   Gate-7 演练（runner/webdriver/probe）、R5 证据（`evidence/R5_COMPLETION_QUALITY.json` 等）、
   REPORT_R5.md、T12 回归。期间修复 probe.mjs BOM（shebang 前 UTF-8 BOM 致 CI 语法门禁失败）。
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-A 最终证据修正**（活体复跑发现两个验证器假阴性缺陷并修复）：
+  (1) recall verifier `SECRET_RX` 掩码跨行不对称 → 收窄正则排除换行桥接，STRICT 活体腿复跑
+  **7/7 ALL-PASS**；(2) 双门生成器 `FILE_PATH_RX` 无法 token 化含空格的 Windows 绝对路径 →
+  新增 `<path>` 标签回执分支，NEG-FINAL-6 回归通过（负例套件 10/10）。双门精确门 verdict
+  如实为 `3 PASS + 2 FAIL`：剩余 FAIL 为生产 store 投影像素噪声的真阳性拦截
+  （todo-receipt ×2、无错误措辞目录清单 ×1；登记册 #8），插件分类策略修订不在本轮授权。
+  「P2.5→P3 残留」全库复查无残留。SH-R9 posture V2 = 9/9 PASS；
+  Completion Quality V2 全库 355 日志只读核算（PROTO=21/QUOTA=15/ECHO=801，四条 era 会话两类 0 命中）。
+  证据：`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md`＋§18 追加于 REPORT_R5.md。
+  未改生产插件代码、零重启；状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 4 之后的重新审核**；P3=BLOCKED 不变。

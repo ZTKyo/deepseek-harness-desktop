@@ -1,0 +1,68 @@
+{
+ "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+ "gate": "R5-5 SH-R9 read-only posture snapshot",
+ "date": "2026-08-27",
+ "items": [
+  {
+   "id": 1,
+   "name": "credential-hygiene-settings-no-plaintext-apikey",
+   "status": "PASS",
+   "evidence": "settings.yaml apiKey-like lines=14, plaintext suspect=0"
+  },
+  {
+   "id": 2,
+   "name": "fail-closed-A5-store-probe",
+   "status": "PASS",
+   "evidence": "context-memory-core.mjs init=false / set=true / fatal guard verified (gate7 copy)"
+  },
+  {
+   "id": 3,
+   "name": "state-truth-CURRENT_STATUS-02.5",
+   "status": "PASS",
+   "evidence": "CURRENT_STATUS.md L13 AWAITING_REVIEW=True, Waiting For=External Review Round 4 re-review"
+  },
+  {
+   "id": 4,
+   "name": "credential-source-coherence",
+   "status": "PASS",
+   "evidence": "registry & settings.yaml consistent (verified in R5)"
+  },
+  {
+   "id": 5,
+   "name": "source-coherence-positive-branch-contract",
+   "status": "PASS",
+   "evidence": "23 T15 positive branches verified"
+  },
+  {
+   "id": 6,
+   "name": "kill-injection-archived-noop",
+   "status": "PASS",
+   "evidence": "actual calls=0, only comment references (3)"
+  },
+  {
+   "id": 7,
+   "name": "restore-owner-archived",
+   "status": "PASS",
+   "evidence": "actual calls=0, archive sole copy, non-archive copies=0"
+  },
+  {
+   "id": 8,
+   "name": "deploy-byte-verify-live-eq-repo",
+   "status": "PASS",
+   "evidence": "two files SHA256 match (live==repo)"
+  },
+  {
+   "id": 9,
+   "name": "mount-chain-agent-cordis-context-memory",
+   "status": "PASS",
+   "evidence": "L438 id=context-memory -> ./context-memory.mjs"
+  }
+ ],
+ "conclusion": {
+  "pass": 9,
+  "fail": 0,
+  "stop": "NO STOP ITEMS",
+  "regression": "NONE"
+ },
+ "sanitized": true
+}

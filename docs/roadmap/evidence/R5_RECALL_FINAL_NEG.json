@@ -1,0 +1,114 @@
+{
+ "spec": "R5.1-A final negative regression (NEG-FINAL-1..6 + positive controls)",
+ "generatedAt": "2026-08-27T12:33:13.494Z",
+ "expectations": 10,
+ "allPass": true,
+ "results": [
+  {
+   "id": "NEG-FINAL-1",
+   "desc": "system-reminder injection passes strict containment but MUST fail semantic gate",
+   "result": "PASS",
+   "detail": {
+    "strictOk": true,
+    "strictReason": "PASS_refs_exact",
+    "semReason": "FAIL_injection_wrapped_not_direct_user_wording"
+   }
+  },
+  {
+   "id": "P1-GOAL-DIRECT",
+   "desc": "genuine direct user wording resolves PASS under both gates",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "PASS_direct_user_wording"
+   }
+  },
+  {
+   "id": "NEG-FINAL-2",
+   "desc": "error-record class needs error wording in claim AND error evidence in raw event; empty pool ⇒ PROVENANCE_GAP (allowed only for error-record sections)",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "FAIL_claim_lacks_error_evidence",
+    "gapOK": true,
+    "gapAllowedC3": true
+   }
+  },
+  {
+   "id": "NEG-FINAL-3",
+   "desc": "todo-update event cited as PATCH_FILE_EVIDENCE must FAIL_false_file_evidence_todo_noise",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "FAIL_false_file_evidence_todo_noise"
+   }
+  },
+  {
+   "id": "P2-REAL-DIFF",
+   "desc": "real diff hunks pass FILE_OPERATION semantic gate",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "PASS_all_refs_semantic_clear"
+   }
+  },
+  {
+   "id": "NEG-FINAL-5",
+   "desc": "prose mention of a path must NOT satisfy PATCH_FILE_EVIDENCE",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "FAIL_no_file_op_signature"
+   }
+  },
+  {
+   "id": "NEG-FINAL-4",
+   "desc": "side-effect chain without any later side-effect event must FAIL_chain_after_missing",
+   "result": "PASS",
+   "detail": {
+    "ok": false,
+    "reason": "FAIL_chain_after_missing",
+    "targetEvent": 200
+   }
+  },
+  {
+   "id": "P3-SIDE-EFFECT-CHAIN",
+   "desc": "raw three-event chain enforces numeric ordering before<TARGET<after with zero duplicate targets",
+   "result": "PASS",
+   "detail": {
+    "ok": true,
+    "reason": "PASS_raw_side_effect_chain",
+    "beforeEvent": 150,
+    "targetEvent": 200,
+    "afterEvent": 260,
+    "eventType": "tool/result",
+    "sideEffectFamily": "CONTROLLED_OP",
+    "duplicateSideEffectCount": 0
+   }
+  },
+  {
+   "id": "P3-DUPLICATE-COUNT",
+   "desc": "an identical duplicated side-effect target is reported via duplicateSideEffectCount=1",
+   "result": "PASS",
+   "detail": {
+    "ok": true,
+    "reason": "PASS_raw_side_effect_chain",
+    "beforeEvent": 190,
+    "targetEvent": 200,
+    "afterEvent": 260,
+    "eventType": "tool/result",
+    "sideEffectFamily": "CONTROLLED_OP",
+    "duplicateSideEffectCount": 1
+   }
+  },
+  {
+   "id": "NEG-FINAL-6",
+   "desc": "DSH write-receipt with space-bearing Windows path resolves PASS under both gates (space-path false-negative fixed)",
+   "result": "PASS",
+   "detail": {
+    "strictReason": "PASS_refs_exact",
+    "semReason": "PASS_real_file_op_signature"
+   }
+  }
+ ]
+}

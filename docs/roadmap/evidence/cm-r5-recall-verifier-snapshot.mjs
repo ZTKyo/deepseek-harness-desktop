@@ -44,7 +44,12 @@ export function expectedTypesFor(section) {
 }
 
 // ── normalization helpers (shared by claim side and event side) ──
-const SECRET_RX = /(sk-[A-Za-z0-9_\-]{6,})|(Bearer\s+[A-Za-z0-9._\-]{8,})|((api[_-]?key|token|password|secret|authorization)["'\s:=]+[^\s"',}\]]{6,})/gi;
+const SECRET_RX = /(sk-[A-Za-z0-9_\-]{6,})|(Bearer[^\S\r\n]+[A-Za-z0-9._\-]{8,})|((api[_-]?key|token|password|secret|authorization)["'\t :=]+[^\s"',}\]]{6,})/gi;
+// R5.1-A correction: separator/value classes exclude \r\n so the masker cannot
+// bridge ACROSS lines inside multi-line tool output (was: "KEY::<newline>parsed"
+// masked on the event side but not on the single-line claim side ⇒ asymmetric
+// masking false-negative FAIL_text_not_supported_by_own_ref). Same-line secrets
+// are still fully masked; backfill registered in R5_1_FINAL_EVIDENCE_CORRECTION.md.
 export function normalizeText(s) {
   return String(s ?? "").replace(SECRET_RX, "***").replace(/\s+/g, " ").trim();
 }

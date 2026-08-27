@@ -1,0 +1,179 @@
+{
+ "gate": "R5.1-A completion-quality V2 — fixed-field failure accounting over OFF/ON era production logs",
+ "date": "2026-08-27",
+ "method": {
+  "decoding": "self-written multi-frame zstd walker, per-frame lossless decode, zero writes to production files",
+  "countingUnit": "event-level JSON records (o.seq unique); no cross-event pairing collapse",
+  "matchers": {
+   "PROTOCOL_CONFIG_LOAD_INCIDENT": "line contains 'reasoning_content' AND (/status code 400/ OR /\"code\":\\s*400/) — mapping per R5_COMPLETION_QUALITY_V2 spec",
+   "PROVIDER_QUOTA": "(/status code 429/ OR /\"code\":\\s*429/) AND GLM-family provider marker (glm|zhipu|bigmodel)",
+   "excludedFromFixedFields": "textual 'rate limit' prose without any literal code ⇒ counted as outOfScopeTextEcho"
+  },
+  "secretHygiene": "no raw log lines are written into this artifact; only counts and integer seq samples"
+ },
+ "scanScope": {
+  "sessionsRoot": "~/.dsh/sessions",
+  "logsScanned": 355,
+  "totalEventsDecoded": 727909
+ },
+ "totalsAllLogs": {
+  "PROTOCOL_CONFIG_LOAD_INCIDENT": 21,
+  "PROVIDER_QUOTA": 15,
+  "outOfScopeTextEcho": 801
+ },
+ "eraRollups": {
+  "ON": {
+   "labeledLogsConsidered": 4,
+   "PROTOCOL_CONFIG_LOAD_INCIDENT": 21,
+   "PROVIDER_QUOTA": 15
+  },
+  "OFF": {
+   "labeledLogsConsidered": 3,
+   "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+   "PROVIDER_QUOTA": 0
+  }
+ },
+ "sessionsWithIncidentsOrLabeledEra": [
+  {
+   "sessionId": "session-11c7aa70-d26b-4acb-9d3a-f63c996ff83d",
+   "era": [
+    "OFF"
+   ],
+   "events": 39827,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 5,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-293a808a-5817-426b-9db7-6646e719bc5d",
+   "era": [
+    "OFF"
+   ],
+   "events": 6492,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 4,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "era": [
+    "ON"
+   ],
+   "events": 91694,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 27,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-5cd0722e-467e-4be5-ab6d-1f841d523a07",
+   "era": [
+    "ON"
+   ],
+   "events": 9617,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 1,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 4,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [
+     25483
+    ],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-9e3b29bb-3f36-4659-9162-18ad928a7f49",
+   "era": [
+    "OFF"
+   ],
+   "events": 75363,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 68,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  },
+  {
+   "sessionId": "session-a144fe3f-1042-4466-b70b-a10642fae037",
+   "era": [
+    "ON"
+   ],
+   "events": 11589,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 20,
+    "PROVIDER_QUOTA": 15
+   },
+   "outOfScopeTextEcho": 8,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [
+     89107,
+     89109,
+     89112,
+     89113,
+     90051,
+     90052,
+     90055,
+     90056,
+     90074,
+     90076
+    ],
+    "PROVIDER_QUOTA": [
+     89109,
+     89112,
+     89113,
+     90079,
+     90784,
+     90785,
+     90787,
+     90790,
+     90791,
+     91600
+    ]
+   }
+  },
+  {
+   "sessionId": "session-ad148b88-be89-488a-a497-e94a443ddc2e",
+   "era": [
+    "ON"
+   ],
+   "events": 9797,
+   "incidents": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": 0,
+    "PROVIDER_QUOTA": 0
+   },
+   "outOfScopeTextEcho": 6,
+   "sampleSeqs": {
+    "PROTOCOL_CONFIG_LOAD_INCIDENT": [],
+    "PROVIDER_QUOTA": []
+   }
+  }
+ ],
+ "carryoverAuditReference": {
+  "v1Gate": "R5-4 completion-quality OFF/ON auditable checklist (R5_COMPLETION_QUALITY.json)",
+  "verdictCarriedForward": "NO MATERIAL REGRESSION (proxy checklist; independent evaluation system remains INCONCLUSIVE, registry #5)"
+ },
+ "sanitized": true
+}

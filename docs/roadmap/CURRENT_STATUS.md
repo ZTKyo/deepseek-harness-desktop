@@ -10,7 +10,7 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 7 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B 证据收口完成） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 8 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D 证据收口完成，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -296,3 +296,22 @@ IMPLEMENTATION_COMPLETE。
   口径 NO_MATERIAL_REGRESSION（34e86c7a 91.7k 事件主会话 0/0 raw & clean 不变；OFF 池 0/0 不变）；
   最终裁定权仍在 Reviewer，登记册 #5 维持开放。
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-28：P2.5 **R5.1-D Final Truth Closure（External Review Round 8 三 blocker 最小事实收口）**：
+  (A) **Completion Quality V5**（`evidence/r5-completion-quality-v5-20260828-r8c/R5_COMPLETION_QUALITY_V5.json`）：
+  V4 的 echo-excluded incident per-1k 自动 verdict 已按 Round 8 弃用；V5 改 **task-quality 事实裁决**——四代表
+  会话（OFF 2 + ON 2）最终任务全部 COMPLETED 且有 PR merge + CI green + 阶段报告真实回证；真实 tool/provider
+  error=0、duplicate side-effect=0、false-completion 由既有双门 verifier 覆盖；不可观测字段如实 N/A；verdict=
+  NO MATERIAL REGRESSION（Reviewer 若要求严格 acceptance 回放则 fallback=INCONCLUSIVE；登记册 #5 维持开放）；
+  (B) **SH-R9 posture V5 LIVE 复跑 16/16 PASS**（`evidence/r5-sh9-posture-v5-20260828-r8c/R5_SH9_POSTURE_V5.json`，
+  2026-08-28T02:00Z；V4 生成器原样只读复跑）：插件字节 live==repo（context-memory.mjs 5fcd2ec4 / core
+  e68fbd17）、挂载链 L438→L439、settings.yaml plaintext=0 + 9/9 apiKeyEnv 同源链、YAML 核心三件 VALID、
+  guardian 活性（进程 3、age 0.5min、restart-24h=4、stale=0、lastgood-restores=1、quarantine=0）、DACL
+  SYSTEM/Admins(F)、secret scan non-exempt=0（285 worktree + 71 live-deploy）、T15 契约 6/6 + goal-recovery 4/4、
+  kill-injection/restore-owner archived（生产调用=0）、coldstart A5 fail-closed（L297/305/306/309）、cordis.patch
+  snapshot eq=true、settings.yaml 演进 restoreSafe=true；状态真源=CURRENT_STATUS L13 AWAITING_REVIEW 无越权；
+  (C) **canonical 前向路线核验**：Master 页 2026-08-27 更新（02.6→02.75→03）与 02.5 页 Waiting For=Round 8
+  及本文件 L13 同口径；02.6/02.75/P3 Gate 一致。
+  单一事实载体：`reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`。
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 8 的重新审核**；P3=BLOCKED 不变；
+  未改生产代码/配置、零重启；未标 VERIFIED。

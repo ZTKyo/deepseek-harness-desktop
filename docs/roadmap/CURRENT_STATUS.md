@@ -216,3 +216,19 @@ IMPLEMENTATION_COMPLETE。
   R4 四条 era 会话两类 0 命中）、REPORT_R5 §18＋`evidence/R5_1_FINAL_EVIDENCE_CORRECTION.md` 单一事实载体、
   「P2.5→P3 残留」复查无残留。状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；
   P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-B Recall 5 类代表制精确门（Round 6 合同）= 5/5 REPRESENTATIVE PASS**：
+  按 Round 6 授权，(1) C2 跨真实 Session 选代表——只读全库普查 5 个真实 production store
+  （4/5 含合法 error-backed claim：59271 git-fatal / 102834 PS-format / 131416 cannot-edit /
+  **52405 timeout**），代表取 c4cc512e blockers[0] refs=[52405]「Error: tool call timed out after
+  60000ms」（结构严格 + 语义门双通过，matchedSeq=52405 evt=tool/result）；主 store 自身 blockers
+  被 v2 语义门正确驳回（真阳性），**production 无需修改、PROVENANCE_GAP 不触发**；
+  (2) C4 改代表制——representative PASS（keyFileChanges[22] `<path>` Created 回执）+
+  噪声单独诊断（todo-receipt ×2 → noiseVerdict=HARDENING_DEBT，登记册 #8 口径不变）；
+  C1/C3/C5 维持 Round 6 认可状态；C5 raw 副作用链 before=1012213 < target=1027575 < after=1029605
+  （dups=0）+ timeline monotonic/watermarked。verdictSummary=`5/5 REPRESENTATIVE PASS`（EXIT=0）。
+  全程只读、未改生产插件代码、零重启。
+  证据：`evidence/R5_1B_RECALL_V3_EVIDENCE.md`（单一事实载体）＋ `evidence/R5_RECALL5_EXACT_V3.json`
+  （来源指纹齐全：main store 6f6057bd8b34fd72 v329 / c2 store 1fcf4f8bab130431 v2）；
+  生成器 `evidence/make-r5-recall5-exact-v3.mjs`（复用 snapshot 严格原语 + v2 语义门，零复制）。
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 6 的重新审核**；P3=BLOCKED 不变。

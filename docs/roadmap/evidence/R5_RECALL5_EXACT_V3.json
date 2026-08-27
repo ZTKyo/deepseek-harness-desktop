@@ -1,0 +1,407 @@
+{
+ "spec": "P2.6 R5.1-B recall v3 — 5-class REPRESENTATIVE gate (Round 6 contract) + separated noise diagnostics",
+ "generatedAt": "2026-08-27T13:56:07.289Z",
+ "generator": "make-r5-recall5-exact-v3.mjs",
+ "strictPrimitives": "cm-r5-recall-verifier-snapshot.mjs (resolveClaim/containment/checkTimeline)",
+ "semanticPrimitives": "make-r5-recall5-exact-v2.mjs (semanticGateAll — single source of truth, imported)",
+ "round6Authorization": "C2 cross-session representative + C4 representative/noise split are the Round 6 BLOCKER-1 contract",
+ "sources": {
+  "main": {
+   "sessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "storeVersion": 329,
+   "active": true,
+   "storePathRedacted": "~\\Desktop\\sdeepseek harness\\_r51-work\\v3-fixtures\\main\\live-store.json",
+   "storeSha256": "6f6057bd8b34fd72bb302f93b18ade348af3310141d11e7ee01d21e9c854b583",
+   "eventsPathRedacted": "~\\Desktop\\sdeepseek harness\\_r51-work\\v3-fixtures\\main\\live-events.json",
+   "eventsSha256": "ea1b283e6490416e4c80212f281d99e418e3593e3e2634408fdd2a3bda4a5637",
+   "decodedEvents": 25729,
+   "rawLogRedacted": "~\\.dsh\\sessions\\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\\session-34e86c7a-c982-4ded-90fa-1511021ffda7\\session.jsonl.zstd"
+  },
+  "c2RepresentativeSource": {
+   "sessionId": "session-c4cc512e-e2d9-4648-a06c-004fd4741470",
+   "storeVersion": 2,
+   "active": false,
+   "storePathRedacted": "~\\Desktop\\sdeepseek harness\\_r51-work\\v3-fixtures\\c2src\\live-store.json",
+   "storeSha256": "1fcf4f8bab130431aaae9b557e6973d325ffc3b493f0d2e9f3714d9b21e25359",
+   "eventsPathRedacted": "~\\Desktop\\sdeepseek harness\\_r51-work\\v3-fixtures\\c2src\\live-events.json",
+   "eventsSha256": "be7501105f731f8485da873e37c7c62308c8cc363b0383936e8137e73fd43ba9",
+   "decodedEvents": 2637
+  }
+ },
+ "classes": [
+  {
+   "classId": "C1",
+   "label": "USER_ORIGINAL_WORDING",
+   "sections": [
+    "goal"
+   ],
+   "poolSize": 1,
+   "sampled": 1,
+   "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "verdict": "PASS",
+   "representativeResult": "PASS",
+   "items": [
+    {
+     "class": "C1",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "goal[0]",
+     "claimFingerprint": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGES_REQUIRED）：不重设计/不扩架构/不建第二套系统/不开SH-R10/不进P3/不重跑长时*** 修 Recall Verifier 假阳性（match…",
+     "refs": [
+      "1027575"
+     ],
+     "matchedSeq": [
+      "1027575"
+     ],
+     "eventType": "user/message",
+     "semanticType": "USER_WORDING",
+     "excerptOrFingerprint": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGES_REQUIRED）：不重设计/不扩架构/不建第二套系统/不开SH-R10/不…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    }
+   ]
+  },
+  {
+   "classId": "C3",
+   "label": "TOOL_RUNTIME_EVIDENCE",
+   "sections": [
+    "completedActions",
+    "runtimeFacts",
+    "verifiedEvidence"
+   ],
+   "poolSize": 15,
+   "sampled": 3,
+   "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "verdict": "PASS",
+   "representativeResult": "PASS",
+   "items": [
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "runtimeFacts[7]",
+     "claimFingerprint": "top-level-shape: version:: | refs:: | MIMO_API_KEY::",
+     "refs": [
+      "880805"
+     ],
+     "matchedSeq": [
+      "880805"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "top-level-shape: version:: | refs:: | MIMO_*** key names: has ZHIPU: false",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    },
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "completedActions[6]",
+     "claimFingerprint": "=== ~/.dsh/sessions 目录内容 === Name Length LastWriteTime ---- ------ ------------- --C-Users-Administrator-- 2026/8/27 11:30:01 --C-Users-Administrator-Desktop-deepseek~0020~8BFB~4E66-- 2026/8/20 10:13:…",
+     "refs": [
+      "1032545"
+     ],
+     "matchedSeq": [
+      "1032545"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "=== ~/.dsh/sessions 目录内容 === Name Length LastWriteTime ---- ------ ------------- --C-Users-Administrator-- 2026/8/27 11:30:01 --C-Users-Administrator-Desktop-de…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    },
+    {
+     "class": "C3",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "runtimeFacts[6]",
+     "claimFingerprint": "Line 77: program.name(\"dsh\").version(version, \"-V, --version\", \"output the version number\").description(\"dsh: boot a DeepSeek Harness profile — an ordered stac…",
+     "refs": [
+      "827706"
+     ],
+     "matchedSeq": [
+      "827706"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "TOOL_OUTPUT",
+     "excerptOrFingerprint": "Found 150 matches C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js Line 77: program.name(\"dsh\").version(version, \"-V, --versi…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    }
+   ]
+  },
+  {
+   "classId": "C4",
+   "label": "PATCH_FILE_EVIDENCE",
+   "sections": [
+    "keyFileChanges"
+   ],
+   "poolSize": 24,
+   "sampled": 3,
+   "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "verdict": "PASS",
+   "representativeResult": "PASS",
+   "noiseCount": 2,
+   "noiseExamplesSanitized": [
+    {
+     "claimPath": "keyFileChanges[23]",
+     "claimFingerprint": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1023001
+     }
+    },
+    {
+     "claimPath": "keyFileChanges[21]",
+     "claimFingerprint": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1009398
+     }
+    }
+   ],
+   "noiseVerdict": "HARDENING_DEBT",
+   "items": [
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[23]",
+     "claimFingerprint": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
+     "refs": [
+      "1023001"
+     ],
+     "matchedSeq": [
+      "1023001"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "Updated todo list: 0 pending, 1 in progress, 4 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1023001
+     },
+     "representativeResult": "FAIL"
+    },
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[22]",
+     "claimFingerprint": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\docs\\roadmap\\evidence\\R5_P25_FINAL_GATE_EVIDENCE.md</path> <type>file</type> <content> Created file </content>",
+     "refs": [
+      "1012213"
+     ],
+     "matchedSeq": [
+      "1012213"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "<path>C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_release-staging\\docs\\roadmap\\evidence\\R5_P25_FINAL_GATE_EVIDENCE.md</path> <type>file</type> <content> C…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    },
+    {
+     "class": "C4",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "keyFileChanges[21]",
+     "claimFingerprint": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
+     "refs": [
+      "1009398"
+     ],
+     "matchedSeq": [
+      "1009398"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "FILE_OPERATION",
+     "excerptOrFingerprint": "Updated todo list: 5 pending, 1 in progress, 2 completed.",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": true
+     },
+     "semanticResult": {
+      "ok": false,
+      "reason": "FAIL_false_file_evidence_todo_noise",
+      "failRef": 1009398
+     },
+     "representativeResult": "FAIL"
+    }
+   ]
+  },
+  {
+   "classId": "C2",
+   "label": "ORIGINAL_ERROR_RECORD",
+   "sections": [
+    "failedApproaches",
+    "blockers"
+   ],
+   "poolSize": 1,
+   "sampled": 1,
+   "sourceSessionId": "session-c4cc512e-e2d9-4648-a06c-004fd4741470",
+   "verdict": "PASS",
+   "representativeResult": "PASS",
+   "representative": {
+    "class": "C2",
+    "sourceSessionId": "session-c4cc512e-e2d9-4648-a06c-004fd4741470",
+    "claimPath": "blockers[0]",
+    "claimFingerprint": "Error: tool call timed out after 60000ms",
+    "refs": [
+     "52405"
+    ],
+    "matchedSeq": [
+     "52405"
+    ],
+    "eventType": "tool/result",
+    "semanticType": "ERROR_RECORD",
+    "excerptOrFingerprint": "Error: tool call timed out after 60000ms",
+    "strictSourceResult": {
+     "ok": true,
+     "reason": "PASS_refs_exact",
+     "multihit": false
+    },
+    "semanticResult": {
+     "ok": true,
+     "reason": "PASS_all_refs_semantic_clear"
+    },
+    "representativeResult": "PASS"
+   },
+   "crossSessionRepresentative": true,
+   "mainStoreC2Status": "semantic gate correctly rejected Temp-dir listing (FAIL_claim_lacks_error_evidence) — verifier working as designed",
+   "items": [
+    {
+     "class": "C2",
+     "sourceSessionId": "session-c4cc512e-e2d9-4648-a06c-004fd4741470",
+     "claimPath": "blockers[0]",
+     "claimFingerprint": "Error: tool call timed out after 60000ms",
+     "refs": [
+      "52405"
+     ],
+     "matchedSeq": [
+      "52405"
+     ],
+     "eventType": "tool/result",
+     "semanticType": "ERROR_RECORD",
+     "excerptOrFingerprint": "Error: tool call timed out after 60000ms",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_exact",
+      "multihit": false
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_all_refs_semantic_clear"
+     },
+     "representativeResult": "PASS"
+    }
+   ]
+  },
+  {
+   "classId": "C5",
+   "label": "TIMELINE_SIDE_EFFECT",
+   "sections": [
+    "refs-windows",
+    "raw-chain"
+   ],
+   "poolSize": 64,
+   "sampled": 1,
+   "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+   "verdict": "PASS",
+   "representativeResult": "PASS",
+   "timeline": {
+    "ok": true,
+    "reason": "PASS_monotonic_bounded_watermarked"
+   },
+   "items": [
+    {
+     "class": "C5",
+     "sourceSessionId": "session-34e86c7a-c982-4ded-90fa-1511021ffda7",
+     "claimPath": "store.refs + raw-log-side-effect-chain",
+     "claimFingerprint": "before < TARGET(real side effect) < after enforced on RAW event numbers",
+     "refs": [],
+     "matchedSeq": [],
+     "eventType": "user/message",
+     "semanticType": "TIMELINE_SIDE_EFFECT",
+     "excerptOrFingerprint": "<goal_round> Objective: \"P2.5 CONTEXT MEMORY — R5 Evidence Fix / Final Gate Preparation（External Review Round 4 = CHANGE…",
+     "strictSourceResult": {
+      "ok": true,
+      "reason": "PASS_refs_windows_and_raw_chain"
+     },
+     "semanticResult": {
+      "ok": true,
+      "reason": "PASS_raw_side_effect_chain",
+      "sideEffectFamily": "CONTROLLED_OP",
+      "duplicateSideEffectCount": 0
+     },
+     "representativeResult": "PASS",
+     "beforeEvent": {
+      "seq": 1012213
+     },
+     "targetEvent": {
+      "seq": 1027575
+     },
+     "afterEvent": {
+      "seq": 1029605
+     },
+     "duplicateSideEffectCount": 0
+    }
+   ]
+  }
+ ],
+ "verdictSummary": "5/5 REPRESENTATIVE PASS",
+ "ok": true,
+ "conclusion": "All 5 semantic classes have at least one strictly legal REAL representative (own-ref → raw source) under dual strict×semantic gates. C4 todo noise quarantined as HARDENING_DEBT. C2 resolved cross-session per Round 6 authorization — production provenance fix NOT required."
+}

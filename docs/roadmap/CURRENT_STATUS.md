@@ -249,3 +249,8 @@ IMPLEMENTATION_COMPLETE。
   证据：`REPORT_R5.md` §19 + `R5_1_B_FINAL_GATE_CLOSURE.md`（单一事实载体）+
   `evidence/R5_COMPLETION_QUALITY_V3.json` + `evidence/R5_SH9_POSTURE_V3.json`。
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变。
+
+- 2026-08-27：P2.5 **R5.1-B Merge Backfill**：PR #52（`fix/context-memory-r5-1-b-final-gate`）CI
+  L1/L2/L3 三绿 → squash MERGED（=`5cb495b`），本行为其纯状态 backfill；Notion 02.5 canonical 页
+  已于合并前同轮同步（Round 7 口径）。状态维持 **AWAITING_REVIEW / Waiting For=External Review
+  Round 7 的重新审核**；P3=BLOCKED 不变。

@@ -6,6 +6,9 @@
 > C. Notion 02.5 页 canonical 前向路线 stale。
 > 不改 §0–§19 已载结论；不改任何生产代码/配置；未重设计 Context Memory；未建第二套评测系统；未开 SH-R10。
 > 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**，等待 **External Review Round 10 的重新审核**（本报告为 R9 修复轮交付物）。
+> **后续（2026-08-28）**：External Review **Round 10 = APPROVED**（PURE STATUS BACKFILL 已执行；
+> P2.5 → **VERIFIED**，见 CURRENT_STATUS 变更日志 + REPORT_R5 §23）；本报告仅追加 verdict pointer，
+> 不改历史 evidence。
 
 ---
 

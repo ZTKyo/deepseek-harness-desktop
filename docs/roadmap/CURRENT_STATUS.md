@@ -10,8 +10,8 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 10 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D/R5.1-E/R5.1-F 证据收口完成，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
-| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `TODO`（P2.6-A EMERGENCY HOTFIX 已独立闭环 APPROVED，整体未开始） | Phase 02.5 外部 `VERIFIED` 后启动（硬前置=02.5 VERIFIED） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/REPORT_R1.md（待建） |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
+| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `TODO`（P2.6-A EMERGENCY HOTFIX 已独立闭环 APPROVED，整体未开始） | **Phase 02.5 已外部 VERIFIED（2026-08-28 Round 10 APPROVED）→ 02.6 为下一 Phase（FULL 未开始）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/REPORT_R1.md（待建） |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
@@ -27,10 +27,16 @@
 ## 当前执行位置
 
 Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #40 merged）。
-P2.5 CONTEXT MEMORY = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。
+P2.5 CONTEXT MEMORY = **VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11）。
 **Governance correction（2026-08-27，Reviewer Round 2 = CHANGES_REQUIRED）**：main `be76a559` 曾在
 External Reviewer 未 APPROVED 前把 P2.5 写成 VERIFIED——该状态无 Reviewer 授权，属 Harness 越权，
-本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 9 的重新审核**；
+本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。
+**Round 10 APPROVED（2026-08-28，PURE STATUS BACKFILL）**：External Reviewer 正式 APPROVED Phase 02.5
+（canonical main=`326a6a42`，R5.1-F PR #56 head=`702fb812` squash merge=`f745865`，CI L1/L2/L3 全绿；
+Completion Quality V6 INCONCLUSIVE 明确非 blocker；SH-R9 V6 无 Runtime/Security blocker；Notion/Canonical
+已一致）。授权仅做：状态 backfill（AWAITING_REVIEW → **VERIFIED**）+ Last Good 术语口径修正
+（guardian-lastgood = restore mirror，非 canonical）+ Notion latest review 清理；不改历史 evidence；
+不重跑 REAL Gate；不再允许 P2.5 Round 11。Phase 02.6 RETRY SEMANTICS 为下一 Phase（FULL 仍 TODO）。
 执行轮次 = R3/R4/R5 Evidence Closure（仅证据收口 + 状态修正，不扩架构）。
 **R3 收口（2026-08-27）**：R3-1…R3-8 全部完成——真实门禁/失败开放/kill-switch 回归 25 PASS +
 单元 61 PASS + 真实观测 17 PASS（合计 103/0）；活体 store 出现自然 provider-switch 激活
@@ -180,17 +186,18 @@ IMPLEMENTATION_COMPLETE。
 
 ## 路线（Security-Hardening APPROVED 后）
 1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
-2. **P2.5 CONTEXT MEMORY** ⏳ R2 已 merge（PR #42）+ R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D/R5.1-E/R5.1-F Evidence Closure 已完成；状态 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Round 2 = CHANGES_REQUIRED；曾误标 VERIFIED，已纠正；当前等待 External Review Round 10）
-3. **Phase 02.6 RETRY SEMANTICS** — 前置 = Phase 02.5 外部 VERIFIED（当前 P2.5 AWAITING_REVIEW，未达前置）
-4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED（P2.6-A 热修已 APPROVED，02.6 FULL 未开始）
-5. **Phase 03**（AUTONOMY）— 前置 = Phase 02.75 外部 VERIFIED（链：02.5 → 02.6 → 02.75 → P3）
+2. **P2.5 CONTEXT MEMORY** ✅ **VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；R2–R5.1-F 证据链闭环；P2.5 封板）
+3. **Phase 02.6 RETRY SEMANTICS** — **下一 Phase**（前置 = Phase 02.5 外部 VERIFIED ✅ 已满足；02.6 FULL 仍 TODO）
+4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED（当前 02.6 FULL 未开始）
+5. **Phase 03**（AUTONOMY）— 前置 = Phase 02.75 外部 VERIFIED（链：02.5 ✅ → 02.6 → 02.75 → P3）
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**P2.5 CONTEXT MEMORY = R5.1-F Evidence Closure 已完成（IMPLEMENTATION_COMPLETE / AWAITING_REVIEW）**
-（External Review Round 2 = CHANGES_REQUIRED 已纠正；R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D/R5.1-E/R5.1-F 证据已入库；
-等待 External Review Round 10 的重新审核；前向链：02.5 VERIFIED → 02.6 → 02.75 → P3）。
+当前执行位置：**P2.5 CONTEXT MEMORY = VERIFIED（External Review Round 10 = APPROVED，2026-08-28）**
+（R2–R5.1-F 证据链闭环；P2.5 封板，不再 Round 11；
+**下一执行位置 = Phase 02.6 RETRY SEMANTICS**（FULL 仍 TODO，P2.6-A 热修已独立 APPROVED）；
+前向链：02.5 ✅ VERIFIED → 02.6 → 02.75 → P3）。
 
 ## 变更日志
 
@@ -357,3 +364,19 @@ IMPLEMENTATION_COMPLETE。
   单一事实载体：`reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`。
   状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 9 的重新审核**；P3=BLOCKED 不变；
   未改生产代码/配置、零重启；未标 VERIFIED。
+- **2026-08-28：P2.5 ROUND 10 APPROVED — PURE STATUS BACKFILL（外部评审员正式 APPROVED）**：
+  External Reviewer 在 99｜Reviewer Feedback 页给出 **Round 10 Verdict = APPROVED**（canonical main=
+  `326a6a42`；R5.1-F PR #56 head=`702fb812` squash merge=`f745865`，随后 pure merge backfill=`326a6a42`；
+  PR #56 只改 roadmap/report/evidence，未修改 production Context Memory；该 head CI L1 #109 / L2 #109 /
+  L3 #83 均 success）。明确接受：Completion Quality V6 **INCONCLUSIVE**（非 blocker，评测体系作为
+  HARDENING/DEBT 不重开 P2.5）；SH-R9 V6 无 Runtime/Security blocker；Canonical/Notion 一致。
+  授权下一动作仅为 **PURE STATUS BACKFILL**：(1) 本文件 P2.5 → **VERIFIED**（Round 10 APPROVED）并记录
+  PR #56 merge/backfill；(2) Notion P2.5 latest review → Round 10 APPROVED / Status=VERIFIED，清理 active
+  stale Round 8/Round 9 waiting 文案；(3) REPORT_R5 / R5_1_F 只做最终 verdict/status pointer + Last Good
+  术语口径修正（guardian-lastgood = restore mirror / DERIVED CACHE，verified-lastgood = canonical Last
+  Good），不改历史 evidence；(4) CI 沿用 PR #56 已绿结果，不重跑 REAL Gate；(5) backfill 完成后
+  **Phase 02.6 RETRY SEMANTICS 成为下一 Phase**（FULL 仍 TODO，P2.75/P3 继续 BLOCKED）。
+  **不再允许 P2.5 Round 11**（无真实新 regression 即封板；严格同任务跨天 A/B、独立 completion evaluator、
+  C4 todo noise、LogStore/lastSwitchAt 等留 HARDENING/DEBT，不得阻塞进入 P2.6）。
+  状态更新：P2.5 = **VERIFIED**（External Review Round 10 = APPROVED，2026-08-28）；Waiting For 清空；
+  P3=BLOCKED 不变；未改生产代码/配置、零重启；未重跑 REAL Gate。

@@ -48,7 +48,8 @@
     },
     "hardenedConfigIdentity": {
       "effectiveConfigSource": "live ~/.dsh/profiles/web/cordis.patch.yml + ~/.dsh/settings.yaml",
-      "canonicalExpectedSource": "guardian-lastgood mirror (cordis.patch.yml / settings.yaml)",
+      "canonicalExpectedSource": "verified-lastgood/current = Health-Verified Last Good Authority（canonical Last Good）",
+      "restoreMirror": "guardian-lastgood = RESTORE MIRROR / DERIVED CACHE（由 Save-VerifiedLastGood 同步；restore 前必须校验 mirror canonicalSetId == verified-lastgood current pointer，否则 fail-closed REFUSE）",
       "cordisPatch": { "effectiveFingerprintSha16": "28D115EC4ACD8BAE", "canonicalExpectedFingerprintSha16": "28D115EC4ACD8BAE", "identityMatch": true },
       "settingsYaml": { "effectiveFingerprintSha16": "09655E5AE2DB73F9", "canonicalExpectedFingerprintSha16": "88D53D7918ACB711", "identityMatch": false, "reason": "模型配置合法演进（V5 EXT-7 已判定 restoreSafe(backups)=true；guardian-lastgood 为恢复基线非活镜像）" },
       "conclusion": "cordis.patch.yml identity match=true；settings.yaml 演进有合法回证；fail-closed/backup 保障在位"

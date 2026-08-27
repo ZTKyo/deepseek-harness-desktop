@@ -218,5 +218,85 @@ R5 六项全部收口：STRICT verifier 全绿、REAL missing 集成测试 ok、
 - 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 7 的重新审核**；P3=BLOCKED 不变；未自称 VERIFIED/APPROVED。
 - 未重跑已 ACCEPTED 的 Gate7 四腿/kill-switch/provider switch/token A/B；未重设计 CM；未建第二套评测系统；未开 SH-R10。
 
+## §20 R5.1-C 追加：Round 7 三 blocker 收口轮（2026-08-27）
+
+> 单一事实载体见 `docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_C_FINAL_FACTUAL_CLOSURE.md`。
+> 不改 §0–§19 已载结论。仅按 External Review Round 7 = CHANGES_REQUIRED 要求做 3 项 blocker 的
+> 事实收口；不新增指标、不建评测系统（Reviewer 明令）。
+
+### §20.1 (A) Completion Quality V4 契约版
+
+- 按 Round 7 固定字段清单生成 **17 项 task-quality 固定字段 OFF/ON 对照表**（可观察字段给真值，
+  不可观察字段一律 `N/A / NOT OBSERVABLE`，不脑补）。
+- verdict 改为三值 `REGRESSED / NO MATERIAL REGRESSION / INCONCLUSIVE`（预注册阈值：ON
+  echo-excluded per-1k > OFF × 2 才 REGRESSED）。
+- 结果 **NO MATERIAL REGRESSION**（echo-excluded per-1k OFF=0 ON=0；最长 ON 主 CM 会话
+  34e86c7a 91.7k 事件 0/0 命中）。
+- V3 的 MATERIAL_REGRESSION 判定已注明为**审查回声污染假象**（V3 是 incident-rate 表非
+  task-quality 比较，其 OFF=0 规则使任何 ON 命中都自动触发 REGRESSION；44 起 ON 命中全部
+  集中于 a144fe3f：23 PROTO=P2.6-A 已修复缺陷类历史 + 21 QUOTA=GLM 外部 429）。
+- 载体：`evidence/r5-completion-quality-v4-20260827-r7c/R5_COMPLETION_QUALITY_V4.json`
+  + 生成器 `make-r5-completion-quality-v4.mjs`（解码与命中链与 V2/V3 字节级一致）。
+
+### §20.2 (B) Security-Hardening 四组 live 字段复核
+
+- guardian recent cycles（EXT-4）、credential same-source chain（EXT-5）、repo+worktree live
+  secret scan（EXT-6）、hardened-config identity snapshot-eq（EXT-7）——SH9 V4 复跑 **16/16 PASS**，
+  无 STOP。
+- 载体：`evidence/R5_SH9_POSTURE_V4.json`。
+
+### §20.3 (C) Canonical 前向路线统一（CURRENT_STATUS ↔ Notion Master/02.5/02.6/02.75/03）
+
+- `P2.5 → 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（TODO；硬前置=P2.5 外部 VERIFIED）→
+  Phase 02.75 SUPERVISOR（TODO；硬前置=P2.6 VERIFIED）→ Phase 03 AUTONOMY（TODO；前置=P2.75
+  VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON`。
+- 与 Master 页 2026-08-27 路线更新、02.6 页 Gate、02.75 页 Gate、P3 页前置一致。
+- Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭；Reviewer 只判断「Context Memory
+  是否造成 material task-quality regression」，证据以 V4 固定字段表为准。
+
+### §20.4 治理
+
+- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 8 的重新审核**；
+  P3=BLOCKED 不变；未改生产代码/配置、零重启；未自称 VERIFIED/APPROVED。
+
+## §21 R5.1-D 追加：Round 8 三 blocker 最终真值收口（2026-08-28）
+
+> 单一事实载体见 `docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`。
+> 不改 §0–§20 已载结论。仅按 External Review Round 8 三 blocker 做最小事实收口。
+
+### §21.1 (A) Completion Quality V5 — task-quality 事实裁决
+
+- V4 的 echo-excluded incident per-1k 自动 verdict 已按 Round 8 弃用；V5 改 **task-quality 事实裁决**：
+  四代表会话（OFF 2 + ON 2）最终任务全部 COMPLETED 且有 PR merge + CI green + 阶段报告真实回证；
+  真实 tool/provider error=0、duplicate side-effect=0、false-completion 由既有双门 verifier 覆盖；
+  不可观测字段如实 N/A；verdict = **NO MATERIAL REGRESSION**（Reviewer 若要求严格 acceptance 回放
+  则 fallback=INCONCLUSIVE；登记册 #5 维持开放）。
+- 载体：`evidence/r5-completion-quality-v5-20260828-r8c/R5_COMPLETION_QUALITY_V5.json`。
+
+### §21.2 (B) SH-R9 posture V5 LIVE 复跑
+
+- **16/16 PASS**（generatedAtUtc=2026-08-27T17:53:36Z，本地 2026-08-28 01:53 CST；V4 生成器原样只读复跑）：
+  插件字节 live==repo（context-memory.mjs 5fcd2ec4 / core e68fbd17）、挂载链 L438→L439、
+  settings.yaml plaintext=0 + 9/9 apiKeyEnv 同源链、YAML 核心三件 VALID、guardian 活性（进程 3、
+  age 0.5min、restart-24h=4、stale=0、lastgood-restores=1、quarantine=0）、DACL SYSTEM/Admins(F)、
+  secret scan non-exempt=0（285 worktree + 71 live-deploy）、T15 契约 6/6 + goal-recovery 4/4、
+  kill-injection/restore-owner archived（生产调用=0）、coldstart A5 fail-closed（L297/305/306/309）、
+  cordis.patch snapshot eq=true、settings.yaml 演进 restoreSafe=true；状态真源=CURRENT_STATUS L13
+  AWAITING_REVIEW 无越权。
+- 载体：`evidence/r5-sh9-posture-v5-20260828-r8c/R5_SH9_POSTURE_V5.json`。
+
+### §21.3 (C) Canonical 前向链统一（2026-08-28 真正改对）
+
+- 总览表新增 02.6/02.75 行；P3 前置修正为「Phase 02.75 外部 VERIFIED 后启动（02.5/02.6 链式前置
+  均已收口）」；02.5 行 Waiting For 统一 Round 9；删除「P2.5 完成后 → Phase 03」错误链；
+  Notion 六处（Master/Orchestrator/02.5/02.6/02.75/03）active 文案统一为
+  `P2.5 VERIFIED → 02.6（硬前置=02.5 VERIFIED）→ 02.75（硬前置=02.6 VERIFIED）→ P3（前置=P2.75 VERIFIED）`。
+- 未改生产代码、零重启。
+
+### §21.4 治理
+
+- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW / Waiting For=External Review Round 9 的重新审核**；
+  P3=BLOCKED 不变；未改生产代码/配置、零重启；未标 VERIFIED。
+
 ---
-*End of REPORT_R5 (§19 appended by R5.1-B)*
+*End of REPORT_R5 (§21 appended by R5.1-D)*

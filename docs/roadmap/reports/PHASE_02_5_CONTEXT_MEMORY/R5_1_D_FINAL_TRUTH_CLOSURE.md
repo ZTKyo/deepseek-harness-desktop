@@ -3,7 +3,7 @@
 > 单一事实载体：`docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`
 > 范围：**只**登记 External Review Round 8（CHANGES_REQUIRED）四个 blocker 的最小事实收口。
 > 不改 §0–§19 已载结论；不改任何生产代码/配置；未重设计 Context Memory；未建第二套评测系统。
-> 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**，等待 **External Review Round 8 的重新审核**（本报告为 R8 修复轮交付物）。
+> 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**，等待 **External Review Round 9 的重新审核**（本报告为 R8 修复轮交付物）。
 
 ---
 
@@ -13,7 +13,7 @@
 |---|---|---|---|
 | **A. Completion Quality V4 自动 rate verdict** | V4 用 echo-excluded incident per-1k 规则（ON 0 ≤ OFF 0 × 2）自动产出 verdict，固定字段未参与裁决；echo 剔除按事件类型无法证明非真实错误；与 Round 7「禁止再设计 metric」合同冲突 | **已修复**：V5 弃用 rate/per-1k/×2/echoExcluded 自动 verdict；改为 **task-quality 事实裁决**（四代表会话 COMPLETED + PR/CI/报告回证链；真实 tool/provider error=0；duplicate side-effect=0；false-completion 由既有双门 verifier 覆盖）；不可观测字段如实 N/A；verdict=NO MATERIAL REGRESSION（若 Reviewer 要求严格 acceptance 回放则 fallback=INCONCLUSIVE，登记册 #5 开放） | `evidence/r5-completion-quality-v5-20260828-r8c/R5_COMPLETION_QUALITY_V5.json` |
 | **B. SH-R9 posture 需 LIVE 重跑** | V4 为 2026-08-27 快照，Round 8 需当前时点 live 复核 | **已修复**：V4 生成器**原样复跑**（断言零改动，只读）→ **16/16 PASS**（generatedAtUtc=2026-08-27T17:53:36Z，本地 2026-08-28 01:53 CST；9 canonical SH-R9 + EXT-1 Guardian 活性 + EXT-2 凭据 DACL + EXT-3 hardened config + EXT-4 近 24h 周期 + EXT-5 凭据同源链 + EXT-6 repo+worktree 活体 secret scan + EXT-7 snapshot identity；工件身份字段已更新为 V5 快照） | `evidence/r5-sh9-posture-v5-20260828-r8c/R5_SH9_POSTURE_V5.json` |
-| **C. canonical 前向路线统一** | 需确认 GitHub ↔ Notion（Master/02.5/02.6/02.75/03）一致 | **已核验**：Master 页 2026-08-27 路线更新（02.6 RETRY SEMANTICS → 02.75 SUPERVISOR → 03）；02.5 页 Waiting For=Round 8；CURRENT_STATUS L13 同口径；02.6 硬前置=P2.5 外部 VERIFIED；02.75 硬前置=02.6 VERIFIED；P3 前置=02.5+02.75 VERIFIED；01/02/02-SH 均已 VERIFIED（历史 APPROVED） | Notion Master 页 + 02.5 页 + `docs/roadmap/CURRENT_STATUS.md` L13/L27-L31 |
+| **C. canonical 前向路线统一** | 需确认 GitHub ↔ Notion（Master/02.5/02.6/02.75/03）一致 | **已核验**：Master 页 2026-08-27 路线更新（02.6 RETRY SEMANTICS → 02.75 SUPERVISOR → 03）；02.5 页 Waiting For=Round 9；CURRENT_STATUS L13 同口径；02.6 硬前置=P2.5 外部 VERIFIED；02.75 硬前置=02.6 VERIFIED；P3 前置=P2.75 VERIFIED；01/02/02-SH 均已 VERIFIED（历史 APPROVED） | Notion Master 页 + 02.5 页 + `docs/roadmap/CURRENT_STATUS.md` L13/L27-L31 |
 | **D. R5.1-C 状态核实** | 需确认 PR #53 已 MERGED、状态未越权 | **已核验**：PR #53 squash MERGED=`fedfeb7`（CI 三项全绿：DSH boot + readiness smoke / Reliability state machine / Static + secret + syntax）；main HEAD=3f6e029（=fedfeb7 + 纯状态 backfill `3f6e029`）；CURRENT_STATUS 记录 R5.1-C merge backfill；**未**将 P2.5 标 VERIFIED；checkpoint 完好 | git log + `CURRENT_STATUS.md` + PR #53 记录 |
 
 ---
@@ -33,7 +33,7 @@
 | kill-injection / restore-owner | 生产调用=0；archive 存在（docs/archive/coldstart-restore-owner.ps1）；引用仅 doc/test | PASS |
 | coldstart A5 fail-closed | coldstart-gate-worker.ps1 L297 init=false / L305 set=true / L306 catch→fatal / L309 FAIL-CLOSED gate（ColdStart 凭据门禁 fail-closed；CM 插件 fail-open 属不同组件设计，均正确） | PASS |
 | settings.yaml snapshot 演进 | cordis.patch.yml snap=28d115ec4acd8bae cur=同 → eq=true；settings.yaml snap=88d53d7918acb711 cur=09655e5ae2db73f9 eq=false（模型配置演进，restoreSafe(backups)=true，guardian-lastgood 为恢复基线非活镜像） | PASS（合法演进） |
-| 状态真源 | CURRENT_STATUS L13：02.5 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Waiting For=External Review Round 8）；无 VERIFIED 越权标记 | PASS |
+| 状态真源 | CURRENT_STATUS L13：02.5 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Waiting For=External Review Round 9）；无 VERIFIED 越权标记 | PASS |
 
 ---
 
@@ -53,7 +53,7 @@
 - 本报告为**证据收口**（docs/evidence + 本报告 + CURRENT_STATUS 状态行 + Notion 02.5 页同步），
   无生产代码/配置改动；未重启服务；零中断。
 - 未重跑已 ACCEPTED 的 Gate7 四腿 / kill-switch / provider switch / token A/B；未重设计 CM；未开 SH-R10。
-- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**；Waiting For=**External Review Round 8 的重新审核**。
+- 状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**；Waiting For=**External Review Round 9 的重新审核**。
 - Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭。
 - 同步动作（待执行）：Notion 02.5 页追加本 R5.1-D 段；CURRENT_STATUS 追加本收口行；入库建议走
   `fix/context-memory-r5-1-d-final-truth-closure` 分支 + PR（遵循 R5.1-B/C 先例；若按先例直推 main 需在报告中如实登记偏差）。

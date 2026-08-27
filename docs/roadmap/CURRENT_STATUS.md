@@ -10,8 +10,10 @@
 | 01 | SAVE / Source of Truth Consolidation | `VERIFIED` | —（APPROVED） | docs/roadmap/reports/PHASE_01_SOURCE_OF_TRUTH/REPORT_R4.md |
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
-| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 8 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D 证据收口完成，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | P2.5 完成（若存在） | — |
+| 02.5 | CONTEXT MEMORY / Session Continuity | `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（⚠️ be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | **External Review Round 9 的重新审核**（R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D 证据收口完成，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md |
+| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `TODO`（P2.6-A EMERGENCY HOTFIX 已独立闭环 APPROVED，整体未开始） | Phase 02.5 外部 `VERIFIED` 后启动（硬前置=02.5 VERIFIED） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/REPORT_R1.md（待建） |
+| 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
+| 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -28,7 +30,7 @@ Security-Hardening Gate = **VERIFIED**（外部审核 Round 9 = APPROVED，PR #4
 P2.5 CONTEXT MEMORY = **IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**。
 **Governance correction（2026-08-27，Reviewer Round 2 = CHANGES_REQUIRED）**：main `be76a559` 曾在
 External Reviewer 未 APPROVED 前把 P2.5 写成 VERIFIED——该状态无 Reviewer 授权，属 Harness 越权，
-本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 6 的重新审核**；
+本轮已纠正回 `AWAITING_REVIEW`；历史记录保留不改写。当前等待 **External Review Round 9 的重新审核**；
 执行轮次 = R3/R4/R5 Evidence Closure（仅证据收口 + 状态修正，不扩架构）。
 **R3 收口（2026-08-27）**：R3-1…R3-8 全部完成——真实门禁/失败开放/kill-switch 回归 25 PASS +
 单元 61 PASS + 真实观测 17 PASS（合计 103/0）；活体 store 出现自然 provider-switch 激活
@@ -61,12 +63,12 @@ Router fallback+defer / reasoning formal regression matrix / CommandCode route /
 IMPLEMENTATION_COMPLETE。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
-- P2.5 完成后 → Phase 03（AUTONOMY）。
+- 前向链（canonical）：P2.5 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（硬前置=P2.5 外部 VERIFIED）→ Phase 02.75 SUPERVISOR（硬前置=02.6 VERIFIED）→ Phase 03 AUTONOMY（前置=P2.75 VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态
 
 - **状态：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（2026-08-27 governance correction；
-  External Review Round 2 = **CHANGES_REQUIRED**；等待 External Review Round 4 之后的重新审核）
+  External Review Round 2 = **CHANGES_REQUIRED**；当前等待 External Review Round 9 的重新审核）
 - **⚠️ 状态纠正记录**：main `be76a559`（PR #42 merge 后 SHA backfill）曾将本 Phase 标为
   `VERIFIED`——External Reviewer Round 2 已认定该标记未经授权（Harness 不得代替 Reviewer 宣布
   VERIFIED / APPROVED）。本轮保留历史事实，新增本 correction，状态回退为 AWAITING_REVIEW。
@@ -101,8 +103,8 @@ IMPLEMENTATION_COMPLETE。
     snapshot-eq（EXT-7）——SH9 V4 复跑 **16/16 PASS**，无 STOP。载体：`evidence/R5_SH9_POSTURE_V4.json`。
   - **(C) Canonical 前向路线统一（CURRENT_STATUS ↔ Notion Master/02.5/02.6/02.75/03）**：
     `P2.5 → 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（TODO；硬前置=P2.5 外部 VERIFIED）→
-    Phase 02.75 SUPERVISOR（TODO；硬前置=P2.6 VERIFIED）→ Phase 03 AUTONOMY（TODO；前置=02.5 +
-    02.75 VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON`。与 Master 页 2026-08-27 路线更新、
+    Phase 02.75 SUPERVISOR（TODO；硬前置=P2.6 VERIFIED）→ Phase 03 AUTONOMY（TODO；前置=P2.75
+    VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON`。与 Master 页 2026-08-27 路线更新、
     02.6 页 Gate、02.75 页 Gate、P3 页前置一致。
   - Registry #5（独立评测体系）保持开放，不由本代理 gate 关闭；Reviewer 只判断「Context Memory 是否
     造成 material task-quality regression」，证据以 V4 固定字段表为准。
@@ -114,7 +116,13 @@ IMPLEMENTATION_COMPLETE。
   Round 8 三 blocker（A Completion Quality V5 / B SH-R9 posture V5 live / C canonical 前向路线）收口证据已入库
   main（`evidence/r5-completion-quality-v5-20260828-r8c/` + `evidence/r5-sh9-posture-v5-20260828-r8c/` +
   `reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`）；状态维持 IMPLEMENTATION_COMPLETE /
-  AWAITING_REVIEW（Waiting For: External Review Round 8 的重新审核）。
+  AWAITING_REVIEW（Waiting For: External Review Round 9 的重新审核）。
+**R5.1-D canonical 前向链统一（2026-08-28，Round 8 blocker (C) 真正改对）**：总览表新增 02.6/02.75
+  行；P3 前置修正为「Phase 02.75 外部 VERIFIED 后启动（02.5/02.6 链式前置均已收口）」；02.5 行
+  Waiting For 统一 Round 9；删除「P2.5 完成后 → Phase 03」错误链（见下方权威边界）；Notion 六处
+  （Master/Orchestrator/02.5/02.6/02.75/03）active 文案统一为 `P2.5 VERIFIED → 02.6（硬前置=02.5
+  VERIFIED）→ 02.75（硬前置=02.6 VERIFIED）→ P3（前置=P2.75 VERIFIED）`；REPORT_R5 追加 §20/§21。
+  未改生产代码、零重启。
 
 ## Phase 02 Security-Hardening 最终状态
 
@@ -146,15 +154,17 @@ IMPLEMENTATION_COMPLETE。
 
 ## 路线（Security-Hardening APPROVED 后）
 1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
-2. **P2.5 CONTEXT MEMORY** ⏳ R2 已 merge（PR #42）+ R3/R4/R5 Evidence Closure 已完成；状态 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Round 2 = CHANGES_REQUIRED；曾误标 VERIFIED，已纠正）
-3. **Phase 03**（AUTONOMY）— **BLOCKED BY P2.5 REVIEW**；仅 External Reviewer 明确 APPROVED 后启动
+2. **P2.5 CONTEXT MEMORY** ⏳ R2 已 merge（PR #42）+ R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D Evidence Closure 已完成；状态 = `IMPLEMENTATION_COMPLETE / AWAITING_REVIEW`（Round 2 = CHANGES_REQUIRED；曾误标 VERIFIED，已纠正；当前等待 External Review Round 9）
+3. **Phase 02.6 RETRY SEMANTICS** — 前置 = Phase 02.5 外部 VERIFIED（当前 P2.5 AWAITING_REVIEW，未达前置）
+4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED（P2.6-A 热修已 APPROVED，02.6 FULL 未开始）
+5. **Phase 03**（AUTONOMY）— 前置 = Phase 02.75 外部 VERIFIED（链：02.5 → 02.6 → 02.75 → P3）
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**P2.5 CONTEXT MEMORY = R5 Evidence Closure 已完成（IMPLEMENTATION_COMPLETE / AWAITING_REVIEW）**
-（External Review Round 2 = CHANGES_REQUIRED 已纠正；R3/R4/R5 证据已入库；
-等待 External Review Round 4 之后对 R5 证据的重新审核；P3 BLOCKED）。
+当前执行位置：**P2.5 CONTEXT MEMORY = R5.1-D Evidence Closure 已完成（IMPLEMENTATION_COMPLETE / AWAITING_REVIEW）**
+（External Review Round 2 = CHANGES_REQUIRED 已纠正；R3/R4/R5/R5.1-A/R5.1-B/R5.1-C/R5.1-D 证据已入库；
+等待 External Review Round 9 的重新审核；前向链：02.5 VERIFIED → 02.6 → 02.75 → P3）。
 
 ## 变更日志
 
@@ -316,8 +326,8 @@ IMPLEMENTATION_COMPLETE。
   SYSTEM/Admins(F)、secret scan non-exempt=0（285 worktree + 71 live-deploy）、T15 契约 6/6 + goal-recovery 4/4、
   kill-injection/restore-owner archived（生产调用=0）、coldstart A5 fail-closed（L297/305/306/309）、cordis.patch
   snapshot eq=true、settings.yaml 演进 restoreSafe=true；状态真源=CURRENT_STATUS L13 AWAITING_REVIEW 无越权；
-  (C) **canonical 前向路线核验**：Master 页 2026-08-27 更新（02.6→02.75→03）与 02.5 页 Waiting For=Round 8
+  (C) **canonical 前向路线核验**：Master 页 2026-08-27 更新（02.6→02.75→03）与 02.5 页 Waiting For=Round 9
   及本文件 L13 同口径；02.6/02.75/P3 Gate 一致。
   单一事实载体：`reports/PHASE_02_5_CONTEXT_MEMORY/R5_1_D_FINAL_TRUTH_CLOSURE.md`。
-  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 8 的重新审核**；P3=BLOCKED 不变；
+  状态维持 **AWAITING_REVIEW / Waiting For=External Review Round 9 的重新审核**；P3=BLOCKED 不变；
   未改生产代码/配置、零重启；未标 VERIFIED。

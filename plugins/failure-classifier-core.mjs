@@ -138,14 +138,27 @@ export function parseResetTimestamp(text, nowMs, tzOffsetMinutes) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   let ms = null;
   let m;
+  // Explicit-zone ISO (Z / ±hh:mm): position-agnostic ("将在 <ISO> 重置" and
+  // "重置后 <ISO>" both accepted). The explicit zone carries full timezone
+  // information, so it is the HIGHEST-confidence form and needs no tz guess —
+  // but only trust it when the text actually names a reset (labeled guard),
+  // so a stray timestamp elsewhere in a long message cannot hijack the parse.
+  // (P2.6 R3 A2: 1310 quota messages commonly say "限额将在 <UTC ISO> 重置" —
+  // the old RESET_ISO_RE only matched label-BEFORE-date, so the reset time was
+  // missed and EC fell back to bounded backoff instead of exact defer.)
+  const mExplicitIso = text.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}))/);
+  if (mExplicitIso && /(?:重置|恢复|解锁|reset)/i.test(text)) {
+    const parsed = Date.parse(`${mExplicitIso[1]}T${mExplicitIso[2]}`);
+    if (Number.isFinite(parsed)) ms = parsed;
+  }
   // Chinese provider interfaces (zhipu/bai) state reset times as server-local
   // naive wall-clock in Asia/Shanghai (+08:00). To be robust on any host TZ
   // (GitHub runners are UTC), naive components are anchored to +08:00 by
   // default; callers on other semantics may override tzOffsetMinutes.
   const tz = Number.isFinite(tzOffsetMinutes) ? tzOffsetMinutes : 480;
-  if ((m = text.match(RESET_CJK_DATE_RE))) {
+  if (ms === null && (m = text.match(RESET_CJK_DATE_RE))) {
     ms = naiveToUtc(m[1], m[2], m[3], m[4], m[5], m[6], tz);
-  } else if ((m = text.match(RESET_ISO_RE))) {
+  } else if (ms === null && (m = text.match(RESET_ISO_RE))) {
     const [, date, time] = m;
     if (/Z|[+-]\d{2}:?\d{2}$/.test(time)) {
       ms = Date.parse(`${date}T${time}`); // explicit zone: keep as-is
@@ -154,9 +167,9 @@ export function parseResetTimestamp(text, nowMs, tzOffsetMinutes) {
       const [h, mi, s = 0] = time.split(":").map(Number);
       ms = Date.UTC(y, mo - 1, d, h, mi, s) - tz * 60 * 1000;
     }
-  } else if ((m = text.match(RESET_EPOCH_RE))) {
+  } else if (ms === null && (m = text.match(RESET_EPOCH_RE))) {
     ms = Number(m[1]) * 1000;
-  } else if (tzOffsetMinutes === undefined) {
+  } else if (ms === null && tzOffsetMinutes === undefined) {
     // Plain date is only trusted when the text explicitly names a reset.
     const labeled = /(?:重置|恢复|解锁|reset)/i.test(text);
     if (labeled && (m = text.match(RESET_PLAIN_DATE_RE))) {

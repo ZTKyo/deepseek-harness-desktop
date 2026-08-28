@@ -11,7 +11,7 @@
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
-| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `IMPLEMENTATION_COMPLETE（R1）/ AWAITING_EXTERNAL_REVIEW`（P2.6-A 独立闭环 APPROVED；R1 实现+受控 E2E 完成，PR #59 merged 2026-08-28） | **停等 External Review Round 1（禁止自标 VERIFIED）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md |
+| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3`（P2.6-A 独立闭环 APPROVED；R1 实现+受控 E2E 完成，PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28，事务化部署+受控重启加载完成 2026-08-29） | **停等 External Review Round 3（禁止自标 VERIFIED）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
@@ -87,7 +87,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 
 ## Phase 02.6 RETRY SEMANTICS 当前状态
 
-- **状态：IMPLEMENTATION_COMPLETE（R1 + R1.1）/ AWAITING_EXTERNAL_REVIEW ROUND 2**（2026-08-28，PR #59 squash merged、PR #60 open；停等 External Review Round 2，禁止自标 VERIFIED）
+- **状态：IMPLEMENTATION_COMPLETE（R1 + R1.1 + R2 + R3 + R3-A1 + R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3**（2026-08-29：R1 PR #59 merged、R1.1+R2+R3+R3-A1+R1.2 随 PR #60 merged=f0a6c47（2026-08-28T16:50:47Z），事务化部署 + 受控重启加载完成（source==deployed==loaded），停等 External Review Round 3，禁止自标 VERIFIED）
 - **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，9 类 3 轴 + 归一化签名）、
   1310→QUOTA_EXHAUSTED same-route retry=0 + unavailableUntil 解析与 defer 预算、
   1305→PROVIDER_OVERLOADED bounded retry、复用既有 EC retry budget 与 Router fallback
@@ -108,7 +108,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   `DSH-Client/_backup-p26-r2/`。已知问题（R1 既有）：Router agent/request 路径有 1 个
   Socket 句柄惰性残留（原版同样存在）；测试脚本顶层 process.exit 已规避，工具管道
   2>&1 会伪超时，须 `node --no-warnings` 直接运行。
-- **R1.1 增量（2026-08-28，随 R1.1 PR #60 提交；R1 授权范围内 Blocker 1）**：
+- **R1.1 增量（2026-08-28，随 R1.1 PR #60 提交并已 merge=f0a6c47；R1 授权范围内 Blocker 1）**：
   direct managed provider（zhipu/bai）1310 配额耗尽 → EC 发 quota requirement 并记录
   sourceProvider/sourceModel → Router 泛化 `isPrimaryModel` + 复用 `pickQuotaRouteTarget`
   （零第二引擎），zhipu/bai/opencode/commandcode 任一主力出现 quota requirement 即跨
@@ -120,7 +120,28 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   `docs/roadmap/evidence/P26_R1_1_MANAGED_DIRECT_QUOTA_VERIFY.md`（含 Blocker A 第 1 项
   配置证据：official dsh-llm-retry core 对无 retryPolicy 的 provider 直接 next()、六 provider
   显式策略不含 RATE_LIMIT → 全生产路径 1310 同路重试=0，直达 EC classifier）。
-- **Next**：External Review Round 2 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
+- **R3 增量（2026-08-28，随 PR #60 merge=f0a6c47；Reviewer 分配）**：官方 retry 中间件
+  retryableCodes 不含 RATE_LIMIT（六 provider 显式策略）；`verify-p26-r3-retry-policy.mjs`
+  41/41 PASS；`verify-p26-r3-a1-official-retry-zero.mjs` 9/9 PASS（1310 same-provider
+  retry=0，含 V2 负对照 + V4 脱敏策略身份）。与 R1.1/R1.2 同一文件正交改动，已在合并部署
+  后双线回归（122/0）。
+- **R1.2 增量（2026-08-29，随 PR #60 merge=f0a6c47；Reviewer Blocker 2）**：
+  quota no-alternative → **zero blind retry**：Router 记录 lastChainIds，quota
+  recovery-requirement 时以 pickQuotaRouteTarget 同语义静态判断无替代并同步发
+  `ec/quota-no-alternative`；EC 消费为一次性 routerNoAlternative 标志，同 pass 直接
+  defer（WAITING_PROVIDER，unavailableUntil-exact 或 bounded），不再返回 retry → 零盲打。
+  验证：`tests/continuity/verify-p26-r1-2-quota-no-alternative.mjs` 10/10 PASS（V1 static
+  no-alt / V2 alt-exists 回归 / V3 cross-provider / V4 late receipt）。
+- **部署与加载闭环（2026-08-29，本报告核心新增）**：main（f0a6c47）三插件
+  （execution-continuity/failure-classifier-core/openrouter-router）字节精确部署到运行
+  profile `~/.dsh/profiles/web/`（cmd 重定向，size==git blob 87952/19462/32456）；
+  attestation source==deployed==loaded：git hash-object == canonical blob
+  （8a9950c1/d4631cc6/c96a4d88），受控重启（restart-dsh-server-delayed.ps1
+  -RestartAndWait）→ 新进程 pid=24372 监听 3080，服务日志 boot 证据行
+  `[failure-classifier] armed (P2.6 R1 observation plugin loaded)`，HTTP 200。
+  部署后全量回归 122 断言 0 fail。完整证据见
+  `docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_2_FINAL_CLOSURE_REPORT.md`（20 项证据）。
+- **Next**：External Review Round 3 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
 - **⚠️ 禁止事项（不变）**：External Reviewer APPROVED 前，禁止把 02.6 写成 `VERIFIED`。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态

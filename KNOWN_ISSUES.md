@@ -62,3 +62,42 @@ EC_STATE_DIR 临时目录冲突致超时，属测试脚手架问题，串行无�
   `{ ...cur, ...patch }` merge，否则会覆盖 recoveryRequirement 等关键状态。
 - EC request-error 的 defer 语义返回 **null**（不是 `{kind:"retry"}`）；断言"无重试"
   写 `!action || action.kind !== 'retry'`。
+
+## 2026-08-28 P2.6 R3 A2 配额重置时间"倒序 ISO-Z"解析失败（真实产品 bug，已修复+已验证）
+
+**现象**：`verify-p26-r1-2-quota-no-alternative.mjs` V5d FAIL——nextRetryAt ≈ now+90s
+（bounded backoff），而非精确的 unavailableUntil。V5 是单模型链 + 配额耗尽 + 无替代
+→ 走 deferQuota，但 `cls.unavailableUntil === null` → 退化为 90s 轮询，违反 R1.2
+"provider 明确给出重置时间时精确 defer"的设计意图。
+
+**根因**：1310 配额消息的常见中文格式是 **"您的限额将在 <UTC ISO 带 Z> 重置"**——
+日期在"重置"label **前面**（倒序），且带小数秒 + Z（`2026-08-28T18:21:35.542Z`）。
+`parseResetTimestamp` 的优先级链：
+1. `RESET_ISO_RE`（正确处理 Z/±hh:mm）只匹配 **label 在日期前**（`重置[^\d]{0,16}日期`）
+   → 倒序不匹配；
+2. 回退 `RESET_PLAIN_DATE_RE` 能匹配 `2026-08-28T18:21:35`，但 time 组不含 `.542Z`，
+   且该分支把 naive 时间**锚定 +08:00** → `18:21:35+08:00` = `10:21:35Z`，早于 now
+   → 判"过去时间"返回 null。
+结果：unavailableUntil=null → EC 用 bounded backoff 而非精确 defer 到重置点。
+
+**修复**（`plugins/failure-classifier-core.mjs` `parseResetTimestamp`）：
+- 新增**位置无关的显式时区 ISO 提取**，置于优先级最前：`(\d{4}-\d{2}-\d{2})[ T]
+  (\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}))`，带 labeled 守卫
+  （文本须含 重置/恢复/解锁/reset）→ `Date.parse` 原样解析（显式时区无需猜测）。
+- labeled 守卫防止长消息里无关 ISO 时间戳劫持解析。
+- 显式时区信息完整，天然最高可信，放在 CJK/ISO/epoch 之前不改变既有语义
+  （既有 D1-D7、A1-A5、F 组全部照旧 PASS）。
+
+**验证**（全部实际运行）：
+- `tests/reliability/test-failure-classifier-v1.mjs` **34 pass 0 fail**（新增 D8 倒序 ISO-Z
+  精确解析、D8b 倒序 +08:00 保留偏移、D9 无 label 不误抓）；
+- `tests/continuity/verify-p26-r1-2-quota-no-alternative.mjs` **17 pass 0 fail**
+  （V5d drift=0ms，nextRetryAt 精确等于 unavailableUntil）；
+- `tests/continuity/verify-p26-r3-a1-official-retry-zero.mjs` **16 pass 0 fail**（回归无破坏）。
+
+**教训**：
+- 供应商配额消息有两种常见语序："重置后 <时间>"（label 前）与"将在 <时间> 重置"
+  （label 后）；解析必须位置无关，且**显式时区（Z/±hh:mm）优先于 naive 猜测**。
+- naive 时间锚定 +08:00 的分支绝不能接收带 Z/偏移的 ISO——会按本地墙钟误算
+  （本 bug 的次根因：RESET_PLAIN_DATE_RE 吞掉 `.542Z` 后仍匹配）。
+- 测试新增防回归 case 时必须同时覆盖：倒序 ISO-Z、倒序带偏移 ISO、以及"无 label 不误抓"。

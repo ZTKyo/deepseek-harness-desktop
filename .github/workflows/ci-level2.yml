@@ -146,6 +146,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-1-DIRECT-QUOTA FAIL"; exit 1 }
           Write-Host "p26 r1.1 direct quota full-path: PASS"
 
+      - name: P2.6 R1.2 quota no-alternative -> zero blind retry (A2 precise semantics)
+        # A2: when the quota-exhausted provider is the ONLY compatible route, EC must
+        # defer (WAITING_PROVIDER, nextRetryAt ≈ unavailableUntil) instead of blind
+        # retrying; receipt consumed once, no busy loop, no session/event writes.
+        # Repo-internal modules only (no official package, no credentials); bounded
+        # ~60s runtime by design (one defer cycle).
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r1-2-quota-no-alternative.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-2-QUOTA-NO-ALTERNATIVE FAIL"; exit 1 }
+          Write-Host "p26 r1.2 quota no-alternative: PASS"
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

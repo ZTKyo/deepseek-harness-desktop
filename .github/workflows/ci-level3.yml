@@ -13,6 +13,8 @@ on:
       - 'tests/context-memory/*'
       - 'tests/install-plugin/*'
       - 'tests/reliability/*'
+      - 'tests/continuity/*'
+      - 'tests/fixtures/*'
       - 'tools/install-plugin.mjs'
       - 'docs/roadmap/**'
       - '.github/workflows/**'
@@ -127,6 +129,45 @@ jobs:
           node tests\install-plugin\verify-install-plugin.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "DEPLOYMENT GATE: INSTALL-PLUGIN REGRESSION FAIL"; exit 1 }
           Write-Host 'PASS: install-plugin regression on deployment gate'
+
+      # ─── P2.6 R3 T-R3-1..7 (Round 3 A1/A2) on the deployment gate ────────────
+      # These suites need the OFFICIAL dsh-llm-retry / dsh-llm packages, which
+      # only exist after `npm install -g @deepseek-ai/dsh@0.1.1-rc.2` above — so
+      # they live on Level 3 (NOT Level 2, which has no dsh install). No secrets:
+      # retry-policy runs against the sanitized repo fixture (DSH_SETTINGS), and
+      # A1 asserts same-provider llm/retry counts on synthetic request-errors.
+      - name: T-R3-1 R3 retry policy settings+schema+taxonomy regression
+        shell: pwsh
+        run: |
+          $env:DSH_SETTINGS = Join-Path $env:GITHUB_WORKSPACE 'tests\fixtures\p26-r3-settings.sanitized.yaml'
+          # dsh is globally installed above; expose the REAL npm global root so
+          # the suite can resolve js-yaml / dsh-llm regardless of npm prefix
+          # (GitHub runner prefix != local %APPDATA%\npm).
+          $env:DSH_GLOBAL_ROOT = (npm root -g).Trim()
+          node tests\continuity\verify-p26-r3-retry-policy.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-1 RETRY-POLICY FAIL"; exit 1 }
+          Write-Host "T-R3-1 retry-policy: PASS"
+
+      - name: T-R3-2..6 R3-A1 official-layer retry-zero proof (1310/1305/transient)
+        # CONTROLLED full-path proof that the OFFICIAL dsh-llm-retry middleware
+        # emits ZERO same-provider llm/retry for 1310 (RATE_LIMIT excluded from
+        # retryableCodes) while still retrying transient SERVER/TIMEOUT and
+        # provider-overload 1305 via EC bounded retry. Uses the real official
+        # middleware package (resolved from the globally installed dsh); no mock
+        # of the official retry decision.
+        shell: pwsh
+        run: |
+          $env:DSH_GLOBAL_ROOT = (npm root -g).Trim()
+          node tests\continuity\verify-p26-r3-a1-official-retry-zero.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-2..6 OFFICIAL-RETRY-ZERO FAIL"; exit 1 }
+          Write-Host "T-R3-2..6 official retry-zero: PASS"
+
+      - name: T-R3-7 failure classifier reset-time regressions (incl. reverse-ISO-Z)
+        shell: pwsh
+        run: |
+          node tests\reliability\test-failure-classifier-v1.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-7 CLASSIFIER FAIL"; exit 1 }
+          Write-Host "T-R3-7 classifier regressions: PASS"
 
       - name: Guardian !!js regression on main-branch gate (P2.5 R2-8)
         shell: pwsh

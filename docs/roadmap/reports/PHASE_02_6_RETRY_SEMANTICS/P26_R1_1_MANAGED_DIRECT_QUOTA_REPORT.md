@@ -96,8 +96,8 @@ Router 泛化 `isPrimaryModel` + 复用 `pickQuotaRouteTarget`（**零第二引�
 
 direct managed provider（zhipu/bai）配额耗尽可自动跨 provider 落到 openrouter（不同配额池），
 补齐 R5 typed bridge + R2 commandcode 覆盖后的最后一类主力 provider；零第二引擎、无行为回归。
-状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_EXTERNAL_REVIEW**（R1 授权范围内增量，
-随 R1.1 PR 提交）。
+状态维持 **IMPLEMENTATION_COMPLETE / AWAITING_EXTERNAL_REVIEW ROUND 2**（R1 授权范围内增量，
+随 R1.1 PR #60 提交；禁止自标 VERIFIED/APPROVED）。
 
 ## 后续（部署时必做）
 

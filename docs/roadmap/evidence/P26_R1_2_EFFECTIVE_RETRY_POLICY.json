@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-08-28T17:15:00.229Z",
+  "note": "sanitized effective retryPolicy evidence: policy SHAPE only (mode/maxRetries/retryableCodes/backoff); apiKey/baseURL/secret fields NEVER read or emitted. sha256 = canonical digest over the sanitized policy JSON.",
+  "providers": {
+    "opencode": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    },
+    "opencode-qwen": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    },
+    "opencode-free": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    },
+    "openrouter": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    },
+    "agentrouter-openai": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    },
+    "commandcode": {
+      "present": true,
+      "sha256": "274dfe0cb3d705eb5c445be6932d3d87c6620f599425738367aee70e70f417c8",
+      "sanitizedPolicy": {
+        "mode": "normal",
+        "maxRetries": 2,
+        "retryableCodes": [
+          "EMPTY_RESPONSE",
+          "SERVER",
+          "TIMEOUT",
+          "TRANSPORT"
+        ],
+        "backoff": {
+          "initialDelayMs": 500,
+          "maxDelayMs": 10000,
+          "jitterRatio": 0.1
+        }
+      }
+    }
+  }
+}

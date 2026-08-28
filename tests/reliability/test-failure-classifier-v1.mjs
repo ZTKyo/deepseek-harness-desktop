@@ -111,6 +111,16 @@ function fmtCjk(epochMs) {
   check('D6 future relative reset parses (naive -> +08:00)', Math.abs(r6 - (NOW + 2 * 3600e3)) < 1500, r6 ? new Date(r6).toISOString() : null);
   const r7 = parseResetTimestamp('您的限额将在 1790000000 重置。', NOW);
   check('D7 labeled epoch seconds', r7 === 1790000000 * 1000);
+  // P2.6 R3 A2: 1310 quota messages commonly say "限额将在 <UTC ISO Z> 重置"
+  // (explicit-zone ISO, label AFTER the date). The pre-R3 parser only matched
+  // label-before-date, so the reset time was missed and EC fell back to bounded
+  // backoff instead of exact defer. Position-agnostic explicit-zone extraction.
+  const r8 = parseResetTimestamp('429: {"code":"1310","message":"您已达到每周/每月使用上限，您的限额将在 2026-08-28T18:21:35.542Z 重置。"}', NOW);
+  check('D8 reversed-label ISO-Z parses exactly (R3 A2 fix)', r8 === Date.parse('2026-08-28T18:21:35.542Z'), r8 ? new Date(r8).toISOString() : null);
+  const r8b = parseResetTimestamp('您的限额将在 2026-08-28T18:21:35+08:00 重置。', NOW);
+  check('D8b reversed-label ISO with +08:00 offset keeps zone', r8b === Date.parse('2026-08-28T18:21:35+08:00'), r8b ? new Date(r8b).toISOString() : null);
+  const r9 = parseResetTimestamp('当前服务器时间 2026-12-01T08:00:00Z，请稍后再试', NOW);
+  check('D9 ISO-Z without reset label -> null (labeled guard)', r9 === null, r9 ? new Date(r9).toISOString() : null);
 }
 
 // ── T-group E: body parsing + signature ─────────────────────────────────────

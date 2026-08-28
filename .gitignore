@@ -33,4 +33,5 @@ dsh-server-*.log
 # --- local DSH client tooling / scratch (never into repo) ---
 DSH-Client/
 _r51-work/
+_r3-checkpoint/
 

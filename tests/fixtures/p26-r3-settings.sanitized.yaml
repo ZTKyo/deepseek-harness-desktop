@@ -1,0 +1,51 @@
+# P2.6 R3 sanitized settings fixture — CI mirror of the LIVE settings.yaml retryPolicy
+# SHAPE ONLY. Contains NO apiKey / baseURL / token / secret of any kind — only the
+# retryPolicy block that verify-p26-r3-retry-policy.mjs asserts (RATE_LIMIT-free for
+# the 6 primary providers; untouched default for non-target providers). Used by
+# CI Level 3 via DSH_SETTINGS=this-file so the R3 policy gate runs on every PR
+# without touching (or even needing) a real ~/.dsh/settings.yaml.
+llm-pi-ai:
+  providers:
+    opencode:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    opencode-qwen:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    opencode-free:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    openrouter:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    agentrouter-openai:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    commandcode:
+      retryPolicy:
+        mode: normal
+        maxRetries: 2
+        retryableCodes: [EMPTY_RESPONSE, SERVER, TIMEOUT, TRANSPORT]
+        backoff: { initialDelayMs: 500, maxDelayMs: 10000, jitterRatio: 0.1 }
+    # Non-target providers: MUST stay WITHOUT explicit retryPolicy (R3-3 asserts
+    # the untouched default — official semantics incl. RATE_LIMIT — is preserved).
+    xiaomi: {}
+    agentrouter-anthropic: {}
+    bai: {}
+    empero-free: {}
+    zhipu: {}

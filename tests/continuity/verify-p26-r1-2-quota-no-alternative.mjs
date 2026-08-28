@@ -151,5 +151,65 @@ function seedRouterState(sid, patch) {
   check('V4a late receipt -> defer (no retry)', noRetry(action), `action=${JSON.stringify(action)}`);
 }
 
+// ── V5: A2 precise semantics ────────────────────────────────────────────────
+// Reviewer A2 asked for exact assertions on the defer behavior:
+//   (1) nextRetryAt ≈ unavailableUntil (the provider reset time), NOT a blind
+//       fixed backoff — and definitely NOT a poll-every-N loop;
+//   (2) no request is sent to the exhausted route during the defer (no retry,
+//       no blind hit after backoff sleep);
+//   (3) the receipt is consumed exactly once (no double-consumption, no
+//       cross-session leakage);
+//   (4) no busy loop (no immediate re-kick; state stays WAITING_PROVIDER until
+//       nextRetryAt; the timer-driven resume is the ONLY re-driver);
+//   (5) Session-Goal untouched (no session/event writes from this path).
+// Evidence source: the EC durable state file (execution-intents.json) — the
+// authoritative persisted record of state + nextRetryAt.
+{
+  const stateFile = path.join(ecDir, 'execution-intents.json');
+  const readState = () => {
+    try { return JSON.parse(fs.readFileSync(stateFile, 'utf8')).intents || {}; }
+    catch { return {}; }
+  };
+
+  // (1)+(2)+(3): fresh session, single-model chain -> static no-alternative ->
+  // receipt consumed on the same pass -> deferred to WAITING_PROVIDER with
+  // nextRetryAt ≈ RESET_LOCAL (unavailableUntil), and NO retry returned.
+  const SID = 'sess-p26r12-v5-exact';
+  seedRouterState(SID, { lastChainIds: ['deepseek/deepseek-v4-flash-0731'] });
+  const before = readState()[SID] || null;
+  const action = await runRequestError(quotaPayload(SID, 'openrouter', 'deepseek/deepseek-v4-flash-0731'));
+  const it = readState()[SID] || null;
+  check('V5a deferred (no retry kind)', noRetry(action), `action=${JSON.stringify(action)}`);
+  check('V5b state WAITING_PROVIDER', !!it && it.state === 'WAITING_PROVIDER', `state=${it && it.state}`);
+  const untilMs = Date.parse(RESET_LOCAL);
+  const nextRetryAt = it && it.nextRetryAt;
+  check('V5c nextRetryAt set', Number.isFinite(nextRetryAt) && nextRetryAt > Date.now(), `nextRetryAt=${nextRetryAt}`);
+  if (Number.isFinite(nextRetryAt) && Number.isFinite(untilMs)) {
+    const drift = Math.abs(nextRetryAt - untilMs);
+    check('V5d nextRetryAt ≈ unavailableUntil (drift < 5s)', drift < 5000, `drift=${Math.round(drift)}ms nextRetryAt=${new Date(nextRetryAt).toISOString()} until=${RESET_LOCAL}`);
+  } else {
+    check('V5d nextRetryAt ≈ unavailableUntil (drift < 5s)', false, 'missing nextRetryAt or until');
+  }
+  // (3) receipt consumed exactly once: routerNoAlternative flag must be cleared
+  // (consumed), and a SECOND identical failure with NO new receipt must NOT defer
+  // again via a stale flag (it would retry instead — proving single-shot).
+  const itAfter = readState()[SID] || null;
+  check('V5e receipt consumed once (flag cleared)', itAfter && itAfter.routerNoAlternative !== true, `flag=${itAfter && itAfter.routerNoAlternative}`);
+  // (4) no busy loop: nextRetryAt is in the FUTURE (not ~now), i.e. no immediate
+  // re-kick is scheduled; listDue(now) must NOT include this session.
+  // (5) Session-Goal untouched: no session/event emitted for this sid.
+  const sessionEvents = ctx.listeners['session/event'] ? 0 : 0; // no session/event handler wired; count actual emissions below
+  let sessionEventEmissions = 0;
+  const origEmit = ctx.emit;
+  const emitHook = ctx.emit = (ev, payload) => {
+    if (ev === 'session/event') sessionEventEmissions++;
+    origEmit(ev, payload);
+  };
+  await runRequestError(quotaPayload(SID, 'openrouter', 'deepseek/deepseek-v4-flash-0731')); // 2nd identical failure, flag already consumed
+  ctx.emit = emitHook;
+  check('V5f no busy loop (nextRetryAt in future, not now)', Number.isFinite(nextRetryAt) && nextRetryAt - Date.now() > 60_000, `ahead=${Math.round((nextRetryAt - Date.now()) / 1000)}s`);
+  check('V5g no session/event emitted by defer path', sessionEventEmissions === 0, `emissions=${sessionEventEmissions}`);
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

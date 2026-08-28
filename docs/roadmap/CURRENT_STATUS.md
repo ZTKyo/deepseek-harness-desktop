@@ -70,7 +70,7 @@ IMPLEMENTATION_COMPLETE。
 **P2.6 R1 IMPLEMENTATION_COMPLETE（2026-08-28，PR #59 squash merged）**：上段"禁止
 IMPLEMENTATION_COMPLETE"为 R1 未开始时的前置约束，现按 R1 目标授权解除（VERIFIED 仍禁止
 自标，须 External Review 授权）。R1 交付：Failure Taxonomy V1 观测层（failure-classifier，
-14 类 3 轴 + 归一化签名，evidence-only 红线：不改 payload.failure/不加会话事件/不重试/
+9 类 3 轴 + 归一化签名，evidence-only 红线：不改 payload.failure/不加会话事件/不重试/
 不选模型，异常全隔离）+ EC 语义升级（classifyFailure 单一真源委托；QUOTA_EXHAUSTED
 same-route retry=0 + unavailableUntil defer 预算 10/h；stream 瞬态不再误触发
 context-recovery）+ 复用既有 EC retry budget 与 Router fallback authority（零第二引擎）。
@@ -88,7 +88,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 ## Phase 02.6 RETRY SEMANTICS 当前状态
 
 - **状态：IMPLEMENTATION_COMPLETE（R1）/ AWAITING_EXTERNAL_REVIEW**（2026-08-28，PR #59 squash merged；停等 External Review Round 1）
-- **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，14 类 3 轴 + 归一化签名）、
+- **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，9 类 3 轴 + 归一化签名）、
   1310→QUOTA_EXHAUSTED same-route retry=0 + unavailableUntil 解析与 defer 预算、
   1305→PROVIDER_OVERLOADED bounded retry、复用既有 EC retry budget 与 Router fallback
   authority（禁造第二套引擎——已遵守）、T1–T18 回归接入现有 CI（L1 语义/L2 状态机）、

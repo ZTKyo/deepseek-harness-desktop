@@ -26,9 +26,12 @@ const check = (name, ok, extra = "") => {
 const TARGETS = ["opencode", "opencode-qwen", "opencode-free", "openrouter", "agentrouter-openai", "commandcode"];
 const RETRYABLE_KEEP = ["EMPTY_RESPONSE", "SERVER", "TIMEOUT", "TRANSPORT"];
 
-// 动态加载 js-yaml（优先 dsh 安装目录，其次工作区）
+// 动态加载 js-yaml（优先 DSH_GLOBAL_ROOT（CI 用 npm root -g 注入），
+// 其次 dsh 默认安装目录，最后工作区）
 function loadYaml() {
+  const g = process.env.DSH_GLOBAL_ROOT;
   const candidates = [
+    ...(g ? [path.join(g, "js-yaml"), path.join(g, "@deepseek-ai", "dsh", "node_modules", "js-yaml")] : []),
     path.join(process.env.APPDATA, "npm", "node_modules", "@deepseek-ai", "dsh", "node_modules", "js-yaml"),
     path.join(ROOT, "node_modules", "js-yaml"),
   ];
@@ -60,7 +63,10 @@ for (const name of TARGETS) {
 
 // ── R3-2: schema 层合法（与 dsh-llm 真实 RetryPolicySchema 一致，字段名/值范围）──
 {
-  const rpSchemaPath = path.join(process.env.APPDATA, "npm", "node_modules", "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai", "dsh-llm", "lib", "types", "retry-policy.js");
+  const g = process.env.DSH_GLOBAL_ROOT;
+  const rpSchemaPath = g
+    ? path.join(g, "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai", "dsh-llm", "lib", "types", "retry-policy.js")
+    : path.join(process.env.APPDATA, "npm", "node_modules", "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai", "dsh-llm", "lib", "types", "retry-policy.js");
   let schemaOk = false;
   try {
     const { RetryPolicySchema } = require(rpSchemaPath);

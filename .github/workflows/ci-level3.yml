@@ -140,6 +140,10 @@ jobs:
         shell: pwsh
         run: |
           $env:DSH_SETTINGS = Join-Path $env:GITHUB_WORKSPACE 'tests\fixtures\p26-r3-settings.sanitized.yaml'
+          # dsh is globally installed above; expose the REAL npm global root so
+          # the suite can resolve js-yaml / dsh-llm regardless of npm prefix
+          # (GitHub runner prefix != local %APPDATA%\npm).
+          $env:DSH_GLOBAL_ROOT = (npm root -g).Trim()
           node tests\continuity\verify-p26-r3-retry-policy.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-1 RETRY-POLICY FAIL"; exit 1 }
           Write-Host "T-R3-1 retry-policy: PASS"
@@ -153,6 +157,7 @@ jobs:
         # of the official retry decision.
         shell: pwsh
         run: |
+          $env:DSH_GLOBAL_ROOT = (npm root -g).Trim()
           node tests\continuity\verify-p26-r3-a1-official-retry-zero.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-2..6 OFFICIAL-RETRY-ZERO FAIL"; exit 1 }
           Write-Host "T-R3-2..6 official retry-zero: PASS"

@@ -28,9 +28,25 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 // Official dsh-llm-retry middleware (the REAL package, not a re-implementation).
+// Resolve from DSH_GLOBAL_ROOT (CI exposes `npm root -g`; GitHub runner prefix
+// differs from local %APPDATA%\npm), falling back to the local dsh install.
 const require = createRequire(import.meta.url);
-const dshNodeModules = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules');
-const llmRetryMod = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-llm-retry', { paths: [dshNodeModules] })).href);
+function findOfficialRetry() {
+  const candidates = [];
+  const g = process.env.DSH_GLOBAL_ROOT;
+  if (g) {
+    candidates.push(path.join(g, '@deepseek-ai', 'dsh', 'node_modules'));
+    candidates.push(g);
+  }
+  candidates.push(path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules'));
+  for (const base of candidates) {
+    try {
+      return import(pathToFileURL(require.resolve('@deepseek-ai/dsh-llm-retry', { paths: [base] })).href);
+    } catch { /* try next */ }
+  }
+  throw new Error('dsh-llm-retry not found: set DSH_GLOBAL_ROOT or install @deepseek-ai/dsh globally');
+}
+const llmRetryMod = await findOfficialRetry();
 const { apply: llmRetryApply } = llmRetryMod;
 import { apply as ecApply } from '../../plugins/execution-continuity.mjs';
 import { apply as routerApply } from '../../plugins/openrouter-router.mjs';

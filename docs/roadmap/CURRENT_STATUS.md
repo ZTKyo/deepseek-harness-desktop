@@ -11,7 +11,7 @@
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
-| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3`（P2.6-A 独立闭环 APPROVED；R1 实现+受控 E2E 完成，PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28，事务化部署+受控重启加载完成 2026-08-29） | **停等 External Review Round 3（禁止自标 VERIFIED）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
+| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `VERIFIED`（**External Review Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；canonical main=a332ebc、classifier=2ea1059f、全量回归 136/0。historical：批准前曾为 IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3；R1 PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28、PR #61 merged=a332ebc 2026-08-28；事务化部署+受控重启加载完成 2026-08-29） | —（APPROVED；Waiting For = NONE） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
@@ -87,7 +87,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 
 ## Phase 02.6 RETRY SEMANTICS 当前状态
 
-- **状态：IMPLEMENTATION_COMPLETE（R1 + R1.1 + R2 + R3 + R3-A1 + R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3**（2026-08-29：R1 PR #59 merged、R1.1+R2+R3+R3-A1+R1.2 随 PR #60 merged=f0a6c47（2026-08-28T16:50:47Z），事务化部署 + 受控重启加载完成（source==deployed==loaded），停等 External Review Round 3，禁止自标 VERIFIED）
+- **状态：VERIFIED**（**External Review Round 3 = APPROVED**，2026-08-29，Reviewer 99 FINAL verdict；**Round 4 = NONE**；**Waiting For = NONE**。historical（批准前）：曾为 IMPLEMENTATION_COMPLETE（R1 + R1.1 + R2 + R3 + R3-A1 + R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3，停等 External Review Round 3，当时禁止自标 VERIFIED——该禁令已随 Round 3 APPROVED 解除。事实链（不变）：R1 PR #59 merged、R1.1+R2+R3+R3-A1+R1.2 随 PR #60 merged=f0a6c47（2026-08-28T16:50:47Z）、PR #61 merged=a332ebc（2026-08-28T18:20:36Z；d6f5543 = PR #61 内部修复 commit，非 merge SHA）、事务化部署 + 受控重启加载完成（source==deployed==loaded））
 - **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，9 类 3 轴 + 归一化签名）、
   1310→QUOTA_EXHAUSTED same-route retry=0 + unavailableUntil 解析与 defer 预算、
   1305→PROVIDER_OVERLOADED bounded retry、复用既有 EC retry budget 与 Router fallback
@@ -124,7 +124,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   retryableCodes 不含 RATE_LIMIT（六 provider 显式策略）；`verify-p26-r3-retry-policy.mjs`
   41/41 PASS；`verify-p26-r3-a1-official-retry-zero.mjs` 9/9 PASS（1310 same-provider
   retry=0，含 V2 负对照 + V4 脱敏策略身份）。与 R1.1/R1.2 同一文件正交改动，已在合并部署
-  后双线回归（122/0）。
+  后双线回归（122/0；historical——R3-A2 随 PR #61 合入并补部署后的最终回归为 136/0，见下）。
 - **R1.2 增量（2026-08-29，随 PR #60 merge=f0a6c47；Reviewer Blocker 2）**：
   quota no-alternative → **zero blind retry**：Router 记录 lastChainIds，quota
   recovery-requirement 时以 pickQuotaRouteTarget 同语义静态判断无替代并同步发
@@ -132,17 +132,20 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   defer（WAITING_PROVIDER，unavailableUntil-exact 或 bounded），不再返回 retry → 零盲打。
   验证：`tests/continuity/verify-p26-r1-2-quota-no-alternative.mjs` 10/10 PASS（V1 static
   no-alt / V2 alt-exists 回归 / V3 cross-provider / V4 late receipt）。
-- **部署与加载闭环（2026-08-29，本报告核心新增）**：main（f0a6c47）三插件
+- **部署与加载闭环（最终态，2026-08-29）**：main（**a332ebc**）三插件
   （execution-continuity/failure-classifier-core/openrouter-router）字节精确部署到运行
-  profile `~/.dsh/profiles/web/`（cmd 重定向，size==git blob 87952/19462/32456）；
-  attestation source==deployed==loaded：git hash-object == canonical blob
-  （8a9950c1/d4631cc6/c96a4d88），受控重启（restart-dsh-server-delayed.ps1
-  -RestartAndWait）→ 新进程 pid=24372 监听 3080，服务日志 boot 证据行
+  profile `~/.dsh/profiles/web/`；attestation **source==deployed==loaded：git hash-object ==
+  canonical blob（8a9950c1/2ea1059f/c96a4d88）**（classifier 为 R3-A2 修复版，随 PR #61
+  合入后补部署，备份 .bak-p26-r3a2），受控重启（restart-dsh-server-delayed.ps1
+  -RestartAndWait）→ 新进程监听 3080，服务日志 boot 证据行
   `[failure-classifier] armed (P2.6 R1 observation plugin loaded)`，HTTP 200。
-  部署后全量回归 122 断言 0 fail。完整证据见
+  **部署后全量回归 136 断言 0 fail**。完整证据见
   `docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_2_FINAL_CLOSURE_REPORT.md`（20 项证据）。
-- **Next**：External Review Round 3 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
-- **⚠️ 禁止事项（不变）**：External Reviewer APPROVED 前，禁止把 02.6 写成 `VERIFIED`。
+  historical（首轮部署记录，已被 R3-A2 补部署取代）：main（f0a6c47）三插件
+  （cmd 重定向，size==git blob 87952/19462/32456）、canonical blob
+  （8a9950c1/d4631cc6/c96a4d88）、新进程 pid=24372、部署后全量回归 122 断言 0 fail。
+- **Next**：Phase 02.75 SUPERVISOR（02.6 已 VERIFIED，解锁条件满足；仅记录 Next，本轮不启动）。
+- **禁止事项（已按 Round 3 APPROVED 更新）**：Round 3 已 APPROVED（2026-08-29，Reviewer 99），`VERIFIED` 标记已获 Reviewer 授权（historical：批准前"禁止自标 VERIFIED"红线不再适用于 02.6）。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态
 
@@ -262,17 +265,17 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 ## 路线（Security-Hardening APPROVED 后）
 1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
 2. **P2.5 CONTEXT MEMORY** ✅ **VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；R2–R5.1-F 证据链闭环；P2.5 封板）
-3. **Phase 02.6 RETRY SEMANTICS** — **下一 Phase**（前置 = Phase 02.5 外部 VERIFIED ✅ 已满足；02.6 FULL 仍 TODO）
-4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED（当前 02.6 FULL 未开始）
+3. **Phase 02.6 RETRY SEMANTICS** ✅ **VERIFIED**（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；R1/R1.1/R2/R3/R3-A1/R1.2 全部合入，canonical main=a332ebc，回归 136/0）
+4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED ✅ 已满足（Next Phase；仅记录，未启动）
 5. **Phase 03**（AUTONOMY）— 前置 = Phase 02.75 外部 VERIFIED（链：02.5 ✅ → 02.6 → 02.75 → P3）
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**P2.5 CONTEXT MEMORY = VERIFIED（External Review Round 10 = APPROVED，2026-08-28）**
-（R2–R5.1-F 证据链闭环；P2.5 封板，不再 Round 11；
-**下一执行位置 = Phase 02.6 RETRY SEMANTICS**（FULL 仍 TODO，P2.6-A 热修已独立 APPROVED）；
-前向链：02.5 ✅ VERIFIED → 02.6 → 02.75 → P3）。
+当前执行位置：**Phase 02.6 RETRY SEMANTICS = VERIFIED（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；Waiting For = NONE）**
+（R1/R1.1/R2/R3/R3-A1/R1.2 全部合入 canonical main=a332ebc；classifier=2ea1059f；attestation source==deployed==loaded；全量回归 136/0；
+**下一执行位置 = Phase 02.75 SUPERVISOR**（前置 02.6 VERIFIED 已满足；仅记录 Next，未启动）；
+前向链：02.5 ✅ VERIFIED → 02.6 ✅ VERIFIED → 02.75 → P3）。
 
 ## 变更日志
 
@@ -455,3 +458,14 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   C4 todo noise、LogStore/lastSwitchAt 等留 HARDENING/DEBT，不得阻塞进入 P2.6）。
   状态更新：P2.5 = **VERIFIED**（External Review Round 10 = APPROVED，2026-08-28）；Waiting For 清空；
   P3=BLOCKED 不变；未改生产代码/配置、零重启；未重跑 REAL Gate。
+- **2026-08-29：P2.6 FINAL CLOSURE — PURE STATUS / CANONICAL BACKFILL（External Review Round 3 = APPROVED）**：
+  External Reviewer 在 99｜Reviewer Feedback 页顶部给出 **Round 3 FINAL Verdict = APPROVED / VERIFIED AUTHORIZED**，
+  **Round 4 = NONE**（PR #60 merged=f0a6c47、PR #61 最终 merge=a332ebcd78f5e582641f2804d57d6814483f9cd9，
+  canonical main=a332ebc；canonical plugin blobs：EC=8a9950c1 / classifier=2ea1059f / Router=c96a4d88；
+  source==deployed==loaded=PASS；R3-A2 后全量回归 136/0）。授权动作仅为 PURE STATUS BACKFILL：
+  (1) 本文件 02.6 → **VERIFIED**（Round 3 APPROVED）、Round 4 = NONE、Waiting For = NONE；
+  (2) 活跃状态 canonical 修正：main=f0a6c47→**a332ebc**、classifier=d4631cc6→**2ea1059f**、122/0→**136/0**；
+  d6f5543 标注为 PR #61 内部修复 commit（非 merge SHA）；历史时间线保留并标 historical；
+  (3) Notion 02.6 同步 VERIFIED + 上述事实，Reviewer 99 保留 Round 3 APPROVED 原文、不新增 verdict；
+  (4) **Next = Phase 02.75 SUPERVISOR（仅记录，未启动）**；P3 = BLOCKED 不变。
+  本 PR 零生产代码改动（仅 docs/roadmap/CURRENT_STATUS.md）、零重启、零部署、零新增测试。

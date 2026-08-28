@@ -1425,7 +1425,7 @@ export function apply(ctx, config = {}) {
             pid: process.pid,
             plugins: {},
           };
-          for (const p of ["execution-continuity.mjs", "openrouter-router.mjs", "commandcode-router.mjs", "model-registry.mjs", "completion-truth-core.mjs", "capacity-resolver.mjs", "runtime-capacity-adapter.mjs", "vision-bridge.mjs"]) {
+          for (const p of ["execution-continuity.mjs", "failure-classifier.mjs", "openrouter-router.mjs", "commandcode-router.mjs", "model-registry.mjs", "completion-truth-core.mjs", "capacity-resolver.mjs", "runtime-capacity-adapter.mjs", "vision-bridge.mjs"]) {
             const fp = path.join(profileWeb, p);
             try {
               loadedManifest.plugins[p] = { sha256: crypto.createHash("sha256").update(fs.readFileSync(fp)).digest("hex") };

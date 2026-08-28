@@ -59,6 +59,7 @@ export function apply(ctx, config = {}) {
     console.error("[failure-classifier] disabled by config (pre-R1 behavior restored)");
     return;
   }
+  console.error("[failure-classifier] armed (P2.6 R1 observation plugin loaded; boot-time evidence line)");
   const file = typeof config.evidenceFile === "string" && config.evidenceFile.length > 0
     ? config.evidenceFile
     : evidencePath();

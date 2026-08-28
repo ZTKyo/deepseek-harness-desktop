@@ -12,6 +12,14 @@
 // 本模块不依赖任何 DSH 运行时，仅使用标准 JS 类型。
 
 import { modelSupports as registryModelSupports, getContextWindow } from "./model-registry.mjs";
+// P2.6 R1: single source of truth for failure-shape patterns now lives in
+// failure-classifier-core.mjs (Taxonomy V1). classifyFailure delegates; the
+// legacy pattern constants below were moved there VERBATIM so pre-existing
+// classifications don't drift, with only the intended R1 semantic fixes
+// (provider business codes 1310/1305, Chinese quota wording, unavailableUntil).
+import { classifyFailureV1, FAILURE_CLASS, TAXONOMY_VERSION } from "./failure-classifier-core.mjs";
+
+export { FAILURE_CLASS, TAXONOMY_VERSION };
 
 // ─── 错误分类 ───────────────────────────────────────────────────────────────
 
@@ -28,65 +36,66 @@ export const CATEGORY = Object.freeze({
   UNKNOWN:            'UNKNOWN',
 });
 
-// 分类关键词（大小写不敏感匹配）
-// P0 细分类优先：reasoning_content / thinking-mode 协议错误（确定性 400，盲重试重复失败，需修复请求状态后重试）
-const REASONING_PROTOCOL_RE = /(reasoning_content.*must be passed back|thinking mode.*must be passed back|must be passed back to the API)/i;
-// 上下文溢出（网络层报告的 quotaLimitReached 也可能是 input token 超限）
-const CTX_OVERFLOW_RE = /(input token exceed|context.*window|token.*limit|input.*too large|context length|maximum context|max_tokens|context_length_exceeded)/i;
-const RETRYABLE_TRANSIENT_RE = /(timeout|timed\s*out|etimedout|econnreset|econnrefused|enotfound|econnaborted|keepalive|empty[_ ]response|empty response|no[_ ]content|no[_ ]output)/i;
-const RATE_LIMIT_RE = /(429|rate[_ ]limit|rate limit|too many requests|retry.*after|retry_after)/i;
-const PROVIDER_OUTAGE_RE = /(5\d{2}|service unavailable|overloaded|internal server error|bad gateway|gateway timeout|server error|temporarily unavailable)/i;
-const QUOTA_EXHAUSTED_RE = /(quota|insufficient.*quota|usage.*limit|billing|allowance.*exhausted|finance|payment)/i;
-const MODEL_UNAVAILABLE_RE = /(model.*not.*found|unknown.*model|no.*adapter|model.*unavailable|model.*not.*supported|unrecognized.*model)/i;
-const AUTH_RE = /(401|403|unauthorized|forbidden|invalid.*api.*key|authentication|api.*key.*required|no.*auth)/i;
-
 /**
  * 分类一个错误（failure 对象来自 agent/request-error payload）。
- * @param {object} failure
- * @param {string} [failure.code]
- * @param {string} [failure.message]
- * @param {number} [failure.providerRetryAfterMs]
- * @param {number} [failure.statusCode]
- * @returns {{ category: string, retryable: boolean, providerRetryAfterMs: number }}
+ * P2.6 R1: 委托 failure-classifier-core (Taxonomy V1)，本函数只做 V1→EC 类别
+ * 映射并保持既有返回形状 { category, retryable, providerRetryAfterMs }；
+ * 额外携带 taxonomy 事实（taxonomyClass / providerCode / unavailableUntil /
+ * normalizedSignature / deterministic / retryableSameRoute）供恢复层使用。
+ *
+ * 有意的 R1 语义变化（对照旧实现，见 P26_R1_BASELINE_AUDIT.md §6）：
+ *  - QUOTA_EXHAUSTED 不再 retryable（同路重试预算=0），携带 unavailableUntil
+ *    （provider 明确重置时间）——恢复层改为 defer，不再窗口内盲恢复。
+ *  - provider 业务码 1310/1305 及中文配额/过载文案优先于裸 429 判定
+ *    （与 core 适配器 isQuotaExceededError 先于 429 的顺序对齐）。
+ *  - 其余类别映射与旧实现逐一保形（REASONING→…→UNKNOWN 延迟值不变）。
+ *
+ * @param {object} failure - { code, message, providerRetryAfterMs?, status? }
+ * @param {object} [context] - { provider, model, nowMs, tzOffsetMinutes }
+ * @returns {{ category: string, retryable: boolean, providerRetryAfterMs: number,
+ *             taxonomyVersion: number, taxonomyClass: string, providerCode: string|null,
+ *             unavailableUntil: number|null, normalizedSignature: string,
+ *             deterministic: boolean, retryableSameRoute: boolean, overload?: boolean }}
  */
-export function classifyFailure(failure) {
-  if (!failure) return { category: CATEGORY.UNKNOWN, retryable: false, providerRetryAfterMs: 0 };
-  const code = String(failure.code || '');
-  const msg = String(failure.message || '');
-  const combined = code + ' ' + msg;
-  const retryAfter = Number.isFinite(failure.providerRetryAfterMs) && failure.providerRetryAfterMs > 0 ? failure.providerRetryAfterMs : 0;
-
-  // 优先级：P0 最具体 → CONTEXT_OVERFLOW → ...
-  // 0) reasoning_protocol 必须最先（避免被 QUOTA/INVALID 抢匹配）
-  if (REASONING_PROTOCOL_RE.test(combined)) {
-    return { category: CATEGORY.REASONING_PROTOCOL_ERROR, retryable: true, providerRetryAfterMs: 0 };
+export function classifyFailure(failure, context = {}) {
+  const v1 = classifyFailureV1(failure, context);
+  const retryAfter = v1.retryAfterMs;
+  const base = {
+    taxonomyVersion: TAXONOMY_VERSION,
+    taxonomyClass: v1.classification,
+    providerCode: v1.providerCode,
+    unavailableUntil: v1.unavailableUntil ?? null,
+    normalizedSignature: v1.normalizedSignature,
+    deterministic: v1.deterministic,
+    retryableSameRoute: v1.retryableSameRoute,
+  };
+  switch (v1.classification) {
+    case FAILURE_CLASS.PROTOCOL_MISMATCH:
+      // 保留 EC 既有契约：repair-retry-once（修复请求状态后的重试不是盲重放同一坏请求）。
+      return { ...base, category: CATEGORY.REASONING_PROTOCOL_ERROR, retryable: true, providerRetryAfterMs: 0 };
+    case FAILURE_CLASS.CONTEXT_LIMIT:
+      return { ...base, category: CATEGORY.CONTEXT_OVERFLOW, retryable: true, providerRetryAfterMs: 0 };
+    case FAILURE_CLASS.QUOTA_EXHAUSTED:
+      // R1: quota 同路重试预算=0；defer 由恢复层按 unavailableUntil 执行。
+      return { ...base, category: CATEGORY.QUOTA_EXHAUSTED, retryable: false, providerRetryAfterMs: retryAfter || 30000 };
+    case FAILURE_CLASS.PROVIDER_OVERLOADED:
+      // R1: 1305/overload 细分（仍是 RATE_LIMIT 类别=有界恢复），overload 标记供证据。
+      return { ...base, category: CATEGORY.RATE_LIMIT, retryable: true, providerRetryAfterMs: retryAfter || 5000, overload: true };
+    case FAILURE_CLASS.SHORT_WINDOW_RATE_LIMIT:
+      return { ...base, category: CATEGORY.RATE_LIMIT, retryable: true, providerRetryAfterMs: retryAfter || 5000 };
+    case FAILURE_CLASS.AUTH_PERMISSION_FAILURE:
+      return { ...base, category: CATEGORY.AUTH, retryable: false, providerRetryAfterMs: 0 };
+    case FAILURE_CLASS.MODEL_ROUTE_UNAVAILABLE:
+      return { ...base, category: CATEGORY.MODEL_UNAVAILABLE, retryable: false, providerRetryAfterMs: 0 };
+    case FAILURE_CLASS.NETWORK_TIMEOUT_5XX:
+      return v1.subKind === 'PROVIDER_OUTAGE'
+        ? { ...base, category: CATEGORY.PROVIDER_OUTAGE, retryable: true, providerRetryAfterMs: retryAfter || 10000 }
+        : { ...base, category: CATEGORY.RETRYABLE_TRANSIENT, retryable: true, providerRetryAfterMs: retryAfter || 3000 };
+    default:
+      return v1.deterministic
+        ? { ...base, category: CATEGORY.INVALID_REQUEST, retryable: false, providerRetryAfterMs: 0 }
+        : { ...base, category: CATEGORY.UNKNOWN, retryable: false, providerRetryAfterMs: 0 };
   }
-  if (CTX_OVERFLOW_RE.test(combined)) {
-    return { category: CATEGORY.CONTEXT_OVERFLOW, retryable: true, providerRetryAfterMs: 0 };
-  }
-  if (RATE_LIMIT_RE.test(combined)) {
-    return { category: CATEGORY.RATE_LIMIT, retryable: true, providerRetryAfterMs: retryAfter || 5000 };
-  }
-  if (PROVIDER_OUTAGE_RE.test(combined)) {
-    return { category: CATEGORY.PROVIDER_OUTAGE, retryable: true, providerRetryAfterMs: retryAfter || 10000 };
-  }
-  if (QUOTA_EXHAUSTED_RE.test(combined)) {
-    return { category: CATEGORY.QUOTA_EXHAUSTED, retryable: true, providerRetryAfterMs: retryAfter || 30000 };
-  }
-  if (MODEL_UNAVAILABLE_RE.test(combined)) {
-    return { category: CATEGORY.MODEL_UNAVAILABLE, retryable: false, providerRetryAfterMs: 0 };
-  }
-  if (RETRYABLE_TRANSIENT_RE.test(combined)) {
-    return { category: CATEGORY.RETRYABLE_TRANSIENT, retryable: true, providerRetryAfterMs: retryAfter || 3000 };
-  }
-  if (AUTH_RE.test(combined)) {
-    return { category: CATEGORY.AUTH, retryable: false, providerRetryAfterMs: 0 };
-  }
-  // 400 或未知 code 落入 INVALID_REQUEST
-  if (/^4\d{2}$/.test(code) || code === '400' || /invalid_request/i.test(combined)) {
-    return { category: CATEGORY.INVALID_REQUEST, retryable: false, providerRetryAfterMs: 0 };
-  }
-  return { category: CATEGORY.UNKNOWN, retryable: false, providerRetryAfterMs: 0 };
 }
 
 // ─── 预算与退避 ────────────────────────────────────────────────────────────

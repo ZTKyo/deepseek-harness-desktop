@@ -46,10 +46,14 @@ const CONTEXT_WINDOW = {
 // ---------------------------------------------------------------------------
 // Family-level modality facts (image/audio/video). Source: Router CAPABILITY.
 // ---------------------------------------------------------------------------
+// P2.6 R1 fix: `text` is a baseline modality every known LLM family supports.
+// It was missing from this table, so modelSupports(..., {modalities:["text"]})
+// failed closed for every model (found by verify-execution-continuity.mjs).
+// Unknown families still default to text:false (fail-closed, R4 Step 6).
 const FAMILY_MODALITIES = {
-  qwen: { image: true, audio: false, video: true },
-  deepseek: { image: false, audio: false, video: false },
-  mimo: { image: true, audio: true, video: true },
+  qwen: { text: true, image: true, audio: false, video: true },
+  deepseek: { text: true, image: false, audio: false, video: false },
+  mimo: { text: true, image: true, audio: true, video: true },
 };
 
 // ---------------------------------------------------------------------------

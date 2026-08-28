@@ -410,12 +410,15 @@ export function apply(ctx, config = {}) {
   const logPath = path.join(store.dir, "execution-continuity.log");
   const resumeCooldownMs = 60000; // anti-double-kick with goal-recovery.mjs
 
-  // ─── Retry Policy Guard（P0 fix 2026-08-23）────────────────────────────
+  // ─── Retry Policy Guard（P0 fix 2026-08-23；P2.6 R3 2026-08-28 扩展）────
   // 官方 dsh-llm-retry 的 mode:'always' 语义 = 永久重试（invariant 强制省略
   // maxRetries），若未来某 provider 被误配成 always 且无配套防护，可导致
   // 对永久性错误无限重试。本 Guard 在 boot 时扫描 provider 注册表：
   //   - 发现 mode:'always' → 记录 warning + 建议显式 maxRetries 或改 normal；
   //   - 不改官方引擎、不拦截请求（任务书：config guard / warning 优先）。
+  // P2.6 R3: 主用 provider 若仍含默认 retryableCodes 中的 RATE_LIMIT，官方
+  // dsh-llm-retry 会同路盲重试 429/1310，EC/Router 永远看不到（跨池回落失效）。
+  // 此处审计并告警，防止未来新 provider 忘配（fail-open，仅告警不拦截）。
   function checkRetryPolicyGuard() {
     try {
       const providers = ctx.llm?.providers || {};
@@ -425,6 +428,12 @@ export function apply(ctx, config = {}) {
         if (rp && rp.mode === "always") {
           diag(`RETRY-GUARD provider=${p} retryPolicy.mode=always (unbounded retry) -> recommend maxRetries or mode:normal`);
           try { logger.warn(`[execution-continuity] retry guard: provider "${p}" uses unbounded retry mode 'always'; consider maxRetries or mode:normal`); } catch { /* noop */ }
+        }
+        // P2.6 R3: 审计 RATE_LIMIT 是否仍留在官方 retryableCodes。
+        const codes = rp && Array.isArray(rp.retryableCodes) ? rp.retryableCodes : null;
+        if (codes && codes.includes("RATE_LIMIT")) {
+          diag(`RETRY-GUARD provider=${p} retryableCodes still contains RATE_LIMIT -> official layer blind-retries 429/1310; EC/Router never sees quota/overload (P2.6 R3). Remove RATE_LIMIT from retryPolicy.retryableCodes.`);
+          try { logger.warn(`[execution-continuity] retry guard: provider "${p}" keeps RATE_LIMIT in retryableCodes; 429/1310 would bypass EC recovery (P2.6 R3). Remove RATE_LIMIT from its retryPolicy.retryableCodes.`); } catch { /* noop */ }
         }
       }
     } catch { /* 注册表不可用时跳过（fail-open） */ }
@@ -1052,6 +1061,11 @@ export function apply(ctx, config = {}) {
               modalities: it.lastModalities || [],
               tools: true,
               used: false,
+              // P2.6 R1.1: provenance of the exhausted route — lets the Router
+              // consume quota/outage requirements for ANY managed provider
+              // (zhipu/bai/opencode/commandcode), not just openrouter.
+              sourceProvider: provider,
+              sourceModel: model,
             };
             // Phase 02 R4 (Step 3): typed bridge — tell the Router (the sole
             // model authority) that this session needs a capability-compatible
@@ -1101,6 +1115,8 @@ export function apply(ctx, config = {}) {
               modalities: it.lastModalities || [],
               needLargerContext: true,
               used: false,
+              sourceProvider: provider,
+              sourceModel: model,
             };
             try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
@@ -1122,6 +1138,8 @@ export function apply(ctx, config = {}) {
               reason: "quota_exhausted: router-decided route switch",
               modalities: it.lastModalities || [],
               used: false,
+              sourceProvider: provider,
+              sourceModel: model,
             };
             try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
@@ -1154,6 +1172,8 @@ export function apply(ctx, config = {}) {
               reason: `${cls.category.toLowerCase()}: router-decided compatible fallback`,
               modalities: it.lastModalities || [],
               used: false,
+              sourceProvider: provider,
+              sourceModel: model,
             };
             try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);

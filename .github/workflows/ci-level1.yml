@@ -244,3 +244,16 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\router\Test-RouterDeployRollback.ps1
           if ($LASTEXITCODE -ne 0) { Write-Host "ROLLBACK TEST FAIL"; exit 1 }
           Write-Host "router deploy rollback: PASS"
+
+      # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
+      # Pure node unit/integration suites: no live server, no credentials,
+      # repo-relative, self-contained harnesses. Per External Review Blocker B:
+      # L1 carries ONLY the pure-unit failure classifier; quota-defer /
+      # network-error / rollback-switch / commandcode / full-path integration
+      # live in Level 2 (state-machine lane) — see ci-level2.yml.
+      - name: P2.6 R1 failure taxonomy classifier (Failure Taxonomy V1, pure unit)
+        shell: pwsh
+        run: |
+          node tests\reliability\test-failure-classifier-v1.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FAILURE-CLASSIFIER TEST FAIL"; exit 1 }
+          Write-Host "failure classifier v1: PASS"

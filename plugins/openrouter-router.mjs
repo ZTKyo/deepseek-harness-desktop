@@ -66,11 +66,35 @@ function isEmptyResponse(failure) {
   const m = (failure && (failure.message || failure.code || "")) || "";
   return EMPTY_RESPONSE_RE.test(m);
 }
-// PRIMARY 概念：当前默认主力（settings 真源 = opencode/deepseek-v4-flash）
+// PRIMARY 概念：当前默认主力（settings 真源 = opencode/deepseek-v4-flash / commandcode/auto）
 // 常量仅标识"是否是需要跨 provider 保护的模型"，具体映射来自 settings/provider-registry
+// P2.6 R1.1: 泛化为「受管 direct provider」——zhipu/bai/opencode/commandcode 任一主力
+// 出现配额/故障恢复 requirement 时，Router 都能跨 provider 改写（不同配额池）。
+// 常量仅用于快速判定；判定失败（未知 provider）时保守放行（不干预）。
 function isPrimaryModel(model, provider) {
   const m = String(model || "");
-  return (provider === "opencode" && (m === "deepseek-v4-flash" || m === "deepseek-v4-flash-free"));
+  if (provider === "opencode" && (m === "deepseek-v4-flash" || m === "deepseek-v4-flash-free")) return true;
+  // Phase 02.6 R2: agent-default-model = commandcode/auto（当前主力）。commandcode 是
+  // auto 路由宿主，配额耗尽后必须能跨 provider 回落，否则 1310 后该 session 停摆。
+  if (provider === "commandcode" && (m === "auto" || m === "commandcode/auto")) return true;
+  // P2.6 R1.1 (Blocker 1): direct managed providers (zhipu/bai) carry the SAME
+  // quota risk — zhipu 1310 / bai quota are the reviewer-named seam. Router is
+  // the model authority for ANY managed provider, so any primary-style direct
+  // route with a quota requirement gets a cross-pool rewrite.
+  if ((provider === "zhipu" || provider === "bai") && m) return true;
+  return false;
+}
+
+// Phase 02.6 R2: QUOTA route-switch 公共决策——给定当前模型，沿 fallback chain
+// 选第一个与当前不同的模型 id（不同配额池 = 唯一有效手段）。链上无差异时退到 PRIMARY。
+// 与 openrouter 分支（quota-route-switch）共用，保证跨 provider 与 provider 内行为一致。
+function pickQuotaRouteTarget(chainIds, finalModel, cfg) {
+  const chain = Array.isArray(chainIds) && chainIds.length ? chainIds
+    : [cfg.modelIds.deepseek, cfg.modelIds.qwen].filter(Boolean);
+  let target = null;
+  for (const id of chain) { if (id && id !== finalModel) { target = id; break; } }
+  if (!target && cfg.modelIds.deepseek && finalModel !== cfg.modelIds.deepseek) target = cfg.modelIds.deepseek;
+  return target;
 }
 // 从 request-error payload 提取失败的模型名
 function resolvedModelOf(payload) {
@@ -255,6 +279,27 @@ export function apply(ctx, config = {}) {
         const { reasoningEffort: _e1, ...rest } = resolved;
         return { ...rest, provider: "openrouter", model: cfg.modelIds.deepseek };
       }
+      // Phase 02.6 R2 (Blocker A) + R1.1 (Blocker 1): 受管 direct provider
+      // （zhipu/bai/opencode/commandcode）的配额耗尽（1310/QUOTA）→ EC 已发
+      // recovery requirement；此处消费它并跨 provider 改写 openrouter（不同配额池）。
+      // Router 是唯一模型权威；requirement 由当前受管 route 消费（session 级，
+      // 不强制 sourceProvider 匹配——R2 起即按此语义，sourceProvider 仅记录
+      // provenance 供诊断）。这是 openrouter 分支 quota-route-switch 的跨 provider
+      // 对应物。opencode 额外命中 isPrimaryModel（deepseek-v4-flash 主力）。
+      const MANAGED_DIRECT_PROVIDERS = ["zhipu", "bai", "opencode", "commandcode"];
+      if (MANAGED_DIRECT_PROVIDERS.includes(resolved.provider) && isPrimaryModel(resolved.model, resolved.provider)) {
+        const req0 = st0.recoveryRequirement;
+        if (req0 && req0.reason && /quota_exhausted/i.test(req0.reason)) {
+          st0.recoveryRequirement = null; // consume (ack) before applying
+          const target0 = pickQuotaRouteTarget(null, resolved.model, cfg);
+          if (target0) {
+            logDiagVolume(sid0, { type: "ec-requirement-apply", reason: req0.reason, from: resolved.model, to: target0, ctx: "quota-cross-provider-switch", from_provider: resolved.provider, to_provider: "openrouter", sourceProvider: req0.sourceProvider || undefined });
+            const { reasoningEffort: _e2, ...rest0 } = resolved;
+            return { ...rest0, provider: "openrouter", model: target0 };
+          }
+          logDiagVolume(sid0, { type: "ec-requirement-apply", reason: req0.reason, from: resolved.model, to: resolved.model, ctx: "quota-no-alternative", from_provider: resolved.provider, sourceProvider: req0.sourceProvider || undefined });
+        }
+      }
       return resolved;
     }
     const sid = payload?.agent?.session?.id ?? "?";
@@ -338,12 +383,9 @@ export function apply(ctx, config = {}) {
           // P2.6 R1: 配额耗尽（周/月配额池用尽，如 zhipu 1310）——同池重试无意义，
           // 唯一有效手段 = 换路由（不同配额池）。按当前任务决策的 fallback chain
           // 顺延，选第一个与当前不同的模型 id；链上无差异时退到 PRIMARY。
-          const chain = Array.isArray(d.fallback_chain_ids) && d.fallback_chain_ids.length
-            ? d.fallback_chain_ids
-            : [cfg.modelIds.deepseek, cfg.modelIds.qwen].filter(Boolean);
-          let target = null;
-          for (const id of chain) { if (id && id !== finalModel) { target = id; break; } }
-          if (!target && cfg.modelIds.deepseek && finalModel !== cfg.modelIds.deepseek) target = cfg.modelIds.deepseek;
+          // Phase 02.6 R2: 决策收敛到 pickQuotaRouteTarget（与 commandcode 跨 provider
+          // 分支共用），避免两处实现漂移。
+          const target = pickQuotaRouteTarget(d.fallback_chain_ids, finalModel, cfg);
           if (target) {
             logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: target, ctx: "quota-route-switch" });
             finalModel = target;

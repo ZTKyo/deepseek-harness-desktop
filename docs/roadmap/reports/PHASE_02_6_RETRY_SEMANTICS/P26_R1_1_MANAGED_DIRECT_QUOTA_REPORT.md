@@ -2,7 +2,7 @@
 
 日期：2026-08-28
 会话：session-a144fe3f
-状态：实现 + 验证完成（**随 R1.1 PR 提交，未单独部署到运行 profile**；R1 授权范围内增量）
+状态：**IMPLEMENTATION_COMPLETE / AWAITING_EXTERNAL_REVIEW ROUND 2**（随 R1.1 PR #60 提交；未单独部署到运行 profile；禁止自标 VERIFIED/APPROVED）
 
 ## 背景与目标（Blocker 1）
 
@@ -64,6 +64,33 @@ Router 泛化 `isPrimaryModel` + 复用 `pickQuotaRouteTarget`（**零第二引�
 3. **Router 惰性 Socket 句柄残留（R1 既有，非本次引入）**：agent/request 路径产生 1 个
    Socket 句柄；测试脚本顶层 `process.exit(0)` 已规避；不影响运行中服务（进程常驻）。
    工具管道 `2>&1` 会因 node stderr 警告造成伪超时，须 `node --no-warnings` 直接运行。
+
+## 20 项证据最终清单（External Review Round 1 提交，含 REAL/CONTROLLED/SYNTHETIC/INFERRED 标注）
+
+| # | 证据 | 类型 | 说明 |
+|---|---|---|---|
+| E1 | `verify-p26-r1-1-managed-direct-quota.mjs` 15/15 PASS | CONTROLLED + SYNTHETIC | 受控注入 quota requirement，经 EC→Router 全链路（zhipu/bai 分支）；夹具 provider/model 名（glm-4.6、deepseek-v4-flash）为合成路由目标 |
+| E2 | `verify-p26-r2-commandcode-quota.mjs` 9/9 PASS | CONTROLLED | R2 commandcode 分支回归 |
+| E3 | `verify-p26-r1-quota-defer.mjs` 18/18 PASS | CONTROLLED | R1 Retry-After 延迟 + 预算回归 |
+| E4 | `verify-p26-r1-network-error.mjs` 20/20 PASS | CONTROLLED | R1 stream/network 分类回归 |
+| E5 | `verify-p26-r1-rollback-switch.mjs` ALL PASS | CONTROLLED | 单开关回滚语义回归 |
+| E6 | `test-failure-classifier-v1.mjs` 31/31 PASS | CONTROLLED | classifier 纯单元（Taxonomy V1） |
+| E7 | `verify-p26-r3-retry-policy.mjs` 41/41 PASS | CONTROLLED | R3 RATE_LIMIT-free retry policy（本地线，正交） |
+| E8 | 官方 `dsh-llm-retry` core `recover()` L129-130 `policy===undefined → next()` | REAL | 只读引用 core 源码：未配 retryPolicy 的 provider 天然 same-route retry=0 |
+| E9 | 官方 core `!retryableCodes.includes(failure.code) → next()`（L138） | REAL | 已配 provider 仅 EMPTY_RESPONSE/SERVER/TIMEOUT/TRANSPORT 重试，不含 RATE_LIMIT |
+| E10 | settings.yaml 六 provider 显式 retryPolicy（retryableCodes 不含 RATE_LIMIT） | REAL | 运行 profile 配置现场 |
+| E11 | zhipu/bai 未配 retryPolicy → 命中 core `policy===undefined` → retry=0 | REAL | 全生产路径 1310 不被官方层同路盲重试 |
+| E12 | EC classifier 1310 → QUOTA_EXHAUSTED（不可重试/无窗口） | CONTROLLED | R1 classifier-v1 覆盖 |
+| E13 | EC 发 quota requirement 含 sourceProvider/sourceModel（V3a/V3b） | CONTROLLED | R1.1 provenance 新增断言 |
+| E14 | Router 泛化 `isPrimaryModel`（zhipu/bai/opencode/commandcode）消费 requirement 改写 openrouter | CONTROLLED | V1c/V1d/V2b/V2c/V4a/V4b |
+| E15 | 复用既有 `pickQuotaRouteTarget`，零第二引擎 | REAL | 代码走查：Router 复用同一路由目标函数 |
+| E16 | 未命中 requirement 的 managed provider 原样放行（V5a/V5b） | CONTROLLED | 不误伤回归 |
+| E17 | 1305 PROVIDER_OVERLOADED bounded retry 回归不破坏（R1 套件全绿） | CONTROLLED | E3-E6 组合覆盖 |
+| E18 | openrouter 分支既有 quota-route-switch 回归（V6a/V6b） | CONTROLLED | 既有分支不回归 |
+| E19 | CI L1/L2/L3 实际 job steps 核对（test-failure-classifier-v1 + 5 verify-p26 套件 + smoke-only） | REAL | `.github/workflows/ci-level{1,2,3}.yml` 实际步骤；L3 未扩建、无 Level 4 新增 |
+| E20 | openrouter 与 direct managed provider 属不同配额池 | INFERRED | 依据 provider 池配置推断，无独立计量观测（如实标注） |
+
+**合计 20 项**：REAL ×6（E8-E11、E15、E19）、CONTROLLED ×12、SYNTHETIC ×1（E1 夹具）、INFERRED ×1（E20）。（E1 同时含 CONTROLLED + SYNTHETIC 双重属性，按主属性计 CONTROLLED；SYNTHETIC 单列 E1 夹具说明。）
 
 ## 结论
 

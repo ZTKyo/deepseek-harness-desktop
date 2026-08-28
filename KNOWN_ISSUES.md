@@ -26,12 +26,10 @@
 
 ## 2026-08-28 P2.6 R1.1 时区陷阱：UTC CI runner 上 naive 重置时间被 +08:00 锚定解析成"过去时间"（重要）
 **现象**：本地（+08:00）全部测试 PASS，但 GitHub Actions（UTC）上 ci-level2 两处失败：
-1. classifier 测试 ailure-classifier 断言 unavailableUntil 取到 null / 解析差 8h；
-2. 集成测试 erify-p26-r1-quota-defer.mjs：V1e/V2d/V4a FAIL（15 pass 3 fail），defer 不生效。
-**根因**：真实 zhipu/bai 1310 报错里的 naive 时间（"2026-08-28 15:06:06 重置"）是**服务端本地时区（Asia/Shanghai +08:00）**，无时区后缀；core 解析时固定锚定 +08:00（CJK 服务商）。但测试构造 naive 串用的是**进程本地时钟**——UTC runner 上 
-ew Date(RESET_AT) 的 getHours() 是 UTC 小时，core 按 +08:00 解释 → 时间偏移 8h、甚至落入过去 → parseResetTimestamp 返回 null。
-**修复**：测试构造改为 
-ew Date(RESET_AT + 8*3600e3) 取 **getUTC* 分量**生成 naive 串（模拟服务端 +08:00 墙钟），任何主机 TZ 下一致；V2 variant 小时同改 getUTCHours()。core 侧见 commit e72f879。
+1. classifier 测试 failure-classifier 断言 unavailableUntil 取到 null / 解析差 8h；
+2. 集成测试 verify-p26-r1-quota-defer.mjs：V1e/V2d/V4a FAIL（15 pass 3 fail），defer 不生效。
+**根因**：真实 zhipu/bai 1310 报错里的 naive 时间（"2026-08-28 15:06:06 重置"）是**服务端本地时区（Asia/Shanghai +08:00）**，无时区后缀；core 解析时固定锚定 +08:00（CJK 服务商）。但测试构造 naive 串用的是**进程本地时钟**——UTC runner 上 new Date(RESET_AT) 的 getHours() 是 UTC 小时，core 按 +08:00 解释 → 时间偏移 8h、甚至落入过去 → parseResetTimestamp 返回 null。
+**修复**：测试构造改为 new Date(RESET_AT + 8*3600e3) 取 **getUTC* 分量**生成 naive 串（模拟服务端 +08:00 墙钟），任何主机 TZ 下一致；V2 variant 小时同改 getUTCHours()。core 侧见 commit e72f879。
 **教训**：
 - 涉及"服务端 naive 时间解析"的测试，**必须模拟服务商时区（+08:00）构造输入**，不能依赖进程本地 TZ；本地过了 ≠ CI 过，务必用 TZ=UTC（或 CI 实测）复验。
 - 时区相关修复要同时检查 core 解析 + 所有测试 fixture 的构造，两边都可能各错一半。

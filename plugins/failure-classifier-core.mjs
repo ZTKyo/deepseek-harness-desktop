@@ -138,42 +138,44 @@ export function parseResetTimestamp(text, nowMs, tzOffsetMinutes) {
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   let ms = null;
   let m;
+  // Chinese provider interfaces (zhipu/bai) state reset times as server-local
+  // naive wall-clock in Asia/Shanghai (+08:00). To be robust on any host TZ
+  // (GitHub runners are UTC), naive components are anchored to +08:00 by
+  // default; callers on other semantics may override tzOffsetMinutes.
+  const tz = Number.isFinite(tzOffsetMinutes) ? tzOffsetMinutes : 480;
   if ((m = text.match(RESET_CJK_DATE_RE))) {
-    const [, y, mo, d, h, mi, s] = m;
-    ms = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), s ? Number(s) : 0).getTime();
+    ms = naiveToUtc(m[1], m[2], m[3], m[4], m[5], m[6], tz);
   } else if ((m = text.match(RESET_ISO_RE))) {
-    ms = new Date(`${m[1]}T${m[2]}`).getTime();
+    const [, date, time] = m;
+    if (/Z|[+-]\d{2}:?\d{2}$/.test(time)) {
+      ms = Date.parse(`${date}T${time}`); // explicit zone: keep as-is
+    } else {
+      const [y, mo, d] = date.split("-").map(Number);
+      const [h, mi, s = 0] = time.split(":").map(Number);
+      ms = Date.UTC(y, mo - 1, d, h, mi, s) - tz * 60 * 1000;
+    }
   } else if ((m = text.match(RESET_EPOCH_RE))) {
     ms = Number(m[1]) * 1000;
   } else if (tzOffsetMinutes === undefined) {
     // Plain date is only trusted when the text explicitly names a reset.
     const labeled = /(?:重置|恢复|解锁|reset)/i.test(text);
     if (labeled && (m = text.match(RESET_PLAIN_DATE_RE))) {
-      ms = new Date(`${m[1]}T${m[2]}`).getTime();
+      const [y, mo, d] = m[1].split("-").map(Number);
+      const [h, mi, s = 0] = m[2].split(":").map(Number);
+      ms = Date.UTC(y, mo - 1, d, h, mi, s) - tz * 60 * 1000;
     } else if (labeled && (m = text.match(RESET_EPOCH_ANY_RE))) {
       // Chinese order ("将在 <epoch> 重置") puts the label AFTER the number.
       ms = Number(m[1]) * 1000;
     }
   }
   if (ms === null || !Number.isFinite(ms)) return null;
-  if (!Number.isFinite(tzOffsetMinutes)) {
-    // tzOffsetMinutes (minutes EAST of UTC, JS Date#getTimezoneOffset sign) lets
-    // a caller re-anchor a naive timestamp; undefined = server-local parse.
-  } else {
-    ms = reanchorNaive(text, ms, tzOffsetMinutes);
-  }
   if (ms <= now || ms > now + MAX_RESET_HORIZON_MS) return null;
   return ms;
 }
 
-function reanchorNaive(text, localMs, tzOffsetMinutes) {
-  const naive = /(\d{4})[-\/年](\d{1,2})[-\/月](\d{1,2})日?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(text);
-  if (!naive) return localMs;
-  const asUtc = Date.UTC(
-    Number(naive[1]), Number(naive[2]) - 1, Number(naive[3]),
-    Number(naive[4]), Number(naive[5]), naive[6] ? Number(naive[6]) : 0
-  );
-  return asUtc - tzOffsetMinutes * 60 * 1000; // caller passes minutes EAST of UTC (e.g. +480 for Beijing)
+/** Naive wall-clock components -> epoch ms, anchored to tzOffsetMinutes EAST of UTC (month 1-based). */
+function naiveToUtc(y, mo, d, h, mi, s, tzOffsetMinutes) {
+  return Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), s ? Number(s) : 0) - tzOffsetMinutes * 60 * 1000;
 }
 
 /** Stable correlation signature. Deliberately message-free (variant-proof). */

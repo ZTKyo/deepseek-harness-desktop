@@ -1006,9 +1006,20 @@ export function apply(ctx, config = {}) {
       if (!sid || !failure) return action;
       const provider = payload?.provider || "";
       const model = payload?.model || payload?.resolved?.model || "";
-      const cls = classifyFailure(failure);
+      // P2.6 R1: classify with provider/model context (Taxonomy V1 delegation).
+      const cls = classifyFailure(failure, { provider, model });
       const it = store.ensure(sid);
-      it.lastFailure = { category: cls.category, code: String(failure.code || ""), message: String(failure.message || "").slice(0, 300) };
+      it.lastFailure = {
+        category: cls.category,
+        code: String(failure.code || ""),
+        message: String(failure.message || "").slice(0, 300),
+        // R1 taxonomy facts (evidence + cross-attempt correlation; count-based
+        // budgets stay the enforcement mechanism, so text variants cannot bypass).
+        taxonomyClass: cls.taxonomyClass,
+        providerCode: cls.providerCode ?? undefined,
+        normalizedSignature: cls.normalizedSignature || undefined,
+        unavailableUntil: cls.unavailableUntil ?? undefined,
+      };
       it.lastFailureAt = Date.now();
       it.retryCount = (it.retryCount || 0) + 1;
 
@@ -1101,8 +1112,40 @@ export function apply(ctx, config = {}) {
           record(`CONTEXT-OVERFLOW -> FAILED_FATAL (no budget/fallback; official compaction handled compact)`);
           return action;
         }
+        case CATEGORY.QUOTA_EXHAUSTED: {
+          // P2.6 R1: quota（含业务码 1310）同路重试预算 = 0。
+          // 第一优先：交 Router（EC 只记录 recovery REQUIREMENT，Router 是唯一
+          // 模型/路由权威；route switch 是唯一能真正绕开配额的手段，有界）。
+          if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
+            it.pendingFallback = {
+              requirement: true,
+              reason: "quota_exhausted: router-decided route switch",
+              modalities: it.lastModalities || [],
+              used: false,
+            };
+            try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
+            store.setState(sid, STATE.RETRYING);
+            record(`QUOTA -> RECOVERY-REQUIREMENT (router decides route)`);
+            await sleep(backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs));
+            return { kind: "retry" };
+          }
+          // 无 fallback 预算/可能：严格 defer——provider 明确给出重置时间时
+          // 精确 defer 到 unavailableUntil（重置窗口内绝不盲恢复、绝不轮询）；
+          // 否则保守 bounded defer。nextRetryAt 之后的恢复走既有 WAITING_PROVIDER
+          // 到期扫描（沿用现有预算/anti-double-kick 机制，不新增引擎）。
+          const nowMs = Date.now();
+          const until = Number.isFinite(cls.unavailableUntil) && cls.unavailableUntil > nowMs ? cls.unavailableUntil : null;
+          const quotaDeferCapMs = Number.isFinite(budgets.quotaDeferCapMs) && budgets.quotaDeferCapMs > 0
+            ? budgets.quotaDeferCapMs
+            : 7 * 24 * 60 * 60 * 1000;
+          const deferMs = until
+            ? Math.min(until - nowMs, quotaDeferCapMs)
+            : backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs);
+          store.setState(sid, STATE.WAITING_PROVIDER, { nextRetryAt: nowMs + deferMs });
+          record(`QUOTA-DEFER until=${until ? new Date(until).toISOString() : "bounded"} deferMs=${Math.round(deferMs)} sig=${cls.normalizedSignature || "-"}`);
+          return action;
+        }
         case CATEGORY.PROVIDER_OUTAGE:
-        case CATEGORY.QUOTA_EXHAUSTED:
         case CATEGORY.MODEL_UNAVAILABLE: {
           if (hasBudget("fallback", it, budgets) && !it.pendingFallback) {
             // Router decides the compatible provider/model; EC only records need.

@@ -13,7 +13,10 @@ const sha = (p) => { try { return crypto.createHash('sha256').update(fs.readFile
 
 const home = os.homedir();
 const local = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-const repo = process.argv[2] || 'C:/Users/Administrator/Desktop/sdeepseek harness/_release-staging';
+// Canonical source of truth = the repo checkout (NOT _release-staging, which is
+// a stale deploy-time snapshot and caused a false DIFF in the 2026-08-28 P2.6 R1
+// run). Override only for fixture drills.
+const repo = process.argv[2] || 'C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop';
 const live = path.join(home, '.dsh', 'profiles', 'web');
 const manifestPath = path.join(local, 'DSHHarness', 'state', 'loaded-release.json');
 

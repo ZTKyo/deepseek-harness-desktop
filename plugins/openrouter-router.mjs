@@ -334,6 +334,22 @@ export function apply(ctx, config = {}) {
             logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: cfg.modelIds.mimo, ctx: "image-required" });
             finalModel = cfg.modelIds.mimo;
           }
+        } else if (req.reason && /quota_exhausted/i.test(req.reason)) {
+          // P2.6 R1: 配额耗尽（周/月配额池用尽，如 zhipu 1310）——同池重试无意义，
+          // 唯一有效手段 = 换路由（不同配额池）。按当前任务决策的 fallback chain
+          // 顺延，选第一个与当前不同的模型 id；链上无差异时退到 PRIMARY。
+          const chain = Array.isArray(d.fallback_chain_ids) && d.fallback_chain_ids.length
+            ? d.fallback_chain_ids
+            : [cfg.modelIds.deepseek, cfg.modelIds.qwen].filter(Boolean);
+          let target = null;
+          for (const id of chain) { if (id && id !== finalModel) { target = id; break; } }
+          if (!target && cfg.modelIds.deepseek && finalModel !== cfg.modelIds.deepseek) target = cfg.modelIds.deepseek;
+          if (target) {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: target, ctx: "quota-route-switch" });
+            finalModel = target;
+          } else {
+            logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: finalModel, ctx: "quota-no-alternative" });
+          }
         } else if (req.reason && /reasoning_protocol/i.test(req.reason)) {
           // reasoning-protocol: prefer a model with stable reasoning
           if (cfg.modelIds.deepseek && finalModel !== cfg.modelIds.deepseek) {

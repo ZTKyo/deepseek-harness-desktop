@@ -12,7 +12,7 @@
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
 | 02.6 | RETRY SEMANTICS / Provider Failure Classification | `VERIFIED`（**External Review Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；canonical main=a332ebc、classifier=2ea1059f、全量回归 136/0。historical：批准前曾为 IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3；R1 PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28、PR #61 merged=a332ebc 2026-08-28；事务化部署+受控重启加载完成 2026-08-29） | —（APPROVED；Waiting For = NONE） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
-| 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
+| 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `IMPLEMENTATION_COMPLETE`（**R1 实施收口 2026-08-29**；未申请 VERIFIED——待外部评审。零核心修改纯插件层：supervisor-bridge.mjs + supervisor-bridge-core.mjs + T1–T14 单测 14/14 + REAL E2E（隔离实例 dsh 0.1.1-rc.2）26/26 PASS（负例 401/404/400、真实派发+goal armed、幂等、纠偏上限 3→409、cancel:clear、快照 metadata-only）；初始指令 mode 'queue'→'now' 修复已入 E2E 证据。部署面：`~/.dsh/profiles/web/` 双文件就位 + cordis.patch.yml 注册（js-yaml 校验 18 ops PASS）；**攒批生效**——未重启 3080 主服务，下次自然重启加载（fail-soft QUARANTINE 安全） | —（Waiting For = 外部评审 Round 1；Reviewer 未授权前不得标 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -469,3 +469,13 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   (3) Notion 02.6 同步 VERIFIED + 上述事实，Reviewer 99 保留 Round 3 APPROVED 原文、不新增 verdict；
   (4) **Next = Phase 02.75 SUPERVISOR（仅记录，未启动）**；P3 = BLOCKED 不变。
   本 PR 零生产代码改动（仅 docs/roadmap/CURRENT_STATUS.md）、零重启、零部署、零新增测试。
+- **2026-08-29：P2.75 SUPERVISOR R1 实施收口（IMPLEMENTATION_COMPLETE，未申请 VERIFIED）**：
+  交付零核心修改纯插件层控制面：`plugins/supervisor-bridge.mjs`（HTTP /supervisor/* host 桥，fail-soft）
+  ＋ `plugins/supervisor-bridge-core.mjs`（纯函数核）＋ T1–T14 单测 **14/14** ＋ REAL E2E（隔离
+  DSH_HOME 实例 dsh 0.1.1-rc.2）**26/26** PASS：负例 401/404/400、T15 真实派发（session.create+
+  goal.create+prompt **mode 'now'**——修复 'queue' 只入队不唤醒缺陷，evidence 含初始指令为真信号）、
+  T16 幂等（同 key 重派 dispatched:false）、T17 纠偏上限 3（第 4 次 409 corrections_exhausted）、
+  快照 metadata-only、T18 cancel:clear 投影清空；验证后隔离实例已销毁。部署面：`~/.dsh/profiles/web/`
+  双文件就位＋cordis.patch.yml 注册（js-yaml 校验 18 ops PASS）；**攒批生效**——本轮未重启 3080
+  主服务，下次自然重启加载（fail-soft）。状态=IMPLEMENTATION_COMPLETE；**Waiting For=外部评审
+  Round 1**（Reviewer 未授权前不得标 VERIFIED）；P3 仍 BLOCKED（前置=P2.75 VERIFIED）。

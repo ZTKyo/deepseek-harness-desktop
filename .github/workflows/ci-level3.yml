@@ -58,7 +58,7 @@ jobs:
             $active = @(
               'completion-notify.mjs','keepalive-patch.mjs',
               'model-selection-guard.mjs','execution-continuity.mjs',
-              'context-memory.mjs'
+              'context-memory.mjs','supervisor-bridge.mjs'
             )
             # copy every plugin module (main + their core/helper deps) so
             # imports resolve inside the profile dir

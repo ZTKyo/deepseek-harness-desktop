@@ -1,0 +1,76 @@
+# ox-relay-providers.yaml — stealth/ox-alpha 同模型跨 relay fallback 的 provider profile 模板
+#
+# 用法：把 ox-relay-a / ox-relay-b 两个 profile 合并进 ~/.dsh/settings.yaml 的
+#   llm-pi-ai.providers 段（与既有 openrouter / commandcode 等 profile 平级）。
+# 这是一个 TEMPLATE：apiKeyEnv 只引用凭据名，本文件不含任何 secret。
+#
+# 审计结论（2026-08-21，docs/execution-economy/probe/ox-relay-audit.mjs 实测）：
+#   ox-relay-a = OpenRouter        —— SUPPORTED（respModel=stealth/ox-alpha）
+#   ox-relay-b = Command Code      —— SUPPORTED（respModel=stealth/ox-alpha）
+#   agentrouter / opencode-zen / zenmux / bai —— UNSUPPORTED（不进入链）
+# 若未来找到第三个真实支持 ox-alpha 的 relay，按同模式新增 ox-relay-c 并把
+# OX_RELAY_CHAIN 扩展为 "ox-relay-a,ox-relay-b,ox-relay-c"。
+#
+# Same-Model Invariant：两个 profile 的模型 id 都必须精确是 stealth/ox-alpha，
+# 不允许改写成任何其他模型（DeepSeek/MiMo/Qwen/auto）。
+#
+# Retry（任务 §13）：每个 relay 至多 1 次 bounded 内部重试（只对真实 provider failure），
+# 然后交给 ox-relay-failover 插件推进到下一个 relay，避免双重重试爆炸。
+
+llm-pi-ai:
+  providers:
+    # Relay A —— OpenRouter（当前主力 openrouter 之外的第二/第三个独立 route identity）
+    ox-relay-a:
+      displayName: OX Relay A (OpenRouter)
+      apiKeyEnv: OPENROUTER_API_KEY
+      api: openai-completions
+      baseURL: https://openrouter.ai/api/v1
+      timeoutMs: 120000
+      retryPolicy:
+        mode: normal
+        maxRetries: 1
+        retryableCodes:
+          - RATE_LIMIT
+          - SERVER
+          - TIMEOUT
+          - TRANSPORT
+        backoff:
+          initialDelayMs: 500
+          maxDelayMs: 5000
+          jitterRatio: 0.1
+      models:
+        - id: stealth/ox-alpha
+          name: Ox Alpha (Relay A / OpenRouter)
+          contextWindow: 1048576
+          maxTokens: 131072
+          input:
+            - text
+            - image
+
+    # Relay B —— Command Code（实测 SUPPORTED：api.commandcode.ai/provider/v1 服务 stealth/ox-alpha）
+    ox-relay-b:
+      displayName: OX Relay B (Command Code)
+      apiKeyEnv: CMD_API_KEY
+      api: openai-completions
+      baseURL: https://api.commandcode.ai/provider/v1
+      timeoutMs: 120000
+      retryPolicy:
+        mode: normal
+        maxRetries: 1
+        retryableCodes:
+          - RATE_LIMIT
+          - SERVER
+          - TIMEOUT
+          - TRANSPORT
+        backoff:
+          initialDelayMs: 500
+          maxDelayMs: 5000
+          jitterRatio: 0.1
+      models:
+        - id: stealth/ox-alpha
+          name: Ox Alpha (Relay B / Command Code)
+          contextWindow: 1048576
+          maxTokens: 131072
+          input:
+            - text
+            - image

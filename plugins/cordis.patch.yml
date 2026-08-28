@@ -255,3 +255,15 @@
       name: './execution-continuity.mjs'
       config:
         enableAutoResume: true
+
+# --- Supervisor Bridge（supervisor-bridge，P2.75 R1 2026-08-29）---
+# ChatGPT → Harness 最小控制面（只读观测 + 受限变更），详见
+# docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md。
+# 安全：/supervisor/* 全部 Bearer token（~/.dsh/supervisor-bridge/token，首次自动生成）；
+#       变更一律回环翻译到宿主既有 session.*/goal.* RPC（禁第二权威）；
+#       纠偏上限 3；无 shell/write_file 通道；不放宽 CORS。
+# 删除本段即还原（插件进入 QUARANTINED：源码保留，注册禁用）。
+- insert:
+    - id: supervisor-bridge
+      name: './supervisor-bridge.mjs'
+      config: {}

@@ -101,6 +101,51 @@ jobs:
           node tests\reliability\test-completion-truth.mjs
           node tests\reliability\test-resume-defer.mjs
 
+      # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
+      # Per External Review Blocker B: quota-defer / network-error /
+      # rollback-switch + commandcode + full-path integration live in the
+      # Level 2 state-machine lane. All are pure node suites (no live server,
+      # no credentials, repo-relative, self-contained harnesses).
+      - name: P2.6 R1 quota defer (EC taxonomy defer + Router requirement bridge)
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r1-quota-defer.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-QUOTA-DEFER FAIL"; exit 1 }
+          Write-Host "p26 r1 quota-defer: PASS"
+
+      - name: P2.6 R1 network error (bounded retry, no fabricated status)
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r1-network-error.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-NETWORK-ERROR FAIL"; exit 1 }
+          Write-Host "p26 r1 network-error: PASS"
+
+      - name: P2.6 R1 rollback switch (EC_DISABLED OFF/ON + isolation)
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r1-rollback-switch.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-ROLLBACK-SWITCH FAIL"; exit 1 }
+          Write-Host "p26 r1 rollback-switch: PASS"
+
+      - name: P2.6 R2 commandcode quota cross-provider fallback (Blocker A)
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r2-commandcode-quota.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R2-COMMANDCODE-QUOTA FAIL"; exit 1 }
+          Write-Host "p26 r2 commandcode-quota: PASS"
+
+      - name: P2.6 R1.1 direct-provider quota full-path integration (Blocker A)
+        # Real production modules only (execution-continuity.mjs + openrouter-router.mjs
+        # + execution-continuity-core.mjs); request-error path drives the authority
+        # transition (EC emits requirement -> router consumes + rewrites provider/model).
+        # No credentials, no live server; sleeps a bounded ~30s per quota-triggered
+        # backoff by design (verify-p26-r1-1-managed-direct-quota.mjs).
+        shell: pwsh
+        run: |
+          node tests\continuity\verify-p26-r1-1-managed-direct-quota.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-1-DIRECT-QUOTA FAIL"; exit 1 }
+          Write-Host "p26 r1.1 direct quota full-path: PASS"
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

@@ -11,7 +11,7 @@
 ## 交付物
 
 ### 1. failure-classifier-core.mjs（新增，976CCC6E…）
-- Failure Taxonomy V1：14 分类 × 3 维度（retryableSameRoute / deterministic / unavailableUntil）。
+- Failure Taxonomy V1：9 分类 × 3 维度（retryableSameRoute / deterministic / unavailableUntil）。
 - 维度优先级：unavailableUntil（429/529/503 quota 携带 Retry-After 时）> deterministic（4xx 语义）
   > retryableSameRoute（5xx/网络瞬态）。
 - 归一化签名（normalizedSignature）：剥数字/quote/guid → 同型失败聚合分析用。

@@ -29,3 +29,8 @@ client-run.old.log
 dsh-server-*.log
 *.pid
 *.sock
+
+# --- local DSH client tooling / scratch (never into repo) ---
+DSH-Client/
+_r51-work/
+

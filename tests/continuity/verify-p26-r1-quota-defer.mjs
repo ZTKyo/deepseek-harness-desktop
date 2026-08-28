@@ -59,11 +59,14 @@ function readIntents() {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-// reset time = now + 2h, formatted server-local naive (the real 1310 shape)
+// reset time = now + 2h, formatted as the provider's server-local naive
+// wall-clock (zhipu/bai render Asia/Shanghai +08:00, like the real 1310 shape).
+// Constructing it from UTC components of (RESET_AT + 8h) keeps the test
+// timezone-independent — identical on UTC CI runners and local +08:00 hosts.
 const RESET_AT = Date.now() + 2 * 3600e3;
 const pad = (n) => String(n).padStart(2, '0');
-const d = new Date(RESET_AT);
-const resetLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+const d = new Date(RESET_AT + 8 * 3600e3);
+const resetLocal = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 const SID1 = 'sess-p26r1-quota';
 const SID2 = 'sess-p26r1-overload';
 
@@ -87,7 +90,7 @@ const SID2 = 'sess-p26r1-overload';
 
 // ── V2: same 1310 again (variant text) -> strict defer to reset time ───────
 {
-  const variant = `429: {"code":"1310","message":"换一种说法：您本周期 ${pad(d.getHours())} 点后流量包额度已用尽，${resetLocal} 恢复。"}`;
+  const variant = `429: {"code":"1310","message":"换一种说法：您本周期 ${pad(d.getUTCHours())} 点后流量包额度已用尽，${resetLocal} 恢复。"}`;
   const payload = {
     agent: { session: { id: SID1 } },
     provider: 'zhipu',

@@ -15,10 +15,13 @@ const NOW = new Date('2026-08-28T02:00:00+08:00').getTime();
 // Real production incident shape (2026-08-26 zhipu 1310), de-sensitized.
 const GLM_1310 = { code: 'RATE_LIMIT', message: '429: {"code":"1310","message":"您已达到每周/每月使用上限，您的限额将在 2026-09-03 01:49:02 重置。"}' };
 
-function fmtLocalReset(resetAt) {
-  const d = new Date(resetAt);
+// Format an epoch as a naive Asia/Shanghai (+08:00) wall-clock string,
+// matching how zhipu/bai render server-local reset times. TZ-independent:
+// works identically on UTC runners and local +08:00 machines.
+function fmtCjk(epochMs) {
+  const d = new Date(epochMs + 8 * 3600e3);
   const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
 // ── T-group A: taxonomy core ────────────────────────────────────────────────
@@ -27,7 +30,7 @@ function fmtLocalReset(resetAt) {
   check('A1 1310 -> QUOTA_EXHAUSTED (not RATE_LIMIT)', c.classification === FAILURE_CLASS.QUOTA_EXHAUSTED, `class=${c.classification}`);
   check('A2 providerCode=1310', c.providerCode === '1310');
   check('A3 same-route retry budget = 0', c.retryableSameRoute === false && c.deterministic === true);
-  check('A4 unavailableUntil parsed exactly (server-local naive)', c.unavailableUntil === new Date('2026-09-03T01:49:02+08:00').getTime(),
+  check('A4 unavailableUntil parsed exactly (CJK naive -> +08:00)', c.unavailableUntil === new Date('2026-09-03T01:49:02+08:00').getTime(),
     `got=${c.unavailableUntil ? new Date(c.unavailableUntil).toISOString() : null}`);
   check('A5 signature deterministic', c.normalizedSignature === 'zhipu|glm-4.6|QUOTA_EXHAUSTED|1310|-|v1', c.normalizedSignature);
 }
@@ -95,7 +98,7 @@ function fmtLocalReset(resetAt) {
 // ── T-group D: reset timestamp parsing ──────────────────────────────────────
 {
   const r1 = parseResetTimestamp('您的限额将在 2026-09-03 01:49:02 重置。', NOW);
-  check('D1 CJK labeled naive date (server-local)', r1 === new Date('2026-09-03T01:49:02+08:00').getTime());
+  check('D1 CJK labeled naive date (+08:00 anchor)', r1 === new Date('2026-09-03T01:49:02+08:00').getTime());
   const r2 = parseResetTimestamp('quota resets 2026-12-01T08:00:00Z', NOW);
   check('D2 ISO with explicit Z keeps UTC', r2 === Date.parse('2026-12-01T08:00:00Z'), r2 ? new Date(r2).toISOString() : null);
   const r3 = parseResetTimestamp('no date here', NOW);
@@ -104,8 +107,8 @@ function fmtLocalReset(resetAt) {
   check('D4 horizon clamp (>400d) -> null', r4 === null);
   const r5 = parseResetTimestamp('您的限额将在 2020-01-01 00:00:00 重置。', NOW);
   check('D5 past date -> null', r5 === null);
-  const r6 = parseResetTimestamp(`您的限额将在 ${fmtLocalReset(NOW + 2 * 3600e3)} 重置。`, NOW);
-  check('D6 future relative reset parses', Math.abs(r6 - (NOW + 2 * 3600e3)) < 1500);
+  const r6 = parseResetTimestamp(`您的限额将在 ${fmtCjk(NOW + 2 * 3600e3)} 重置。`, NOW);
+  check('D6 future relative reset parses (naive -> +08:00)', Math.abs(r6 - (NOW + 2 * 3600e3)) < 1500, r6 ? new Date(r6).toISOString() : null);
   const r7 = parseResetTimestamp('您的限额将在 1790000000 重置。', NOW);
   check('D7 labeled epoch seconds', r7 === 1790000000 * 1000);
 }

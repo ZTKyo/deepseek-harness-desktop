@@ -70,7 +70,7 @@ IMPLEMENTATION_COMPLETE。
 **P2.6 R1 IMPLEMENTATION_COMPLETE（2026-08-28，PR #59 squash merged）**：上段"禁止
 IMPLEMENTATION_COMPLETE"为 R1 未开始时的前置约束，现按 R1 目标授权解除（VERIFIED 仍禁止
 自标，须 External Review 授权）。R1 交付：Failure Taxonomy V1 观测层（failure-classifier，
-14 类 3 轴 + 归一化签名，evidence-only 红线：不改 payload.failure/不加会话事件/不重试/
+9 类 3 轴 + 归一化签名，evidence-only 红线：不改 payload.failure/不加会话事件/不重试/
 不选模型，异常全隔离）+ EC 语义升级（classifyFailure 单一真源委托；QUOTA_EXHAUSTED
 same-route retry=0 + unavailableUntil defer 预算 10/h；stream 瞬态不再误触发
 context-recovery）+ 复用既有 EC retry budget 与 Router fallback authority（零第二引擎）。
@@ -87,8 +87,8 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 
 ## Phase 02.6 RETRY SEMANTICS 当前状态
 
-- **状态：IMPLEMENTATION_COMPLETE（R1）/ AWAITING_EXTERNAL_REVIEW**（2026-08-28，PR #59 squash merged；停等 External Review Round 1）
-- **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，14 类 3 轴 + 归一化签名）、
+- **状态：IMPLEMENTATION_COMPLETE（R1 + R1.1）/ AWAITING_EXTERNAL_REVIEW ROUND 2**（2026-08-28，PR #59 squash merged、PR #60 open；停等 External Review Round 2，禁止自标 VERIFIED）
+- **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，9 类 3 轴 + 归一化签名）、
   1310→QUOTA_EXHAUSTED same-route retry=0 + unavailableUntil 解析与 defer 预算、
   1305→PROVIDER_OVERLOADED bounded retry、复用既有 EC retry budget 与 Router fallback
   authority（禁造第二套引擎——已遵守）、T1–T18 回归接入现有 CI（L1 语义/L2 状态机）、
@@ -98,7 +98,29 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   `{ enabled: false }`（已实测恢复 pre-R1）。
 - **latest report**：`docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md`
 - **PR**：PR #59（R1, squash merged 2026-08-28）
-- **Next**：External Review Round 1 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
+- **R2 增量（2026-08-28，本地部署未提交 PR；R1 授权范围内 Blocker A）**：
+  commandcode 主力（agent-default-model=commandcode/auto）配额耗尽 1310 → EC 发
+  quota_exhausted recovery requirement → Router commandcode 分支消费并跨 provider 改写
+  openrouter（不同配额池），复用 pickQuotaRouteTarget（零第二引擎）。验证：
+  `tests/continuity/verify-p26-r2-commandcode-quota.mjs` 9/9 PASS；R1 三套件回归
+  18/18 + 20/20 + ALL PASS（合计 47+ 断言 0 fail）。证据：
+  `docs/roadmap/evidence/P26_R2_COMMANDCODE_QUOTA_VERIFY.md`。备份：
+  `DSH-Client/_backup-p26-r2/`。已知问题（R1 既有）：Router agent/request 路径有 1 个
+  Socket 句柄惰性残留（原版同样存在）；测试脚本顶层 process.exit 已规避，工具管道
+  2>&1 会伪超时，须 `node --no-warnings` 直接运行。
+- **R1.1 增量（2026-08-28，随 R1.1 PR #60 提交；R1 授权范围内 Blocker 1）**：
+  direct managed provider（zhipu/bai）1310 配额耗尽 → EC 发 quota requirement 并记录
+  sourceProvider/sourceModel → Router 泛化 `isPrimaryModel` + 复用 `pickQuotaRouteTarget`
+  （零第二引擎），zhipu/bai/opencode/commandcode 任一主力出现 quota requirement 即跨
+  provider 改写 openrouter（不同配额池），未命中不误伤。验证：
+  `tests/continuity/verify-p26-r1-1-managed-direct-quota.mjs` 15/15 PASS；R2 9/9 与 R1
+  三套件回归全 PASS。CI 接入（External Review Blocker B 分配）：L1=classifier 纯单元
+  步骤；L2=quota-defer/network-error/rollback-switch/commandcode/full-path 五件套
+  （.github/workflows/ci-level1.yml / ci-level2.yml）。证据：
+  `docs/roadmap/evidence/P26_R1_1_MANAGED_DIRECT_QUOTA_VERIFY.md`（含 Blocker A 第 1 项
+  配置证据：official dsh-llm-retry core 对无 retryPolicy 的 provider 直接 next()、六 provider
+  显式策略不含 RATE_LIMIT → 全生产路径 1310 同路重试=0，直达 EC classifier）。
+- **Next**：External Review Round 2 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
 - **⚠️ 禁止事项（不变）**：External Reviewer APPROVED 前，禁止把 02.6 写成 `VERIFIED`。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态

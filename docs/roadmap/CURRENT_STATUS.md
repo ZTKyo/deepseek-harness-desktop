@@ -11,7 +11,7 @@
 | 02 | SIMPLIFY / Architecture Consolidation + Reliability P2 | `VERIFIED` | —（APPROVED，R1–R11 全部闭环） | docs/roadmap/reports/PHASE_02_SIMPLIFY/REPORT_R11.md |
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
-| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `TODO`（P2.6-A EMERGENCY HOTFIX 已独立闭环 APPROVED，整体未开始） | **Phase 02.5 已外部 VERIFIED（2026-08-28 Round 10 APPROVED）→ 02.6 为下一 Phase（FULL 未开始）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/REPORT_R1.md（待建） |
+| 02.6 | RETRY SEMANTICS / Provider Failure Classification | `IMPLEMENTATION_COMPLETE（R1）/ AWAITING_EXTERNAL_REVIEW`（P2.6-A 独立闭环 APPROVED；R1 实现+受控 E2E 完成，PR #59 merged 2026-08-28） | **停等 External Review Round 1（禁止自标 VERIFIED）** | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `TODO` | Phase 02.6 外部 `VERIFIED` 后启动（硬前置=02.6 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_R1.md（待建） |
 | 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
@@ -67,9 +67,39 @@ PR #49 转 READY 后 squash MERGED=`9cff3839e0eddcb58d2c4d9008ad105e76c90803`，
 Router fallback+defer / reasoning formal regression matrix / CommandCode route / --no-open
 均未开始）；硬前置不变：Phase 02.5 外部 VERIFIED 后方可启动。禁止把 P2.6 写成 VERIFIED 或
 IMPLEMENTATION_COMPLETE。
+**P2.6 R1 IMPLEMENTATION_COMPLETE（2026-08-28，PR #59 squash merged）**：上段"禁止
+IMPLEMENTATION_COMPLETE"为 R1 未开始时的前置约束，现按 R1 目标授权解除（VERIFIED 仍禁止
+自标，须 External Review 授权）。R1 交付：Failure Taxonomy V1 观测层（failure-classifier，
+14 类 3 轴 + 归一化签名，evidence-only 红线：不改 payload.failure/不加会话事件/不重试/
+不选模型，异常全隔离）+ EC 语义升级（classifyFailure 单一真源委托；QUOTA_EXHAUSTED
+same-route retry=0 + unavailableUntil defer 预算 10/h；stream 瞬态不再误触发
+context-recovery）+ 复用既有 EC retry budget 与 Router fallback authority（零第二引擎）。
+验证：classifier-v1 31/31、quota-defer 18/18、network-error 20/20、rollback 单开关
+enabled=false 恢复 pre-R1 全 PASS、r8 attestation 三端哈希一致、事务化部署 5/5
+（p26-r1-20260828112927-7b5d14fc）。受控 E2E（真实管线，2026-08-28 13:35-13:52）：死端口
+注入 bai 路由 → classifier 17+ 条 NETWORK_TIMEOUT_5XX/TRANSPORT 正确分类 → EC bounded
+retry 退避（15→18）→ WAITING_PROVIDER defer → RECOVERY_QUEUED 冷却 → RESUME goal
+re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状态 =
+**IMPLEMENTATION_COMPLETE / AWAITING_EXTERNAL_REVIEW，停等 External Review Round 1**。
 
 - P2.5 必须保持：Official Session = Truth、Official Goal = Task Truth、Execution Continuity = Recovery Authority、Router = Model/Provider Authority；Context Memory 不得成为第二 Task/Goal/Recovery/Router Authority。
 - 前向链（canonical）：P2.5 外部 VERIFIED → Phase 02.6 RETRY SEMANTICS（硬前置=P2.5 外部 VERIFIED）→ Phase 02.75 SUPERVISOR（硬前置=02.6 VERIFIED）→ Phase 03 AUTONOMY（前置=P2.75 VERIFIED）→ 04 LEARN → 05 RESTORE → 06 ALWAYS-ON。
+
+## Phase 02.6 RETRY SEMANTICS 当前状态
+
+- **状态：IMPLEMENTATION_COMPLETE（R1）/ AWAITING_EXTERNAL_REVIEW**（2026-08-28，PR #59 squash merged；停等 External Review Round 1）
+- **R1 范围（已完成）**：9 类错误分类器（Failure Taxonomy V1，14 类 3 轴 + 归一化签名）、
+  1310→QUOTA_EXHAUSTED same-route retry=0 + unavailableUntil 解析与 defer 预算、
+  1305→PROVIDER_OVERLOADED bounded retry、复用既有 EC retry budget 与 Router fallback
+  authority（禁造第二套引擎——已遵守）、T1–T18 回归接入现有 CI（L1 语义/L2 状态机）、
+  rollback 单开关验证、≥1 个 CONTROLLED E2E（真实管线全链路，见报告）。
+- **红线遵守**：classifier 为 evidence-only 观测层（不改 payload.failure、不新增会话事件、
+  不重试、不选模型、异常全隔离、链路永远 next() 透传）；一键回滚 = config
+  `{ enabled: false }`（已实测恢复 pre-R1）。
+- **latest report**：`docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md`
+- **PR**：PR #59（R1, squash merged 2026-08-28）
+- **Next**：External Review Round 1 → APPROVED 后 02.6 VERIFIED → Phase 02.75 SUPERVISOR 解锁。
+- **⚠️ 禁止事项（不变）**：External Reviewer APPROVED 前，禁止把 02.6 写成 `VERIFIED`。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态
 

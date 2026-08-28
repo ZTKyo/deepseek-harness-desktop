@@ -73,8 +73,10 @@ IMPLEMENTATION_COMPLETE。
 
 ## Phase 02.5 CONTEXT MEMORY 当前状态
 
-- **状态：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW**（2026-08-27 governance correction；
-  External Review Round 2 = **CHANGES_REQUIRED**；当前等待 External Review Round 9 的重新审核）
+- **状态：VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；P2.5 封板 SEALED，不再 Round 11）
+- **External Review**：Round 10 = APPROVED（2026-08-28；PURE STATUS BACKFILL 授权，非 Harness 自行宣布）
+- **Waiting For**：无
+- **Next**：Phase 02.6 RETRY SEMANTICS（TODO / READY TO START；本轮不启动 P2.6 R1）
 - **⚠️ 状态纠正记录**：main `be76a559`（PR #42 merge 后 SHA backfill）曾将本 Phase 标为
   `VERIFIED`——External Reviewer Round 2 已认定该标记未经授权（Harness 不得代替 Reviewer 宣布
   VERIFIED / APPROVED）。本轮保留历史事实，新增本 correction，状态回退为 AWAITING_REVIEW。
@@ -91,7 +93,7 @@ IMPLEMENTATION_COMPLETE。
     校正口径 NO_MATERIAL_REGRESSION（echo-excluded）
   - R5-5 SH-R9 只读 posture 9 项：ALL PASS（无 STOP）
   - R5-6 CURRENT_STATUS.md canonical 清理（本条目）
-- **状态维持**：IMPLEMENTATION_COMPLETE / AWAITING_REVIEW（不越权改 VERIFIED）
+- **状态维持**：VERIFIED / SEALED（External Review Round 10 = APPROVED 为 P2.5 最终 Gate verdict；Waiting For：无）
 - **边界**：未进入 P3；不触碰 Security-Hardening（仅 live posture 只读核对）；观察者角色不变
 - **R5.1-C FINAL FACTUAL CLOSURE（2026-08-27，External Review Round 7 = CHANGES_REQUIRED 后收口）**：
   仅按 Round 7 要求做 3 项 blocker 的事实收口，不新增指标、不建评测系统（Reviewer 明令）：

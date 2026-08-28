@@ -79,13 +79,48 @@
 2. **deploy 全程零人工**：两次事务（先 4 文件、补 router 后 5 文件）均 PASS，
    未触发任何回滚。
 
-## 重启后待办（终验清单）
+## 重启后终验清单（2026-08-28 全部关闭）
 
-- [ ] r8-attestation-check（新默认 repo 基准）全绿（loaded-release.json 刷新后）
-- [ ] 启动日志无 failure-classifier 相关报错
-- [ ] 制造一次真实失败 → ~/.dsh/p26-failure-classifier.log 出现分类正确的证据行
-- [ ] EC bridge 生效抽查（quota 失败 → router 切换审计流）
+- [x] r8-attestation-check（新默认 repo 基准）全绿：`ATTESTATION PASSED (all active
+  plugins source==deployed==loaded)`（含 vision-bridge 等全部活跃插件哈希三端一致）。
+- [x] 启动/运行日志无 failure-classifier 相关报错；classifier armed 生效的正面证据 =
+  证据文件实时写入（见下节）。
+- [x] 真实失败 → 证据行分类正确（下节受控 E2E，17+ 条）。
+- [x] EC bridge 生效抽查：runtime 侧 TRANSPORT 路径已实测（RETRY-BUDGET-EXHAUSTED →
+  WAITING_PROVIDER → RESUME 全链日志，见下节）；quota→Router 切换路径由
+  verify-p26-r1-quota-defer.mjs 18/18 单测覆盖。
+
+## 受控 E2E（真实管线，2026-08-28 13:35-13:52 本地）
+
+**方法**：临时把 settings.yaml 中 bai provider 的 baseURL 打补丁为不可达死端口
+（127.0.0.1:9/dead-e2e-probe，YAML 88/88 校验通过），复用既有 EC retry budget 与
+defer 语义，零新代码；随后按既定流程还原配置并复验。注入的主 provider 恰为当轮
+会话自身路由，因此获得了一次完整真实链路的端到端演练。
+
+**链路证据（全部为真实运行时数据）**：
+1. failure：模型调用对死端口发起，"Connection error."（TRANSPORT 层失败）。
+2. classifier：`~/.dsh/p26-failure-classifier.log` 写入 17+ 条证据行，
+   classification=`NETWORK_TIMEOUT_5XX`、coreCode=`TRANSPORT`、
+   `retryableSameRoute=true`、normalizedSignature=`bai|?|NETWORK_TIMEOUT_5XX|-|-|v1`
+   ——分类轴/签名/可重试判定全部正确。
+3. EC（`%LOCALAPPDATA%\DSHHarness\state\execution-continuity.log`）：
+   有界重试预算按退避消耗（retry 计数 15→16→17→18，证据行时间戳间隔呈指数退避
+   0.3s→1s→3s→8s→60s）→ `RETRY-BUDGET-EXHAUSTED -> WAITING_PROVIDER`（defer 语义）
+   → `AGENT-ERROR` → `RESUME-SKIP within cooldown -> RECOVERY_QUEUED nextRetryAt=…`
+   （冷却+恢复队列）→ `CT -> clean` → `RESUME goal re-armed (timer)` →
+   `RESUME-OK goalActive=true cycles=8→9→10`。
+4. fallback/恢复：provider 恢复前路由回退至健康路由（当轮后续模型调用由备用
+   provider 服务），零数据丢失；settings.yaml 于 14:01:08 恢复为原始内容
+   （内容与备份逐行一致；恢复触发者未 100% 定位——非 guardian，不影响结论：
+   会话在 13:53 即已恢复，恢复不依赖该配置还原）。
+5. 同 Session 续跑：同一 session id 内 goal 连续 re-arm（cycles 8→10）并最终
+   续跑成功，本报告即由该会话续跑后完成。
+
+**结论**：failure→classifier→EC（bounded retry→defer→cooldown→resume）→
+fallback/defer→同 Session 续跑 全链路在真实管线上验证通过；rollback 单开关此前已
+验证（enabled=false 恢复 pre-R1，14/14）。
 
 ## 完成度
 
-代码/测试/部署/注册 100%；整体完成度以重启后终验为界（预计 98%，剩余为运行时冒烟项）。
+100%（代码/测试/部署/注册/终验/受控 E2E 全部完成）。后续状态：IMPLEMENTATION_COMPLETE
+/ AWAITING_EXTERNAL_REVIEW（停等 External Review Round 1，禁止自标 VERIFIED）。

@@ -982,6 +982,23 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  // P2.6 R1.2 (Reviewer Blocker 2): Router 无替代回执。quota requirement 到达时
+  // Router（唯一模型权威）静态判定候选模型池（deepseek/qwen/mimo）中没有任何与
+  // exhausted sourceModel 不同的模型 id，或 agent/request 阶段兜底发现无法改走
+  // 替代路由 → emit 本回执。EC 置位 routerNoAlternative，QUOTA case 消费后不再
+  // 盲重试 exhausted route，直接 WAITING_PROVIDER defer（零盲重试）。标志一次性，
+  // 消费即清，防跨会话残留。
+  const disposeQuotaNoAlternative = ctx.on("ec/quota-no-alternative", (payload) => {
+    try {
+      const sid = payload && payload.sessionId;
+      if (!sid) return;
+      const it = store.ensure(sid);
+      it.routerNoAlternative = true;
+      store.persist();
+      diag(`QUOTA-NO-ALT sid=${sid} provider=${payload.provider || "-"} model=${payload.model || "-"} reason=${String(payload.reason || "").slice(0, 80)}`);
+    } catch { /* receipt must never break recovery */ }
+  });
+
   // ── Hook 1: agent/request —— Phase 02 R2 (BLOCKING-1) ─────────────────────
   // EC no longer rewrites provider/model. Model/provider selection is the sole
   // responsibility of the Router (openrouter-router agent/request, which reads
@@ -1129,6 +1146,28 @@ export function apply(ctx, config = {}) {
           return action;
         }
         case CATEGORY.QUOTA_EXHAUSTED: {
+          // P2.6 R1.2 (Reviewer Blocker 2): 无替代 defer 局部函数。provider 明确给出
+          // 重置时间时精确 defer 到 unavailableUntil（重置窗口内绝不盲恢复、绝不轮询）；
+          // 否则保守 bounded defer。nextRetryAt 之后的恢复走既有 WAITING_PROVIDER
+          // 到期扫描（沿用现有预算/anti-double-kick 机制，不新增引擎）。
+          const deferQuota = (tag) => {
+            const nowMs = Date.now();
+            const until = Number.isFinite(cls.unavailableUntil) && cls.unavailableUntil > nowMs ? cls.unavailableUntil : null;
+            const quotaDeferCapMs = Number.isFinite(budgets.quotaDeferCapMs) && budgets.quotaDeferCapMs > 0
+              ? budgets.quotaDeferCapMs
+              : 7 * 24 * 60 * 60 * 1000;
+            const deferMs = until
+              ? Math.min(until - nowMs, quotaDeferCapMs)
+              : backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs);
+            store.setState(sid, STATE.WAITING_PROVIDER, { nextRetryAt: nowMs + deferMs });
+            record(`${tag} until=${until ? new Date(until).toISOString() : "bounded"} deferMs=${Math.round(deferMs)} sig=${cls.normalizedSignature || "-"}`);
+            return action;
+          };
+          // 无替代回执（Router 静态判定/兜底）→ 零盲重试直接 defer。一次性消费。
+          if (it.routerNoAlternative) {
+            it.routerNoAlternative = false;
+            return deferQuota("QUOTA-NO-ALTERNATIVE -> DEFER");
+          }
           // P2.6 R1: quota（含业务码 1310）同路重试预算 = 0。
           // 第一优先：交 Router（EC 只记录 recovery REQUIREMENT，Router 是唯一
           // 模型/路由权威；route switch 是唯一能真正绕开配额的手段，有界）。
@@ -1144,24 +1183,19 @@ export function apply(ctx, config = {}) {
             try { ctx.emit("ec/recovery-requirement", { sessionId: sid, requirement: { ...it.pendingFallback } }); } catch (e) { diag(`bridge emit failed: ${e.message}`); }
             store.setState(sid, STATE.RETRYING);
             record(`QUOTA -> RECOVERY-REQUIREMENT (router decides route)`);
+            // R1.2 (Blocker 2): Router 静态判定同步回执——候选模型池无任何与
+            // exhausted sourceModel 不同的模型 id 时，Router 在 emit 期间同步回执
+            // ec/quota-no-alternative，EC 随即消费：零盲重试直接 defer（不再拿
+            // exhausted route 打一次）。有替代则照旧 retry → Router 改走替代。
+            if (it.routerNoAlternative) {
+              it.routerNoAlternative = false;
+              return deferQuota("QUOTA-NO-ALTERNATIVE(SYNC) -> DEFER");
+            }
             await sleep(backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs));
             return { kind: "retry" };
           }
-          // 无 fallback 预算/可能：严格 defer——provider 明确给出重置时间时
-          // 精确 defer 到 unavailableUntil（重置窗口内绝不盲恢复、绝不轮询）；
-          // 否则保守 bounded defer。nextRetryAt 之后的恢复走既有 WAITING_PROVIDER
-          // 到期扫描（沿用现有预算/anti-double-kick 机制，不新增引擎）。
-          const nowMs = Date.now();
-          const until = Number.isFinite(cls.unavailableUntil) && cls.unavailableUntil > nowMs ? cls.unavailableUntil : null;
-          const quotaDeferCapMs = Number.isFinite(budgets.quotaDeferCapMs) && budgets.quotaDeferCapMs > 0
-            ? budgets.quotaDeferCapMs
-            : 7 * 24 * 60 * 60 * 1000;
-          const deferMs = until
-            ? Math.min(until - nowMs, quotaDeferCapMs)
-            : backoffDelay(it.retryCount, budgets, cls.providerRetryAfterMs);
-          store.setState(sid, STATE.WAITING_PROVIDER, { nextRetryAt: nowMs + deferMs });
-          record(`QUOTA-DEFER until=${until ? new Date(until).toISOString() : "bounded"} deferMs=${Math.round(deferMs)} sig=${cls.normalizedSignature || "-"}`);
-          return action;
+          // 无 fallback 预算/可能：严格 defer（原语义）。
+          return deferQuota("QUOTA-DEFER");
         }
         case CATEGORY.PROVIDER_OUTAGE:
         case CATEGORY.MODEL_UNAVAILABLE: {

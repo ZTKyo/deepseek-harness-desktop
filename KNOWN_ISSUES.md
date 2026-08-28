@@ -34,3 +34,31 @@
 - 涉及"服务端 naive 时间解析"的测试，**必须模拟服务商时区（+08:00）构造输入**，不能依赖进程本地 TZ；本地过了 ≠ CI 过，务必用 TZ=UTC（或 CI 实测）复验。
 - 时区相关修复要同时检查 core 解析 + 所有测试 fixture 的构造，两边都可能各错一半。
 - 对 Windows 上 node 设置 TZ 环境变量在同一命令行内生效（$env:TZ='UTC'; node ...）；pwsh 分号连接即可，不要用外部包装。
+
+## 2026-08-28 P2.6 R1.2 配额无替代 → 零盲重试（Reviewer Blocker 2，已完成+已验证）
+
+**问题**：配额耗尽（1310/QUOTA）且 fallback 链无任何与当前模型不同的候选（单模型链/链末）
+时，Router 无法改走替代路线，但 EC 仍 sleep 退避后 retry → 对已耗尽配额池打 1 次盲重试
+（R1 已把同路重试预算归零，但"换路由"分支的无替代兜底仍是盲打）。
+
+**修复**（`plugins/openrouter-router.mjs` + `plugins/execution-continuity.mjs`）：
+1. Router 在 agent/request 决议时记录 `st.lastChainIds`（= 该决议的 fallback 链，可被
+   模态裁剪到单模型）；quota recovery-requirement 到达时，静态判定用
+   `pickQuotaRouteTarget(lastChainIds, sourceModel, cfg)` 精确复刻 agent/request 的
+   pickQuotaRouteTarget 语义（无链时保守回退全局池 deepseek/qwen/mimo）。
+2. 无替代 → Router **同步** emit `ec/quota-no-alternative`（在 emit recovery-requirement
+   期间回执）；agent/request 的 openrouter 链耗尽 / 跨 provider 无替代分支也兜底 emit。
+3. EC 消费回执：`it.routerNoAlternative` 一次性标志 → QUOTA case **同一 pass** 直接
+   defer（WAITING_PROVIDER，`unavailableUntil` 精确 or bounded），不返回 retry = 零盲重试。
+
+**验证**：`tests/continuity/verify-p26-r1-2-quota-no-alternative.mjs` **10 pass 0 fail**：
+V1 静态无替代（单模型链）同步回执+同 pass defer；V2 有替代不误伤（retry + 移出耗尽模型）；
+V3 跨 provider（zhipu→openrouter 换池）；V4 迟到回执下一次失败即 defer。
+全量 continuity 回归串行通过（p26-r1-1 单独 15/15；其余各 9~41 PASS；并行跑会因共享
+EC_STATE_DIR 临时目录冲突致超时，属测试脚手架问题，串行无碍）。
+
+**教训**：
+- Router 状态 Map 公开但 `.set` 是整条目替换；集成测试注入字段必须
+  `{ ...cur, ...patch }` merge，否则会覆盖 recoveryRequirement 等关键状态。
+- EC request-error 的 defer 语义返回 **null**（不是 `{kind:"retry"}`）；断言"无重试"
+  写 `!action || action.kind !== 'retry'`。

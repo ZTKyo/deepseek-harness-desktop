@@ -252,6 +252,28 @@ export function apply(ctx, config = {}) {
       const st = getState(sid);
       st.recoveryRequirement = payload.requirement || null;
       logDiagVolume(sid, { type: "ec-recovery-requirement", reason: st.recoveryRequirement ? st.recoveryRequirement.reason : "?" });
+      // Phase 02.6 R1.2 (Reviewer Blocker 2): 确定性无替代静态判定。quota requirement
+      // 到达时若候选模型池（deepseek/qwen/mimo，不同配额池的唯一手段）里没有任何
+      // 与 exhausted sourceModel 不同的模型 id，则 Router 在 agent/request 阶段
+      // 必然无法改走替代——此时重试只会拿 exhausted route 盲打（有界浪费 + 延迟）。
+      // Router 是唯一模型权威：立即 emit 回执，EC 收到后不再 emit retry、直接
+      // WAITING_PROVIDER defer（零盲重试）。sourceModel 缺失时保守按「可能有替代」
+      // 处理（不回执，交由完整路由决策兜底——agent/request 无替代分支也会回执）。
+      const req = payload.requirement || null;
+      if (req && req.reason && /quota_exhausted/i.test(req.reason)) {
+        const sm = req.sourceModel || null;
+        // R1.2 (Blocker 2) 静态判定与 agent/request 的 pickQuotaRouteTarget 完全同构：
+        // 优先用最近一次决议记录的 fallback 链（被裁剪到单模型 / 链末 = 真无替代）；
+        // 无链记录时保守回退全局候选池（deepseek/qwen/mimo，跨配额池唯一手段）。
+        const chainIds = Array.isArray(st.lastChainIds) && st.lastChainIds.length
+          ? st.lastChainIds
+          : [cfg.modelIds.deepseek, cfg.modelIds.qwen, cfg.modelIds.mimo].filter(Boolean);
+        const hasAlt = sm ? pickQuotaRouteTarget(chainIds, sm, cfg) !== null : chainIds.length > 0;
+        if (!hasAlt) {
+          try { ctx.emit("ec/quota-no-alternative", { sessionId: sid, provider: req.sourceProvider || null, model: sm, reason: req.reason }); } catch (e) { /* receipt must never break routing */ }
+          logDiagVolume(sid, { type: "quota-no-alternative-static", sourceModel: sm, candidates: chainIds });
+        }
+      }
     } catch (e) { /* bridge must never break routing */ }
   });
 
@@ -298,6 +320,9 @@ export function apply(ctx, config = {}) {
             return { ...rest0, provider: "openrouter", model: target0 };
           }
           logDiagVolume(sid0, { type: "ec-requirement-apply", reason: req0.reason, from: resolved.model, to: resolved.model, ctx: "quota-no-alternative", from_provider: resolved.provider, sourceProvider: req0.sourceProvider || undefined });
+          // R1.2 (Blocker 2): 无替代兜底回执——agent/request 阶段才发现无法改走
+          // 替代路由时，通知 EC 本轮回执后不要重试（EC 置 routerNoAlternative）。
+          try { ctx.emit("ec/quota-no-alternative", { sessionId: sid0, provider: resolved.provider, model: resolved.model, reason: req0.reason }); } catch (e) { /* receipt must never break routing */ }
         }
       }
       return resolved;
@@ -391,6 +416,9 @@ export function apply(ctx, config = {}) {
             finalModel = target;
           } else {
             logDiagVolume(sid, { type: "ec-requirement-apply", reason: req.reason, from: finalModel, to: finalModel, ctx: "quota-no-alternative" });
+            // R1.2 (Blocker 2): openrouter 分支同样兜底回执——fallback chain 上
+            // 无任何与当前模型不同的替代（同池无意义）时，通知 EC 不再重试。
+            try { ctx.emit("ec/quota-no-alternative", { sessionId: sid, provider: resolved.provider, model: finalModel, reason: req.reason }); } catch (e) { /* receipt must never break routing */ }
           }
         } else if (req.reason && /reasoning_protocol/i.test(req.reason)) {
           // reasoning-protocol: prefer a model with stable reasoning
@@ -417,6 +445,10 @@ export function apply(ctx, config = {}) {
         st.forcedAlias = null; // 一次性
         st.fallbackIndex = Math.max(0, st.fallbackIndex ?? 0);
       }
+      // R1.2 (Blocker 2): 记录最近一次决议的 fallback 链——quota requirement 到达时
+      // listener 据此做「无替代」静态判定（与 agent/request 的 pickQuotaRouteTarget
+      // 同一逻辑，精确复刻；无链时保守回退全局池）。
+      st.lastChainIds = Array.isArray(d.fallback_chain_ids) ? d.fallback_chain_ids : null;
       const changed = finalModel !== resolved.model;
       const rec = {
         request_id: `${payload.turn ?? "-"}.${payload.step ?? "-"}`,

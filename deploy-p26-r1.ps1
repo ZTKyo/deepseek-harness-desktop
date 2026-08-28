@@ -33,6 +33,7 @@ $managedFiles = @(
     'failure-classifier-core.mjs',
     'failure-classifier.mjs',
     'execution-continuity-core.mjs',
+    'execution-continuity.mjs',
     'model-registry.mjs',
     'openrouter-router.mjs'
 )

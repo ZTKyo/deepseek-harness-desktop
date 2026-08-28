@@ -34,6 +34,11 @@ key 校验 / objective 校验 / maxGoalRounds 边界 / 确定性 session id（�
 - 实例含插件 boot 自动生成 token、健康检查 `GET /supervisor/health` ok:true。
 - 隔离实例已在验证后销毁（临时 DSH_HOME 清理）。
 
+### CI / PR / 回归
+- PR #63（branch `p275-r1-supervisor-bridge`，head=7fd83db）CI 全绿：L1 Static+secret+syntax 1m07s ✅ / L2 Reliability state machine（P2.5/P2.6 回归矩阵）6m33s ✅ / L3 DSH boot+readiness smoke **8m00s ✅（含 supervisor-bridge 真实 boot 冒烟）**。
+- Squash merge → **canonical main = f2d94f9**（feat(p275): supervisor bridge R1 ... (#63)）。9 files changed, 1074 insertions。
+- 部署面（`~/.dsh/profiles/web/`）与 canonical main 同源提交，内容一致。
+
 ### 部署状态
 - 部署 profile（`~/.dsh/profiles/web/`）：双插件文件已就位；`cordis.patch.yml` 追加注册段，js-yaml（含 `!!js` schema）校验 PASS（18 ops，supervisor-bridge 在列）。
 - **生效时机**：遵守攒批重启纪律，本次未重启 3080 主服务；插件将在下一次自然重启时加载（fail-soft：加载异常仅 QUARANTINED 不影响 boot）。当前会话无感、零中断。

@@ -194,20 +194,27 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 
 ### 7.5 本机落地模板（无 secret）
 
+**adapter 是 MCP Streamable HTTP 服务器（POST http://127.0.0.1:8091/mcp，非 stdio）**，
+所以 tunnel-client 用 `--mcp-server-url` 而非 `--mcp-command`。
+
 ```bash
-# 1) 拉 tunnel-client（release 最新版；或 Platform settings 下载链接）
-# 2) 初始化 stdio profile（MCP 服务器 = 本仓库 supervisor-mcp-adapter）
-export CONTROL_PLANE_API_KEY="<runtime-api-key>"   # 经 secret 面板注入，不入仓库
-tunnel-client init --sample sample_mcp_stdio_local --profile p275-supervisor \
+# 1) tunnel-client 二进制（v0.0.13，SHA256 已核对，本机解压于
+#    DSH-Client\_tools\tunnel-client\extracted\tunnel-client.exe）
+# 2) 先拉起 adapter（独立进程，8091；kill-switch 见 §6.1）
+node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs
+# 3) 初始化 HTTP profile（MCP 服务器 = adapter；API key 经 secret 面板注入，不入仓库）
+export CONTROL_PLANE_API_KEY="<runtime-api-key>"
+tunnel-client init --sample sample_mcp_with_dcr --profile p275-supervisor \
   --tunnel-id "<tunnel_id>" \
-  --mcp-command "node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs"
+  --mcp-server-url "http://127.0.0.1:8091/mcp"
 tunnel-client doctor --profile p275-supervisor --explain
 tunnel-client run --profile p275-supervisor
-# 3) 完成后 Ctrl-C 关闭即可（隧道资源在 OpenAI 侧，随时复用）
+# 4) 完成后 Ctrl-C 关闭即可（隧道资源在 OpenAI 侧，随时复用）
 ```
 
 > 注：tunnel-client 当前以二进制分发（release 页 + Platform settings 下载）；若未来提供
-> npm 包则以官方指引为准。
+> npm 包则以官方指引为准。stdio 模式（`sample_mcp_stdio_local`）仅适用于本地命令型
+> MCP 服务器，本 adapter 为 HTTP 服务器，必须用 `--mcp-server-url`。
 
 ## 8. P3 硬门禁（本报告即门禁声明）
 

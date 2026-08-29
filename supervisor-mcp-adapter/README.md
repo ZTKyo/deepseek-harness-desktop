@@ -101,4 +101,23 @@ node supervisor-mcp-adapter\server.mjs
 
 ## ChatGPT 绑定
 
-见下节（P2.75 TX-B 阶段调研结论落地后补充）。
+**连接方式（2026-08-29 官方机制核验，developers.openai.com Secure MCP Tunnel 指南）**：
+ChatGPT 开发者模式 App → 私有 MCP 的官方首选路径 = **Secure MCP Tunnel**——本机跑
+`tunnel-client`（openai/tunnel-client，outbound HTTPS 长轮询 `api.openai.com:443 /v1/tunnel/*`）
+把 OpenAI 托管隧道端点收到的 MCP JSON-RPC 转发到本机 adapter（stdio 或 HTTP）。
+**无需公网入口、不开放入站端口、MCP 地址保持私有**，完全适配本机 CGNAT/无公网 IP 拓扑。
+
+```bash
+# tunnel-client 初始化（stdio profile → 本 adapter）
+export CONTROL_PLANE_API_KEY="<runtime-api-key>"   # 经 secret 面板注入，不入仓库
+tunnel-client init --sample sample_mcp_stdio_local --profile p275-supervisor \
+  --tunnel-id "<tunnel_id>" \
+  --mcp-command "node <repo>/supervisor-mcp-adapter/server.mjs"
+tunnel-client doctor --profile p275-supervisor --explain   # 自检
+tunnel-client run --profile p275-supervisor                # 保持存活
+```
+
+前提（详见 docs/operations/CHATGPT_SUPERVISOR_BINDING.md §7）：Platform tunnel 权限
+（Tunnels Read+Manage 建隧道 / Read+Use 运行+选用）、ChatGPT developer mode（独立 workspace
+权限，Enterprise/Edu 需 admin 授予 + Settings→Security and login 开启）、隧道必须关联目标
+ChatGPT workspace 才在列表可见。E2E 计划见该报告 §6。

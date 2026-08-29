@@ -52,6 +52,29 @@ import {
   DEFAULT_BUDGETS,
 } from "./execution-continuity-core.mjs";
 import { evaluateCompletion } from "./completion-truth-core.mjs";
+// P3 AUTONOMY R1: autonomy metadata pure helpers (schema v3 fields, criteria
+// evidence, verificationState derivation, resume progress line). Single writer
+// remains the IntentStore — this module never writes a second state file.
+import {
+  emptyAutonomy,
+  sanitizeAutonomy,
+  upsertCriterionResult,
+  deriveVerificationState,
+  buildResumeProgressLine,
+  CRITERION_STATUSES,
+  AUTONOMY_SCHEMA_VERSION,
+  MAX_MILESTONES,
+} from "./autonomy-state-core.mjs";
+// dsh-tools is available in the web host plane (secret-gate precedent) but NOT
+// when this file is imported from the repo (no node_modules up-tree). Soft
+// import: if resolution fails, the autonomy TOOL surface is disabled with a
+// warning — recovery paths never depend on the tool surface.
+let defineTool = null;
+try {
+  ({ defineTool } = await import("@deepseek-ai/dsh-tools"));
+} catch {
+  // defineTool stays null → autonomy tool registration is skipped in apply().
+}
 
 export const name = "execution-continuity";
 
@@ -65,7 +88,9 @@ export const name = "execution-continuity";
 // 惰性探测（ctx.get 优先、属性访问兜底），缺失 → contextOverflowRecovery
 // DEGRADED，Host 照常启动（fail-open）。agents/goals/sessions 是 web host
 // 平面真实存在的服务，保留声明。
-export const inject = ["agents", "goals", "sessions"];
+// P3 R1: "tools" 加入 inject —— web host 平面真实服务（secret-gate 先例），
+// 用于注册 autonomy_report / autonomy_verify / autonomy_state 三个 agent 工具。
+export const inject = ["agents", "goals", "sessions", "tools"];
 
 // ─── 可恢复状态集（自动恢复白名单）───────────────────────────────────────────
 export const RECOVERABLE_STATES = Object.freeze([
@@ -237,6 +262,16 @@ export class IntentStore {
       };
       this.data.intents[sessionId] = it;
     }
+    // P3 AUTONOMY R1: schema v3 migration — additive-only, idempotent. Every
+    // touch of an intent (new or legacy v1/v2) gains the `autonomy` sub-object
+    // (empty defaults); nothing pre-existing is cleared or rewritten. The
+    // single-writer IntentStore remains the only persistence path.
+    if (!it.autonomy || typeof it.autonomy !== "object" || Array.isArray(it.autonomy)) {
+      it.autonomy = emptyAutonomy();
+    }
+    if (it.schemaVersion !== AUTONOMY_SCHEMA_VERSION) {
+      it.schemaVersion = AUTONOMY_SCHEMA_VERSION;
+    }
     return it;
   }
   setState(sessionId, state, extra = {}) {
@@ -336,6 +371,20 @@ export function hasPendingQuestion(session) {
 }
 
 // ─── 插件主体 ───────────────────────────────────────────────────────────────
+// ─── P3 AUTONOMY R1: resume message composition ──────────────────────────
+// Base messages unchanged (restart vs interruption); when the session carries
+// persisted autonomy facts (P3 schema v3), the resume prompt additionally
+// injects the verified progress line so a resumed/context-switched run knows
+// the last verified checkpoint and does NOT redo verified milestones. Pure
+// additive formatting — recovery gating (WAIT-GATE / CT / budgets) untouched.
+export function composeResumeMessage(reason, autonomy) {
+  const base = reason === "restart"
+    ? "[execution-continuity] The local DSH server restarted while this task was running. Inspect the current session state and workspace, verify the last operation's outcome before repeating any write/delete/send/payment action, then continue the task. Do not re-run the whole task from scratch."
+    : "[execution-continuity] A recoverable provider/network interruption occurred. Inspect current state, verify the last operation completed before repeating side-effect actions, then continue the task. Do not re-run the whole task from scratch.";
+  const prog = buildResumeProgressLine(autonomy);
+  return prog ? `${base} ${prog}` : base;
+}
+
 export function apply(ctx, config = {}) {
   if (process.env.EC_DISABLED === "true") {
     ctx.logger?.info("[execution-continuity] disabled (EC_DISABLED=true)");
@@ -959,9 +1008,7 @@ export function apply(ctx, config = {}) {
       }
     } catch { /* noop */ }
 
-    const message = reason === "restart"
-      ? "[execution-continuity] The local DSH server restarted while this task was running. Inspect the current session state and workspace, verify the last operation's outcome before repeating any write/delete/send/payment action, then continue the task. Do not re-run the whole task from scratch."
-      : "[execution-continuity] A recoverable provider/network interruption occurred. Inspect current state, verify the last operation completed before repeating side-effect actions, then continue the task. Do not re-run the whole task from scratch.";
+    const message = composeResumeMessage(reason, it.autonomy);
 
     try {
       await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
@@ -1557,6 +1604,140 @@ export function apply(ctx, config = {}) {
     })();
   }
 
+  // ── P3 AUTONOMY R1: Task Autonomy 工具面（verify() 职责在 Task Autonomy 内）──
+  // autonomy_report / autonomy_verify / autonomy_state：把任务进度（currentStep/
+  // remainingSteps）、验收标准（write-once）、已验证里程碑与最后验证检查点、逐条
+  // 验收证据写入 IntentStore 的 autonomy 子对象（schema v3）。唯一写入者仍是本插
+  // 件（无第二状态源）；会话作用域取 exec.agent.session.id（官方 dsh-tool-ask-user
+  // 先例）。工具校验失败 fail-soft（报错返回），绝不进入恢复链路。
+  const applyAutonomyPatch = (sessionId, patch) => {
+    const it = store.ensure(sessionId);
+    const res = sanitizeAutonomy(patch, it.autonomy);
+    if (!res.ok) return res;
+    it.autonomy = res.value;
+    store.persist();
+    return res;
+  };
+  const autonomySnapshot = (sessionId) => {
+    const it = store.get(sessionId);
+    return {
+      state: it ? it.state : null,
+      goalId: it ? it.goalId : null,
+      autonomy: it ? it.autonomy : emptyAutonomy(),
+    };
+  };
+  if (defineTool && ctx.tools && typeof ctx.tools.register === "function") {
+    ctx.tools.register(defineTool({
+      name: "autonomy_report",
+      description: "Report task progress into durable autonomy metadata that survives restarts and model switches: current step, optional remaining steps, and (write-once per task) the acceptance criteria list. Call it at task start (declare acceptanceCriteria) and whenever the current step changes. Metadata only — never performs side effects. Only criteria with verify() PASS evidence make a task VERIFIED.",
+      parameters: {
+        currentStep: { type: "string", description: "What you are working on right now (the next concrete action)." },
+        remainingSteps: { type: "array", description: "Optional ordered remaining steps (array of strings)." },
+        acceptanceCriteria: { type: "array", description: "Write-once acceptance criteria (1-12 strings, each <=500 chars). Rejected after the first successful set." },
+        lastErrorClass: { type: "string", description: "Optional short error class/signature when the last step failed." },
+      },
+      output: {
+        schema: { type: "object", additionalProperties: false, properties: { ok: { type: "boolean", required: true }, autonomy: { type: "object", additionalProperties: true } } },
+        render: (_a, v) => [{ type: "text", text: JSON.stringify(v) }],
+      },
+      async execute(args, exec) {
+        const sid = exec?.agent?.session?.id;
+        if (!sid) throw new Error("autonomy_report: no session context (exec.agent missing)");
+        const patch = { lastProgressAt: Date.now() };
+        if (args.currentStep !== undefined) patch.currentStep = args.currentStep;
+        if (args.remainingSteps !== undefined) patch.remainingSteps = args.remainingSteps;
+        if (args.acceptanceCriteria !== undefined) patch.acceptanceCriteria = args.acceptanceCriteria;
+        if (args.lastErrorClass !== undefined) patch.lastErrorClass = args.lastErrorClass;
+        const res = applyAutonomyPatch(sid, patch);
+        if (!res.ok) {
+          const msg = `autonomy_report rejected: ${res.errors.join("; ")}`;
+          diag(msg);
+          throw new Error(msg);
+        }
+        diag(`AUTONOMY-REPORT sid=${sid} step=${args.currentStep !== undefined ? String(args.currentStep).slice(0, 60) : "-"} criteria=${res.value.acceptanceCriteria ? res.value.acceptanceCriteria.length : 0}`);
+        return { ok: true, autonomy: res.value };
+      },
+    }));
+    ctx.tools.register(defineTool({
+      name: "autonomy_verify",
+      description: "Record a VERIFICATION result (not a claim): a criterion PASS/FAIL with evidence (priority: system_api > file_hash > git > browser_state > screenshot > ai_judgment), and optionally a verified milestone/checkpoint. On PASS with milestoneStep the milestone is appended and lastVerifiedCheckpoint updated. Derives verificationState: all criteria PASS -> VERIFIED; any FAIL -> FAILED; partial -> PARTIAL. Executor claims are NOT verification — this tool is the durable evidence ledger used to restore 'last verified state' after restarts.",
+      parameters: {
+        status: { type: "string", description: "PASS or FAIL for this verification.", required: true },
+        evidenceClass: { type: "string", description: "Evidence class: system_api | file_hash | git | browser_state | screenshot | ai_judgment.", required: true },
+        evidence: { type: "string", description: "Short evidence description (command run, hash, API response, URL...).", required: true },
+        criterionIndex: { type: "number", description: "0-based index into acceptanceCriteria when verifying a criterion." },
+        milestoneStep: { type: "string", description: "Optional milestone description appended to verifiedMilestones on PASS." },
+        checkpoint: { type: "string", description: "Optional last-verified-checkpoint text (defaults to milestoneStep on PASS)." },
+      },
+      output: {
+        schema: { type: "object", additionalProperties: false, properties: { ok: { type: "boolean", required: true }, verificationState: { type: "string" }, autonomy: { type: "object", additionalProperties: true } } },
+        render: (_a, v) => [{ type: "text", text: JSON.stringify(v) }],
+      },
+      async execute(args, exec) {
+        const sid = exec?.agent?.session?.id;
+        if (!sid) throw new Error("autonomy_verify: no session context (exec.agent missing)");
+        // 证据纪律：PASS/FAIL 必须携带非空证据（Executor Claim != Verified Result）；
+        // UNVERIFIED 允许无证据（占位登记）。
+        if (!CRITERION_STATUSES.includes(args.status)) throw new Error("autonomy_verify rejected: invalid_status");
+        const evText = typeof args.evidence === "string" ? args.evidence.trim() : "";
+        if (args.status !== "UNVERIFIED" && !evText) throw new Error("autonomy_verify rejected: missing_evidence");
+        const now = Date.now();
+        const it = store.ensure(sid);
+        const patch = { lastProgressAt: now };
+        if (args.criterionIndex !== undefined) {
+          const up = upsertCriterionResult(it.autonomy.criteriaEvidence, {
+            index: args.criterionIndex,
+            status: args.status,
+            evidenceClass: args.evidenceClass,
+            evidence: args.evidence,
+            at: now,
+          });
+          if (!up.ok) throw new Error(`autonomy_verify rejected: ${up.error}`);
+          patch.criteriaEvidence = up.value;
+        }
+        if (args.status === "PASS" && args.milestoneStep !== undefined) {
+          const ms = Array.isArray(it.autonomy.verifiedMilestones) ? it.autonomy.verifiedMilestones : [];
+          patch.verifiedMilestones = [...ms, {
+            at: now,
+            step: String(args.milestoneStep).slice(0, 300),
+            evidenceClass: args.evidenceClass,
+            evidence: String(args.evidence).slice(0, 300),
+          }].slice(-MAX_MILESTONES);
+        }
+        const checkpoint = args.checkpoint !== undefined ? args.checkpoint : (args.status === "PASS" && args.milestoneStep !== undefined ? args.milestoneStep : undefined);
+        if (checkpoint !== undefined) patch.lastVerifiedCheckpoint = checkpoint;
+        const merged = sanitizeAutonomy(patch, it.autonomy);
+        if (!merged.ok) throw new Error(`autonomy_verify rejected: ${merged.errors.join("; ")}`);
+        // 派生 verificationState（derive 后二次 sanitize 保证全量字段合法）。
+        patch.verificationState = deriveVerificationState(merged.value.acceptanceCriteria, merged.value.criteriaEvidence);
+        const final = sanitizeAutonomy(patch, it.autonomy);
+        if (!final.ok) throw new Error(`autonomy_verify rejected: ${final.errors.join("; ")}`);
+        it.autonomy = final.value;
+        store.persist();
+        diag(`AUTONOMY-VERIFY sid=${sid} status=${args.status} evidenceClass=${args.evidenceClass} criterionIndex=${args.criterionIndex ?? "-"} state=${patch.verificationState}`);
+        return { ok: true, verificationState: patch.verificationState, autonomy: final.value };
+      },
+    }));
+    ctx.tools.register(defineTool({
+      name: "autonomy_state",
+      description: "Read back the durable autonomy metadata for the current session: acceptance criteria, criteria evidence, verified milestones, last verified checkpoint, current step, and verificationState. Use after a restart, interruption recovery, or model switch to reload the last verified progress before continuing.",
+      parameters: {},
+      output: {
+        schema: { type: "object", additionalProperties: false, properties: { ok: { type: "boolean", required: true }, state: { type: "string" }, goalId: { type: "string" }, autonomy: { type: "object", additionalProperties: true } } },
+        render: (_a, v) => [{ type: "text", text: JSON.stringify(v) }],
+      },
+      async execute(_args, exec) {
+        const sid = exec?.agent?.session?.id;
+        if (!sid) throw new Error("autonomy_state: no session context (exec.agent missing)");
+        const snap = autonomySnapshot(sid);
+        diag(`AUTONOMY-STATE sid=${sid} state=${snap.state}`);
+        return { ok: true, ...snap };
+      },
+    }));
+  } else {
+    logger?.warn?.("[execution-continuity] autonomy tool surface unavailable (defineTool missing or no tools service) — recovery paths unaffected");
+  }
+
   ctx.effect(function* () {
     boot();
     yield async () => {
@@ -1577,6 +1758,6 @@ export function apply(ctx, config = {}) {
       intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi },
+    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
   };
 }

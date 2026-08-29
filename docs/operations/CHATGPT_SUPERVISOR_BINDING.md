@@ -53,7 +53,7 @@ supervisor-bridge-core.mjs  (唯一校验权威 + 幂等权威)
 
 | 验证 | 结果 |
 |---|---|
-| `node server-test.mjs`（mock bridge 进程内自测） | **31 PASS / 0 FAIL**：initialize→2025-06-18、notifications/initialized→202、tools/list=9、readOnlyHint=5、schema 全 object、5 READ + 4 MUTATION 全链路字段映射、unknown tool→-32602+可用清单、bridge 停机→isError+bridge_unreachable、GET /mcp→405、healthz、resources/list 空、无鉴权 401、错误 bearer 401、正确 bearer 200 |
+| `node server-test.mjs`（mock bridge 进程内自测） | **37 PASS / 0 FAIL**：initialize→2025-06-18、notifications/initialized→202、tools/list=9、readOnlyHint=5、schema 全 object、5 READ + 4 MUTATION 全链路字段映射、unknown tool→-32602+可用清单、bridge 停机→isError+bridge_unreachable、GET /mcp→405、healthz、resources/list 空、无鉴权 401、错误 bearer 401、正确 bearer 200、双 token 分离（入口自动生成+独立文件、上游只认 BRIDGE_TOKEN、子进程 sep 验证） |
 | 真实 bridge v0.2.2 只读冒烟 | healthz `bridge:"ok"`；tools/list=9；`supervisor_get_state` 返回真实 sessions；`supervisor_get_snapshot` 正常；幽灵 session → `isError:true, error:invalid_session_id`（bridge 404 原样映射，无副作用） |
 | 端口纪律 | 8091 启动前空闲实测；冒烟后进程已清理、8091 已释放 |
 | sealed code 未触碰 | diff 仅新增 `supervisor-mcp-adapter/`；3080/8090/Guardian/router/core 零改动 |
@@ -67,8 +67,10 @@ bridge `ok:false` / HTTP≥400 → MCP `tools/call` 结果 `isError:true`，结�
 ## 5. 认证与网络边界
 
 - **双 token 分离**：ChatGPT→adapter 入口 token（`MCP_TOKEN`/`MCP_TOKEN_FILE`）与
-  adapter→bridge 上游 token（`BRIDGE_TOKEN`/`BRIDGE_TOKEN_FILE`）互不复用；默认均回落
-  `~/.dsh/supervisor-bridge/token`（本机零配置；分离仅改环境变量即可）。
+  adapter→bridge 上游 token（`BRIDGE_TOKEN`/`BRIDGE_TOKEN_FILE`）互不复用。入口默认
+  `~/.dsh/supervisor-mcp/token`（缺失自动生成 64-hex 并写盘，0600）；上游默认
+  `~/.dsh/supervisor-bridge/token`（复用 bridge 既有凭据）。两者文件分离，env 覆盖各自
+  独立生效。
 - 入口鉴权常量时间比较，缺失/错误 → 401；`MCP_REQUIRE_AUTH=0` 仅供本机测试。
 - **3080 不暴露公网**：所有公网可达性集中在 adapter 一侧（且默认仅回环）；远程入口方案
   与生命周期见 §5.1。

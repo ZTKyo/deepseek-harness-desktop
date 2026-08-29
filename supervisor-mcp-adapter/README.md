@@ -25,9 +25,10 @@ ChatGPT ──MCP(Streamable HTTP)──► supervisor-mcp-adapter :8091 ──H
 ## 快速开始
 
 ```powershell
-# 1) 入口 token：任选其一
+# 1) 入口 token（ChatGPT → adapter）：任选其一
 #    a. 显式：$env:MCP_TOKEN = "<≥32字符随机串>"
-#    b. 文件：默认复用 ~/.dsh/supervisor-bridge/token（同时作为 bridge 上游 token）
+#    b. 文件：默认 ~/.dsh/supervisor-mcp/token（独立于 bridge token；缺失自动生成 64-hex 并写盘）
+#    上游 token（adapter → bridge）默认 ~/.dsh/supervisor-bridge/token，与入口分离
 # 2) 启动
 $env:PORT = "8091"; $env:HOST = "127.0.0.1"
 $env:BRIDGE_BASE = "http://127.0.0.1:3080"
@@ -43,7 +44,7 @@ Invoke-RestMethod http://127.0.0.1:8091/healthz
 | `PORT` / `HOST` | `8091` / `127.0.0.1` | 监听地址（默认仅回环） |
 | `BRIDGE_BASE` | `http://127.0.0.1:3080` | supervisor-bridge 地址 |
 | `BRIDGE_TOKEN` / `BRIDGE_TOKEN_FILE` | `~/.dsh/supervisor-bridge/token` | adapter→bridge 上游鉴权 |
-| `MCP_TOKEN` / `MCP_TOKEN_FILE` | `~/.dsh/supervisor-bridge/token` | ChatGPT→adapter 入口鉴权 |
+| `MCP_TOKEN` / `MCP_TOKEN_FILE` | `~/.dsh/supervisor-mcp/token`（缺失自动生成 64-hex） | ChatGPT→adapter 入口鉴权（与上游分离，不复用 bridge token） |
 | `MCP_REQUIRE_AUTH` | `1` | `0` 关闭入口鉴权（仅限本机测试） |
 
 ## 工具（9，与 bridge 端点 1:1）
@@ -79,9 +80,10 @@ Invoke-RestMethod http://127.0.0.1:8091/healthz
 
 ```powershell
 node supervisor-mcp-adapter\server-test.mjs
-# 31 项断言：MCP 握手/notifications/202、tools/list 9+readOnlyHint=5、
+# 37 项断言：MCP 握手/notifications/202、tools/list 9+readOnlyHint=5、
 # 5 READ + 4 MUTATION 全链路映射、bridge down→isError、GET /mcp→405、
-# healthz、resources/list 空、鉴权 401/正确 bearer 200
+# healthz、resources/list 空、鉴权 401/正确 bearer 200、
+# 双 token 分离（入口 token 自动生成/独立文件、上游走 BRIDGE_TOKEN）
 ```
 
 真实 bridge 冒烟（只读，无副作用）：

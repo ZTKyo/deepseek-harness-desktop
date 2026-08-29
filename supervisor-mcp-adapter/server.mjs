@@ -19,14 +19,17 @@
 //
 // 启动：node server.mjs
 //   PORT=8091 HOST=127.0.0.1 BRIDGE_BASE=http://127.0.0.1:3080
-//   MCP_REQUIRE_AUTH=1（默认开）  MCP_TOKEN_FILE=~/.dsh/supervisor-bridge/token
-//   MCP_TOKEN=<显式 token 覆盖>（优先于文件；仅供测试）
+//   MCP_REQUIRE_AUTH=1（默认开）
+//   入口 token（ChatGPT → adapter）：MCP_TOKEN=<显式>（优先）或 MCP_TOKEN_FILE（默认
+//     ~/.dsh/supervisor-mcp/token，独立于 bridge token；启动时缺失则自动生成 64-hex 并写盘）
+//   上游 token（adapter → bridge）：BRIDGE_TOKEN=<显式>（优先）或 BRIDGE_TOKEN_FILE
+//     （默认 ~/.dsh/supervisor-bridge/token）——与入口 token 分离，不得复用同一文件
 
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const ADAPTER_VERSION = '0.1.0';
@@ -36,7 +39,11 @@ const SERVER_NAME = 'dsh-supervisor-bridge';
 const PORT = Number(process.env.PORT || 8091);
 const HOST = process.env.HOST || '127.0.0.1';
 const BRIDGE_BASE = (process.env.BRIDGE_BASE || 'http://127.0.0.1:3080').replace(/\/+$/, '');
-const TOKEN_FILE = process.env.MCP_TOKEN_FILE || join(homedir(), '.dsh', 'supervisor-bridge', 'token');
+// 入口 token 与上游 token 的存放文件分离（BLOCKER B，R1.1）：
+//   入口（ChatGPT→adapter）默认 ~/.dsh/supervisor-mcp/token
+//   上游（adapter→bridge）默认 ~/.dsh/supervisor-bridge/token
+// 两者默认不再指向同一文件；MCP_TOKEN/MCP_TOKEN_FILE 只控制入口，BRIDGE_TOKEN/BRIDGE_TOKEN_FILE 只控制上游。
+const TOKEN_FILE = process.env.MCP_TOKEN_FILE || join(homedir(), '.dsh', 'supervisor-mcp', 'token');
 const BRIDGE_TOKEN_FILE = process.env.BRIDGE_TOKEN_FILE || join(homedir(), '.dsh', 'supervisor-bridge', 'token');
 const REQUIRE_AUTH = process.env.MCP_REQUIRE_AUTH !== '0';
 
@@ -56,18 +63,26 @@ function bridgeToken() {
 		return null;
 	}
 }
-function adapterToken() {
+// 入口 token 缺失时自动生成（64 hex，>=32B），确保 MCP_REQUIRE_AUTH=1 默认可用且不依赖 bridge token 文件。
+function ensureAdapterToken() {
 	const explicit = process.env.MCP_TOKEN;
 	if (typeof explicit === 'string' && explicit.trim().length >= 32) return explicit.trim();
 	try {
 		const raw = readFileSync(TOKEN_FILE, 'utf8').trim();
 		if (raw.length >= 32) return raw;
-		return null;
-	} catch {
+	} catch { /* missing → generate below */ }
+	try {
+		const generated = createHash('sha256').update(String(Math.random()) + String(Date.now()) + String(process.pid)).digest('hex');
+		mkdirSync(dirname(TOKEN_FILE), { recursive: true });
+		writeFileSync(TOKEN_FILE, generated + '\n', { mode: 0o600, flag: 'wx' });
+		console.error(`[adapter] generated adapter token at ${TOKEN_FILE} (0600, not in git)`);
+		return generated;
+	} catch (e) {
+		console.error(`[adapter] failed to persist adapter token: ${String(e?.message ?? e)}`);
 		return null;
 	}
 }
-const ADAPTER_TOKEN = REQUIRE_AUTH ? adapterToken() : null;
+const ADAPTER_TOKEN = REQUIRE_AUTH ? ensureAdapterToken() : null;
 if (REQUIRE_AUTH && !ADAPTER_TOKEN) {
 	console.error('[adapter] MCP_REQUIRE_AUTH=1 but no adapter token (MCP_TOKEN / MCP_TOKEN_FILE) — refusing to start');
 	process.exit(1);
@@ -420,7 +435,7 @@ const httpServer = createServer(async (req, res) => {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 	httpServer.listen(PORT, HOST, () => {
 		log(`listening on http://${HOST}:${PORT}/mcp  auth=${REQUIRE_AUTH ? 'bearer' : 'none'}  bridge=${BRIDGE_BASE}  tools=${TOOLS.length}`);
-		log(`bridge token source: ${process.env.BRIDGE_TOKEN ? 'BRIDGE_TOKEN env' : BRIDGE_TOKEN_FILE}${REQUIRE_AUTH ? `; adapter auth token: ${process.env.MCP_TOKEN ? 'MCP_TOKEN env' : TOKEN_FILE}` : ''}`);
+		log(`adapter token source: ${process.env.MCP_TOKEN ? 'MCP_TOKEN env' : TOKEN_FILE}; bridge token source: ${process.env.BRIDGE_TOKEN ? 'BRIDGE_TOKEN env' : BRIDGE_TOKEN_FILE}`);
 	});
 }
 

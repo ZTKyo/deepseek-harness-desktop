@@ -267,7 +267,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 2. **P2.5 CONTEXT MEMORY** ✅ **VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；R2–R5.1-F 证据链闭环；P2.5 封板）
 3. **Phase 02.6 RETRY SEMANTICS** ✅ **VERIFIED**（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；R1/R1.1/R2/R3/R3-A1/R1.2 全部合入，canonical main=a332ebc，回归 136/0）
 4. **Phase 02.75 SUPERVISOR** ✅ **VERIFIED**（External Review **Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；R1/R1.1/R1.2 全部合入（PR #63/#65/#67），canonical main=4fae42f、bridge v0.2.2 已部署加载；production code 封板）
-5. **ChatGPT Client Binding R1**（integration 事务，非新 Phase）：thin MCP adapter（loopback）→ 既有 P2.75 Supervisor Bridge，9 tools；真实 ChatGPT E2E 通过后 CHATGPT_BINDING = VERIFIED
+5. **ChatGPT Client Binding R1**（integration 事务，非新 Phase）：thin MCP adapter（loopback）→ 既有 P2.75 Supervisor Bridge，9 tools；真实 ChatGPT E2E 通过后 CHATGPT_BINDING = VERIFIED —— **R1 adapter 侧完成（2026-08-29）：supervisor-mcp-adapter（MCP 2025-06-18 Streamable HTTP，127.0.0.1:8091，双 token 分离，纯适配层零第二引擎）自测 31/31 PASS + 真实桥只读冒烟 PASS；官方连接机制已核验＝Secure MCP Tunnel（outbound tunnel-client + OpenAI 托管端点，适配 CGNAT，§7）；状态 = READY_FOR_CHATGPT_HUMAN_GATE（用户手动创建 Platform tunnel + ChatGPT 开发者模式 App → 真实 E2E 1–5）；详见 docs/operations/CHATGPT_SUPERVISOR_BINDING.md**
 6. **Phase 03**（AUTONOMY）— 前置 = P2.75 VERIFIED ✅；**首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispatch**（链：02.5 ✅ → 02.6 ✅ → 02.75 ✅ → Binding → P3）
 
 ## 恢复指令
@@ -276,6 +276,7 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 当前执行位置：**Phase 02.75 SUPERVISOR = VERIFIED（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；Waiting For = NONE）**
 （R1/R1.1/R1.2 全部合入 canonical main=4fae42f、docs closure 7830be6；bridge v0.2.2 已部署加载 attestation source==deployed==loaded；重启后回归 19/0＋136/0＋72/0＋E2E all pass）；
 **下一执行位置 = ChatGPT Client Binding R1**（thin MCP adapter → 既有 Supervisor Bridge，独立 integration 事务，非新 Phase；连接验证完成前 P3 禁止启动）；
+**Binding R1 现况（2026-08-29）：adapter 侧已完成并验证（supervisor-mcp-adapter 9 工具、自测 31/31、真实桥只读冒烟 PASS、端口 8091/3080 纪律 + kill-switch 就绪），READY_FOR_CHATGPT_HUMAN_GATE —— 待用户手动创建 ChatGPT Custom Connector 后执行真实 E2E 1–5；P3 硬门禁不变（E2E 全过前禁止启动，P3 首个 Goal 须由真实 ChatGPT dispatch）**；
 P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispatch（前向链：02.5 ✅ VERIFIED → 02.6 ✅ VERIFIED → 02.75 ✅ VERIFIED → Binding → P3）。
 
 ## 变更日志
@@ -488,3 +489,26 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   Binding dispatch；路线清单与恢复指令同步。零生产代码改动、零插件改动、零配置改动、零 deploy、
   零 restart、零 runtime mutation、Reviewer 99 未触碰。**下一事务 = ChatGPT Client Binding R1**
   （thin MCP adapter → 既有 P2.75 Supervisor Bridge，独立 branch/PR；连接验证通过前 P3 禁止启动）。
+- **2026-08-29：ChatGPT Client Binding R1（TX-B）adapter 侧完成 = READY_FOR_CHATGPT_HUMAN_GATE**：
+  新增 supervisor-mcp-adapter（supervisor-mcp-adapter/：server.mjs + server-test.mjs + README.md，
+  commit 25bd77a，branch p275-txb-mcp-adapter）——MCP 2025-06-18 Streamable HTTP stateless server，
+  127.0.0.1:8091（启动前确认空闲），9 工具与 bridge v0.2.2 1:1（5 READ readOnlyHint + 4 MUTATION），
+  snake_case→camelCase 映射、bridge 4xx/5xx→isError 原样透传（409 idempotency_conflict/503 语义保留），
+  双 token 分离（MCP_TOKEN 入口 vs BRIDGE_TOKEN 上游，timingSafeEqual），GET /mcp→405、
+  DELETE /mcp→204、resources/list 空、kill-switch=独立进程一键 Stop-Process。
+  验证：mock 自测 31 PASS/0 FAIL；真实桥只读冒烟（healthz bridge:ok、tools/list=9、get_state 真实
+  sessions、幽灵 session→isError invalid_session_id）PASS；冒烟后进程清理、8091 释放。
+  运维报告 docs/operations/CHATGPT_SUPERVISOR_BINDING.md（无 secret）。P2.75 sealed code/3080/8090/
+  Guardian/router/core 零改动。**P3 硬门禁不变：READY_FOR_CHATGPT_HUMAN_GATE（用户手动创建
+  Custom Connector → Tool Scan 9/9 → 真实 E2E 1–5，任一 FAIL 则 P3 不启动；P3 首个 Goal 须由
+  真实 ChatGPT dispatch）**。
+- **2026-08-29：OpenAI 官方连接机制核验完成（Secure MCP Tunnel）**：developers.openai.com
+  Secure MCP Tunnel 官方指南逐条核实——ChatGPT 开发者模式 App 连接私有 MCP 的官方首选 =
+  OpenAI 托管隧道端点 + 本机 outbound `tunnel-client` 长轮询（/v1/tunnel/*），**无需公网
+  入口、不开放入站端口、MCP 地址保持私有，完全适配本机 CGNAT/无公网 IP 拓扑**；权限分离
+  （Tunnels Read+Manage 建隧道 / Read+Use 运行与选用；developer mode 为独立 workspace 权限，
+  Enterprise/Edu 需 admin 授予 + Settings→Security and login 开启）；隧道必须关联目标 ChatGPT
+  workspace 才在列表可见；`tunnel-client doctor/run` + /healthz /readyz 自检。§5.1 公网入口方案
+  由 cloudflared 备选升级为 **Secure MCP Tunnel 首选**；§7 全量落地（含用户操作清单 7.4 与
+  本机落地模板 7.5）。cloudflared 仅作无 tunnel 权限时兜底。文档更新 commit 待合（branch
+  p275-txb-mcp-adapter）。

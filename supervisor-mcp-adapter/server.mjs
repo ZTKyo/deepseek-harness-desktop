@@ -27,7 +27,7 @@
 
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -64,6 +64,8 @@ function bridgeToken() {
 	}
 }
 // 入口 token 缺失时自动生成（64 hex，>=32B），确保 MCP_REQUIRE_AUTH=1 默认可用且不依赖 bridge token 文件。
+// entropy source = crypto.randomBytes（CSPRNG，R1.2 Blocker A）；哈希混合不能把可预测源（时间/PID 等）变成密码学安全随机数，
+// 故 token 熵只允许来自 CSPRNG。exclusive-create（'wx'）+ 0600 语义保持不变。
 function ensureAdapterToken() {
 	const explicit = process.env.MCP_TOKEN;
 	if (typeof explicit === 'string' && explicit.trim().length >= 32) return explicit.trim();
@@ -72,7 +74,7 @@ function ensureAdapterToken() {
 		if (raw.length >= 32) return raw;
 	} catch { /* missing → generate below */ }
 	try {
-		const generated = createHash('sha256').update(String(Math.random()) + String(Date.now()) + String(process.pid)).digest('hex');
+		const generated = randomBytes(32).toString('hex');
 		mkdirSync(dirname(TOKEN_FILE), { recursive: true });
 		writeFileSync(TOKEN_FILE, generated + '\n', { mode: 0o600, flag: 'wx' });
 		console.error(`[adapter] generated adapter token at ${TOKEN_FILE} (0600, not in git)`);

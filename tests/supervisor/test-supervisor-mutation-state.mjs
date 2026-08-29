@@ -1,9 +1,13 @@
-// test-supervisor-mutation-state.mjs —— P2.75 R1.1 mutation 状态机受控套件（L2，无真实服务器）
+// test-supervisor-mutation-state.mjs —— P2.75 R1.1+R1.2 mutation 状态机受控套件（L2，无真实服务器）
 //
 // 合同（External Review Round 2 §26）：dispatch/correction/cancel 全幂等（重复请求真实
 // 副作用计数=1）、stale-generation guard、账本损坏 fail-closed、objective-only dispatch
 // 可执行、同一 Harness Goal continuity、Bridge restart 后 replay 不产生第二副作用、
 // rpc 歧义 fail-closed（不盲重放）、断点续传（已执行步骤不重复）。
+// R1.2（External Review Round 3 唯一 Blocker）：dispatch payload identity ——
+// 同 idempotencyKey 重放必须与 canonical dispatch contract 指纹一致：
+// exact replay → duplicate（不重派）；payload 不同 → 409 idempotency_conflict 且零新增副作用；
+// 表示噪声（whitespace/null-vs-absent maxGoalRounds）不产生假冲突；legacy 无指纹 → fail-closed。
 // 实现：真实 core 模块 + fake host（副作用计数 = 宿主 RPC 调用次数，provider 无关）。
 // 运行：node tests/supervisor/test-supervisor-mutation-state.mjs
 
@@ -77,6 +81,8 @@ class Driver {
 		this.gate();
 		const v = core.validateDispatch(body);
 		if (!v.ok) throw httpError(400, v.error);
+		// R1.2 payload identity：同 idempotencyKey 重放必须与账本指纹一致（与 bridge 同构）
+		const dispatchFingerprint = core.dispatchFingerprintOf(v.value);
 		const key = v.value.idempotencyKey;
 		const cmdId = `DISPATCH:${key}`;
 		const existing = this.receipts.get(key);
@@ -85,8 +91,13 @@ class Driver {
 			&& existing.pendingMutation?.commandId === cmdId
 			&& !existing.executedCommands[cmdId];
 		if (existing && !resumeNeeded) {
-			if (body.supervisorGoalId && body.supervisorGoalId !== existing.supervisorGoalId) {
-				throw httpError(409, 'supervisor_goal_mismatch');
+			// R1.2 幂等命中闸门：仅 exact replay（指纹一致）→ duplicate；
+			// payload 不同或 legacy 无指纹 → 409 idempotency_conflict（fail-closed）
+			if (existing.dispatchFingerprint !== dispatchFingerprint) {
+				throw httpError(409, 'idempotency_conflict', {
+					reason: existing.dispatchFingerprint ? 'payload_identity_mismatch' : 'legacy_dispatch_fingerprint_missing',
+					supervisorGoalId: existing.supervisorGoalId,
+				});
 			}
 			existing.dupHits.dispatch += 1;
 			return { dispatched: false, duplicate: true, generation: existing.generation };
@@ -96,13 +107,20 @@ class Driver {
 		let applied;
 		let goalRef;
 		if (resumeNeeded) {
+			// 断点续传重放同样过 payload identity 闸门（R1.2）
 			r = this.receipts.get(key);
+			if (r.dispatchFingerprint !== dispatchFingerprint) {
+				throw httpError(409, 'idempotency_conflict', {
+					reason: r.dispatchFingerprint ? 'payload_identity_mismatch' : 'legacy_dispatch_fingerprint_missing',
+					supervisorGoalId: r.supervisorGoalId,
+				});
+			}
 			sessionId = r.sessionId;
 			applied = r.pendingMutation.appliedSteps;
 			goalRef = r.goalRef;
 		} else {
 			sessionId = core.deriveSessionId(key);
-			r = core.markPending(core.newReceipt(key, sessionId, v.value.objective, null, Date.now(), { supervisorGoalId: v.value.supervisorGoalId, acceptanceCriteria: v.value.acceptanceCriteria }), 'DISPATCH', cmdId, Date.now(), 0);
+			r = core.markPending(core.newReceipt(key, sessionId, v.value.objective, null, Date.now(), { supervisorGoalId: v.value.supervisorGoalId, acceptanceCriteria: v.value.acceptanceCriteria, dispatchFingerprint }), 'DISPATCH', cmdId, Date.now(), 0);
 			this.receipts.set(key, r);
 			applied = r.pendingMutation.appliedSteps;
 			goalRef = null;
@@ -229,17 +247,118 @@ const SID = core.deriveSessionId(KEY); // 与 dispatch 派生的 sessionId 一�
 const CID = (gen, kind, seq) => `${SG}:g${gen}:${kind}:${seq}`;
 const CORR = { commandId: CID(1, 'CORRECTION', 1), generation: 1, sessionId: SID, text: 'fix X', mode: 'steer' };
 
-// ---------- M1 dispatch 幂等：重复派发副作用=1 ----------
-t('M1 dispatch duplicate: side effect = 1', async () => {
+// ---------- M1 dispatch 幂等：exact replay 副作用=1（R1.2：必须指纹一致才 duplicate） ----------
+t('M1 dispatch exact replay duplicate: side effect = 1', async () => {
 	const host = new FakeHost();
 	const d = new Driver(host);
 	await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK' });
-	const r2 = await d.dispatch({ idempotencyKey: KEY, objective: 'DIFFERENT ignored' });
+	// R1.2 exact replay：同 canonical payload → duplicate，不重派
+	const r2 = await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK' });
 	assert.equal(r2.dispatched, false);
 	assert.equal(r2.duplicate, true);
 	assert.equal(host.count('session.create'), 1);
 	assert.equal(host.count('goal.create'), 1);
 	assert.equal(host.count('session.prompt'), 1);
+});
+
+// ---------- M1a 表示噪声不变式：whitespace / null-vs-absent 不产生假冲突（§4） ----------
+t('M1a representation noise stays duplicate (no false conflict)', async () => {
+	const host = new FakeHost();
+	const d = new Driver(host);
+	await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK' });
+	// objective 两侧空白（validateDispatch 已 trim）→ 同一语义
+	const a = await d.dispatch({ idempotencyKey: KEY, objective: '  objective one  ', initialInstruction: 'KICK' });
+	assert.equal(a.duplicate, true);
+	// initialInstruction 两侧空白（canonical 归一 trim）→ 同一语义
+	const b = await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: '  KICK  ' });
+	assert.equal(b.duplicate, true);
+	// maxGoalRounds null vs absent（canonical 统一 null）→ 同一语义
+	const c = await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK', maxGoalRounds: null });
+	assert.equal(c.duplicate, true);
+	// 显式 supervisorGoalId == 派生值（identity 相同、表达不同）→ 同一语义
+	const e2 = await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK', supervisorGoalId: SG });
+	assert.equal(e2.duplicate, true);
+	assert.equal(d.receipts.get(KEY).dupHits.dispatch, 4);
+	assert.equal(host.count('session.create'), 1);
+	assert.equal(host.count('session.prompt'), 1); // 零新增副作用
+});
+
+// ---------- M1b payload identity 冲突表：任一语义字段差异 → 409 且零副作用 ----------
+t('M1b conflicting payload under same idempotencyKey → 409 idempotency_conflict (zero side effects)', async () => {
+	const cases = [
+		['objective changed', { objective: 'objective CHANGED', initialInstruction: 'KICK' }],
+		['initialInstruction changed', { objective: 'objective one', initialInstruction: 'DIFFERENT-KICK' }],
+		['initialInstruction dropped', { objective: 'objective one' }],
+		['maxGoalRounds added', { objective: 'objective one', initialInstruction: 'KICK', maxGoalRounds: 5 }],
+		['acceptanceCriteria added', { objective: 'objective one', initialInstruction: 'KICK', acceptanceCriteria: ['tests green'] }],
+		['acceptanceCriteria reordered', { objective: 'objective one', initialInstruction: 'KICK', acceptanceCriteria: ['b', 'a'] }],
+		['supervisorGoalId changed', { objective: 'objective one', initialInstruction: 'KICK', supervisorGoalId: 'sg-other-99' }],
+	];
+	for (const [label, replayBody] of cases) {
+		const host = new FakeHost();
+		const d = new Driver(host);
+		await d.dispatch({ idempotencyKey: KEY, objective: 'objective one', initialInstruction: 'KICK' });
+		await assert.rejects(
+			() => d.dispatch({ idempotencyKey: KEY, ...replayBody }),
+			(e) => e.code === 409 && e.message === 'idempotency_conflict' && e.reason === 'payload_identity_mismatch',
+			`case: ${label}`,
+		);
+		assert.equal(host.count('session.create'), 1, `case: ${label} — conflict 不得重派`);
+		assert.equal(host.count('goal.create'), 1, `case: ${label}`);
+		assert.equal(host.count('session.prompt'), 1, `case: ${label} — 零新增副作用`);
+	}
+});
+
+// ---------- M1c legacy receipt 无指纹 → fail-closed 409（不猜） ----------
+t('M1c legacy receipt without fingerprint → fail-closed (completed + pending paths)', async () => {
+	const host = new FakeHost();
+	const d = new Driver(host);
+	await d.dispatch({ idempotencyKey: KEY, objective: 'objective m1c', initialInstruction: 'KICK' });
+	// 模拟 legacy（v1/R1.1 早期）receipt：无 dispatchFingerprint
+	const cur = d.receipts.get(KEY);
+	d.receipts.set(KEY, { ...cur, dispatchFingerprint: null });
+	await assert.rejects(
+		() => d.dispatch({ idempotencyKey: KEY, objective: 'objective m1c', initialInstruction: 'KICK' }),
+		(e) => e.code === 409 && e.message === 'idempotency_conflict' && e.reason === 'legacy_dispatch_fingerprint_missing',
+	);
+	assert.equal(host.count('session.create'), 1); // 零副作用
+	// pending（断点续传路径）同样 fail-closed
+	const host2 = new FakeHost();
+	const d2 = new Driver(host2);
+	await d2.dispatch({ idempotencyKey: KEY, objective: 'objective m1c', initialInstruction: 'KICK' });
+	const cur2 = d2.receipts.get(KEY);
+	const cmdId2 = `DISPATCH:${KEY}`;
+	d2.receipts.set(KEY, {
+		...cur2,
+		dispatchFingerprint: null, // legacy pending
+		pendingMutation: { kind: 'DISPATCH', commandId: cmdId2, startedAt: Date.now(), appliedSteps: 2 },
+		executedCommands: {},
+	});
+	await assert.rejects(
+		() => d2.dispatch({ idempotencyKey: KEY, objective: 'objective m1c', initialInstruction: 'KICK' }),
+		(e) => e.code === 409 && e.message === 'idempotency_conflict' && e.reason === 'legacy_dispatch_fingerprint_missing',
+	);
+	assert.equal(host2.count('session.prompt'), 1); // 不续发 prompt
+});
+
+// ---------- M1d restart 后指纹持久：exact replay duplicate / 冲突 409 / 零副作用 ----------
+t('M1d restart: fingerprint persists in ledger; conflicting replay after reload → 409, zero RPC', async () => {
+	const host1 = new FakeHost();
+	const d1 = new Driver(host1);
+	await d1.dispatch({ idempotencyKey: KEY, objective: 'objective m1d', initialInstruction: 'KICK' });
+	assert.match(d1.receipts.get(KEY).dispatchFingerprint, /^[0-9a-f]{64}$/); // 64-hex SHA-256
+	const text = d1.serializeLedger();
+	const host2 = new FakeHost();
+	const d2 = new Driver(host2);
+	assert.equal(d2.loadFromTexts(text, null), 'OK');
+	assert.match(d2.receipts.get(KEY).dispatchFingerprint, /^[0-9a-f]{64}$/); // 序列化往返不丢
+	const rd = await d2.dispatch({ idempotencyKey: KEY, objective: 'objective m1d', initialInstruction: 'KICK' });
+	assert.equal(rd.duplicate, true);
+	await assert.rejects(
+		() => d2.dispatch({ idempotencyKey: KEY, objective: 'DIFFERENT after restart' }),
+		(e) => e.code === 409 && e.message === 'idempotency_conflict',
+	);
+	assert.equal(host2.calls.length, 0); // 重放与冲突均零副作用
 });
 
 // ---------- M2 correction 幂等：重放副作用=1（真实 prompt 只发一次） ----------
@@ -412,7 +531,8 @@ t('M10 restart replay: no second side effects after reload', async () => {
 	const host2 = new FakeHost();
 	const d2 = new Driver(host2);
 	assert.equal(d2.loadFromTexts(text, null), 'OK');
-	const r1 = await d2.dispatch({ idempotencyKey: KEY, objective: 'DIFFERENT ignored' });
+	// R1.2：restart 后 replay 必须 exact replay（指纹一致）
+	const r1 = await d2.dispatch({ idempotencyKey: KEY, objective: 'objective m10', initialInstruction: 'KICK' });
 	assert.equal(r1.dispatched, false);
 	const r2 = await d2.correction(CORR);
 	assert.equal(r2.duplicate, true);
@@ -490,15 +610,16 @@ t('M12 dispatch resume: applied steps not repeated', async () => {
 	assert.equal(d.receipts.get(KEY).pendingMutation, null);
 });
 
-// ---------- M13 dispatch 重放身份冲突 ----------
-t('M13 dispatch replay with different supervisorGoalId → mismatch', async () => {
+// ---------- M13 dispatch 重放身份冲突（R1.2：supervisorGoalId 属 canonical contract） ----------
+t('M13 dispatch replay with different supervisorGoalId → 409 idempotency_conflict', async () => {
 	const host = new FakeHost();
 	const d = new Driver(host);
 	await d.dispatch({ idempotencyKey: KEY, objective: 'objective m13', supervisorGoalId: 'sg-explicit-01' });
 	await assert.rejects(
 		() => d.dispatch({ idempotencyKey: KEY, objective: 'objective m13', supervisorGoalId: 'sg-other-02' }),
-		(e) => e.code === 409 && e.message === 'supervisor_goal_mismatch',
+		(e) => e.code === 409 && e.message === 'idempotency_conflict',
 	);
+	assert.equal(host.count('session.create'), 1); // 冲突不重派
 });
 
 // ---------- M14 correction adopt 不适用（无 receipt → 404；adopt 属 bridge 行为，L3 覆盖） ----------

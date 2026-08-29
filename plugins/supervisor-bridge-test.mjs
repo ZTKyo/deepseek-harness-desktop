@@ -436,6 +436,71 @@ t('T30 stable derived identities (no Date.now in identity)', () => {
 	assert.equal(core.deriveSupervisorGoalId('k'), core.deriveSupervisorGoalId('k'));
 });
 
+// ---------- R1.2 dispatch payload identity（canonical fingerprint） ----------
+
+t('T31 fingerprint: 派生字段归一 + 真差异必变指纹', () => {
+	const base = { idempotencyKey: 'fp-key-01', objective: 'same goal', initialInstruction: ' go ' };
+	// maxGoalRounds 缺省/null/undefined 统一为 null（canonicalDispatchContract）
+	const f1 = core.dispatchFingerprintOf(base);
+	const f2 = core.dispatchFingerprintOf({ ...base, maxGoalRounds: null });
+	const f2b = core.dispatchFingerprintOf({ ...base, maxGoalRounds: undefined });
+	// supervisorGoalId 为派生字段（= uuidv5(key)）但仍在 contract 内显式携带：
+	// 相同值归一为 null 与显式 null 相同
+	const f3 = core.dispatchFingerprintOf({ ...base, supervisorGoalId: null });
+	// startPromptOrigin 不参与 payload identity（由 objective/initialInstruction 决定）
+	const f4 = core.dispatchFingerprintOf({ ...base, startPromptOrigin: 'objective-derived' });
+	assert.equal(f1, f2);
+	assert.equal(f1, f2b);
+	assert.equal(f1, f3);
+	assert.equal(f1, f4);
+	assert.match(f1, /^[0-9a-f]{64}$/);
+	// 真差异必须变指纹
+	assert.notEqual(f1, core.dispatchFingerprintOf({ ...base, objective: 'DIFFERENT goal' }));
+	assert.notEqual(f1, core.dispatchFingerprintOf({ ...base, initialInstruction: ' other prompt ' }));
+	assert.notEqual(f1, core.dispatchFingerprintOf({ ...base, maxGoalRounds: 6 }));
+	assert.notEqual(f1, core.dispatchFingerprintOf({ ...base, acceptanceCriteria: [{ criterion: 'x', evidence: 'REAL' }] }));
+});
+
+t('T32 fingerprint: 首尾空白噪声归一；key 不参与指纹；内部差异 fail-closed', () => {
+	// 归一层 = validateDispatch（objective 首尾 trim）+ canonicalDispatchContract（initialInstruction trim）
+	const v1 = core.validateDispatch({ idempotencyKey: 'noise-key-01', objective: '  A B  ' });
+	const v2 = core.validateDispatch({ idempotencyKey: 'noise-key-01', objective: 'A B' });
+	assert.equal(core.dispatchFingerprintOf(v1.value), core.dispatchFingerprintOf(v2.value),
+		'objective 首尾空白应是 duplicate');
+	const v3 = core.validateDispatch({ idempotencyKey: 'noise-key-01', objective: 'A B', initialInstruction: '  x  ' });
+	const v4 = core.validateDispatch({ idempotencyKey: 'noise-key-01', objective: 'A B', initialInstruction: 'x' });
+	assert.equal(core.dispatchFingerprintOf(v3.value), core.dispatchFingerprintOf(v4.value),
+		'initialInstruction 首尾空白应是 duplicate');
+	// idempotencyKey 不在 contract 内：同 payload 不同 key → 同指纹
+	//（跨 key 是不同 dispatch，由 key 本身区分；指纹只守同 key 重放）
+	const a = core.dispatchFingerprintOf({ idempotencyKey: 'noise-key-01', objective: 'A B', initialInstruction: 'x' });
+	const b = core.dispatchFingerprintOf({ idempotencyKey: 'other-key-02', objective: 'A B', initialInstruction: 'x' });
+	assert.equal(a, b);
+	// 内部空白差异 = 真实 payload 变化（fail-closed，从严不猜）：指纹必须不同
+	const raw1 = core.dispatchFingerprintOf({ objective: 'A\r\nB', initialInstruction: 'x' });
+	const raw2 = core.dispatchFingerprintOf({ objective: 'A B', initialInstruction: 'x' });
+	assert.notEqual(raw1, raw2);
+});
+
+t('T33 serialize: fingerprint 进 JSON 不改 ledger 形状', () => {
+	// newReceipt 本身不带指纹（bridge 在 dispatch 时用 dispatchFingerprintOf 附上）——
+	// 这里模拟 bridge 行为：附指纹 → serialize → deserialize → 字段原样保留。
+	const r0 = core.newReceipt('ser-key-01', SID, 'obj', { id: 'h', revision: 1 }, 1000);
+	r0.dispatchFingerprint = core.dispatchFingerprintOf({ idempotencyKey: 'ser-key-01', objective: 'obj' });
+	assert.match(r0.dispatchFingerprint, /^[0-9a-f]{64}$/);
+	// ledger 以 idempotencyKey 为索引（v.key === k 强制）——键必须用 receipt.key
+	const json = core.serializeReceipts(new Map([['ser-key-01', r0]]));
+	const back = core.deserializeReceipts(json);
+	const r = back?.get('ser-key-01');
+	assert.ok(r, 'roundtrip missing receipt');
+	assert.equal(r.dispatchFingerprint, r0.dispatchFingerprint);
+	assert.equal(r.key, 'ser-key-01');
+	// 无指纹 receipt（构造场景）roundtrip 后保持缺失（不凭空生成）
+	const nofp = core.newReceipt('ser-key-02', SID, 'obj2', null, 1000);
+	const back2 = core.deserializeReceipts(core.serializeReceipts(new Map([['ser-key-02', nofp]])));
+	assert.equal(back2?.get('ser-key-02')?.dispatchFingerprint ?? null, null);
+});
+
 // 汇总
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) {

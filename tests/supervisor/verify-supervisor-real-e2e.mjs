@@ -124,12 +124,16 @@ if (PHASE === 2) {
 	const st = JSON.parse(readFileSync(process.env.SB_STATE_FILE, 'utf8'));
 	ok('P2 token exists after restart', /^[0-9a-f]{64}$/.test(token));
 	const health = await sb('health', {}, token, 'GET');
-	ok('P2 health ok + version 0.2.1', health.status === 200 && health.body?.version === '0.2.1', JSON.stringify(health.body).slice(0, 120));
+	ok('P2 health ok + version 0.2.2', health.status === 200 && health.body?.version === '0.2.2', JSON.stringify(health.body).slice(0, 120));
 	ok('P2 ledger reloaded OK', health.body?.ledger?.state === 'OK', JSON.stringify(health.body?.ledger));
 
-	const rd = await sb('dispatch_goal', { idempotencyKey: st.keyA, objective: st.objectiveA, maxGoalRounds: 64, initialInstruction: st.markerA1 }, token);
-	ok('P2 dispatch replay → duplicate:true', rd.status === 200 && rd.body?.dispatched === false && rd.body?.duplicate === true, JSON.stringify(rd.body).slice(0, 200));
+	// R1.2：phase2 必须逐字重放 phase1 的 dispatch 输入（state 保存完整 initialInstruction）
+	const rd = await sb('dispatch_goal', { idempotencyKey: st.keyA, objective: st.objectiveA, maxGoalRounds: 64, initialInstruction: st.initialInstructionA }, token);
+	ok('P2 dispatch exact replay → duplicate:true', rd.status === 200 && rd.body?.dispatched === false && rd.body?.duplicate === true, JSON.stringify(rd.body).slice(0, 200));
 	ok('P2 dispatch replay same supervisorGoalId', rd.body?.supervisorGoalId === st.sgA, `${rd.body?.supervisorGoalId} vs ${st.sgA}`);
+	// R1.2：restart 后同 key 不同 payload → 409 fail-closed（零第二副作用）
+	const rdc = await sb('dispatch_goal', { idempotencyKey: st.keyA, objective: `${st.objectiveA} CHANGED`, maxGoalRounds: 64, initialInstruction: st.initialInstructionA }, token);
+	ok('P2 conflicting payload after restart → 409 idempotency_conflict', rdc.status === 409 && rdc.body?.error === 'idempotency_conflict' && rdc.body?.reason === 'payload_identity_mismatch', JSON.stringify(rdc.body).slice(0, 220));
 
 	const rc = await sb('send_correction', { commandId: st.corr1CommandId, generation: 1, sessionId: st.sidA, text: st.markerA2, mode: 'steer' }, token);
 	ok('P2 correction replay → duplicate:true', rc.status === 200 && rc.body?.duplicate === true && rc.body?.accepted === false, JSON.stringify(rc.body).slice(0, 200));
@@ -190,11 +194,13 @@ const markerA1 = `E2E-MARKER-A1-${RUN}`;
 const markerA2 = `E2E-MARKER-A2-${RUN}`;
 const markerB1 = `E2E-MARKER-B1-${RUN}`;
 const objectiveA = `P2.75 R1.1 REAL E2E (run ${RUN}): confirm readiness then stop`;
+// R1.2 payload identity：dispatch 输入必须可被 phase2 逐字重放（canonical contract 一致）
+const initialInstructionA = `${markerA1}: reply exactly READY and stop. Do not modify any files.`;
 
 // ---------- 0. token + health identity ----------
 ok('T0 token exists (64 hex)', /^[0-9a-f]{64}$/.test(token), token.slice(0, 8));
 const health = await sb('health', {}, token, 'GET');
-ok('T0 health → 200 ok:true version 0.2.1', health.status === 200 && health.body?.ok === true && health.body?.version === '0.2.1', JSON.stringify(health.body).slice(0, 140));
+ok('T0 health → 200 ok:true version 0.2.2', health.status === 200 && health.body?.ok === true && health.body?.version === '0.2.2', JSON.stringify(health.body).slice(0, 140));
 ok('T0 health identity sha256 present', /^[0-9a-f]{64}$/.test(health.body?.identity?.bridgeSha256 ?? '') && /^[0-9a-f]{64}$/.test(health.body?.identity?.coreSha256 ?? ''), JSON.stringify(health.body?.identity));
 ok('T0 health ledger OK/ABSENT', ['OK', 'ABSENT'].includes(health.body?.ledger?.state), JSON.stringify(health.body?.ledger));
 
@@ -220,7 +226,7 @@ const dispA = await sb('dispatch_goal', {
 	idempotencyKey: keyA,
 	objective: objectiveA,
 	maxGoalRounds: 64,
-	initialInstruction: `${markerA1}: reply exactly READY and stop. Do not modify any files.`,
+	initialInstruction: initialInstructionA,
 }, token);
 ok('T15 dispatch → 200 dispatched:true (fresh)', dispA.status === 200 && dispA.body?.dispatched === true && dispA.body?.duplicate === false && dispA.body?.resumed === false, JSON.stringify(dispA.body).slice(0, 240));
 const sidA = dispA.body?.receipt?.sessionId;
@@ -228,13 +234,18 @@ const sgA = dispA.body?.supervisorGoalId;
 ok('T15 sessionId = uuidv5(key) deterministic', sidA === dispA.body?.session?.sessionId && /^session-[0-9a-f-]{36}$/.test(sidA ?? ''), sidA);
 ok('T15 supervisorGoalId present + generation 1', !!sgA && dispA.body?.generation === 1, `${sgA} gen=${dispA.body?.generation}`);
 ok('T15 goalRef armed (harness goal created)', !!dispA.body?.receipt?.goalRef?.id, JSON.stringify(dispA.body?.receipt?.goalRef));
+ok('T15 receipt carries dispatchFingerprint (R1.2)', /^[0-9a-f]{64}$/.test(dispA.body?.receipt?.dispatchFingerprint ?? ''), dispA.body?.receipt?.dispatchFingerprint);
 ok('T15 startPromptOrigin = provided', dispA.body?.startPromptOrigin === 'provided', dispA.body?.startPromptOrigin);
 // rc.8 实测 session.create 返回体可能不含 running（turn 尚未起）；真实启动证据由 marker 断言承担
 ok('T15 session object returned', dispA.body?.session?.sessionId === sidA, JSON.stringify(dispA.body?.session));
 
-const dupA = await sb('dispatch_goal', { idempotencyKey: keyA, objective: 'DIFFERENT objective ignored on replay', maxGoalRounds: 2 }, token);
-ok('T16 dispatch replay → duplicate:true same goal', dupA.status === 200 && dupA.body?.dispatched === false && dupA.body?.duplicate === true && dupA.body?.supervisorGoalId === sgA, JSON.stringify(dupA.body).slice(0, 200));
+// R1.2：exact replay（同 canonical contract）→ duplicate；不同 payload → 409 fail-closed
+const dupA = await sb('dispatch_goal', { idempotencyKey: keyA, objective: objectiveA, maxGoalRounds: 64, initialInstruction: initialInstructionA }, token);
+ok('T16 dispatch exact replay → duplicate:true same goal', dupA.status === 200 && dupA.body?.dispatched === false && dupA.body?.duplicate === true && dupA.body?.supervisorGoalId === sgA, JSON.stringify(dupA.body).slice(0, 200));
 ok('T16 dispatch replay same generation (1)', dupA.body?.generation === 1, `gen=${dupA.body?.generation}`);
+// R1.2 Blocker 修复的 E2E 级证明：同 key 不同 objective → 409 idempotency_conflict（不重派）
+const conflictA = await sb('dispatch_goal', { idempotencyKey: keyA, objective: 'DIFFERENT objective must conflict under R1.2', maxGoalRounds: 2 }, token);
+ok('T16b dispatch conflicting payload → 409 idempotency_conflict', conflictA.status === 409 && conflictA.body?.error === 'idempotency_conflict' && conflictA.body?.reason === 'payload_identity_mismatch', JSON.stringify(conflictA.body).slice(0, 220));
 
 const m1Before = await countMarker(sidA, markerA1);
 if (CI) {
@@ -380,7 +391,7 @@ if (stFile) {
 	const m2 = await countMarker(sidA, markerA2);
 	writeFileSync(stFile, JSON.stringify({
 		run: RUN, keyA, keyB, keyC, sidA, sidB, sidC, sgA, sgB, sgC,
-		objectiveA, markerA1, markerA2, markerB1,
+		objectiveA, initialInstructionA, markerA1, markerA2, markerB1,
 		corr1CommandId: c1CommandId, cancelCommandB,
 		markerA1Count: m1, markerA2Count: m2,
 		harnessGoalIdA: dispA.body?.receipt?.goalRef?.id ?? null,

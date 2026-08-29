@@ -61,3 +61,15 @@ key 校验 / objective 校验 / maxGoalRounds 边界 / 确定性 session id（�
 - **生产加载 attestation**：部署 `git hash-object` 三文件==canonical blob 全 MATCH；受控重启（ledger 旧→新 pid=25424，无 QUARANTINE）后 `/supervisor/health` `version=0.2.1` 且 `identity.bridge/coreSha256` == 部署字节 SHA-256（`ef3430dbb22a…`/`cccf1e67b228…`）；错 token→401、对 token→200。
 - **重启后回归**：P2.6 八套件 **136/0** + P2.5 **72/0** + supervisor CI E2E 编排器复跑（结果见下方 E2E 行修正；0 失败，无关失败 0）。
 - **治理**：零核心修改、零新增功能；诊断草稿已清理（配方存工作区 VERIFICATION.md）；VERIFIED 待 Round 3。
+
+## R1.2 附录（Round 3 final closure，2026-08-29）
+
+> 外部评审 Round 3 **唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」** 闭环 + 事务化部署/受控重启加载 v0.2.2 attestation 全达成。详证见同目录 `P275_R1_2_ROUND3_CLOSURE.md`。
+
+- **Payload identity**：receipt 新增 `dispatchFingerprint`（SHA-256 canonical normalized contract：objective/initialInstruction/maxGoalRounds/acceptanceCriteria/supervisorGoalId/generation；规范化字典序键序+trim+CRLF→LF；排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹 → duplicate 零副作用，同 key 异指纹 → 409 `idempotency_conflict` 零副作用，遗留无指纹 receipt → fail-closed，重启后指纹持久（M1d）；表示噪声不误报（M1a）、同 key 异 supervisorGoalId 409（M13）、未知会话纠偏 404（M14）。
+- **对照测试扩容**：mutation 套件 14 → **19/0**；隔离 E2E 增补 T15 指纹断言 + T16b 冲突 payload 409——本轮全绿（ci 模式下历史依赖断言按设计 SKIP，full 模式在 CI L3 执行）。
+- **Canonical**：PR #67（branch `p275-r12-round3-final`，head=`f21f3bc`）全绿 squash merge → **main=`4fae42f`**（2026-08-29T08:36:48Z）；blob：bridge `d2e2cdf3`、core `ab342dd2`、test `a04f985f`；5 文件 +283/−27（零 Harness 核心）。
+- **CI 全绿**（head=f21f3bc）：L1 run 33243204206 / L2 run 33243204210 / L3 run 33243204229 全部 success。
+- **生产加载 attestation**：事务化部署（先备份 `.bak-r12` 三文件 13:12:16 → 覆盖 16:36:54，部署字节==canonical blob 全 MATCH）；受控重启 16:49（旧 pid 15572 → 新 pid 3300；ledger attempt `d0549067` 因 readiness 宽限窗超时提前记 FAILED，**实际终态健康**——偏差如实记录）后 `/supervisor/health` `version=0.2.2` 且 identity SHA-256 == 部署字节（`a43d4cd6e1fe…`/`59e3b5dfb8e2…`）；错 token→401、对 token→200。
+- **重启后回归**（v0.2.2 进程，两轮电池全 exit 0）：mutation **19/0** + supervisor CI E2E **ALL PHASES PASS** + P2.6 八套件 **136/0**（rollback-switch ALL PASS）+ P2.5 **72/0**；合计 0 失败，无关失败 0。
+- **治理**：零核心修改、零新增功能；未触碰 Reviewer 99 页 verdict；VERIFIED 待 Round 3 授权。

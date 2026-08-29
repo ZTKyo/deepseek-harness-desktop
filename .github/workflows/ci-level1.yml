@@ -257,3 +257,15 @@ jobs:
           node tests\reliability\test-failure-classifier-v1.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "FAILURE-CLASSIFIER TEST FAIL"; exit 1 }
           Write-Host "failure classifier v1: PASS"
+
+      # ─── P2.75 SUPERVISOR (R1.1, External Review Round 2 Blocker C) ───────────
+      # L1 carries ONLY the pure-unit supervisor core/tool-surface suite (zero
+      # deps, no server, no dsh install). Integration/mutation suites live on
+      # L2; the isolated real-instance E2E lives on L3 — see ci-level2.yml /
+      # ci-level3.yml.
+      - name: P2.75 Supervisor core/tool-surface unit tests (T1-T30, pure unit)
+        shell: pwsh
+        run: |
+          node plugins\supervisor-bridge-test.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR CORE TEST FAIL"; exit 1 }
+          Write-Host 'P2.75 supervisor core/tool-surface unit tests: PASS'

@@ -14,6 +14,7 @@ on:
       - 'tests/install-plugin/*'
       - 'tests/reliability/*'
       - 'tests/continuity/*'
+      - 'tests/supervisor/*'
       - 'tests/fixtures/*'
       - 'tools/install-plugin.mjs'
       - 'docs/roadmap/**'
@@ -168,6 +169,27 @@ jobs:
           node tests\reliability\test-failure-classifier-v1.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "T-R3-7 CLASSIFIER FAIL"; exit 1 }
           Write-Host "T-R3-7 classifier regressions: PASS"
+
+      # ─── P2.75 SUPERVISOR isolated real E2E (R1.1, Round 2 Blocker C) ─────────
+      # Three-phase REAL E2E on isolated DSH_HOME instances booted from the
+      # globally installed dsh (same as the smoke above; NO external
+      # credentials needed — SB_MODE=ci replaces model-turn assertions with
+      # deterministic ones; full mode stays local-only).
+      #   phase 1: homeA (supervisor-bridge) -> boot -> negatives(401/404/400)
+      #            + dispatch + idempotent re-dispatch + corrections + cancel
+      #            + review/evidence bundle + snapshot metadata-only
+      #   phase 2: homeA RESTART (bridge restart semantics) -> replay must not
+      #            cause second side effects + corrupt-ledger fail-closed
+      #   phase 3: homeB (NO bridge) -> /supervisor/* absent, host surface
+      #            unaffected (disabled baseline)
+      # Temp homes are destroyed at the end (KEEP=1 to retain for debugging).
+      - name: P2.75 Supervisor isolated real E2E (dispatch/review, bridge-restart replay, disabled baseline)
+        shell: pwsh
+        run: |
+          $env:SB_MODE = 'ci'
+          node tests\supervisor\run-supervisor-ci-e2e.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P275-R1-1 SUPERVISOR REAL E2E FAIL"; exit 1 }
+          Write-Host 'P2.75 R1.1 supervisor isolated real E2E (3 phases): PASS'
 
       - name: Guardian !!js regression on main-branch gate (P2.5 R2-8)
         shell: pwsh

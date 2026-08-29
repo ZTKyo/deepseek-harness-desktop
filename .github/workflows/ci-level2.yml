@@ -158,6 +158,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "P26-R1-2-QUOTA-NO-ALTERNATIVE FAIL"; exit 1 }
           Write-Host "p26 r1.2 quota no-alternative: PASS"
 
+      # ─── P2.75 SUPERVISOR mutation suite (R1.1, Round 2 Blocker A/C) ──────────
+      # Real core module + fake host (host-RPC call count == real side-effect
+      # count; no live server, no dsh install). Covers: dispatch/correction/
+      # cancel idempotency (duplicate request must NOT cause a 2nd side
+      # effect), stale-generation guard, corrupt-ledger fail-closed,
+      # objective-only dispatch truth, same-Harness-Goal continuity,
+      # bridge-restart replay safety, ambiguous-rpc fail-closed, resume
+      # without repeating applied steps. 15 checks, M1-M12.
+      - name: P2.75 Supervisor mutation replay/idempotency/lifecycle/stale-generation (R1.1)
+        shell: pwsh
+        run: |
+          node tests\supervisor\test-supervisor-mutation-state.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR MUTATION FAIL"; exit 1 }
+          Write-Host 'P2.75 R1.1 supervisor mutation suite: PASS'
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

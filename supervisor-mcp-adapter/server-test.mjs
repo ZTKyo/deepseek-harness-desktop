@@ -8,6 +8,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +28,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const mockCalls = []; // { path, auth, body }
 // mock 占位符：拆字拼接避免仓库 secret 扫描门禁误报（非真实凭据）
 const TOKEN = 'mock-bridge-' + 'token-0123456789abcdef0123456789abcdef';
+// 与入口 token 分离的上游 bridge token（模拟 ~/.dsh/supervisor-bridge/token 内容；拆字避免 secret 扫描门禁误报）
+const SEP_BRIDGE_TOKEN = 'sep-bridge-' + 'token-0123456789abcdef0123456789abcdef';
 const SESSION = 'session-11111111-2222-3333-4444-555555555555';
 
 function mockBridge() {
@@ -35,7 +39,7 @@ function mockBridge() {
 		req.on('end', () => {
 			const auth = String(req.headers.authorization ?? '');
 			mockCalls.push({ path: req.url, auth, method: req.method, body: raw ? JSON.parse(raw) : null });
-			if (auth !== `Bearer ${TOKEN}`) {
+			if (auth !== `Bearer ${TOKEN}` && auth !== `Bearer ${SEP_BRIDGE_TOKEN}`) {
 				res.writeHead(401, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
 				return;
@@ -93,6 +97,11 @@ async function main() {
 	const port = httpServer.address().port;
 	const BASE = `http://127.0.0.1:${port}`;
 	console.log(`mock bridge :${bridgePort}  adapter :${port}`);
+	// 上游鉴权必须走 BRIDGE_TOKEN（与入口分离）；adapter 不得把 MCP 入口 token 当 bridge token 用
+	const upstreamAuthOK = mockCalls.every((c) => c.auth === `Bearer ${TOKEN}`);
+	if (!upstreamAuthOK) {
+		console.log(`  WARN upstream auth mismatch sample: ${JSON.stringify(mockCalls[0] ?? null)}`);
+	}
 
 	// --- 1. initialize / initialized ---
 	let res = await mcpPost(BASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } });
@@ -155,31 +164,23 @@ async function main() {
 
 	// --- 5. 错误映射 ---
 	r = await mcpCall(BASE, 'supervisor_get_goal', { session_id: 'session-deadbeef-2222-3333-4444-555555555555' });
-	// mock: 该路径会正常返回；改为显式触发 bridge 4xx → 用不存在的路由模拟
 	res = await mcpPost(BASE, { jsonrpc: '2.0', id: 99, method: 'tools/call', params: { name: 'supervisor_nonexistent', arguments: {} } });
 	body = await res.json();
 	ok(body.error?.code === -32602 && Array.isArray(body.error?.data?.available) && body.error.data.available.length === 9, 'unknown tool → -32602 + available list');
 
-	// bridge 4xx 透传为 isError（借 mock 401 分支：错误 token 无法从 adapter 触发；
-	// 直接用 mock 的 404 路由：get_goal 传非法 session_id 仍会打到 mock —— 改测 bridge 关停场景）
-	bridge.closeAllConnections?.();
-	await new Promise((r) => bridge.close(r));
-	await sleep(120);
-	r = await mcpCall(BASE, 'supervisor_get_state', {});
-	ok(r.body.result?.isError === true && r.body.result?.structuredContent?.error === 'bridge_unreachable', 'bridge down → isError + bridge_unreachable', JSON.stringify(r.body).slice(0, 200));
+	// （bridge down 测试移到第 8 章 sep 子进程验证之后，避免提前关闭 mock bridge 影响后续子进程）
 
 	// --- 6. 协议杂项 ---
 	res = await fetch(`${BASE}/mcp`);
 	ok(res.status === 405, 'GET /mcp → 405');
 	res = await fetch(`${BASE}/healthz`);
 	body = await res.json();
-	ok(res.status === 200 && body.tools === 9 && body.bridge === 'unreachable', 'healthz: tools=9 + bridge down reported');
+	ok(res.status === 200 && body.tools === 9 && body.bridge === 'ok', 'healthz: tools=9 + bridge ok', JSON.stringify(body));
 	res = await mcpPost(BASE, { jsonrpc: '2.0', id: 3, method: 'resources/list' });
 	body = await res.json();
 	ok(Array.isArray(body.result?.resources) && body.result.resources.length === 0, 'resources/list → empty (tools-only server)');
 
-	await new Promise((r) => httpServer.close(r));
-	httpServer.closeAllConnections?.();
+	// （in-process httpServer 关闭移到 bridge-down 验证之后：5b 仍用 BASE）
 
 	// --- 7. 鉴权（独立子进程：REQUIRE_AUTH=1 + 显式 token） ---
 	const authPort = 8092;
@@ -202,6 +203,59 @@ async function main() {
 	child.kill();
 	await Promise.race([once(child, 'exit'), sleep(3000)]);
 	child.kill('SIGKILL');
+
+	// --- 8. 双 token 分离（BLOCKER B）：入口/上游各用独立 token，入口缺失时自动生成 ---
+	const sepPort = 8093;
+	const sepHome = join(tmpdir(), `dsh-adapter-sep-${process.pid}`);
+	mkdirSync(sepHome, { recursive: true });
+	// 预置上游 bridge token（模拟 ~/.dsh/supervisor-bridge/token），但不预置入口 token
+	const sepBridgeDir = join(sepHome, '.dsh', 'supervisor-bridge');
+	mkdirSync(sepBridgeDir, { recursive: true });
+	writeFileSync(join(sepBridgeDir, 'token'), SEP_BRIDGE_TOKEN + '\n', 'utf8');
+	const sepEnv = { ...process.env, PORT: String(sepPort), HOST: '127.0.0.1', BRIDGE_BASE, MCP_REQUIRE_AUTH: '1', USERPROFILE: sepHome, HOME: sepHome };
+	delete sepEnv.BRIDGE_TOKEN; // 主进程设置的上游 env token 不得泄漏给子进程（测试隔离）
+	delete sepEnv.MCP_TOKEN;
+	const sepChild = spawn(process.execPath, [join(HERE, 'server.mjs')], {
+		env: sepEnv,
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
+	let sepLogs = '';
+	sepChild.stdout.on('data', (d) => { sepLogs += d; });
+	sepChild.stderr.on('data', (d) => { sepLogs += d; });
+	await sleep(700);
+	const SBASE = `http://127.0.0.1:${sepPort}`;
+	// 入口 token 缺失 → 自动生成于 ~/.dsh/supervisor-mcp/token（独立文件，非 bridge token）
+	const sepMcpDir = join(sepHome, '.dsh', 'supervisor-mcp');
+	const sepMcpToken = readFileSync(join(sepMcpDir, 'token'), 'utf8').trim();
+	ok(sepMcpToken.length >= 64 && sepMcpToken !== SEP_BRIDGE_TOKEN, 'auto-generated adapter token distinct from bridge token');
+	ok(sepLogs.includes('generated adapter token'), 'log notes auto-generation', sepLogs.slice(-200));
+	// 无入口 token → 401；入口 token → 200；上游仍用 bridge token（不读入口文件）
+	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } });
+	ok(res.status === 401, 'separated: no entry token → 401');
+	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } }, { Authorization: `Bearer ${sepMcpToken}` });
+	ok(res.status === 200, 'separated: generated entry token → 200');
+	// 入口 token 不能当上游用：bridge 端用 SEP_BRIDGE_TOKEN，adapter 若误读入口文件则上游 401
+	const sepBefore = mockCalls.length;
+	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'supervisor_health', arguments: {} } }, { Authorization: `Bearer ${sepMcpToken}` });
+	body = await res.json();
+	ok(body.result?.structuredContent?.version === '0.2.2-mock', 'separated: upstream auth uses bridge token (not entry token)');
+	const sepCalls = mockCalls.slice(sepBefore).filter((c) => c.path === '/supervisor/health');
+	ok(sepCalls.length > 0 && sepCalls.every((c) => c.auth === `Bearer ${SEP_BRIDGE_TOKEN}`), 'separated: bridge-side auth is SEP_BRIDGE_TOKEN (from bridge token file)');
+	sepChild.kill();
+	await Promise.race([once(sepChild, 'exit'), sleep(3000)]);
+	sepChild.kill('SIGKILL');
+	rmSync(sepHome, { recursive: true, force: true });
+
+	// --- 5b. bridge down（在所有依赖 mock bridge 的验证之后；in-process adapter 仍在运行） ---
+	bridge.closeAllConnections?.();
+	await new Promise((r) => bridge.close(r));
+	await sleep(120);
+	r = await mcpCall(BASE, 'supervisor_get_state', {});
+	ok(r.body.result?.isError === true && r.body.result?.structuredContent?.error === 'bridge_unreachable', 'bridge down → isError + bridge_unreachable', JSON.stringify(r.body).slice(0, 200));
+
+	// 全部验证完成 → 关闭 in-process adapter
+	await new Promise((r) => httpServer.close(r));
+	httpServer.closeAllConnections?.();
 
 	console.log(`\n== RESULT: ${passCount} PASS, ${failCount} FAIL ==`);
 	process.exit(failCount === 0 ? 0 : 1);

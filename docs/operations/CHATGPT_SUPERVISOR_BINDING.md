@@ -97,14 +97,16 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
   [12584461](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)）；
 - tunnel 需同时关联「所属 Platform 组织 + 目标 ChatGPT workspace」（只关联组织不会出现在
   ChatGPT 列表，见 §7.4）；
-- `tunnel-client run --profile <name>` 保持存活（app discovery 与 MCP 调用都依赖它）；
-  `tunnel-client doctor --profile <name> --explain` 可自检。
+- `tunnel-client runtimes connect` 托管长驻运行时保持存活（app discovery 与 MCP 调用都依赖
+  它）；`tunnel-client runtimes status <alias> --json` 可自检。
 
 **执行顺序（用户在场时一次性完成）**：
 1. 用户打开 https://platform.openai.com/settings/organization/tunnels 创建 tunnel，
    拿到 `tunnel_id` + runtime API key；
-2. 本机 `tunnel-client init --sample sample_mcp_stdio_local --profile <name> --tunnel-id <id>
-   --mcp-command "node <repo>/supervisor-mcp-adapter/server.mjs"`，然后 `tunnel-client run`；
+2. 本机 `tunnel-client runtimes connect --alias <name> --tunnel-id <id>
+   --runtime-api-key env:OPENAI_TUNNEL_API_KEY
+   --mcp-server-url http://127.0.0.1:8091/mcp`（adapter 为 Streamable HTTP 服务器，
+   必须用 `--mcp-server-url`，非 stdio）；
 3. 用户打开 https://chatgpt.com/plugins → 创建开发者模式 App → Connection 选 **Tunnel** →
    选择/粘贴 tunnel_id；
 4. 执行 §6 E2E 1–5；完毕关 `tunnel-client` 即可（tunnel 是 OpenAI 托管资源，随时可复用，
@@ -157,7 +159,8 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 - 隧道可关联多个 Platform 组织 / ChatGPT workspace：**必须把目标 ChatGPT workspace 也加进
   关联**，否则隧道不出现在 ChatGPT 列表（Troubleshooting 明确列出此坑）。
 - `tunnel-client` 暴露 `/healthz`、`/readyz`、`/metrics` 与 loopback-only 管理 UI `/ui`；
-  `tunnel-client doctor --profile <name> --explain` 自检。不健康/未连接时隧道请求失败。
+  `tunnel-client runtimes status <alias> --json` 自检（暴露 process_running/healthy/ready）。
+  不健康/未连接时隧道请求失败。
 - 企业能力：出站代理、自定义 CA 包、control-plane 客户端证书、MCP 侧 mTLS。
 - 日志边界：隧道传输不在 ChatGPT Compliance Platform app events 内；隧道元数据变更走
   Platform Audit logs（`tunnel.created/updated/deleted`）；App 级合规日志（invocation、
@@ -190,20 +193,25 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 4. 确认账号有 ChatGPT developer mode：Enterprise/Edu 找 workspace admin 开权限 → 自己在
    **Settings → Security and login** 开启；个人账号按官方文章确认可用性。
 5. 在 https://chatgpt.com/plugins 创建开发者模式 App：Connection 选 **Tunnel** → 选择隧道。
-6. 通知本机运行 `tunnel-client run`（本回合已完成命令模板，届时 1 条命令拉起）。
+6. 通知本机运行 `tunnel-client runtimes connect`（本回合已完成命令模板，届时 1 条命令拉起）。
 
 ### 7.5 本机落地模板（无 secret）
 
 ```bash
-# 1) 拉 tunnel-client（release 最新版；或 Platform settings 下载链接）
-# 2) 初始化 stdio profile（MCP 服务器 = 本仓库 supervisor-mcp-adapter）
-export CONTROL_PLANE_API_KEY="<runtime-api-key>"   # 经 secret 面板注入，不入仓库
-tunnel-client init --sample sample_mcp_stdio_local --profile p275-supervisor \
+# 1) tunnel-client 二进制（release 最新版或 Platform settings 下载；本机已解压于
+#    DSH-Client\_tools\tunnel-client\extracted\tunnel-client.exe）
+# 2) 先拉起 adapter（独立进程，8091；kill-switch 见 §1）
+node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs
+# 3) attach 既有 tunnel（官方推荐：runtimes connect 托管长驻运行时；API key 经 secret
+#    面板注入 ~/.dsh/.credentials.yaml 后以 env: 引用，不入仓库）
+tunnel-client runtimes connect \
+  --alias p275-supervisor \
   --tunnel-id "<tunnel_id>" \
-  --mcp-command "node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs"
-tunnel-client doctor --profile p275-supervisor --explain
-tunnel-client run --profile p275-supervisor
-# 3) 完成后 Ctrl-C 关闭即可（隧道资源在 OpenAI 侧，随时复用）
+  --runtime-api-key "env:OPENAI_TUNNEL_API_KEY" \
+  --mcp-server-url "http://127.0.0.1:8091/mcp"
+# 4) 验证运行时健康（--json 暴露 process_running/healthy/ready 三字段）
+tunnel-client runtimes status p275-supervisor --json
+# 5) 停止：tunnel-client runtimes stop p275-supervisor（隧道资源在 OpenAI 侧，随时复用）
 ```
 
 > 注：tunnel-client 当前以二进制分发（release 页 + Platform settings 下载）；若未来提供

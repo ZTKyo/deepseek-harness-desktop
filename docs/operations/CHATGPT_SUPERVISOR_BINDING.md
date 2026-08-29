@@ -126,7 +126,7 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 |---|---|---|
 | 1 | READ：ChatGPT 内调用 `supervisor_get_state` / `supervisor_get_goal` | 返回真实数据，与 3080 直查一致 |
 | 2 | 控制性 dispatch：ChatGPT 发 `supervisor_dispatch_goal`（一次性目标+简单验收） | bridge 收到同形 payload，session 创建，幂等键生效 |
-| 3 | 幂等重放 + 409：同 `idempotency_key` 重发；再换 key 撞 `command_id` | 第一次返回原结果，冲突场景 `isError` + 409 原文 |
+| 3 | 幂等重放契约：same `idempotency_key` + **same semantic payload** → duplicate（返回原结果，零二次副作用）；same `idempotency_key` + **different semantic payload** → `isError` + 409 `idempotency_conflict`（`payload_identity_mismatch`，零副作用，fail-closed）——不得以"换 key 撞 `command_id`"替代 payload 冲突判据 | 两种情形均按契约返回，且无新增 session/goal |
 | 4 | `supervisor_review_goal` → VERIFIED | 状态投影 VERIFIED，回执落库 |
 | 5 | 新会话 rebind：ChatGPT 新对话重新扫描工具 | 9/9 工具可发现，READ 正常 |
 

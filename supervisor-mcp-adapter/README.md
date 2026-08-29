@@ -106,17 +106,22 @@ node supervisor-mcp-adapter\server.mjs
 **连接方式（2026-08-29 官方机制核验，developers.openai.com Secure MCP Tunnel 指南）**：
 ChatGPT 开发者模式 App → 私有 MCP 的官方首选路径 = **Secure MCP Tunnel**——本机跑
 `tunnel-client`（openai/tunnel-client，outbound HTTPS 长轮询 `api.openai.com:443 /v1/tunnel/*`）
-把 OpenAI 托管隧道端点收到的 MCP JSON-RPC 转发到本机 adapter（stdio 或 HTTP）。
+把 OpenAI 托管隧道端点收到的 MCP JSON-RPC 转发到本机 adapter（Streamable HTTP，
+`--mcp-server-url http://127.0.0.1:8091/mcp`，非 stdio）。
 **无需公网入口、不开放入站端口、MCP 地址保持私有**，完全适配本机 CGNAT/无公网 IP 拓扑。
 
 ```bash
-# tunnel-client 初始化（stdio profile → 本 adapter）
-export CONTROL_PLANE_API_KEY="<runtime-api-key>"   # 经 secret 面板注入，不入仓库
-tunnel-client init --sample sample_mcp_stdio_local --profile p275-supervisor \
+# 1) 先拉起 adapter（独立进程，8091；kill-switch 见 docs/operations/CHATGPT_SUPERVISOR_BINDING.md §1）
+node supervisor-mcp-adapter/server.mjs
+# 2) tunnel-client attach 既有 tunnel（官方推荐：runtimes connect 托管长驻运行时 → HTTP 端点）
+tunnel-client runtimes connect \
+  --alias p275-supervisor \
   --tunnel-id "<tunnel_id>" \
-  --mcp-command "node <repo>/supervisor-mcp-adapter/server.mjs"
-tunnel-client doctor --profile p275-supervisor --explain   # 自检
-tunnel-client run --profile p275-supervisor                # 保持存活
+  --runtime-api-key "env:OPENAI_TUNNEL_API_KEY" \   # 经 secret 面板注入 ~/.dsh/.credentials.yaml，不入仓库
+  --mcp-server-url "http://127.0.0.1:8091/mcp"
+# 3) 自检（--json 暴露 process_running/healthy/ready 三字段）
+tunnel-client runtimes status p275-supervisor --json
+# 4) 停止：tunnel-client runtimes stop p275-supervisor（隧道资源在 OpenAI 侧，随时复用）
 ```
 
 前提（详见 docs/operations/CHATGPT_SUPERVISOR_BINDING.md §7）：Platform tunnel 权限

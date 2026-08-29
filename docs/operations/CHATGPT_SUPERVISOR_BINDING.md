@@ -1,8 +1,9 @@
 # CHATGPT_SUPERVISOR_BINDING.md
 
 P2.75 TX-B —— ChatGPT Client Binding R1 交付报告。
-**状态：READY_FOR_CHATGPT_HUMAN_GATE**（adapter 侧事务已完成并验证；下一步是用户手动
-创建 ChatGPT Custom Connector，之后按 §6 执行真实 E2E）。
+**状态：READY_FOR_CHATGPT_HUMAN_GATE**（adapter 侧事务已完成并验证；OpenAI 官方连接机制
+已核验（§7）＝Secure MCP Tunnel 首选；下一步是用户手动创建 Platform tunnel +
+ChatGPT 开发者模式 App，之后按 §6 执行真实 E2E）。
 
 本文不含任何 secret（token 以 `<...>` 占位）。
 
@@ -74,9 +75,44 @@ bridge `ok:false` / HTTP≥400 → MCP `tools/call` 结果 `isError:true`，结�
 
 ### 5.1 公网入口（ChatGPT 必需，短暂启用）
 
-ChatGPT Custom Connector 要求公网 HTTPS URL。选型与参数以官方文档核验结论为准（§7），
-原则：临时隧道（如 cloudflared quick tunnel）只在用户执行 E2E 时拉起，结束即关；
-不打开路由器端口映射、不长期暴露。
+**官方首选方案（2026-08-29 核验，见 §7）：OpenAI Secure MCP Tunnel + tunnel-client。**
+
+ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（developers.openai.com
+`/api/docs/guides/secure-mcp-tunnels`）：
+
+1. **Secure MCP Tunnel（推荐，本机唯一可行）**：本机跑 `tunnel-client`（openai/tunnel-client，
+   outbound HTTPS 长轮询 `api.openai.com:443 /v1/tunnel/*`），由 **OpenAI 托管隧道端点**承接
+   ChatGPT 的 MCP 请求，再转发回本机私有 MCP 服务器。**不需要公网入口、不开放入站端口、
+   MCP 服务器地址永不公开** —— 完美适配本机 CGNAT 双 NAT 无 IPv6 拓扑（路由器无公网 IP，
+   任何端口映射/公网 VPS 转发都绕不开）。
+2. 公网 HTTPS MCP 端点（public plugin 提交路径）：要求稳定公网可达端点 —— 本机不具备，
+   排除。
+
+**前提（E2E 前必须备齐，见 §7.2）**：
+- Platform 组织 tunnel 权限（Tunnels Read + Manage 建隧道 / Read + Use 运行 tunnel-client）；
+- 目标 ChatGPT workspace 的 **developer mode 权限**（Enterprise/Edu 需 workspace admin 授予，
+  用户再在 **Settings → Security and login** 开启；个人账号路径见官方 developer-mode 文章
+  [12584461](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)）；
+- tunnel 需同时关联「所属 Platform 组织 + 目标 ChatGPT workspace」（只关联组织不会出现在
+  ChatGPT 列表，见 §7.4）；
+- `tunnel-client run --profile <name>` 保持存活（app discovery 与 MCP 调用都依赖它）；
+  `tunnel-client doctor --profile <name> --explain` 可自检。
+
+**执行顺序（用户在场时一次性完成）**：
+1. 用户打开 https://platform.openai.com/settings/organization/tunnels 创建 tunnel，
+   拿到 `tunnel_id` + runtime API key；
+2. 本机 `tunnel-client init --sample sample_mcp_stdio_local --profile <name> --tunnel-id <id>
+   --mcp-command "node <repo>/supervisor-mcp-adapter/server.mjs"`，然后 `tunnel-client run`；
+3. 用户打开 https://chatgpt.com/plugins → 创建开发者模式 App → Connection 选 **Tunnel** →
+   选择/粘贴 tunnel_id；
+4. 执行 §6 E2E 1–5；完毕关 `tunnel-client` 即可（tunnel 是 OpenAI 托管资源，随时可复用，
+   无持续暴露）。
+
+备选（不推荐，仅在用户无 Platform 组织/无 Tunnel 权限时）：
+- 临时公网隧道（cloudflared quick tunnel 等）包一层 HTTPS 转发到 8091 —— 仅 E2E 时段拉起、
+  结束即关、不开放路由器端口映射；但 ChatGPT 侧无法走官方 Tunnel 连接选项时需用
+  public HTTPS MCP endpoint 路径（§7 明确仅支持公网可达端点，且无官方隧道时每次都要重拉
+  cloudflared URL 并在 App 里改，体验差、安全面更大）。
 
 ## 6. ChatGPT-originated E2E 计划（App 创建后逐项执行，任一 FAIL → P3 不启动）
 
@@ -88,10 +124,88 @@ ChatGPT Custom Connector 要求公网 HTTPS URL。选型与参数以官方文档
 | 4 | `supervisor_review_goal` → VERIFIED | 状态投影 VERIFIED，回执落库 |
 | 5 | 新会话 rebind：ChatGPT 新对话重新扫描工具 | 9/9 工具可发现，READ 正常 |
 
-## 7. OpenAI 官方机制核验（Custom MCP App / Tunnel / 认证）
+## 7. OpenAI 官方机制核验（2026-08-29 已核实，来源=developers.openai.com 官方文档）
 
-<!-- 待研究结论落地后填写：官方入口路径、开发者模式开关、no-auth/OAuth 选项、
-     localhost 隧道方案与安全注意事项、发布/审核要求。占位不影响已验证部分。 -->
+**结论先行：ChatGPT（开发者模式）→ 私有 MCP 的官方一等公民路径 = Secure MCP Tunnel。
+本机 CGNAT/无公网 IP 环境完全可用；无需 cloudflared/端口映射/VPS 转发。**
+
+### 7.1 官方文档
+
+- Secure MCP Tunnel 指南：https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+  （Markdown：同 URL 追加 `.md`）
+- 通用 MCP 概念：https://developers.openai.com/api/docs/guides/tools-connectors-mcp
+- tunnel-client 发布：https://github.com/openai/tunnel-client/releases/latest
+- 开发者模式 Help Center：https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta
+  （"Developer mode apps and full MCP connectors in ChatGPT (beta)"；help.openai.com 有
+  Cloudflare 挑战，浏览器带真实 UA 可读）
+- RBAC：https://developers.openai.com/api/docs/guides/rbac
+
+### 7.2 机制（官方原文要点）
+
+- `tunnel-client` 在**能触达私有 MCP 服务器的网络内部**运行：出站 HTTPS 长轮询
+  `api.openai.com:443 /v1/tunnel/*`（配了 control-plane mTLS 时走
+  `mtls.api.openai.com:443`），把 OpenAI 侧排队的 MCP JSON-RPC 请求转发到本机 MCP 服务器，
+  响应经同一隧道回传。**MCP 服务器不需要公网监听器**；支持流式 SSE 转发。
+- 前提三件套：`tunnel_id`（Platform tunnel settings）+ runtime API key（给 tunnel-client）+
+  本机可经 stdio 或 HTTP 触达的 MCP 服务器。
+- 权限分离：创建/编辑隧道 = Tunnels **Read+Manage**；运行 tunnel-client / 创建 App 时选隧道 =
+  Tunnels **Read+Use**（组织级，非项目级，最多 30 分钟传播）；**ChatGPT developer mode 是
+  独立的 workspace 权限**（Enterprise/Edu 由 workspace admin 授予，用户再在
+  Settings → Security and login 开启）。
+- 隧道可关联多个 Platform 组织 / ChatGPT workspace：**必须把目标 ChatGPT workspace 也加进
+  关联**，否则隧道不出现在 ChatGPT 列表（Troubleshooting 明确列出此坑）。
+- `tunnel-client` 暴露 `/healthz`、`/readyz`、`/metrics` 与 loopback-only 管理 UI `/ui`；
+  `tunnel-client doctor --profile <name> --explain` 自检。不健康/未连接时隧道请求失败。
+- 企业能力：出站代理、自定义 CA 包、control-plane 客户端证书、MCP 侧 mTLS。
+- 日志边界：隧道传输不在 ChatGPT Compliance Platform app events 内；隧道元数据变更走
+  Platform Audit logs（`tunnel.created/updated/deleted`）；App 级合规日志（invocation、
+  `APP_AUTH_LOG`）照常。
+- OAuth：OAuth discovery 可走隧道；授权服务器本身不自动隧道化，若授权服务器公网与
+  tunnel-client 宿主机都不可达，OAuth 流程仍会失败。
+- Advanced：allowlisted HTTP callouts（内嵌 Harpoon MCP server，按 label 暴露受限 HTTP 目标，
+  非通用代理）。
+
+### 7.3 对本项目的影响（官方路径 vs 原占位方案）
+
+| 维度 | Secure MCP Tunnel（官方首选） | cloudflared quick tunnel（原备选） |
+|---|---|---|
+| 公网入口 | 无（outbound-only） | 有（公开 URL） |
+| MCP 地址隐私 | 保持私有 | 公网可探测 |
+| CGNAT 适配 | ✅ 完全适配（纯出站） | ✅ 可用但每次 URL 变化 |
+| ChatGPT 连接方式 | 官方 Tunnel 选项，App 内选择/粘贴 tunnel_id | 普通 HTTPS endpoint 手动填 URL |
+| 安全面 | 最小（OpenAI 托管端点 + 双向鉴权） | 较大（公网可触达 8091 侧） |
+| 持续成本 | 无（隧道复用，仅运行时占进程） | 每次 E2E 重拉 |
+
+**决策：E2E 首选 Secure MCP Tunnel；cloudflared 仅当用户无 Platform tunnel 权限时兜底。**
+
+### 7.4 用户操作清单（E2E 前需要用户做，全部非技术）
+
+1. 打开 https://platform.openai.com/settings/organization/tunnels（若报 "Tunnels access
+   required" 找组织 owner/RBAC admin 授权 Read+Manage；本机账号 = 个人 Platform 组织）。
+2. 创建 tunnel → 记下 `tunnel_id`，下载/获取 runtime API key（经安全面板入
+   `~/.dsh/.credentials.yaml`，不落文档）。
+3. 把目标 ChatGPT workspace 加入 tunnel 关联（若个人账号与 ChatGPT 同账号，确认已关联）。
+4. 确认账号有 ChatGPT developer mode：Enterprise/Edu 找 workspace admin 开权限 → 自己在
+   **Settings → Security and login** 开启；个人账号按官方文章确认可用性。
+5. 在 https://chatgpt.com/plugins 创建开发者模式 App：Connection 选 **Tunnel** → 选择隧道。
+6. 通知本机运行 `tunnel-client run`（本回合已完成命令模板，届时 1 条命令拉起）。
+
+### 7.5 本机落地模板（无 secret）
+
+```bash
+# 1) 拉 tunnel-client（release 最新版；或 Platform settings 下载链接）
+# 2) 初始化 stdio profile（MCP 服务器 = 本仓库 supervisor-mcp-adapter）
+export CONTROL_PLANE_API_KEY="<runtime-api-key>"   # 经 secret 面板注入，不入仓库
+tunnel-client init --sample sample_mcp_stdio_local --profile p275-supervisor \
+  --tunnel-id "<tunnel_id>" \
+  --mcp-command "node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs"
+tunnel-client doctor --profile p275-supervisor --explain
+tunnel-client run --profile p275-supervisor
+# 3) 完成后 Ctrl-C 关闭即可（隧道资源在 OpenAI 侧，随时复用）
+```
+
+> 注：tunnel-client 当前以二进制分发（release 页 + Platform settings 下载）；若未来提供
+> npm 包则以官方指引为准。
 
 ## 8. P3 硬门禁（本报告即门禁声明）
 

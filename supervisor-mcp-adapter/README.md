@@ -113,13 +113,19 @@ ChatGPT 开发者模式 App → 私有 MCP 的官方首选路径 = **Secure MCP 
 ```bash
 # 1) 先拉起 adapter（独立进程，8091；kill-switch 见 docs/operations/CHATGPT_SUPERVISOR_BINDING.md §1）
 node supervisor-mcp-adapter/server.mjs
-# 2) tunnel-client attach 既有 tunnel（官方推荐：runtimes connect 托管长驻运行时 → HTTP 端点）
+# 2) tunnel-client attach 既有 tunnel（一次性绑定；connect 会重写 profile，MCP 鉴权不在此步配置）
 tunnel-client runtimes connect \
   --alias p275-supervisor \
   --tunnel-id "<tunnel_id>" \
-  --runtime-api-key "env:OPENAI_TUNNEL_API_KEY" \   # 经 secret 面板注入 ~/.dsh/.credentials.yaml，不入仓库
+  --runtime-api-key "file:<runtime-key 文件，0600 不入仓库>" \
   --mcp-server-url "http://127.0.0.1:8091/mcp"
-# 3) 自检（--json 暴露 process_running/healthy/ready 三字段）
+# 2b) canonical 鉴权（token 经 file:/ 引用承载，不落 config 明文；本机已配置生效）：
+#     profile YAML 中 control_plane.api_key 与 mcp.extra_headers.Authorization 均用
+#     "file:<路径>" 引用（bearer-header 文件内容=Bearer <token>），然后长驻运行——
+#     run 只读 profile，不会被 connect 重写覆盖：
+tunnel-client run --profile p275-supervisor
+# 3) 自检（--json 暴露 process_running/healthy/ready 三字段；run 模式下 runtime_state=stopped
+#    属托管元数据缺失，以 healthz/readyz 为准——readyz 含 "requires auth" 说明鉴权没传进去）
 tunnel-client runtimes status p275-supervisor --json
 # 4) 停止：tunnel-client runtimes stop p275-supervisor（隧道资源在 OpenAI 侧，随时复用）
 ```

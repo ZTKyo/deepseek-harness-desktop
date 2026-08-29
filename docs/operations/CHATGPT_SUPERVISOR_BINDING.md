@@ -95,16 +95,20 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
   [12584461](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta)）；
 - tunnel 需同时关联「所属 Platform 组织 + 目标 ChatGPT workspace」（只关联组织不会出现在
   ChatGPT 列表，见 §7.4）；
-- `tunnel-client runtimes connect` 托管长驻运行时保持存活（app discovery 与 MCP 调用都依赖
-  它）；`tunnel-client runtimes status <alias> --json` 可自检。
+- tunnel-client 长驻运行时保持存活（app discovery 与 MCP 调用都依赖它）；绑定用
+  `runtimes connect`，日常起停与鉴权配置用 canonical profile + `run --profile`（connect 会
+  重写 profile，鉴权不能依赖 connect 传参/env）；`runtimes status <alias> --json` 可自检
+  （run 模式下 runtime_state=stopped 属托管元数据缺失，以 healthz/readyz/daemon log 为准）。
 
 **执行顺序（用户在场时一次性完成）**：
 1. 用户打开 https://platform.openai.com/settings/organization/tunnels 创建 tunnel，
    拿到 `tunnel_id` + runtime API key；
 2. 本机 `tunnel-client runtimes connect --alias <name> --tunnel-id <id>
-   --runtime-api-key env:OPENAI_TUNNEL_API_KEY
+   --runtime-api-key "file:<runtime-key 文件，0600 不入仓库>"
    --mcp-server-url http://127.0.0.1:8091/mcp`（adapter 为 Streamable HTTP 服务器，
-   必须用 `--mcp-server-url`，非 stdio）；
+   必须用 `--mcp-server-url`，非 stdio）；随后把 MCP 鉴权写进 canonical profile 并用
+   `run --profile` 起长驻（Authorization 经 `mcp.extra_headers` 的 file:/ 引用承载，
+   token 不落 config 明文，见 §7.5 与 RUNBOOK「tunnel-client 连本地 MCP」）；
 3. 用户打开 https://chatgpt.com/plugins → 创建开发者模式 App → Connection 选 **Tunnel** →
    选择/粘贴 tunnel_id；
 4. 执行 §6 E2E 1–5；完毕关 `tunnel-client` 即可（tunnel 是 OpenAI 托管资源，随时可复用，
@@ -200,14 +204,21 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 #    DSH-Client\_tools\tunnel-client\extracted\tunnel-client.exe）
 # 2) 先拉起 adapter（独立进程，8091；kill-switch=stop-adapter.ps1，见 §1）
 node supervisor-mcp-adapter/server.mjs
-# 3) attach 既有 tunnel（官方推荐：runtimes connect 托管长驻运行时；API key 经 secret
-#    面板注入 ~/.dsh/.credentials.yaml 后以 env: 引用，不入仓库）
+# 3) attach 既有 tunnel（一次性绑定；connect 会重写 profile，MCP 鉴权不在此步配置）
 tunnel-client runtimes connect \
   --alias p275-supervisor \
   --tunnel-id "<tunnel_id>" \
-  --runtime-api-key "env:OPENAI_TUNNEL_API_KEY" \
+  --runtime-api-key "file:<runtime-key 文件，0600 不入仓库>" \
   --mcp-server-url "http://127.0.0.1:8091/mcp"
-# 4) 验证运行时健康（--json 暴露 process_running/healthy/ready 三字段）
+# 3b) canonical 鉴权（token 经 file:/ 引用承载，不落 config 明文；本机已配置生效）：
+#     profile YAML（%APPDATA%\tunnel-client\p275-supervisor.yaml）中
+#       control_plane.api_key: "file:<runtime-key 文件>"
+#       mcp.extra_headers: { Authorization: "file:<bearer-header 文件，内容=Bearer <token>>" }
+#     长驻运行（run 只读 profile，不会被 connect 重写覆盖）：
+tunnel-client run --profile p275-supervisor
+# 4) 验证运行时健康（--json 暴露 process_running/healthy/ready 三字段；run 模式下
+#    runtime_state=stopped 属托管元数据缺失，以 healthz/readyz 为准——readyz 文本含
+#    "requires auth" 说明 Authorization 没传进去）
 tunnel-client runtimes status p275-supervisor --json
 # 5) 停止：tunnel-client runtimes stop p275-supervisor（隧道资源在 OpenAI 侧，随时复用）
 # 6) 关闭 adapter：powershell -ExecutionPolicy Bypass -File supervisor-mcp-adapter\stop-adapter.ps1

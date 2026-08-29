@@ -55,6 +55,11 @@ supervisor-bridge-core.mjs  (唯一校验权威 + 幂等权威)
 | 真实 bridge v0.2.2 只读冒烟 | healthz `bridge:"ok"`；tools/list=9；`supervisor_get_state` 返回真实 sessions；`supervisor_get_snapshot` 正常；幽灵 session → `isError:true, error:invalid_session_id`（bridge 404 原样映射，无副作用） |
 | 端口纪律 | 8091 启动前空闲实测；冒烟后进程已清理、8091 已释放 |
 | sealed code 未触碰 | diff 仅新增 `supervisor-mcp-adapter/`；3080/8090/Guardian/router/core 零改动 |
+| `node server-test.mjs` @ R1.2 修正轮（PR #73 合入前后各 fresh run 一次） | **45 PASS / 0 FAIL**：R1.1 全部 37 断言保持通过，新增 8 断言——入口 token CSPRNG（`crypto.randomBytes(32)` 生成、token 不落进程日志、`server.mjs` 源码零 `Math.random`）、`MCP_REQUIRE_AUTH=0` 显式负例且其余场景鉴权默认强制、canonical profile YAML 链路（`mcp.extra_headers` 的 file:/ 引用 + `server_urls`→`http://127.0.0.1:8091/mcp`，零 env 变量依赖）、幂等重放契约两情形（same key+same payload→duplicate 零二次副作用；same key+different payload→`isError`+409 `idempotency_conflict`/`payload_identity_mismatch` fail-closed） |
+| PR #73（`client-binding-r12-round2` → main）required CI | L1 `Static + secret + syntax gate` = SUCCESS（run 33264802093）；L2 `Windows Reliability State Machines` = SUCCESS（run 33264802101，6m43s）；`gh pr checks` 双绿后才 merge |
+| merge 事实（GitHub fresh-read） | PR #73 **MERGED** = b166276c130d6…（2026-08-29T17:14:49Z，merge commit，与 #70-#72 同 policy）；`gh api /branches/main`：`protected:true` 且 SHA 一致；本地 main == origin/main == API main HEAD（fast-forward 干净） |
+| 分支 diff secret scan（vs origin/main） | CLEAN——无 secret-like 字符串；token 仅 `file:<...>` 占位引用；长驻链路 Authorization 经 `mcp.extra_headers` 的 file:/ 承载（canonical YAML 见 §7.5 模板） |
+| merge 范围复核（canonical main b166276） | 恰 4 文件、81 insertions / 15 deletions：`docs/operations/CHATGPT_SUPERVISOR_BINDING.md`、`supervisor-mcp-adapter/README.md`、`server-test.mjs`、`server.mjs`；sealed authority 文件零触碰（`git show --stat` 复核） |
 
 ## 4. 错误映射
 

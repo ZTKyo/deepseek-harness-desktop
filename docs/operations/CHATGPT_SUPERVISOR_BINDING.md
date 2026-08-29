@@ -26,10 +26,8 @@ supervisor-bridge-core.mjs  (唯一校验权威 + 幂等权威)
 - **端口纪律**：8091 仅本回合新启用（启动前已确认占用为空）；3080（dsh web）与
   8090（既有 supervisor 手桥）不复用、不重启、不改代码。
 - **kill-switch**：adapter 是独立 node 进程，一键关闭（不触碰 3080）：
-
-  ```powershell
-  Stop-Process -Id (Get-NetTCPConnection -LocalPort 8091 -State Listen).OwningProcess
-  ```
+  `powershell -ExecutionPolicy Bypass -File supervisor-mcp-adapter\stop-adapter.ps1`
+  （幂等：8091 无监听时直接退出；仅按 8091 端口定位进程，绝不误伤 3080/8090）。
 
 ## 2. 工具面（9 = 5 READ + 4 MUTATION，与 bridge 1:1）
 
@@ -200,8 +198,8 @@ ChatGPT 开发者模式 App 连接私有 MCP 服务器有两个官方路径（de
 ```bash
 # 1) tunnel-client 二进制（release 最新版或 Platform settings 下载；本机已解压于
 #    DSH-Client\_tools\tunnel-client\extracted\tunnel-client.exe）
-# 2) 先拉起 adapter（独立进程，8091；kill-switch 见 §1）
-node C:/Users/Administrator/Desktop/sdeepseek harness/deepseek-harness-desktop/supervisor-mcp-adapter/server.mjs
+# 2) 先拉起 adapter（独立进程，8091；kill-switch=stop-adapter.ps1，见 §1）
+node supervisor-mcp-adapter/server.mjs
 # 3) attach 既有 tunnel（官方推荐：runtimes connect 托管长驻运行时；API key 经 secret
 #    面板注入 ~/.dsh/.credentials.yaml 后以 env: 引用，不入仓库）
 tunnel-client runtimes connect \
@@ -212,6 +210,7 @@ tunnel-client runtimes connect \
 # 4) 验证运行时健康（--json 暴露 process_running/healthy/ready 三字段）
 tunnel-client runtimes status p275-supervisor --json
 # 5) 停止：tunnel-client runtimes stop p275-supervisor（隧道资源在 OpenAI 侧，随时复用）
+# 6) 关闭 adapter：powershell -ExecutionPolicy Bypass -File supervisor-mcp-adapter\stop-adapter.ps1
 ```
 
 > 注：tunnel-client 当前以二进制分发（release 页 + Platform settings 下载）；若未来提供

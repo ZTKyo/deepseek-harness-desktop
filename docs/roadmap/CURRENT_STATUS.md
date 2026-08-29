@@ -12,8 +12,8 @@
 | 02-SH | **Security-Hardening Gate**（P2 前置 gate） | `VERIFIED` | —（APPROVED Round 9） | docs/roadmap/reports/PHASE_02_SECURITY_HARDENING/REPORT_SH_R9.md |
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
 | 02.6 | RETRY SEMANTICS / Provider Failure Classification | `VERIFIED`（**External Review Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；canonical main=a332ebc、classifier=2ea1059f、全量回归 136/0。historical：批准前曾为 IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3；R1 PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28、PR #61 merged=a332ebc 2026-08-28；事务化部署+受控重启加载完成 2026-08-29） | —（APPROVED；Waiting For = NONE） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
-| 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `IMPLEMENTATION_COMPLETE`（**R1.2 Round 3 final closure 2026-08-29**；未申请 VERIFIED——待外部评审 Round 3。R1：零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26。R1.1＝Reviewer 99 Round 1 verdict 合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 3 唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | —（Waiting For = 外部评审 Round 3；Reviewer 未授权前不得标 VERIFIED） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | Phase 02.75 外部 `VERIFIED` 后启动（前置=P2.75 VERIFIED） | — |
+| 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `VERIFIED`（**外部评审 Round 3 = APPROVED（2026-08-29 Reviewer 裁决）→ VERIFIED AUTHORIZED；Round 4 = NONE；production code 封板**。历史（保留不改写）：R1 实施收口＝零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26，PR #63 merged=f2d94f9。R1.1＝Round 1 verdict（CHANGES_REQUIRED）合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 2 verdict（CHANGES_REQUIRED）唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | NONE（Round 3 APPROVED；Round 4 = NONE；**Next = ChatGPT Client Binding → P3 bootstrap**） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
+| 03 | AUTONOMY / Task Autonomy | 未开始 | 前置 P2.75 `VERIFIED` 已满足；**P3 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding（Custom MCP App）dispatch 启动，禁止由 Harness 自行开始** | — |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -266,16 +266,17 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
 1. **Security-Hardening VERIFIED** ✅（Round 9 APPROVED）
 2. **P2.5 CONTEXT MEMORY** ✅ **VERIFIED**（External Review **Round 10 = APPROVED**，2026-08-28；R2–R5.1-F 证据链闭环；P2.5 封板）
 3. **Phase 02.6 RETRY SEMANTICS** ✅ **VERIFIED**（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；R1/R1.1/R2/R3/R3-A1/R1.2 全部合入，canonical main=a332ebc，回归 136/0）
-4. **Phase 02.75 SUPERVISOR** — 前置 = Phase 02.6 外部 VERIFIED ✅ 已满足（Next Phase；仅记录，未启动）
-5. **Phase 03**（AUTONOMY）— 前置 = Phase 02.75 外部 VERIFIED（链：02.5 ✅ → 02.6 → 02.75 → P3）
+4. **Phase 02.75 SUPERVISOR** ✅ **VERIFIED**（External Review **Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；R1/R1.1/R1.2 全部合入（PR #63/#65/#67），canonical main=4fae42f、bridge v0.2.2 已部署加载；production code 封板）
+5. **ChatGPT Client Binding R1**（integration 事务，非新 Phase）：thin MCP adapter（loopback）→ 既有 P2.75 Supervisor Bridge，9 tools；真实 ChatGPT E2E 通过后 CHATGPT_BINDING = VERIFIED
+6. **Phase 03**（AUTONOMY）— 前置 = P2.75 VERIFIED ✅；**首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispatch**（链：02.5 ✅ → 02.6 ✅ → 02.75 ✅ → Binding → P3）
 
 ## 恢复指令
 
 重启后：读取本文件 → 读取 Notion Phase 状态 → 从当前执行位置继续。
-当前执行位置：**Phase 02.6 RETRY SEMANTICS = VERIFIED（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；Waiting For = NONE）**
-（R1/R1.1/R2/R3/R3-A1/R1.2 全部合入 canonical main=a332ebc；classifier=2ea1059f；attestation source==deployed==loaded；全量回归 136/0；
-**下一执行位置 = Phase 02.75 SUPERVISOR**（前置 02.6 VERIFIED 已满足；仅记录 Next，未启动）；
-前向链：02.5 ✅ VERIFIED → 02.6 ✅ VERIFIED → 02.75 → P3）。
+当前执行位置：**Phase 02.75 SUPERVISOR = VERIFIED（External Review Round 3 = APPROVED，2026-08-29；Round 4 = NONE；Waiting For = NONE）**
+（R1/R1.1/R1.2 全部合入 canonical main=4fae42f、docs closure 7830be6；bridge v0.2.2 已部署加载 attestation source==deployed==loaded；重启后回归 19/0＋136/0＋72/0＋E2E all pass）；
+**下一执行位置 = ChatGPT Client Binding R1**（thin MCP adapter → 既有 Supervisor Bridge，独立 integration 事务，非新 Phase；连接验证完成前 P3 禁止启动）；
+P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispatch（前向链：02.5 ✅ VERIFIED → 02.6 ✅ VERIFIED → 02.75 ✅ VERIFIED → Binding → P3）。
 
 ## 变更日志
 
@@ -479,3 +480,11 @@ re-armed（cycles 8→10）→ 同 Session 续跑成功，零数据丢失。状�
   双文件就位＋cordis.patch.yml 注册（js-yaml 校验 18 ops PASS）；**攒批生效**——本轮未重启 3080
   主服务，下次自然重启加载（fail-soft）。状态=IMPLEMENTATION_COMPLETE；**Waiting For=外部评审
   Round 1**（Reviewer 未授权前不得标 VERIFIED）；P3 仍 BLOCKED（前置=P2.75 VERIFIED）。
+- **2026-08-29：P2.75 SUPERVISOR = VERIFIED（External Review Round 3 = APPROVED；PURE STATUS BACKFILL）**：
+  External Reviewer 正式裁决 P2.75 Round 3 = **APPROVED**、Round 4 = NONE、VERIFIED AUTHORIZED。
+  本 PR 为纯状态回填（仅 docs/roadmap/CURRENT_STATUS.md）：02.75 总览行 IMPLEMENTATION_COMPLETE → **VERIFIED**
+  （R1/Round 1、R1.1/Round 2 CHANGES_REQUIRED 历史保留不改写）；Waiting For → NONE（Next = ChatGPT
+  Client Binding → P3 bootstrap）；03 行标注前置已满足、P3 首个 Goal 须由真实 ChatGPT 经 Client
+  Binding dispatch；路线清单与恢复指令同步。零生产代码改动、零插件改动、零配置改动、零 deploy、
+  零 restart、零 runtime mutation、Reviewer 99 未触碰。**下一事务 = ChatGPT Client Binding R1**
+  （thin MCP adapter → 既有 P2.75 Supervisor Bridge，独立 branch/PR；连接验证通过前 P3 禁止启动）。

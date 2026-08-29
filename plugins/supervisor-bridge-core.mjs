@@ -1,8 +1,12 @@
-// supervisor-bridge-core.mjs —— P2.75 Supervisor Bridge 纯函数核心（R1.1）
+// supervisor-bridge-core.mjs —— P2.75 Supervisor Bridge 纯函数核心（R1.1 + R1.2）
 //
 // 设计：docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md（R1 冻结基础）
 //       + R1.1 Round2 closure：mutation replay safety / minimal lifecycle /
 //         structured evidence bundle / resumable snapshot。
+//       + R1.2 Round3 closure（唯一 Blocker：DISPATCH IDEMPOTENCY PAYLOAD IDENTITY）：
+//         dispatchFingerprint = canonical dispatch contract 的 SHA-256 指纹。
+//         同 idempotencyKey 重放必须与账本指纹一致（exact replay 才幂等）；
+//         payload 不同 → 409 idempotency_conflict；legacy 无指纹 → fail-closed。
 // 原则：零依赖（node 内置 crypto）；不含 IO/网络（由 supervisor-bridge.mjs 编排）；
 //       所有变更语义 = 翻译到宿主既有 session.*/goal.* RPC（禁第二权威）。
 // 红线：不暴露 shell/write_file 通道；不保存会漂移的运行态（rebind 读时推导）；
@@ -11,7 +15,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const PLUGIN_NAME = 'supervisor-bridge';
-export const PLUGIN_VERSION = '0.2.1';
+export const PLUGIN_VERSION = '0.2.2';
 export const MAX_CORRECTIONS = 3;
 export const MAX_GOAL_ROUNDS = 64;
 export const KEY_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
@@ -131,6 +135,32 @@ export function validateDispatch(input = {}) {
 	};
 }
 
+// ---------- R1.2 dispatch 指纹（payload identity；External Review Round 3 唯一 Blocker） ----------
+//
+// dispatchFingerprint = SHA-256(JSON.stringify(canonicalDispatchContract))。
+// 覆盖语义派发输入全集（§4）：objective / initialInstruction / maxGoalRounds /
+// acceptanceCriteria（保序，语义数组）/ supervisorGoalId / generation。
+// 不含任何时间戳 / runId / sessionId / revision / PID / 端口 / 随机值 / optional 挂载（§3）。
+// canonical 序列化 = 固定 key 顺序的对象字面量 + JSON.stringify（确定性；无 undefined）。
+// 表示噪声不产生假冲突（§4）：objective/acceptanceCriteria 已由 validateDispatch trim，
+// initialInstruction 此处仅 trim 归一（不改实际派发语义——planDispatchSteps 用原始值），
+// maxGoalRounds 缺省/null 统一为 null。
+
+export function canonicalDispatchContract(value) {
+	return {
+		objective: String(value?.objective ?? ''),
+		initialInstruction: typeof value?.initialInstruction === 'string' ? value.initialInstruction.trim() : null,
+		maxGoalRounds: Number.isInteger(value?.maxGoalRounds) ? value.maxGoalRounds : null,
+		acceptanceCriteria: Array.isArray(value?.acceptanceCriteria) ? value.acceptanceCriteria.slice() : null,
+		supervisorGoalId: value?.supervisorGoalId ?? null,
+		generation: value?.generation ?? 1,
+	};
+}
+
+export function dispatchFingerprintOf(value) {
+	return createHash('sha256').update(JSON.stringify(canonicalDispatchContract(value)), 'utf8').digest('hex');
+}
+
 // ---------- commandId / generation（R1.1 §4-6） ----------
 
 export function parseCommandId(commandId) {
@@ -243,6 +273,7 @@ export function generateToken() {
 // ---------- Receipts（持久账本 = 最小 Supervisor goal metadata，非第二 Task DB） ----------
 //
 // v2 字段：identity（supervisorGoalId/runId/generation/revision）+ control/review 状态 +
+//          dispatchFingerprint（R1.2：canonical dispatch contract SHA-256，payload identity）+
 //          executedCommands（commandId → 执行凭据，replay-safe 的唯一依据）+ correction/cancel/review log +
 //          pendingMutation（rpc 前持久化，支持断点续传与 ambiguous fail-closed）。
 // 禁止存：Session history 副本 / Goal body 副本 / Context Memory / Router state / 执行队列。
@@ -264,6 +295,12 @@ export function newReceipt(key, sessionId, objective, goalRef, now = Date.now(),
 		sessionId,
 		objective: String(objective ?? '').slice(0, 200),
 		acceptanceCriteria: Array.isArray(opts.acceptanceCriteria) ? opts.acceptanceCriteria : null,
+		// R1.2：dispatch 指纹（同 key 重放的 payload identity 依据）。
+		// adopt / legacy v1 迁移路径无 dispatch body → 保持 null，重放时 fail-closed
+		// （无法确定性重建原始 canonical request → 不猜，409 idempotency_conflict）。
+		dispatchFingerprint: typeof opts.dispatchFingerprint === 'string' && opts.dispatchFingerprint.length === 64
+			? opts.dispatchFingerprint
+			: null,
 		goalRef: goalRef ?? null, // harnessGoalId = goalRef.id（Official Goal identity，不复制 body）
 		runId: deriveRunId(key, generation),
 		generation,

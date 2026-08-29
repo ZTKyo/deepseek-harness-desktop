@@ -1,10 +1,14 @@
-// supervisor-bridge.mjs —— P2.75 Supervisor Bridge（ChatGPT → Harness Control Plane，R1.1）
+// supervisor-bridge.mjs —— P2.75 Supervisor Bridge（ChatGPT → Harness Control Plane，R1.1+R1.2）
 //
 // 设计：docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md（R1 冻结基础）
 //       + R1.1：全部 mutation replay-safe（commandId+generation+持久 receipts）；
 //         账本损坏/歧义 → mutation fail-closed（503），只读继续；
 //         最小 Supervisor lifecycle（Harness COMPLETE != Supervisor VERIFIED）；
 //         结构化 Evidence Bundle / resumable Snapshot / review_goal 受控 seam。
+//       + R1.2（External Review Round 3 唯一 Blocker）：dispatch payload identity ——
+//         每次 dispatch 计算 canonical contract 指纹并存入 receipt；
+//         同 key 重放必须指纹一致（exact replay → duplicate）；
+//         payload 不同 / legacy 无指纹 → 409 idempotency_conflict（fail-closed，不猜）。
 // 定位：thin plugin/adapter —— 在宿主 3080 webServer 上注册 /supervisor/* 端点，
 //       变更一律回环调用宿主既有 session.*/goal.* RPC（与 GUI 同一权威，禁第二权威）。
 // 只读：health / get_state / get_goal / get_evidence / get_snapshot
@@ -200,6 +204,7 @@ export function apply(ctx) {
 			nextExpectedAction: receipt.nextExpectedAction,
 			latestEvidenceId: receipt.latestEvidenceId,
 			latestReviewVerdict: receipt.latestReviewVerdict,
+			dispatchFingerprint: receipt.dispatchFingerprint ?? null, // R1.2：canonical contract SHA-256（非敏感控制元数据）
 		};
 	}
 
@@ -228,7 +233,8 @@ export function apply(ctx) {
 	 * 端点包装：鉴权 → handler → 统一错误映射。
 	 * codes: 400 invalid_* / body_* · 401 unauthorized · 404 unknown_session
 	 *        409 corrections_exhausted / stale_generation / command_outcome_ambiguous /
-	 *            supervisor_goal_mismatch / invalid_control_state
+	 *            idempotency_conflict（R1.2 dispatch payload identity）/ invalid_control_state /
+	 *            supervisor_goal_mismatch（命令目标定位冲突）
 	 *        502 upstream_rpc_failed · 503 supervisor_state_corrupt / supervisor_state_ambiguous
 	 */
 	function route(pathName, handler, opts = {}) {
@@ -367,6 +373,8 @@ export function apply(ctx) {
 		gateLedgerForMutation();
 		const v = core.validateDispatch(body);
 		if (!v.ok) { const e = new Error(v.error); throw e; }
+		// R1.2 payload identity：同 idempotencyKey 的重放必须与账本指纹一致（§4-§6）
+		const dispatchFingerprint = core.dispatchFingerprintOf(v.value);
 		const { idempotencyKey } = v.value;
 		const existing = receipts.get(idempotencyKey);
 		const dispatchCommandId = `DISPATCH:${idempotencyKey}`;
@@ -375,9 +383,15 @@ export function apply(ctx) {
 			&& existing.pendingMutation?.commandId === dispatchCommandId
 			&& !existing.executedCommands[dispatchCommandId];
 		if (existing && !resumeNeeded) {
-			// 幂等命中：不重派；显式 supervisorGoalId 与账本不一致 → 明确冲突
-			if (v.value.supervisorGoalId && body.supervisorGoalId && body.supervisorGoalId !== existing.supervisorGoalId) {
-				throw httpError(409, 'supervisor_goal_mismatch', { supervisorGoalId: existing.supervisorGoalId });
+			// 幂等命中：不重派。R1.2 payload identity 闸门：仅 exact replay 视为 duplicate；
+			// payload 不同（objective/initialInstruction/maxGoalRounds/acceptanceCriteria/
+			// supervisorGoalId/generation 任一差异）或 legacy receipt 无指纹（无法确定性重建
+			// canonical request）→ 409 idempotency_conflict（fail-closed，不猜）。
+			if (existing.dispatchFingerprint !== dispatchFingerprint) {
+				throw httpError(409, 'idempotency_conflict', {
+					reason: existing.dispatchFingerprint ? 'payload_identity_mismatch' : 'legacy_dispatch_fingerprint_missing',
+					supervisorGoalId: existing.supervisorGoalId,
+				});
 			}
 			existing.dupHits.dispatch += 1;
 			receipts.set(idempotencyKey, existing);
@@ -397,8 +411,15 @@ export function apply(ctx) {
 		let receipt;
 		let applied;
 		if (resumeNeeded) {
-			// 断点续传：definite 失败后重放 → 从已持久化的 appliedSteps 继续（已执行步骤不重复）
+			// 断点续传：definite 失败后重放 → 从已持久化的 appliedSteps 继续（已执行步骤不重复）。
+			// R1.2：续传重放同样必须通过 payload identity 闸门（legacy pending 无指纹 → fail-closed）。
 			receipt = receipts.get(idempotencyKey);
+			if (receipt.dispatchFingerprint !== dispatchFingerprint) {
+				throw httpError(409, 'idempotency_conflict', {
+					reason: receipt.dispatchFingerprint ? 'payload_identity_mismatch' : 'legacy_dispatch_fingerprint_missing',
+					supervisorGoalId: receipt.supervisorGoalId,
+				});
+			}
 			sessionId = receipt.sessionId;
 			applied = receipt.pendingMutation.appliedSteps;
 		} else {
@@ -406,6 +427,7 @@ export function apply(ctx) {
 			receipt = core.newReceipt(idempotencyKey, sessionId, v.value.objective, null, Date.now(), {
 				supervisorGoalId: v.value.supervisorGoalId,
 				acceptanceCriteria: v.value.acceptanceCriteria,
+				dispatchFingerprint,
 			});
 			receipt = core.markPending(receipt, 'DISPATCH', dispatchCommandId, Date.now(), 0);
 			receipts.set(idempotencyKey, receipt);

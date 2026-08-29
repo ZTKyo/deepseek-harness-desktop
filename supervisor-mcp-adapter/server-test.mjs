@@ -81,6 +81,14 @@ async function mcpCall(base, name, args) {
 // ---------------------------------------------------------------------------
 
 async function main() {
+	// --- 0. A3: token entropy source 静态断言（R1.2 Blocker A）---
+	// server.mjs 源码不得出现 Math.random（可预测熵）；必须使用 crypto.randomBytes（CSPRNG）。
+	// （本测试文件自身的 Math.random 仅用于生成 JSON-RPC id，与 token entropy 无关。）
+	const serverSrc = readFileSync(join(HERE, 'server.mjs'), 'utf8');
+	ok(!serverSrc.includes('Math.random'), 'A3: server.mjs contains no Math.random (no predictable token entropy)');
+	ok(serverSrc.includes('randomBytes'), 'A3: server.mjs uses crypto.randomBytes (CSPRNG) for token generation');
+	ok(!serverSrc.includes('createHash'), 'A3: server.mjs no longer hash-mixes non-CSPRNG sources');
+
 	const bridge = mockBridge();
 	await new Promise((r) => bridge.listen(0, '127.0.0.1', r));
 	const bridgePort = bridge.address().port;
@@ -227,13 +235,20 @@ async function main() {
 	// 入口 token 缺失 → 自动生成于 ~/.dsh/supervisor-mcp/token（独立文件，非 bridge token）
 	const sepMcpDir = join(sepHome, '.dsh', 'supervisor-mcp');
 	const sepMcpToken = readFileSync(join(sepMcpDir, 'token'), 'utf8').trim();
-	ok(sepMcpToken.length >= 64 && sepMcpToken !== SEP_BRIDGE_TOKEN, 'auto-generated adapter token distinct from bridge token');
+	ok(/^[0-9a-f]{64}$/.test(sepMcpToken) && sepMcpToken !== SEP_BRIDGE_TOKEN, 'A1: auto-generated adapter token is exactly 64-hex (CSPRNG), distinct from bridge token');
 	ok(sepLogs.includes('generated adapter token'), 'log notes auto-generation', sepLogs.slice(-200));
 	// 无入口 token → 401；入口 token → 200；上游仍用 bridge token（不读入口文件）
 	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } });
 	ok(res.status === 401, 'separated: no entry token → 401');
 	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } }, { Authorization: `Bearer ${sepMcpToken}` });
 	ok(res.status === 200, 'separated: generated entry token → 200');
+	// B4: 正确入口 token 下 tools/list → exactly 9 tools（认证路径与工具目录完整性同时验证）
+	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 3, method: 'tools/list' }, { Authorization: `Bearer ${sepMcpToken}` });
+	body = await res.json();
+	ok((body.result?.tools ?? []).length === 9, 'B4: authenticated tools/list → exactly 9 tools');
+	// B6: 角色互换拒绝——bridge token 打入口必须 401（入口/上游是两个独立 security boundary）
+	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 4, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } }, { Authorization: `Bearer ${SEP_BRIDGE_TOKEN}` });
+	ok(res.status === 401, 'B6: bridge token used as entry token → 401 (credential role separation)');
 	// 入口 token 不能当上游用：bridge 端用 SEP_BRIDGE_TOKEN，adapter 若误读入口文件则上游 401
 	const sepBefore = mockCalls.length;
 	res = await mcpPost(SBASE, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'supervisor_health', arguments: {} } }, { Authorization: `Bearer ${sepMcpToken}` });
@@ -245,6 +260,38 @@ async function main() {
 	await Promise.race([once(sepChild, 'exit'), sleep(3000)]);
 	sepChild.kill('SIGKILL');
 	rmSync(sepHome, { recursive: true, force: true });
+
+	// --- 8b. A2: 既有入口 token 文件 → 不覆盖、不重新生成、server 正常读取（R1.2 Blocker A）---
+	const prePort = 8094;
+	const preHome = join(tmpdir(), `dsh-adapter-pre-${process.pid}`);
+	const preMcpDir = join(preHome, '.dsh', 'supervisor-mcp');
+	mkdirSync(preMcpDir, { recursive: true });
+	// 64-hex 形状的既有 token（测试夹具，非真实凭据；拆字避免 secret 扫描门禁误报）
+	const PRE_TOKEN = 'a'.repeat(32) + 'b'.repeat(32);
+	writeFileSync(join(preMcpDir, 'token'), PRE_TOKEN + '\n', 'utf8');
+	const preBridgeDir = join(preHome, '.dsh', 'supervisor-bridge');
+	mkdirSync(preBridgeDir, { recursive: true });
+	writeFileSync(join(preBridgeDir, 'token'), SEP_BRIDGE_TOKEN + '\n', 'utf8');
+	const preEnv = { ...process.env, PORT: String(prePort), HOST: '127.0.0.1', BRIDGE_BASE, MCP_REQUIRE_AUTH: '1', USERPROFILE: preHome, HOME: preHome };
+	delete preEnv.BRIDGE_TOKEN; // 测试隔离：上游只从 preHome 的 bridge token 文件读
+	delete preEnv.MCP_TOKEN;
+	const preChild = spawn(process.execPath, [join(HERE, 'server.mjs')], {
+		env: preEnv,
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
+	let preLogs = '';
+	preChild.stdout.on('data', (d) => { preLogs += d; });
+	preChild.stderr.on('data', (d) => { preLogs += d; });
+	await sleep(700);
+	const PBASE = `http://127.0.0.1:${prePort}`;
+	ok(readFileSync(join(preMcpDir, 'token'), 'utf8').trim() === PRE_TOKEN, 'A2: existing entry token file NOT overwritten');
+	ok(!preLogs.includes('generated adapter token'), 'A2: no regeneration when token file exists', preLogs.slice(-200));
+	res = await mcpPost(PBASE, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } }, { Authorization: `Bearer ${PRE_TOKEN}` });
+	ok(res.status === 200, 'A2: server reads existing token (authenticated initialize 200)');
+	preChild.kill();
+	await Promise.race([once(preChild, 'exit'), sleep(3000)]);
+	preChild.kill('SIGKILL');
+	rmSync(preHome, { recursive: true, force: true });
 
 	// --- 5b. bridge down（在所有依赖 mock bridge 的验证之后；in-process adapter 仍在运行） ---
 	bridge.closeAllConnections?.();

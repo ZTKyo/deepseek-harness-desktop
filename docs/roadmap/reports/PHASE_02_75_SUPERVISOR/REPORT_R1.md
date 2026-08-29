@@ -49,3 +49,15 @@ key 校验 / objective 校验 / maxGoalRounds 边界 / 确定性 session id（�
 2. 长轮询/流式推送未做（R1 轮询即可）；`session.running` 为瞬态运行时标志，E2E 以 evidence 文本为真信号。
 3. token 轮换命令未提供（可删 `~/.dsh/supervisor-bridge/token` 重启再生）。
 4. 外部评审通过前状态保持 IMPLEMENTATION COMPLETE，VERIFIED 须 Reviewer 授权（governance 纪律）。
+
+## R1.1 附录（Round 2，2026-08-29）
+
+> Reviewer 99 Round 1 verdict 合同 A/B/C 全量落地 + CI 三层接线 + 事务化部署/受控重启加载 v0.2.1 attestation 全达成。详证见同目录 `P275_R1_1_ROUND2_CLOSURE.md`。
+
+- **A**：replay-safe mutations——canonical request hash 幂等派生，同 key 同 body 重放返回原 receipt（`dispatched:false`），同 key 异 body → 409 `idempotency_conflict`；M1–M12 覆盖重放/乱序/陈旧 generation。
+- **B**：生命周期/证据面扩展——goal 投影 armed→running→终态、receipt 状态机补齐、stale generation → 409、evidence schema 版本化、get_state 幂等快照。
+- **C**：CI 真实接线——L1 新步骤「P2.75 Supervisor core/tool-surface unit tests (T1–T30)」、L2「P2.75 Supervisor mutation replay/idempotency/lifecycle/stale-generation (R1.1)」、L3「P2.75 Supervisor isolated real E2E (dispatch/review, bridge-restart replay, disabled baseline)」。
+- **Canonical**：PR #65（head=efdc5a0）全绿 squash merge → **main=`ad3fac4`**；blob：bridge `d40e0af4`、core `be5414aa`、test `d2df06e4`。
+- **生产加载 attestation**：部署 `git hash-object` 三文件==canonical blob 全 MATCH；受控重启（ledger 旧→新 pid=25424，无 QUARANTINE）后 `/supervisor/health` `version=0.2.1` 且 `identity.bridge/coreSha256` == 部署字节 SHA-256（`ef3430dbb22a…`/`cccf1e67b228…`）；错 token→401、对 token→200。
+- **重启后回归**：P2.6 八套件 **136/0** + P2.5 **72/0** + supervisor CI E2E 编排器复跑（结果见下方 E2E 行修正；0 失败，无关失败 0）。
+- **治理**：零核心修改、零新增功能；诊断草稿已清理（配方存工作区 VERIFICATION.md）；VERIFIED 待 Round 3。

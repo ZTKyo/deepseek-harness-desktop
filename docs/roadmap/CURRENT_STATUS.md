@@ -13,7 +13,7 @@
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
 | 02.6 | RETRY SEMANTICS / Provider Failure Classification | `VERIFIED`（**External Review Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；canonical main=a332ebc、classifier=2ea1059f、全量回归 136/0。historical：批准前曾为 IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3；R1 PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28、PR #61 merged=a332ebc 2026-08-28；事务化部署+受控重启加载完成 2026-08-29） | —（APPROVED；Waiting For = NONE） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `VERIFIED`（**外部评审 Round 3 = APPROVED（2026-08-29 Reviewer 裁决）→ VERIFIED AUTHORIZED；Round 4 = NONE；production code 封板**。历史（保留不改写）：R1 实施收口＝零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26，PR #63 merged=f2d94f9。R1.1＝Round 1 verdict（CHANGES_REQUIRED）合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 2 verdict（CHANGES_REQUIRED）唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | NONE（Round 3 APPROVED；Round 4 = NONE；**Next = ChatGPT Client Binding → P3 bootstrap**） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
-| 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）；部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据） | External Review（R1 verdict 待裁决；F1 定级与 R2 范围由 Reviewer 判定） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ e2e/ |
+| 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）→ **R1 Correction 修复（同日）**：file_hash/system_api 两类 PASS 证据强制宿主确定性复核（真实文件 sha256 比对 / 127.0.0.1 回环 API 断言），伪造或不匹配 fail-closed 降级 UNVERIFIED（零里程碑/零 checkpoint），PASS 记录带 HOST-VERIFIED 前缀；core 86/0＋已部署面 52/0（新增 I10-I15 含真实回环 API 三态）＋真实 E2E 四腿 E1/E2/E2B/E3 32/0 全绿；REPORT_R1C.md；R1 部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据；R1C 部署 SHA256==仓库（回滚锚点 _pre-p3r1c-*），随下次受控重启生效；pre-existing 10 插件 profile 部署漂移已登记 KNOWN_ISSUES（专项待办，非本引入）） | External Review（R1 verdict 待裁决；F1 定级与 R2 范围由 Reviewer 判定） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ e2e/ |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -526,3 +526,19 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   （RESTART_RESUME_REPAIR.md）。诚实发现 F1：verify 信任模型自述证据串（R2 候选
   宿主侧复核）。分支 p3-autonomy-r1（466abc9 + 69ade9b + 9274418）→ **PR #75
   merged=92240cb（CI 3/3 绿）**；状态 AWAITING_EXTERNAL_REVIEW。
+- **2026-08-30：P3 AUTONOMY R1 Correction（外审 Round 1 Blocker F1 闭环）→ 维持
+  AWAITING_EXTERNAL_REVIEW**：autonomy_verify 对 file_hash/system_api 两类 PASS 证据
+  实施**宿主侧确定性复核**（fail-closed）——机读证据规范（`file:<abs>|sha256:<hex>` /
+  `api:port|path|expectStatus[|expectContains]`，严格解析拒未知/重复 key）+ 真实复核动作
+  （读文件算 sha256 比对；对 127.0.0.1 发真实 GET 断言状态码/包含），不符 → 降级
+  UNVERIFIED（零里程碑/零 checkpoint，证据记 `HOST-VERIFY FAILED (<reason>)`）；通过 →
+  `HOST-VERIFIED` 前缀照常升级。FAIL/UNVERIFIED 方向与其余证据类不设闸（block-only，
+  升级风险为零；git/截图类宿主复核列 R2 候选）。复核器 IO 注入（core 零副作用可单测）。
+  验证：core 86/0（新增 C11/C11b/C12）+ 已部署面 52/0（新增 I10-I15：伪造哈希 fail-closed、
+  真实文件 PASS、prose 拒、真实回环 API 三态、FAIL 不设闸、ai_judgment 不受影响）+
+  **真实 Runtime E2E 四腿 E1 8/0 / E2 9/0 / E2B 7/0 / E3 8/0（32/0）** + continuity 15 套
+  exit 0 + EC 相关 reliability 5 套 exit 0；R1 时的 [FINDING F1] 条件断言全过。
+  无关 pre-existing 发现：verify-r2-restart-recovery 6 FAIL = 10 插件 profile 部署漂移
+  （repo 08-23~08-29 更新未同步，早于 R1；KNOWN_ISSUES 2026-08-30 登记，专项待办）。
+  分支 p3-autonomy-r1-correction（5e9d470）→ **PR #76 merged=e19c3e6（CI 3/3 绿）**；
+  R1C 部署 SHA256==仓库（回滚锚点 _pre-p3r1c-20260830-132546-*），随下次受控重启生效。

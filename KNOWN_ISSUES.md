@@ -101,3 +101,32 @@ EC_STATE_DIR 临时目录冲突致超时，属测试脚手架问题，串行无�
 - naive 时间锚定 +08:00 的分支绝不能接收带 Z/偏移的 ISO——会按本地墙钟误算
   （本 bug 的次根因：RESET_PLAIN_DATE_RE 吞掉 `.542Z` 后仍匹配）。
 - 测试新增防回归 case 时必须同时覆盖：倒序 ISO-Z、倒序带偏移 ISO、以及"无 label 不误抓"。
+
+## 2026-08-30 P3 R1 Correction 期间发现：profile 插件部署漂移（pre-existing，未修，需专项处理）
+
+**现象**：`tests/reliability/verify-r2-restart-recovery.mjs` 30 PASS / 6 FAIL，6 个 FAIL
+全部来自 `install-plugin --check`（`tools/install-plugin.mjs`）对 profile 部署位的校验失败：
+10 个插件的 profile 位比 repo 源旧——ask-telegram / computer-use / secret-gate /
+completion-notify / failure-classifier / openrouter-router / agentrouter-wire /
+agent-inspector / keepalive-patch / model-selection-guard。
+
+**根因（时间线证据）**：profile 位 secret-gate.mjs LastWriteTime=2026-08-18，而 repo 侧
+这些插件 2026-08-23 ~ 08-29 间多次更新（fc181dd/df5bf43/5eff17a 等）后**从未同步到
+profile**——即漂移至少从 08-23 起就存在，早于 P3 R1（08-30）与本任务，属长期手工部署
+流程欠账。execution-continuity.mjs 在 R1 时已同步（✓ 一致），不在漂移清单。
+
+**影响**：运行中的 3080 服务一直在用旧版插件（ask-telegram/computer-use/secret-gate 等
+08-18 版）；`verify-r2-restart-recovery` 的 install-plugin 校验腿因此常绿性破坏
+（任何改动前后跑它都会 6 FAIL，与改动无关）。
+
+**为何本任务不修**：同步这 10 个插件=对运行面引入 10 个与本任务无关的行为变更，且需
+重启才生效，超出 P3 R1 Correction 范围（变更确认纪律：只报告不执行）。
+
+**修复路径（供后续专项）**：`node tools/install-plugin.mjs --preset
+"$env:USERPROFILE\.dsh\.agent-presets\autonomous" --profile "$env:USERPROFILE\.dsh\profiles\web"`
+（无 --check 即同步），先由用户确认时机（会引入插件行为变化 + 需重启），同步后重跑
+verify-r2-restart-recovery 应回到 36/36。
+
+**附带改进建议（未实施）**：`plugins/autonomy-state-core.mjs` 是 EC 的相对 import 依赖，
+但不在 cordis.patch.yml 的 16 个挂载清单里——install-plugin 不会自动同步它，当前靠手动
+copy 到 profile。建议后续把它加进挂载清单（属配置变更，需重启生效，故本任务未动）。

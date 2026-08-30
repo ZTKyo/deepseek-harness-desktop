@@ -11,6 +11,8 @@
 //   C8  deriveVerificationState：null / UNVERIFIED / PARTIAL / VERIFIED / FAILED
 //   C9  buildResumeProgressLine：空 → null；有里程碑 → 尾注"不重做已验证里程碑"
 //   C10 verificationState 枚举钳制（非法值 → null）
+//   C11 证据机器规范解析（P3 R1 Correction）：parseFileHashEvidence / parseSystemApiEvidence
+//   C12 hostVerifyEvidence 宿主侧确定性复核（io 注入）：file_hash / system_api / fail-closed
 
 import {
   emptyAutonomy,
@@ -18,6 +20,10 @@ import {
   upsertCriterionResult,
   deriveVerificationState,
   buildResumeProgressLine,
+  parseFileHashEvidence,
+  parseSystemApiEvidence,
+  hostVerifyEvidence,
+  HOST_VERIFIABLE_CLASSES,
   AUTONOMY_SCHEMA_VERSION,
   MAX_ACCEPTANCE_ITEMS,
   MAX_MILESTONES,
@@ -159,6 +165,86 @@ section("C10: verificationState clamp");
   assert(r.ok && r.value.verificationState === null, "invalid enum -> null");
   const r2 = sanitizeAutonomy({ verificationState: "PARTIAL" }, null);
   assert(r2.ok && r2.value.verificationState === "PARTIAL", "valid enum stored");
+}
+
+section("C11: machine-checkable evidence spec parsers (P3 R1 Correction)");
+{
+  assert(Array.isArray(HOST_VERIFIABLE_CLASSES) && HOST_VERIFIABLE_CLASSES.join(",") === "system_api,file_hash", "HOST_VERIFIABLE_CLASSES = system_api,file_hash");
+
+  // file_hash 合法样例
+  const ok1 = parseFileHashEvidence("file:C:\\work\\proof.txt|sha256:ABCD0123abcd4567ABCD0123abcd4567ABCD0123abcd4567ABCD0123abcd4567|note here");
+  assert(ok1.ok && ok1.value.path === "C:\\work\\proof.txt", "file_hash: valid spec, path parsed");
+  assert(ok1.ok && ok1.value.sha256 === "abcd0123abcd4567abcd0123abcd4567abcd0123abcd4567abcd0123abcd4567", "file_hash: hex normalized lowercase");
+  assert(ok1.ok && ok1.value.note === "note here", "file_hash: note preserved");
+  const ok2 = parseFileHashEvidence("  file:/abs/proof|sha256:" + "a".repeat(64) + "  ");
+  assert(ok2.ok && ok2.value.path === "/abs/proof" && ok2.value.note === null, "file_hash: posix path + no note, trims");
+
+  // file_hash 非法样例（fail-closed）
+  const bad = [
+    ["the file looks good and exists", "prose"],
+    ["file:proof.txt|sha256:" + "a".repeat(64), "relative path"],
+    ["file:C:\\x\\y.txt|sha256:short", "bad hex"],
+    ["file:C:\\x\\y.txt", "missing sha256 segment"],
+    ["C:\\x\\y.txt|sha256:" + "a".repeat(64), "missing file: prefix"],
+    [null, "non-string"],
+  ];
+  for (const [e, why] of bad) assert(parseFileHashEvidence(e).ok === false, `file_hash reject: ${why}`);
+  assert(String(parseFileHashEvidence("file:C:\\x|sha256:zz").reason).startsWith("format_invalid"), "file_hash reject reason format_invalid*");
+}
+
+section("C11b: system_api spec parser");
+{
+  const ok1 = parseSystemApiEvidence("api:port=33311|path=/api/autonomy/state|expectStatus=200|expectContains=verificationState");
+  assert(ok1.ok && ok1.value.port === 33311 && ok1.value.path === "/api/autonomy/state", "system_api: valid spec");
+  assert(ok1.ok && ok1.value.expectStatus === 200 && ok1.value.expectContains === "verificationState", "system_api: expect fields parsed");
+  const ok2 = parseSystemApiEvidence("api:port=8080|path=/x|expectStatus=204|expectContains=a=b|note with spaces");
+  assert(ok2.ok && ok2.value.expectContains === "a=b" && ok2.value.note === "note with spaces", "system_api: '=' inside value + note");
+  const bad = [
+    ["api:port=0|path=/x|expectStatus=200", "port 0"],
+    ["api:port=99999|path=/x|expectStatus=200", "port too big"],
+    ["api:port=8080|path=x|expectStatus=200", "path no leading slash"],
+    ["api:port=8080|path=/x|expectStatus=99", "status <100"],
+    ["api:port=8080|path=/x", "missing expectStatus"],
+    ["not api at all", "missing api: prefix"],
+  ];
+  for (const [e, why] of bad) assert(parseSystemApiEvidence(e).ok === false, `system_api reject: ${why}`);
+}
+
+section("C12: hostVerifyEvidence — injected io, fail-closed semantics");
+{
+  const enc = (s) => new TextEncoder().encode(s);
+  // --- file_hash ---
+  const data = enc("real-evidence-v1");
+  const sha = await (async () => (await import("node:crypto")).createHash("sha256").update(data).digest("hex"))();
+  const io = {
+    readFile: async (p) => { if (p === "C:\\t\\proof.txt") return data; const e = new Error("nope"); e.code = "ENOENT"; throw e; },
+    sha256Hex: async (d) => (await import("node:crypto")).createHash("sha256").update(d).digest("hex"),
+    fetchImpl: async () => ({ status: 200, text: async () => "verificationState=VERIFIED" }),
+  };
+  const v1 = await hostVerifyEvidence("file_hash", `file:C:\\t\\proof.txt|sha256:${sha}`, io);
+  assert(v1.verified === true && String(v1.detail).startsWith("sha256="), "file_hash: hash match -> verified");
+  const v2 = await hostVerifyEvidence("file_hash", `file:C:\\t\\proof.txt|sha256:${"0".repeat(64)}`, io);
+  assert(v2.verified === false && v2.reason === "hash_mismatch", "file_hash: wrong hash -> hash_mismatch");
+  assert(String(v2.detail).includes("actual=" + sha), "hash_mismatch detail carries actual hash");
+  const v3 = await hostVerifyEvidence("file_hash", "file:C:\\t\\missing.txt|sha256:" + sha, io);
+  assert(v3.verified === false && v3.reason === "file_missing", "file_hash: ENOENT -> file_missing");
+  const v4 = await hostVerifyEvidence("file_hash", "the model says the file exists", io);
+  assert(v4.verified === false && String(v4.reason).startsWith("format_invalid"), "file_hash: prose -> format_invalid (fail-closed)");
+  const v5 = await hostVerifyEvidence("git", "merged", io);
+  assert(v5.verified === false && v5.reason === "class_not_host_verifiable", "non-host class refused by verifier guard");
+
+  // --- system_api ---
+  const v6 = await hostVerifyEvidence("system_api", "api:port=12345|path=/api/state|expectStatus=200|expectContains=verificationState", io);
+  assert(v6.verified === true && String(v6.detail).includes("host-verified"), "system_api: status+contains match -> verified");
+  const v7 = await hostVerifyEvidence("system_api", "api:port=12345|path=/api/state|expectStatus=201", io);
+  assert(v7.verified === false && v7.reason === "status_mismatch", "system_api: status mismatch");
+  const v8 = await hostVerifyEvidence("system_api", "api:port=12345|path=/api/state|expectStatus=200|expectContains=NOT-PRESENT", io);
+  assert(v8.verified === false && v8.reason === "contains_mismatch", "system_api: contains mismatch");
+  const ioFail = { ...io, fetchImpl: async () => { throw Object.assign(new Error("connect refused"), { cause: { code: "ECONNREFUSED" } }); } };
+  const v9 = await hostVerifyEvidence("system_api", "api:port=1|path=/x|expectStatus=200", ioFail);
+  assert(v9.verified === false && v9.reason === "request_failed", "system_api: unreachable -> request_failed");
+  const v10 = await hostVerifyEvidence("system_api", "prose about an api call", io);
+  assert(v10.verified === false && String(v10.reason).startsWith("format_invalid"), "system_api: prose -> format_invalid");
 }
 
 console.log(`\n${"=".repeat(60)}`);

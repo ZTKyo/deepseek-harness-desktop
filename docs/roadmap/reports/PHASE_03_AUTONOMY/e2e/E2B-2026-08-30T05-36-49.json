@@ -1,0 +1,122 @@
+{
+  "leg": "E2B",
+  "stamp": "2026-08-30T05-36-49",
+  "port": 33314,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2b-PQwOrp",
+  "sessionId": "p3r1e2b-2026-08-30T05-36-49",
+  "checks": [
+    {
+      "name": "E2B.0 seed turn clean history (CT-clean precondition)",
+      "ok": true,
+      "detail": "ct=clean events=56"
+    },
+    {
+      "name": "E2B.1 resume message contains \"Verified progress:\" line",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "E2B.2 resume line carries checkpoint text + no-redo directive",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "E2B.3 recovery actually happened (RESUME-OK this boot)",
+      "ok": true,
+      "detail": "state=RUNNING cycles=1"
+    },
+    {
+      "name": "E2B.4 autonomy block survived restart intact (milestones + criteria + checkpoint)",
+      "ok": true,
+      "detail": "post={\"m\":1,\"ac\":1,\"cp\":\"阶段1完成：side-effect-b.txt 已写入 v1 且 AC-0 PASS（种子回合，运行器预置）\"}"
+    },
+    {
+      "name": "E2B.5 side-effect file exactly-once (content unchanged, mtime unchanged)",
+      "ok": true,
+      "detail": "content=side-effect-v1 mtimeDelta=0"
+    },
+    {
+      "name": "E2B.6 EC diag shows SCAN restart + RESUME-OK",
+      "ok": true,
+      "detail": "2026-08-30T05:46:44.040Z CTX-LLM keys=ctx,name,adapters,directory,discoveries type=LlmRuntime resolveModelInfo=function | 2026-08-30T05:47:02.950Z plugin ready; apiOk=true compaction=UNAVAILABLE -> contextOverflowRecovery DEGRADED safeMode=false enableAutoResume=true budgets={\"sameModelRetries\":3,\"providerFallbackCount\":2,\"contextRecoveryCount\":2,\"contextOverflowRetry\":1,\"autoR"
+    }
+  ],
+  "injectedAutonomy": {
+    "acceptanceCriteria": [
+      "E2B 确定性恢复演练：重启后从 last verified state 续跑，副作用文件恰好一次"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2b-PQwOrp\\workdir\\side-effect-b.txt",
+        "at": 1788068819491
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788068819491,
+        "step": "阶段1种子回合完成：文件已写入并验证",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2b-PQwOrp\\workdir\\side-effect-b.txt"
+      }
+    ],
+    "currentStep": "等待重启恢复：从 last verified checkpoint 续跑",
+    "remainingSteps": [
+      "重启后核对副作用文件恰好一次",
+      "结束回合"
+    ],
+    "lastProgressAt": 1788068819491,
+    "lastVerifiedCheckpoint": "阶段1完成：side-effect-b.txt 已写入 v1 且 AC-0 PASS（种子回合，运行器预置）",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "postAutonomy": {
+    "acceptanceCriteria": [
+      "E2B 确定性恢复演练：重启后从 last verified state 续跑，副作用文件恰好一次"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2b-PQwOrp\\workdir\\side-effect-b.txt",
+        "at": 1788068819491
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788068819491,
+        "step": "阶段1种子回合完成：文件已写入并验证",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2b-PQwOrp\\workdir\\side-effect-b.txt"
+      }
+    ],
+    "currentStep": "等待重启恢复：从 last verified checkpoint 续跑",
+    "remainingSteps": [
+      "重启后核对副作用文件恰好一次",
+      "结束回合"
+    ],
+    "lastProgressAt": 1788068819491,
+    "lastVerifiedCheckpoint": "阶段1完成：side-effect-b.txt 已写入 v1 且 AC-0 PASS（种子回合，运行器预置）",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "postState": "RUNNING",
+  "autoResumeCycles": 1,
+  "lastResumeAt": 1788068828072,
+  "preKillTs": 1788068815987,
+  "sideEffectContent": "side-effect-v1",
+  "resumeHistoryEventCount": 63,
+  "ecDiagLines": [
+    "2026-08-30T05:46:44.035Z plugin ready; apiOk=true compaction=UNAVAILABLE -> contextOverflowRecovery DEGRADED safeMode=false enableAutoResume=true budgets={\"sameModelRetries\":3,\"providerFallbackCount\":2,\"contextRecoveryCount\":2,\"contextOverflowRetry\":1,\"autoResumeCycles\":10,\"initialDelayMs\":1000,\"maxDelayMs\":60000,\"jitterRatio\":0.3} maxConcurrent=2 capability={\"retryRecovery\":true,\"providerFallback\":true,\"goalResume\":true,\"restartRecovery\":true,\"contextOverflowRecovery\":true,\"reasoningProtocolRecovery\":true}",
+    "2026-08-30T05:46:44.040Z CTX-LLM keys=ctx,name,adapters,directory,discoveries type=LlmRuntime resolveModelInfo=function",
+    "2026-08-30T05:47:02.950Z plugin ready; apiOk=true compaction=UNAVAILABLE -> contextOverflowRecovery DEGRADED safeMode=false enableAutoResume=true budgets={\"sameModelRetries\":3,\"providerFallbackCount\":2,\"contextRecoveryCount\":2,\"contextOverflowRetry\":1,\"autoResumeCycles\":10,\"initialDelayMs\":1000,\"maxDelayMs\":60000,\"jitterRatio\":0.3} maxConcurrent=2 capability={\"retryRecovery\":true,\"providerFallback\":true,\"goalResume\":true,\"restartRecovery\":true,\"contextOverflowRecovery\":true,\"reasoningProtocolRecovery\":true}",
+    "2026-08-30T05:47:02.954Z CTX-LLM keys=ctx,name,adapters,directory,discoveries type=LlmRuntime resolveModelInfo=function",
+    "2026-08-30T05:47:07.972Z SCAN restart: 1 recoverable intent(s): p3r1e2b-2026-08-30T05-36-49[RUNNING]",
+    "2026-08-30T05:47:07.997Z CT sid=p3r1e2b-2026-08-30T05-36-49 -> clean (persisted-log fallback, 56 events)",
+    "2026-08-30T05:47:08.077Z RESUME-OK sid=p3r1e2b-2026-08-30T05-36-49 goalActive=false cycles=1 (restart)"
+  ],
+  "seedCt": "clean"
+}

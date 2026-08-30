@@ -61,6 +61,9 @@ import {
   upsertCriterionResult,
   deriveVerificationState,
   buildResumeProgressLine,
+  hostVerifyEvidence,
+  describeEvidenceSpec,
+  HOST_VERIFIABLE_CLASSES,
   CRITERION_STATUSES,
   AUTONOMY_SCHEMA_VERSION,
   MAX_MILESTONES,
@@ -1842,11 +1845,11 @@ export function apply(ctx, config = {}) {
     }));
     ctx.tools.register(defineTool({
       name: "autonomy_verify",
-      description: "Record a VERIFICATION result (not a claim): a criterion PASS/FAIL with evidence (priority: system_api > file_hash > git > browser_state > screenshot > ai_judgment), and optionally a verified milestone/checkpoint. On PASS with milestoneStep the milestone is appended and lastVerifiedCheckpoint updated. Derives verificationState: all criteria PASS -> VERIFIED; any FAIL -> FAILED; partial -> PARTIAL. Executor claims are NOT verification — this tool is the durable evidence ledger used to restore 'last verified state' after restarts.",
+      description: "Record a VERIFICATION result (not a claim): a criterion PASS/FAIL with evidence (priority: system_api > file_hash > git > browser_state > screenshot > ai_judgment), and optionally a verified milestone/checkpoint. HOST-DETERMINISTIC RULE: for evidenceClass file_hash/system_api, a PASS is only accepted after independent host-side re-verification — evidence must be machine-checkable: file_hash 'file:<absolute-path>|sha256:<64-hex>[|note]'; system_api 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]' (loopback only). Prose or unverifiable evidence fails closed: recorded as UNVERIFIED (never PASS), no milestone, no checkpoint, verificationState never VERIFIED from it. On PASS with milestoneStep the milestone is appended and lastVerifiedCheckpoint updated. Derives verificationState: all criteria PASS -> VERIFIED; any FAIL -> FAILED; partial -> PARTIAL. Executor claims are NOT verification — this tool is the durable evidence ledger used to restore 'last verified state' after restarts.",
       parameters: {
         status: { type: "string", description: "PASS or FAIL for this verification.", required: true },
-        evidenceClass: { type: "string", description: "Evidence class: system_api | file_hash | git | browser_state | screenshot | ai_judgment.", required: true },
-        evidence: { type: "string", description: "Short evidence description (command run, hash, API response, URL...).", required: true },
+        evidenceClass: { type: "string", description: "Evidence class: system_api | file_hash | git | browser_state | screenshot | ai_judgment. file_hash/system_api PASS require the machine-checkable spec (see tool description); otherwise the host verifier fails closed to UNVERIFIED.", required: true },
+        evidence: { type: "string", description: "Evidence. For file_hash: 'file:<absolute-path>|sha256:<64-hex>[|note]'. For system_api: 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]'. Prose allowed only for git/browser_state/screenshot/ai_judgment.", required: true },
         criterionIndex: { type: "number", description: "0-based index into acceptanceCriteria when verifying a criterion." },
         milestoneStep: { type: "string", description: "Optional milestone description appended to verifiedMilestones on PASS." },
         checkpoint: { type: "string", description: "Optional last-verified-checkpoint text (defaults to milestoneStep on PASS)." },
@@ -1865,28 +1868,47 @@ export function apply(ctx, config = {}) {
         if (args.status !== "UNVERIFIED" && !evText) throw new Error("autonomy_verify rejected: missing_evidence");
         const now = Date.now();
         const it = store.ensure(sid);
+        // ── P3 R1 Correction（外审 Round 1 blocker, AC5）：deterministic verifier ──
+        // file_hash/system_api 的 PASS 必须先过宿主侧独立复核（不得仅凭模型字符串升级）；
+        // 复核不过 → fail-closed：落 UNVERIFIED（不计 PASS）、不建里程碑、不写 checkpoint。
+        // 降级记录保留声称的 evidenceClass + 真实结果文本（HOST-VERIFY FAILED <reason>），
+        // 状态列即实际宿主复核结论；PASS 记录的 file_hash/system_api ⇒ 宿主已复核成功。
+        // FAIL/UNVERIFIED 方向不做宿主复核（它们只会阻断 VERIFIED，无升级风险）。
+        let recStatus = args.status;
+        let recEvidence = evText;
+        let hostResult = null;
+        if (args.status === "PASS" && HOST_VERIFIABLE_CLASSES.includes(args.evidenceClass)) {
+          hostResult = await hostVerifyEvidence(args.evidenceClass, evText);
+          recEvidence = hostResult.verified
+            ? `HOST-VERIFIED (${hostResult.detail}): ${evText}`
+            : `HOST-VERIFY FAILED (${hostResult.reason}): ${evText}`;
+          if (!hostResult.verified) recStatus = "UNVERIFIED";
+        }
         const patch = { lastProgressAt: now };
         if (args.criterionIndex !== undefined) {
           const up = upsertCriterionResult(it.autonomy.criteriaEvidence, {
             index: args.criterionIndex,
-            status: args.status,
+            status: recStatus,
             evidenceClass: args.evidenceClass,
-            evidence: args.evidence,
+            evidence: recEvidence,
             at: now,
           });
           if (!up.ok) throw new Error(`autonomy_verify rejected: ${up.error}`);
           patch.criteriaEvidence = up.value;
         }
-        if (args.status === "PASS" && args.milestoneStep !== undefined) {
+        if (recStatus === "PASS" && args.milestoneStep !== undefined) {
           const ms = Array.isArray(it.autonomy.verifiedMilestones) ? it.autonomy.verifiedMilestones : [];
           patch.verifiedMilestones = [...ms, {
             at: now,
             step: String(args.milestoneStep).slice(0, 300),
             evidenceClass: args.evidenceClass,
-            evidence: String(args.evidence).slice(0, 300),
+            evidence: String(recEvidence).slice(0, 300),
           }].slice(-MAX_MILESTONES);
         }
-        const checkpoint = args.checkpoint !== undefined ? args.checkpoint : (args.status === "PASS" && args.milestoneStep !== undefined ? args.milestoneStep : undefined);
+        // checkpoint 只在最终 PASS 时写（lastVerifiedCheckpoint = 最后"已验证"状态锚点）。
+        const checkpoint = recStatus === "PASS"
+          ? (args.checkpoint !== undefined ? args.checkpoint : (args.milestoneStep !== undefined ? args.milestoneStep : undefined))
+          : undefined;
         if (checkpoint !== undefined) patch.lastVerifiedCheckpoint = checkpoint;
         const merged = sanitizeAutonomy(patch, it.autonomy);
         if (!merged.ok) throw new Error(`autonomy_verify rejected: ${merged.errors.join("; ")}`);
@@ -1896,7 +1918,7 @@ export function apply(ctx, config = {}) {
         if (!final.ok) throw new Error(`autonomy_verify rejected: ${final.errors.join("; ")}`);
         it.autonomy = final.value;
         store.persist();
-        diag(`AUTONOMY-VERIFY sid=${sid} status=${args.status} evidenceClass=${args.evidenceClass} criterionIndex=${args.criterionIndex ?? "-"} state=${patch.verificationState}`);
+        diag(`AUTONOMY-VERIFY sid=${sid} status=${recStatus} claimed=${args.status} evidenceClass=${args.evidenceClass} hostVerify=${hostResult ? (hostResult.verified ? "ok" : hostResult.reason) : "n/a"} criterionIndex=${args.criterionIndex ?? "-"} state=${patch.verificationState}`);
         return { ok: true, verificationState: patch.verificationState, autonomy: final.value };
       },
     }));

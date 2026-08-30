@@ -1,4 +1,4 @@
-// autonomy-state-core.mjs — P3 Task Autonomy 状态纯逻辑（无外部依赖）
+// autonomy-state-core.mjs — P3 Task Autonomy 状态纯逻辑（仅标准库 node:path）
 //
 // 职责（对应 docs/roadmap/reports/PHASE_03_AUTONOMY/DESIGN_R1.md）：
 //   1. EC IntentStore schema v3 的 `autonomy` 子对象：默认值 / 清洗 / 迁移（幂等、只增不清）。
@@ -12,9 +12,18 @@
 //   - evidenceClass 枚举按 Goal 合同证据优先级排序（高→低）：
 //     system_api > file_hash > git > browser_state > screenshot > ai_judgment；
 //   - 上限与 supervisor-bridge-core 对齐（MAX_ACCEPTANCE_ITEMS=12、单条 ≤500）。
-// 本模块不依赖任何 DSH 运行时，仅使用标准 JS 类型。
+// 本模块不依赖任何 DSH 运行时，仅使用标准 JS 类型 + node:path（canonPath 绑定比对）。
+// R1C-2 完成真值收紧（外审 Round 1 C 系列）：
+//   a) criteriaBindings —— file_hash/system_api PASS 的前置逐条目标绑定
+//      （write-once per index；无绑定/绑错目标 → hostVerify 前即 fail-closed）；
+//   b) 软证据类别（git/browser_state/screenshot/ai_judgment）PASS 一律拒收/降权
+//      （工具层降级 UNVERIFIED(SOFT-EVIDENCE)，derive 层不推进 VERIFIED）；
+//   c) system_api 规范严格化：未知/重复键拒绝；宿主验证器固定 GET 只读、
+//      不跟随重定向（验证器自身不得产生变更请求）。
 
-export const AUTONOMY_SCHEMA_VERSION = 3;
+import path from "node:path";
+
+export const AUTONOMY_SCHEMA_VERSION = 4;
 export const MAX_ACCEPTANCE_ITEMS = 12; // 与 supervisor-bridge-core.MAX_ACCEPTANCE_ITEMS 对齐
 export const MAX_ACCEPTANCE_LEN = 500;  // 与 supervisor-bridge-core.validateAcceptanceCriteria 对齐
 export const MAX_MILESTONES = 50;
@@ -34,13 +43,26 @@ export const EVIDENCE_CLASSES = Object.freeze([
   "ai_judgment",
 ]);
 
+/** 宿主可确定性复核的证据类别（R1 Correction AC5；全模块单一定义点）。 */
+export const HOST_VERIFIABLE_CLASSES = Object.freeze(["system_api", "file_hash"]);
+
+/** 软证据类别（R1C-2）：仅观察记录，PASS 一律不被接受（不得推进 VERIFIED）。 */
+export const SOFT_EVIDENCE_CLASSES = Object.freeze(
+  EVIDENCE_CLASSES.filter((c) => !HOST_VERIFIABLE_CLASSES.includes(c))
+);
+
+/** 软证据 PASS 降级记录前缀（工具层使用；单一来源，供测试/审计识别）。 */
+export const SOFT_PASS_REFUSED_PREFIX =
+  "SOFT-EVIDENCE (observation only; PASS not accepted for this evidence class):";
+
 export const CRITERION_STATUSES = Object.freeze(["PASS", "FAIL", "UNVERIFIED"]);
 export const VERIFICATION_STATES = Object.freeze(["UNVERIFIED", "PARTIAL", "VERIFIED", "FAILED"]);
 
-/** schema v3 默认 autonomy 子对象（全部可空/空数组）。 */
+/** schema v4 默认 autonomy 子对象（全部可空/空数组）。 */
 export function emptyAutonomy() {
   return {
     acceptanceCriteria: null,   // string[] | null（write-once）
+    criteriaBindings: null,     // R1C-2: Array<{index,kind:'file'|'api'|'none',...}> | null（write-once per index）
     criteriaEvidence: null,     // Array<{index,status,evidenceClass,evidence,at}> | null
     verifiedMilestones: [],     // Array<{at,step,evidenceClass,evidence}>
     currentStep: null,          // string | null（当前步骤 / next action）
@@ -77,6 +99,88 @@ function sanitizeAcceptanceCriteria(raw) {
   return { value: out };
 }
 
+/** 绑定字段长度上限（api.path / api.expectContains / none.note）。 */
+const MAX_BINDING_STR = 200;
+
+/** 规范化绝对路径用于绑定比对（Windows 大小写不敏感、分隔符/尾缀统一；不做符号链接解析）。 */
+export function canonPath(p) {
+  if (typeof p !== "string" || !p.trim()) return null;
+  const r = path.resolve(p.trim());
+  return process.platform === "win32" ? r.toLowerCase() : r;
+}
+
+/**
+ * 校验单条 criterion 目标绑定（R1C-2 Blocker B）：file_hash/system_api PASS 的前置条件。
+ *   {index,kind:"file",path:<绝对路径>} | {index,kind:"api",port,path:"/...",expectStatus,expectContains?}
+ *   | {index,kind:"none",note?}（该条明确不由宿主确定性复核，PASS 永不可用）
+ */
+function sanitizeBindingEntry(raw) {
+  if (!isPlainObject(raw)) return { error: "invalid_criteria_binding" };
+  const index = raw.index;
+  if (!Number.isInteger(index) || index < 0 || index >= MAX_ACCEPTANCE_ITEMS) return { error: "invalid_criterion_index" };
+  if (raw.kind === "file") {
+    for (const k of Object.keys(raw)) if (!["index", "kind", "path"].includes(k)) return { error: `invalid_binding_field:${k}` };
+    if (typeof raw.path !== "string" || !raw.path.trim() || raw.path.length > MAX_ACCEPTANCE_LEN) return { error: "invalid_criteria_binding" };
+    if (!ABSOLUTE_PATH.test(raw.path.trim())) return { error: "invalid_criteria_binding_path_not_absolute" };
+    const cp = canonPath(raw.path);
+    if (!cp) return { error: "invalid_criteria_binding" };
+    return { value: { index, kind: "file", path: cp } };
+  }
+  if (raw.kind === "api") {
+    for (const k of Object.keys(raw)) if (!["index", "kind", "port", "path", "expectStatus", "expectContains"].includes(k)) return { error: `invalid_binding_field:${k}` };
+    if (!Number.isInteger(raw.port) || raw.port < 1 || raw.port > 65535) return { error: "invalid_criteria_binding_port" };
+    if (typeof raw.path !== "string" || !raw.path.startsWith("/") || raw.path.length > MAX_BINDING_STR) return { error: "invalid_criteria_binding_path" };
+    if (!Number.isInteger(raw.expectStatus) || raw.expectStatus < 100 || raw.expectStatus > 599) return { error: "invalid_criteria_binding_expect_status" };
+    if (raw.expectContains !== undefined) {
+      if (typeof raw.expectContains !== "string" || !raw.expectContains || raw.expectContains.length > MAX_BINDING_STR) return { error: "invalid_criteria_binding_expect_contains" };
+    }
+    const v = { index, kind: "api", port: raw.port, path: raw.path, expectStatus: raw.expectStatus };
+    if (raw.expectContains !== undefined) v.expectContains = raw.expectContains;
+    return { value: v };
+  }
+  if (raw.kind === "none") {
+    for (const k of Object.keys(raw)) if (!["index", "kind", "note"].includes(k)) return { error: `invalid_binding_field:${k}` };
+    if (raw.note === undefined) return { value: { index, kind: "none" } };
+    const note = cleanStr(raw.note, MAX_BINDING_STR);
+    if (!note) return { error: "invalid_criteria_binding" };
+    return { value: { index, kind: "none", note } };
+  }
+  return { error: "invalid_criteria_binding_kind" };
+}
+
+/**
+ * criteriaBindings 合并（R1C-2）：write-once per index。
+ * - 未提供 → 维持现状；null → 已有绑定时拒绝清空（否则幂等 no-op）；
+ * - 与 criteria 数量强耦合（criteria 未设或长度不符 → 拒绝）；
+ * - 同 index 重绑必须逐字段全等（幂等重申允许，改绑拒绝）。
+ */
+function mergeCriteriaBindings(raw, cur, out, errors) {
+  if (raw === undefined) return;
+  const criteria = Array.isArray(out.acceptanceCriteria) && out.acceptanceCriteria.length > 0
+    ? out.acceptanceCriteria
+    : (Array.isArray(cur.acceptanceCriteria) && cur.acceptanceCriteria.length > 0 ? cur.acceptanceCriteria : null);
+  if (raw === null) {
+    if (Array.isArray(cur.criteriaBindings) && cur.criteriaBindings.length > 0) errors.push("immutable_criteria_bindings");
+    return;
+  }
+  if (!Array.isArray(raw)) { errors.push("invalid_criteria_bindings"); return; }
+  if (!criteria) { errors.push("bindings_require_criteria"); return; }
+  if (raw.length !== criteria.length) { errors.push("bindings_length_mismatch"); return; }
+  const merged = Array.isArray(cur.criteriaBindings) ? [...cur.criteriaBindings] : [];
+  for (const b of raw) {
+    const v = sanitizeBindingEntry(b);
+    if (v.error) { errors.push(v.error); return; }
+    const prev = merged.find((x) => x.index === v.value.index);
+    if (prev) {
+      if (JSON.stringify(prev) !== JSON.stringify(v.value)) { errors.push(`immutable_criteria_binding:${v.value.index}`); return; }
+      continue;
+    }
+    merged.push(v.value);
+  }
+  merged.sort((a, b) => a.index - b.index);
+  out.criteriaBindings = merged.slice(0, MAX_ACCEPTANCE_ITEMS);
+}
+
 /** 校验单条证据记录。 */
 function sanitizeCriterionResult(entry) {
   if (!isPlainObject(entry)) return { error: "invalid_criterion_result" };
@@ -85,6 +189,11 @@ function sanitizeCriterionResult(entry) {
   if (!CRITERION_STATUSES.includes(entry.status)) return { error: "invalid_criterion_status" };
   const evidenceClass = EVIDENCE_CLASSES.includes(entry.evidenceClass) ? entry.evidenceClass : null;
   if (!evidenceClass) return { error: "invalid_evidence_class" };
+  // R1C-2 状态合同：PASS 只能落在宿主可确定性复核的类别上。软类别 PASS 在工具层
+  // 已降级为 UNVERIFIED（SOFT-EVIDENCE）；此处为结构性兜底（直写证据表也不得制造软 PASS）。
+  if (entry.status === "PASS" && !HOST_VERIFIABLE_CLASSES.includes(evidenceClass)) {
+    return { error: "invalid_pass_evidence_class" };
+  }
   const evidence = entry.status === "UNVERIFIED" ? cleanStr(entry.evidence, MAX_EVIDENCE_LEN) : cleanStr(entry.evidence, MAX_EVIDENCE_LEN);
   if (entry.status !== "UNVERIFIED" && !evidence) return { error: "missing_evidence" };
   const at = Number.isFinite(entry.at) ? entry.at : Date.now();
@@ -112,7 +221,11 @@ export function deriveVerificationState(criteria, evidence) {
   if (Array.isArray(evidence)) {
     for (const e of evidence) {
       if (isPlainObject(e) && Number.isInteger(e.index) && CRITERION_STATUSES.includes(e.status)) {
-        byIndex.set(e.index, e.status); // upsert 语义：同 index 后写覆盖
+        // R1C-2 派生纪律：明确标注为软类别的 PASS 不推进 VERIFIED（按 UNVERIFIED 计）。
+        // 无 evidenceClass 的历史记录维持原语义（不追溯降权）。
+        const softPass = e.status === "PASS" && typeof e.evidenceClass === "string" &&
+          SOFT_EVIDENCE_CLASSES.includes(e.evidenceClass);
+        byIndex.set(e.index, softPass ? "UNVERIFIED" : e.status); // upsert 语义：同 index 后写覆盖
       }
     }
   }
@@ -153,6 +266,10 @@ export function sanitizeAutonomy(raw, existing) {
   }
 
   // criteriaEvidence —— 整表替换（须全部合法；常规写入走 upsertCriterionResult）。
+  // criteriaBindings —— R1C-2：file_hash/system_api PASS 的前置目标绑定。
+  // 放在 acceptanceCriteria 处理之后，保证同一 patch 内与 criteria 数量耦合成立。
+  mergeCriteriaBindings(raw.criteriaBindings, cur, out, errors);
+
   if (raw.criteriaEvidence !== undefined) {
     if (raw.criteriaEvidence === null) {
       out.criteriaEvidence = null;
@@ -252,13 +369,13 @@ export function buildResumeProgressLine(a) {
 // 本节仍保持"纯逻辑 + io 注入"，不引入 DSH 运行时依赖。
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** 声称宿主可确定性复核的证据类别（证据优先级最高的两档）。 */
-export const HOST_VERIFIABLE_CLASSES = Object.freeze(["system_api", "file_hash"]);
+// HOST_VERIFIABLE_CLASSES 单一定义点在文件头（证据类别区）；此处不再重复定义。
 
 /** 证据机器可校验规范说明（工具描述/错误提示共用，保持单一来源）。 */
 export function describeEvidenceSpec() {
   return "file_hash spec: 'file:<absolute-path>|sha256:<64-hex>|<optional note>'; " +
-    "system_api spec: 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>]|<optional note>' (loopback 127.0.0.1 only)";
+    "system_api spec: 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>]|<optional free-text note without =>' " +
+    "(loopback 127.0.0.1 only; verifier issues GET only; unknown/duplicate keys rejected)";
 }
 
 const HEX64 = /^[0-9a-fA-F]{64}$/;
@@ -296,7 +413,14 @@ export function parseSystemApiEvidence(evidence) {
       if (kv.note === undefined) { kv.note = s; continue; }
       return { ok: false, reason: `format_invalid:unexpected_segment:${s.slice(0, 30)}` };
     }
-    kv[s.slice(0, eq).trim().toLowerCase()] = s.slice(eq + 1).trim();
+    // R1C-2 严格化：未知键拒绝（含注入的 method/body 等验证器行为键——验证器固定
+    // GET 只读，规范不可表达）；重复键拒绝（避免歧义覆盖）。
+    const key = s.slice(0, eq).trim().toLowerCase();
+    if (!["port", "path", "expectstatus", "expectcontains"].includes(key)) {
+      return { ok: false, reason: `format_invalid:unknown_key:${key.slice(0, 30)}` };
+    }
+    if (kv[key] !== undefined) return { ok: false, reason: `format_invalid:duplicate_key:${key}` };
+    kv[key] = s.slice(eq + 1).trim();
   }
   const port = Number(kv.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, reason: "format_invalid:port" };
@@ -311,7 +435,7 @@ export function parseSystemApiEvidence(evidence) {
 
 /**
  * 宿主侧独立 deterministic 复核。io 可注入（测试）；缺省用 node:crypto/node:fs/promises
- * 与全局 fetch（system_api 仅回环 127.0.0.1，POST，3s 超时）。
+ * 与全局 fetch（system_api 仅回环 127.0.0.1，GET 只读、不跟随重定向，3s 超时）。
  * @returns {Promise<{verified: boolean, reason: string|null, detail: string|null}>}
  */
 export async function hostVerifyEvidence(evidenceClass, evidence, io = null) {
@@ -341,11 +465,12 @@ export async function hostVerifyEvidence(evidenceClass, evidence, io = null) {
   const url = `http://127.0.0.1:${p.value.port}${p.value.path}`;
   let res;
   try {
+    // R1C-2：验证器只发 GET 只读请求、不跟随重定向（3xx 按实际状态判定）——
+    // 验证过程自身不得对被验证对象产生任何变更请求。
     res = await d.fetchImpl(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "{}",
+      method: "GET",
       signal: AbortSignal.timeout(3000),
+      redirect: "manual",
     });
   } catch (e) {
     const code = e && typeof e === "object" ? (e.cause?.code ?? e.name) : undefined;

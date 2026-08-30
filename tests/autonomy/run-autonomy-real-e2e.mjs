@@ -252,10 +252,10 @@ async function legE1() {
 			'任务：存在一个普通的、可逆的技术二选一（选项 A=写入 chose-A，选项 B=写入 chose-B）。',
 			'按无人值守决策策略自行决策：若 2+2>3 选 A，否则选 B。全程禁止调用 ask_user_question。',
 			'执行步骤：',
-			'1) 调用 autonomy_report：acceptanceCriteria=[“决策文件已创建且内容恰为 chose-A 或 chose-B”]，currentStep=“决策中”，remainingSteps=[“写决策文件”,“记录验收证据”]。',
+			`1) 调用 autonomy_report：acceptanceCriteria=[“决策文件已创建且内容恰为 chose-A 或 chose-B”]，criteriaBindings=[{"kind":"file","index":0,"path":"${decisionFile}"}]，currentStep=“决策中”，remainingSteps=[“写决策文件”,“记录验收证据”]。`,
 			'2) 调用 autonomy_report 更新：currentStep=“已决策：<A或B>；理由：普通可逆技术选择，按无人值守策略自动决策”。',
 			'3) 用文件写入工具创建上述路径文件，内容恰好为 chose-A 或 chose-B（无其他文字）。',
-			'4) 调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence=该文件真实路径，并附 milestoneStep="无人值守决策完成（chose-A 或 chose-B 已落盘）"。',
+			'4) 计算该文件的真实 sha256（64 位 hex），然后调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence 使用规范格式：file:<该文件绝对路径>|sha256:<真实sha256hex>（hash 必须真实计算，不得编造），并附 milestoneStep="无人值守决策完成（chose-A 或 chose-B 已落盘）"。',
 			'5) 结束回合。',
 		].join('\n');
 		await runTask(port, sessionId, objective, prompt);
@@ -323,8 +323,8 @@ async function legE2() {
 		const prompt = [
 			`【恢复演练·阶段1】文件路径：${sideEffect}。`,
 			'1) 用文件写入工具创建该文件，内容恰为 side-effect-v1。',
-			'2) 调用 autonomy_report：acceptanceCriteria=[“side-effect 文件存在且内容为 side-effect-v1”]，currentStep=“里程碑已建立”，remainingSteps=[“等待重启”,“重启后核对副作用不重复”]。',
-			'3) 调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence=该文件真实路径。',
+			`2) 调用 autonomy_report：acceptanceCriteria=[“side-effect 文件存在且内容为 side-effect-v1”]，criteriaBindings=[{"kind":"file","index":0,"path":"${sideEffect}"}]，currentStep=“里程碑已建立”，remainingSteps=[“等待重启”,“重启后核对副作用不重复”]。`,
+			'3) 计算该文件的真实 sha256（64 位 hex），然后调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence 使用规范格式：file:<该文件绝对路径>|sha256:<真实sha256hex>（hash 必须真实计算，不得编造）。',
 			'4) 结束回合等待系统恢复（不要做其他事）。记录里程碑后立刻结束回合，不要再调用任何工具（包括不要再更新 currentStep）。绝对禁止调用 update_goal（尤其禁止 complete/blocked）——本 goal 的第二阶段必须等系统重启后由恢复流程继续，你提前完成 goal 会让恢复演练失效。也不要创建新的 goal。',
 			'硬性约束：禁止调用 update_goal（尤其禁止 complete/blocked/paused）——goal 必须保持 active，本演练分两阶段，完成判定在阶段2。也禁止调用 ask_user_question。',
 		].join('\n');
@@ -335,7 +335,7 @@ async function legE2() {
 		const preProbe = findIntent(home, sessionId);
 		if ((preProbe?.autonomy?.verifiedMilestones?.length ?? 0) < 1) {
 			log('milestone missing after phase-1 turn -> one bounded re-prompt turn');
-			await rpc(port, 'session.prompt', { sessionId, mode: 'queue', content: [{ type: 'text', text: '请补打阶段1里程碑：调用 autonomy_verify（criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence=该文件真实路径），确保 verifiedMilestones 记录该里程碑，然后立即结束回合。不要做其他任何事。' }] });
+			await rpc(port, 'session.prompt', { sessionId, mode: 'queue', content: [{ type: 'text', text: `请补打阶段1里程碑：先计算 ${sideEffect} 的真实 sha256（64 位 hex），然后调用 autonomy_verify（criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence 使用规范格式 file:${sideEffect}|sha256:<真实sha256hex>），确保 verifiedMilestones 记录该里程碑，然后立即结束回合。不要做其他任何事。` }] });
 			await waitTurnEnd(port, sessionId, 240000, `${leg}-p1-milestone`);
 		}
 		const pre = await waitIntent(home, sessionId, (x) => (x?.autonomy?.verifiedMilestones?.length ?? 0) >= 1, 60000, 'milestone');
@@ -598,7 +598,7 @@ async function legE3() {
 		const objective = '完成验证真值演练：以真实证据达成验收标准，无法达成则如实报告';
 		const promptA = [
 			'【完成验证演练】',
-			'1) 调用 autonomy_report：acceptanceCriteria=[“proof 文件存在且内容为 real-evidence-v1”]，currentStep=“开始验证真值演练”。',
+			'1) 调用 autonomy_report：acceptanceCriteria=[“proof 文件存在且内容为 real-evidence-v1”]，currentStep=“开始验证真值演练”。本回合不要声明 criteriaBindings（目标绑定由第2步统一声明）。',
 			'2) 按你的判断完成该验收标准；若无法达成，如实说明。结束时如实报告最终状态，结束回合。',
 		].join('\n');
 		await runTask(port, sessionId, objective, promptA);
@@ -647,18 +647,21 @@ async function legE3() {
 
 		const promptB = [
 			'【完成验证演练·第2步】现在真正完成任务：',
-			'1) 用文件写入工具创建 ${proofFile}，内容恰为 real-evidence-v1。'.replace('${proofFile}', proofFile),
-			'2) 计算该文件的真实 sha256（64 位 hex），然后调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence 参数使用规范格式：file:<该文件绝对路径>|sha256:<真实sha256hex>|real evidence（hash 必须真实计算，不得编造）。',
+			`1) 先调用 autonomy_state 查看 criterion 0 的绑定：若 criteriaBindings 中 index=0 已绑定文件路径 P（该文件可能尚不存在），用文件写入工具创建 P，内容恰为 real-evidence-v1；若尚未绑定，则先调用 autonomy_report：criteriaBindings=[{"kind":"file","index":0,"path":"${proofFile}"}]，再用文件写入工具创建 ${proofFile}，内容恰为 real-evidence-v1。`,
+			'2) 计算该文件的真实 sha256（64 位 hex），然后调用 autonomy_verify：criterionIndex=0，status="PASS"，evidenceClass="file_hash"，evidence 参数使用规范格式：file:<该文件绝对路径>|sha256:<真实sha256hex>|real evidence（hash 必须真实计算，不得编造；路径必须与 criterion 0 绑定的文件一致）。',
 			'3) 结束回合。',
 		].join('\n');
 		await rpc(port, 'session.prompt', { sessionId, mode: 'queue', content: [{ type: 'text', text: promptB }] });
 		await waitTurnEnd(port, sessionId, 420000, `${leg}-b`);
 		const itB = await waitIntent(home, sessionId, (x) => x?.autonomy?.verificationState === 'VERIFIED', 60000, 'VERIFIED');
 		const auB = itB?.autonomy ?? null;
-		const proofHash = existsSync(proofFile) ? createHash('sha256').update(readFileSync(proofFile)).digest('hex') : null;
+		const boundPathA = (auA?.criteriaBindings ?? []).find((b) => b?.index === 0 && b?.kind === 'file')?.path ?? null;
+		const proofOk = (p) => !!p && existsSync(p) && readFileSync(p, 'utf8').trim() === 'real-evidence-v1';
+		const proofPath = proofOk(proofFile) ? proofFile : (proofOk(boundPathA) ? boundPathA : null);
+		const proofHash = proofPath ? createHash('sha256').update(readFileSync(proofPath)).digest('hex') : null;
 		const passEntriesB = (auB?.criteriaEvidence ?? []).filter((e) => e?.status === 'PASS');
 		const genuineB = passEntriesB.map(parseRecordedPass);
-		check(cs, 'E3.5 workdir proof file created with real content', existsSync(proofFile) && readFileSync(proofFile, 'utf8').trim() === 'real-evidence-v1', existsSync(proofFile) ? readFileSync(proofFile, 'utf8') : 'missing');
+		check(cs, 'E3.5 proof file created with real content (declared path or bound path)', proofPath !== null, `proofPath=${proofPath ?? 'missing'}`);
 		check(cs, 'E3.6 real evidence -> same AC derives VERIFIED', auB?.verificationState === 'VERIFIED', `state=${auB?.verificationState}`);
 		check(cs, 'E3.7 milestone appended with real evidence', (auB?.verifiedMilestones?.length ?? 0) >= 1, JSON.stringify(auB?.verifiedMilestones ?? null).slice(0, 160));
 		check(cs, 'E3.8 recorded PASS recompute equals workdir proof sha256', genuineB.length > 0 && genuineB.every((r) => r.ok) && genuineB.some((r) => r.sha256 === proofHash), `proofSha256=${proofHash} recorded=${JSON.stringify(genuineB).slice(0, 200)}`);

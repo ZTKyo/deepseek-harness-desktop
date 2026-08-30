@@ -13,6 +13,8 @@
 //   C10 verificationState 枚举钳制（非法值 → null）
 //   C11 证据机器规范解析（P3 R1 Correction）：parseFileHashEvidence / parseSystemApiEvidence
 //   C12 hostVerifyEvidence 宿主侧确定性复核（io 注入）：file_hash / system_api / fail-closed
+//   C13 criteriaBindings sanitize + write-once merge（R1C-2）：canon 存储、字段/端口/
+//       绝对路径校验、长度强耦合、改绑拒绝、幂等重申、null 清空拒绝、none 绑定
 
 import {
   emptyAutonomy,
@@ -23,6 +25,7 @@ import {
   parseFileHashEvidence,
   parseSystemApiEvidence,
   hostVerifyEvidence,
+  canonPath,
   HOST_VERIFIABLE_CLASSES,
   AUTONOMY_SCHEMA_VERSION,
   MAX_ACCEPTANCE_ITEMS,
@@ -42,7 +45,7 @@ section("C1: emptyAutonomy default shape");
   assert(a.currentStep === null && a.remainingSteps === null, "step fields null");
   assert(a.lastProgressAt === null && a.lastVerifiedCheckpoint === null, "timestamps null");
   assert(a.verificationState === null && a.lastErrorClass === null, "state fields null");
-  assert(AUTONOMY_SCHEMA_VERSION === 3, "schema version is 3");
+  assert(AUTONOMY_SCHEMA_VERSION === 4, "schema version is 4 (R1C-2: bindings + completion-verification kind)", `got ${AUTONOMY_SCHEMA_VERSION}`);
 }
 
 section("C2: sanitize whitelist + trims");
@@ -245,6 +248,62 @@ section("C12: hostVerifyEvidence — injected io, fail-closed semantics");
   assert(v9.verified === false && v9.reason === "request_failed", "system_api: unreachable -> request_failed");
   const v10 = await hostVerifyEvidence("system_api", "prose about an api call", io);
   assert(v10.verified === false && String(v10.reason).startsWith("format_invalid"), "system_api: prose -> format_invalid");
+}
+
+section("C13: criteriaBindings sanitize + write-once merge (R1C-2)");
+{
+  assert(emptyAutonomy().criteriaBindings === null, "emptyAutonomy: criteriaBindings null");
+  const fileSpec = process.platform === "win32" ? "C:\\tmp\\proof-i13.txt" : "/tmp/proof-i13.txt";
+  const r1 = sanitizeAutonomy({
+    acceptanceCriteria: ["file proof", "api healthy", "manual item"],
+    criteriaBindings: [
+      { index: 0, kind: "file", path: fileSpec },
+      { index: 1, kind: "api", port: 8080, path: "/api/state", expectStatus: 200, expectContains: "VERIFIED" },
+      { index: 2, kind: "none", note: "human visual check only" },
+    ],
+  }, null);
+  assert(r1.ok === true, "valid file+api+none bindings accepted", JSON.stringify(r1.errors ?? []));
+  assert(r1.value.criteriaBindings.length === 3, "three bindings stored");
+  const b0 = r1.value.criteriaBindings[0];
+  assert(b0.path === canonPath(fileSpec), "file binding path canonized (case/resolution normalized)", JSON.stringify(b0));
+  const b2 = r1.value.criteriaBindings[2];
+  assert(b2.kind === "none" && b2.note === "human visual check only", "none binding keeps note");
+
+  // 绑定数组长度与 criteria 强耦合：逐条校验用例必须传满 3 条，否则先撞 bindings_length_mismatch
+  const goodBindings = () => [
+    { index: 0, kind: "file", path: fileSpec },
+    { index: 1, kind: "api", port: 8080, path: "/api/state", expectStatus: 200, expectContains: "VERIFIED" },
+    { index: 2, kind: "none", note: "human visual check only" },
+  ];
+  const reject = (mutate, errSub, label) => {
+    const bs = goodBindings();
+    mutate(bs);
+    const r = sanitizeAutonomy({ criteriaBindings: bs }, r1.value);
+    assert(r.ok === false && r.errors.some((e) => String(e).includes(errSub)), label, JSON.stringify(r.errors ?? []));
+  };
+  reject((bs) => { bs[0].path = "./relative/path.txt"; }, "not_absolute", "relative path rejected");
+  reject((bs) => { bs[0].extra = 1; }, "invalid_binding_field:extra", "unknown field on file binding rejected");
+  reject((bs) => { bs[1].port = 0; }, "invalid_criteria_binding_port", "port=0 rejected");
+  reject((bs) => { bs[1].port = 70000; }, "invalid_criteria_binding_port", "port=70000 rejected");
+  reject((bs) => { bs[1].path = "x"; }, "invalid_criteria_binding_path", "api path without leading slash rejected");
+  reject((bs) => { bs[1].expectStatus = 99; }, "invalid_criteria_binding_expect_status", "expectStatus=99 rejected");
+  reject((bs) => { bs[0].kind = "sftp"; }, "invalid_criteria_binding_kind", "unknown kind rejected");
+  reject((bs) => { bs[0].path = process.platform === "win32" ? "C:\\tmp\\other.txt" : "/tmp/other.txt"; }, "immutable_criteria_binding:0", "re-binding index 0 to a different target rejected");
+  const rLen = sanitizeAutonomy({ criteriaBindings: [{ index: 9, kind: "none" }] }, r1.value);
+  assert(rLen.ok === false && rLen.errors.includes("bindings_length_mismatch"), "length != criteria count rejected", JSON.stringify(rLen.errors ?? []));
+  const rNull = sanitizeAutonomy({ criteriaBindings: null }, r1.value);
+  assert(rNull.ok === false && rNull.errors.includes("immutable_criteria_bindings"), "null bindings when set -> rejected", JSON.stringify(rNull.errors ?? []));
+  const bindNoCriteria = sanitizeAutonomy({ criteriaBindings: [{ index: 0, kind: "none" }] }, null);
+  assert(bindNoCriteria.ok === false && bindNoCriteria.errors.includes("bindings_require_criteria"), "bindings without criteria ever set -> bindings_require_criteria", JSON.stringify(bindNoCriteria.errors ?? []));
+  const rSame = sanitizeAutonomy({
+    criteriaBindings: [
+      { index: 0, kind: "file", path: fileSpec },
+      { index: 1, kind: "api", port: 8080, path: "/api/state", expectStatus: 200, expectContains: "VERIFIED" },
+      { index: 2, kind: "none", note: "human visual check only" },
+    ],
+  }, r1.value);
+  assert(rSame.ok === true, "re-declaring the IDENTICAL bindings accepted (idempotent)", JSON.stringify(rSame.errors ?? []));
+  assert(rSame.value.criteriaBindings.length === 3, "bindings preserved after idempotent re-declare");
 }
 
 console.log(`\n${"=".repeat(60)}`);

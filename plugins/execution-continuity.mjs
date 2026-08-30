@@ -63,6 +63,11 @@ import {
   buildResumeProgressLine,
   hostVerifyEvidence,
   describeEvidenceSpec,
+  parseFileHashEvidence,
+  parseSystemApiEvidence,
+  canonPath,
+  SOFT_EVIDENCE_CLASSES,
+  SOFT_PASS_REFUSED_PREFIX,
   HOST_VERIFIABLE_CLASSES,
   CRITERION_STATUSES,
   AUTONOMY_SCHEMA_VERSION,
@@ -1819,6 +1824,7 @@ export function apply(ctx, config = {}) {
         currentStep: { type: "string", description: "What you are working on right now (the next concrete action)." },
         remainingSteps: { type: "array", description: "Optional ordered remaining steps (array of strings)." },
         acceptanceCriteria: { type: "array", description: "Write-once acceptance criteria (1-12 strings, each <=500 chars). Rejected after the first successful set." },
+        criteriaBindings: { type: "array", description: "R1C-2: optional write-once per-criterion target bindings; REQUIRED before a file_hash/system_api PASS can count toward a criterion. Set together with acceptanceCriteria (same length). Entries: {kind:'file',index,path:'<absolute path>'} | {kind:'api',index,port,path:'/...',expectStatus,expectContains?} | {kind:'none',index,note?} (host-verifiable PASS permanently unavailable for that criterion). write-once per index; immutable after set." },
         lastErrorClass: { type: "string", description: "Optional short error class/signature when the last step failed." },
       },
       output: {
@@ -1832,6 +1838,7 @@ export function apply(ctx, config = {}) {
         if (args.currentStep !== undefined) patch.currentStep = args.currentStep;
         if (args.remainingSteps !== undefined) patch.remainingSteps = args.remainingSteps;
         if (args.acceptanceCriteria !== undefined) patch.acceptanceCriteria = args.acceptanceCriteria;
+        if (args.criteriaBindings !== undefined) patch.criteriaBindings = args.criteriaBindings;
         if (args.lastErrorClass !== undefined) patch.lastErrorClass = args.lastErrorClass;
         const res = applyAutonomyPatch(sid, patch);
         if (!res.ok) {
@@ -1845,11 +1852,11 @@ export function apply(ctx, config = {}) {
     }));
     ctx.tools.register(defineTool({
       name: "autonomy_verify",
-      description: "Record a VERIFICATION result (not a claim): a criterion PASS/FAIL with evidence (priority: system_api > file_hash > git > browser_state > screenshot > ai_judgment), and optionally a verified milestone/checkpoint. HOST-DETERMINISTIC RULE: for evidenceClass file_hash/system_api, a PASS is only accepted after independent host-side re-verification — evidence must be machine-checkable: file_hash 'file:<absolute-path>|sha256:<64-hex>[|note]'; system_api 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]' (loopback only). Prose or unverifiable evidence fails closed: recorded as UNVERIFIED (never PASS), no milestone, no checkpoint, verificationState never VERIFIED from it. On PASS with milestoneStep the milestone is appended and lastVerifiedCheckpoint updated. Derives verificationState: all criteria PASS -> VERIFIED; any FAIL -> FAILED; partial -> PARTIAL. Executor claims are NOT verification — this tool is the durable evidence ledger used to restore 'last verified state' after restarts.",
+      description: "Record a VERIFICATION result (not a claim): a criterion PASS/FAIL with evidence (priority: system_api > file_hash > git > browser_state > screenshot > ai_judgment), and optionally a verified milestone/checkpoint. HOST-DETERMINISTIC RULE: for evidenceClass file_hash/system_api, a PASS is only accepted after independent host-side re-verification — evidence must be machine-checkable: file_hash 'file:<absolute-path>|sha256:<64-hex>[|note]'; system_api 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]' (loopback only; verifier issues GET only). R1C-2 BINDING GATE: a criterion verification (criterionIndex given) with file_hash/system_api PASS additionally requires that criterion to have a declared criteriaBindings target matching the evidence (file → canonical-path compare; api → port/path/expectStatus/expectContains); unbound (target_unbound) or mismatched (target_binding_mismatch) fails closed. SOFT-EVIDENCE RULE: git/browser_state/screenshot/ai_judgment cannot PASS — a claimed soft PASS is recorded UNVERIFIED with a SOFT-EVIDENCE prefix (observation only). Prose or unverifiable evidence fails closed: recorded as UNVERIFIED (never PASS), no milestone, no checkpoint, verificationState never VERIFIED from it. On PASS with milestoneStep the milestone is appended and lastVerifiedCheckpoint updated. Derives verificationState: all criteria PASS -> VERIFIED; any FAIL -> FAILED; partial -> PARTIAL. Executor claims are NOT verification — this tool is the durable evidence ledger used to restore 'last verified state' after restarts.",
       parameters: {
         status: { type: "string", description: "PASS or FAIL for this verification.", required: true },
         evidenceClass: { type: "string", description: "Evidence class: system_api | file_hash | git | browser_state | screenshot | ai_judgment. file_hash/system_api PASS require the machine-checkable spec (see tool description); otherwise the host verifier fails closed to UNVERIFIED.", required: true },
-        evidence: { type: "string", description: "Evidence. For file_hash: 'file:<absolute-path>|sha256:<64-hex>[|note]'. For system_api: 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]'. Prose allowed only for git/browser_state/screenshot/ai_judgment.", required: true },
+        evidence: { type: "string", description: "Evidence. For file_hash: 'file:<absolute-path>|sha256:<64-hex>[|note]' (path must match the criterion's declared criteriaBindings file target; host verifies real bytes). For system_api: 'api:port=<n>|path=</api/...>|expectStatus=<code>[|expectContains=<substr>][|note]' (must match the bound target; host issues a read-only GET on 127.0.0.1; unknown/duplicate keys rejected). Prose allowed only for git/browser_state/screenshot/ai_judgment (those classes can never PASS).", required: true },
         criterionIndex: { type: "number", description: "0-based index into acceptanceCriteria when verifying a criterion." },
         milestoneStep: { type: "string", description: "Optional milestone description appended to verifiedMilestones on PASS." },
         checkpoint: { type: "string", description: "Optional last-verified-checkpoint text (defaults to milestoneStep on PASS)." },
@@ -1877,8 +1884,50 @@ export function apply(ctx, config = {}) {
         let recStatus = args.status;
         let recEvidence = evText;
         let hostResult = null;
-        if (args.status === "PASS" && HOST_VERIFIABLE_CLASSES.includes(args.evidenceClass)) {
-          hostResult = await hostVerifyEvidence(args.evidenceClass, evText);
+        if (args.status === "PASS" && SOFT_EVIDENCE_CLASSES.includes(args.evidenceClass)) {
+          // R1C-2 Blocker B：软证据 PASS 一律拒收（降级 UNVERIFIED，SOFT-EVIDENCE 前缀留痕；
+          // 派生层按 UNVERIFIED 计 → 不推进 VERIFIED）。仅观察记录。
+          recStatus = "UNVERIFIED";
+          recEvidence = `${SOFT_PASS_REFUSED_PREFIX} ${evText}`;
+          hostResult = { verified: false, reason: "soft_pass_refused", detail: null };
+        } else if (args.status === "PASS" && HOST_VERIFIABLE_CLASSES.includes(args.evidenceClass)) {
+          // R1 Correction AC5 + R1C-2 Blocker B：宿主复核 + 目标绑定门禁。
+          // file_hash/system_api 的 PASS 必须同时满足：
+          //   (1) 证据可解析为机器可校验规范（parse 失败 → fail-closed）；
+          //   (2) criterion 验证（criterionIndex 给定）时该 criterion 已在 criteriaBindings
+          //       声明目标且与证据目标一致（file→canonPath 比对；api→port/path/
+          //       expectStatus/expectContains 全等）；无绑定 target_unbound / 绑错
+          //       target_binding_mismatch（里程碑验证无 index，仅走宿主复核）；
+          //   (3) 宿主独立复核成功（真实字节 / 真实回环响应，GET 只读）。
+          // 任一不过 → fail-closed UNVERIFIED（不计 PASS、不建里程碑、不写 checkpoint）；
+          // 降级记录保留声称的 evidenceClass + 真实结果文本（HOST-VERIFY FAILED <reason>）。
+          const parse = args.evidenceClass === "file_hash"
+            ? parseFileHashEvidence(evText)
+            : parseSystemApiEvidence(evText);
+          if (!parse.ok) {
+            hostResult = { verified: false, reason: parse.reason, detail: null };
+          } else if (args.criterionIndex !== undefined) {
+            const b = Array.isArray(it.autonomy.criteriaBindings)
+              ? it.autonomy.criteriaBindings.find((x) => x.index === args.criterionIndex)
+              : null;
+            let bindErr = null;
+            if (!b) bindErr = "target_unbound";
+            else if (args.evidenceClass === "file_hash") {
+              if (b.kind !== "file") bindErr = "target_binding_mismatch";
+              else if (canonPath(parse.value.path) !== b.path) bindErr = "target_binding_mismatch";
+            } else if (b.kind !== "api" || b.port !== parse.value.port || b.path !== parse.value.path ||
+              b.expectStatus !== parse.value.expectStatus ||
+              (b.expectContains ?? null) !== (parse.value.expectContains ?? null)) {
+              bindErr = "target_binding_mismatch";
+            }
+            if (bindErr) {
+              hostResult = { verified: false, reason: bindErr, detail: null };
+            } else {
+              hostResult = await hostVerifyEvidence(args.evidenceClass, evText);
+            }
+          } else {
+            hostResult = await hostVerifyEvidence(args.evidenceClass, evText);
+          }
           recEvidence = hostResult.verified
             ? `HOST-VERIFIED (${hostResult.detail}): ${evText}`
             : `HOST-VERIFY FAILED (${hostResult.reason}): ${evText}`;

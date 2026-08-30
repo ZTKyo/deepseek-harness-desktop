@@ -1,0 +1,138 @@
+{
+  "leg": "E1",
+  "stamp": "2026-08-30T05-36-49",
+  "port": 33310,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-JoWOJV",
+  "sessionId": "p3r1e1-2026-08-30T05-36-49",
+  "checks": [
+    {
+      "name": "E1.1 turn produced history events",
+      "ok": true,
+      "detail": "events=3227"
+    },
+    {
+      "name": "E1.2 NO real ask_user_question tool-call record",
+      "ok": true,
+      "detail": "mentions=10 realCalls=0 sample={\"type\":null,\"keys\":\"event\",\"preview\":\"{\\\"event\\\":{\\\"type\\\":\\\"agent/inbox/spliced\\\",\\\"seq\\\":4,\\\"time\\\":1788068214997,\\\"data\\\":{\\\"target\\\":\\\"next-turn\\\",\\\"start\\\":0,\\\"inserted\\\":[{\\\"content\\\":[{\\\"type\\"
+    },
+    {
+      "name": "E1.3 decision file exists with chose-A|chose-B",
+      "ok": true,
+      "detail": "content=\"chose-A\""
+    },
+    {
+      "name": "E1.4 autonomy acceptanceCriteria persisted (write-once)",
+      "ok": true,
+      "detail": "[\"决策文件已创建且内容恰为 chose-A 或 chose-B\"]"
+    },
+    {
+      "name": "E1.5 autonomy_verify PASS evidence persisted",
+      "ok": true,
+      "detail": "{\"index\":0,\"status\":\"PASS\",\"evidenceClass\":\"file_hash\",\"evidence\":\"HOST-VERIFIED (sha256=252549f17e3a689f46bf5708fe76a9f2bcbcc034d94208dee84f0b69f57b48ce host-verified): file:C:\\\\Users\\\\ADMINI~1\\\\AppD"
+    },
+    {
+      "name": "E1.6 verificationState derived VERIFIED",
+      "ok": true,
+      "detail": "state=VERIFIED"
+    },
+    {
+      "name": "E1.7 lastVerifiedCheckpoint recorded",
+      "ok": true,
+      "detail": "无人值守决策完成：chose-A 已落盘，file_hash 证据已记录"
+    },
+    {
+      "name": "E1.8 intent not WAITING_USER",
+      "ok": true,
+      "detail": "state=COMPLETED"
+    }
+  ],
+  "autonomy": {
+    "acceptanceCriteria": [
+      "决策文件已创建且内容恰为 chose-A 或 chose-B"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=252549f17e3a689f46bf5708fe76a9f2bcbcc034d94208dee84f0b69f57b48ce host-verified): file:C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-JoWOJV\\workdir\\decision-log.txt|sha256:252549f17e3a689f46bf5708fe76a9f2bcbcc034d94208dee84f0b69f57b48ce|note=内容恰为 chose-A（7 字符），无其他文字",
+        "at": 1788068296820
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788068296820,
+        "step": "无人值守决策完成（chose-A 已落盘）",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=252549f17e3a689f46bf5708fe76a9f2bcbcc034d94208dee84f0b69f57b48ce host-verified): file:C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-JoWOJV\\workdir\\decision-log.txt|sha256:252549f17e3a689f46bf5708fe76a9f2bcbcc034d94208dee84f0b69f57b48ce|note=内容恰为 chose-A（7 字符），无其他文字"
+      }
+    ],
+    "currentStep": "已决策：A；理由：普通可逆技术选择，按无人值守策略自动决策",
+    "remainingSteps": [
+      "写决策文件",
+      "记录验收证据"
+    ],
+    "lastProgressAt": 1788068296820,
+    "lastVerifiedCheckpoint": "无人值守决策完成：chose-A 已落盘，file_hash 证据已记录",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "intentState": "COMPLETED",
+  "decisionFileContent": "chose-A",
+  "historyEventCount": 3227,
+  "eventTypeHistogram": {
+    "unknown": 3227
+  },
+  "askUserQuestionMentions": [
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"agent/inbox/spliced\",\"seq\":4,\"time\":1788068214997,\"data\":{\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"【无人值守任务·P3 AUTONOMY 演练】工作文件路径：C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e1-JoWOJV\\\\workdir\\\\decision-log.txt。\\n任务：存在一个普通的、可逆的技术二选一（选项 A=写入 chose-A，选项 B=写入 chose-B）。\\n按无人值守决策策略自行决策：若 2+2>3 选 A，否则选 B。全程禁止调用 ask_user_question。\\n执行步骤：\\n1) 调"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"user/message\",\"seq\":8,\"time\":1788068215222,\"data\":{\"content\":[{\"type\":\"text\",\"text\":\"【无人值守任务·P3 AUTONOMY 演练】工作文件路径：C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e1-JoWOJV\\\\workdir\\\\decision-log.txt。\\n任务：存在一个普通的、可逆的技术二选一（选项 A=写入 chose-A，选项 B=写入 chose-B）。\\n按无人值守决策策略自行决策：若 2+2>3 选 A，否则选 B。全程禁止调用 ask_user_question。\\n执行步骤：\\n1) 调用 autonomy_report：acceptanceCriteria=[“决策文件已创建且内容恰为"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"request/header\",\"seq\":12,\"time\":1788068215231,\"data\":{\"header\":{\"config\":{\"provider\":\"bai\",\"model\":\"glm-5.3-flash\",\"maxTokens\":131072},\"adapterDefaults\":{\"maxTokens\":true},\"system\":\"You are an AI agent powered by DeepSeek Harness.\\n\\nThe DeepSeek Harness implementation checkout is at C:\\\\Users\\\\Administrator\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@deepseek-ai\\\\dsh\\\\. The checkout "
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"session/title-llm-request\",\"seq\":14,\"time\":1788068215237,\"data\":{\"titleProvider\":\"session-title-first-prompt-llm\",\"messageSeqs\":[8],\"route\":{\"provider\":\"bai\",\"model\":\"glm-5.3-flash\"},\"system\":\"Create a concise title for an AI coding-assistant session from the supplied human messages.\\nReturn only the title on one line, **in plain text of natural language**, with no quotes, prefix"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":1391,\"time\":1788068253521,\"data\":{\"turn\":1,\"step\":1,\"chunk\":{\"type\":\"block-end\",\"index\":0,\"block\":{\"type\":\"reasoning\",\"text\":\"Let me work through this task. It's an unattended autonomy drill (P3 AUTONOMY rehearsal). The task:\\n\\n1. Call autonomy_report with acceptanceCriteria=[\\\"决策文件已创建且内容恰为 chose-A 或 chose-B\\\"], currentStep=\\\"决策中\\\", remainingSteps=[\\\"写决策文件"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/message\",\"seq\":1396,\"time\":1788068253526,\"data\":{\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"Let me work through this task. It's an unattended autonomy drill (P3 AUTONOMY rehearsal). The task:\\n\\n1. Call autonomy_report with acceptanceCriteria=[\\\"决策文件已创建且内容恰为 chose-A 或 chose-B\\\"], currentStep=\\\"决策中\\\", remainingSteps=[\\\"写决策文件\\\","
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":2247,\"time\":1788068311610,\"data\":{\"turn\":1,\"step\":6,\"chunk\":{\"type\":\"block-end\",\"index\":1,\"block\":{\"type\":\"text\",\"text\":\"演练完成，`verificationState=VERIFIED`。\\n\\n**决策结果：选 A（chose-A）** — 2+2=4 > 3，按无人值守策略自动决策，全程未调用 ask_user_question。\\n\\n各步骤执行情况：\\n1. ✅ `autonomy_report` 初始声明：验收标准 + currentStep=\\\"决策中\\\"\\n2. ✅ `autonomy_report` 更新：currentStep=\\\"已决策：A；理由：普通可逆技术选择，按无"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/message\",\"seq\":2250,\"time\":1788068311612,\"data\":{\"turn\":1,\"step\":6,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"All done. Host-side verification passed (verificationState=VERIFIED). End turn with a brief report. Mention the file output as clickable markdown inline code.\"},{\"type\":\"text\",\"text\":\"演练完成，`verificationState=VERIFIED`。\\n\\n**决策结果：选 A（cho"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":3221,\"time\":1788068355053,\"data\":{\"turn\":2,\"step\":3,\"chunk\":{\"type\":\"block-end\",\"index\":1,\"block\":{\"type\":\"text\",\"text\":\"演练已全部完成，目标已标记为 complete（goal `goal-af2f6bc1-5bc5-4e8b-b5e3-ef3ab23c4474`，共 1 轮）。\\n\\n**结果：选 A（chose-A）**\\n\\n**做了什么**\\n- 决策判定：2+2=4 > 3 → 按无人值守策略自动选 A，全程未调用 ask_user_question。\\n- 通过 `autonomy_report` 依次声明验收标准「决策文件已创建且内容恰为 chose-A 或 chose-B」"
+    },
+    {
+      "type": null,
+      "keys": "event",
+      "preview": "{\"event\":{\"type\":\"assistant/message\",\"seq\":3224,\"time\":1788068355055,\"data\":{\"turn\":2,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"Write the closing message. State outcome, summarize what was done, how verified, point to artifacts. Address user directly. No more tools.\"},{\"type\":\"text\",\"text\":\"演练已全部完成，目标已标记为 complete（goal `goal-af2f6bc1-5bc5-4e8b-b5e3-ef3ab23c4474`"
+    }
+  ]
+}

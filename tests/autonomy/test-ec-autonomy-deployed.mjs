@@ -8,16 +8,26 @@
 //   I2  旧 v2 数据迁移：无 autonomy 字段的既有 intent → 迁移后旧字段原样保留
 //   I3  applyAutonomyPatch：白名单写入 + persist 落盘（重开 store 可读回）
 //   I4  acceptanceCriteria write-once 经工具路径二次设置 → 抛错（immutable）
-//   I5  工具执行路径：autonomy_report → autonomy_verify（criterion PASS）→
+//   I5  工具执行路径：autonomy_report → autonomy_verify（criterion PASS，git 证据）→
 //       verificationState 派生（PARTIAL→VERIFIED→FAILED）+ milestone/checkpoint
+//       （host-verifiable 类 file_hash/system_api 的确定性复核行为见 I10-I13）
 //   I6  autonomy_state 读回快照
 //   I7  composeResumeMessage：无 autonomy → 基线文案不变；有 → 注入验证进度行
 //   I8  持久化往返：verify 产物经新 IntentStore 实例读回（重启模拟）
 //   I9  无 exec.agent.session.id → 工具抛错（fail-soft，不入恢复链路）
+//   I10 host 确定性复核（P3 R1 Correction）：伪造 file_hash PASS → 降级 UNVERIFIED，
+//       不建里程碑、不写 checkpoint、verificationState≠VERIFIED（fail-closed）
+//   I11 真实文件 file_hash 规范（file:<path>|sha256:<hex>）→ PASS + HOST-VERIFIED
+//   I12 prose file_hash PASS → format_invalid 降级（fail-closed）
+//   I13 system_api 真实回环服务：200+contains → PASS；status 不符 → 降级；不可达 → 降级
+//   I14 FAIL 方向不做宿主复核（照单记录 FAIL —— 只会阻断 VERIFIED，无升级风险）
+//   I15 ai_judgment prose PASS 不受门禁影响（非 host-verifiable 类不设闸）
 
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import http from "node:http";
+import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const DEPLOYED = "C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs";
@@ -117,12 +127,12 @@ section("I4+I5: tool surface — report/verify/state via captured register()");
     let threw = false;
     try { await report.execute({ acceptanceCriteria: ["second set"] }, fakeExec(sid)); } catch { threw = true; }
     assert(threw === true, "second criteria set throws (write-once via tool)");
-    // verify: criterion 0 PASS + milestone
-    const v1 = await verify.execute({ status: "PASS", evidenceClass: "system_api", evidence: "suites 6/6", criterionIndex: 0, milestoneStep: "core merged" }, fakeExec(sid));
+    // verify: criterion 0 PASS + milestone（git 类：prose 允许，无宿主门禁）
+    const v1 = await verify.execute({ status: "PASS", evidenceClass: "git", evidence: "suites 6/6", criterionIndex: 0, milestoneStep: "core merged" }, fakeExec(sid));
     assert(v1.ok === true && v1.verificationState === "PARTIAL", "1/2 criteria PASS -> PARTIAL", `got ${v1.verificationState}`);
     assert(v1.autonomy.verifiedMilestones.length === 1 && v1.autonomy.lastVerifiedCheckpoint === "core merged", "milestone + checkpoint set");
-    // verify: criterion 1 PASS -> VERIFIED
-    const v2 = await verify.execute({ status: "PASS", evidenceClass: "file_hash", evidence: "hash match", criterionIndex: 1 }, fakeExec(sid));
+    // verify: criterion 1 PASS -> VERIFIED（git 类 prose）
+    const v2 = await verify.execute({ status: "PASS", evidenceClass: "git", evidence: "all green", criterionIndex: 1 }, fakeExec(sid));
     assert(v2.verificationState === "VERIFIED", "all criteria PASS -> VERIFIED", `got ${v2.verificationState}`);
     // verify: criterion 1 改判 FAIL -> FAILED（upsert 后写覆盖）
     const v3 = await verify.execute({ status: "FAIL", evidenceClass: "git", evidence: "dirty tree", criterionIndex: 1 }, fakeExec(sid));
@@ -175,6 +185,132 @@ section("I8: persistence round-trip across store instances (restart simulation)"
   assert(back.verificationState === "VERIFIED", "verificationState survived");
   assert(back.verifiedMilestones.length === 1 && back.verifiedMilestones[0].step === "phase A done", "milestone survived");
   assert(back.lastVerifiedCheckpoint === "ckpt-A", "checkpoint survived");
+}
+
+// ── P3 R1 Correction（外审 Round 1 blocker）：宿主侧确定性复核门禁 ──
+const sha256Hex = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
+function httpServer(handler) {
+  return new Promise((resolve) => {
+    const srv = http.createServer(handler);
+    srv.listen(0, "127.0.0.1", () => resolve(srv));
+  });
+}
+
+section("I10: fabricated file_hash PASS fails closed (downgrade to UNVERIFIED, no milestone/checkpoint)");
+{
+  const ctx = makeMockCtx(true);
+  const plugin = MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i10";
+  await report.execute({ acceptanceCriteria: ["proof exists"] }, fakeExec(sid));
+  const v = await verify.execute({
+    status: "PASS", evidenceClass: "file_hash",
+    evidence: `file:${path.join(stateDir, "nope-does-not-exist.txt")}|sha256:${"f".repeat(64)}|model claims it wrote this`,
+    criterionIndex: 0, milestoneStep: "fake milestone", checkpoint: "fake ckpt",
+  }, fakeExec(sid));
+  const rec = v.autonomy.criteriaEvidence[0];
+  assert(v.ok === true, "tool call itself succeeds (recorded, not thrown)");
+  assert(rec.status === "UNVERIFIED", "claimed PASS downgraded to UNVERIFIED", JSON.stringify(rec));
+  assert(String(rec.evidence).startsWith("HOST-VERIFY FAILED (file_missing"), "host verify failure reason recorded", rec.evidence);
+  assert(v.autonomy.verifiedMilestones.length === 0, "no milestone appended by fake claim");
+  assert(v.autonomy.lastVerifiedCheckpoint === null, "no checkpoint written by fake claim");
+  assert(v.verificationState === "UNVERIFIED" && v.verificationState !== "VERIFIED", "verificationState != VERIFIED");
+}
+
+section("I11: real file + real sha256 spec -> PASS with HOST-VERIFIED record");
+{
+  const ctx = makeMockCtx(true);
+  MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i11";
+  await report.execute({ acceptanceCriteria: ["proof exists"] }, fakeExec(sid));
+  const proofPath = path.join(stateDir, "proof-i11.txt");
+  fs.writeFileSync(proofPath, "real-evidence-v1", "utf8");
+  const realHash = sha256Hex(fs.readFileSync(proofPath));
+  const v = await verify.execute({
+    status: "PASS", evidenceClass: "file_hash",
+    evidence: `file:${proofPath}|sha256:${realHash}`,
+    criterionIndex: 0, milestoneStep: "real proof verified", checkpoint: "ckpt-i11",
+  }, fakeExec(sid));
+  const rec = v.autonomy.criteriaEvidence[0];
+  assert(rec.status === "PASS" && v.verificationState === "VERIFIED", "real evidence -> PASS -> VERIFIED", JSON.stringify(rec));
+  assert(String(rec.evidence).startsWith("HOST-VERIFIED (sha256="), "HOST-VERIFIED prefix recorded (host-side verification ran)", rec.evidence.slice(0, 80));
+  assert(v.autonomy.verifiedMilestones.length === 1, "milestone appended with real evidence");
+  assert(v.autonomy.lastVerifiedCheckpoint === "ckpt-i11", "checkpoint written on PASS");
+}
+
+section("I12: prose file_hash PASS -> format_invalid fail-closed");
+{
+  const ctx = makeMockCtx(true);
+  MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i12";
+  await report.execute({ acceptanceCriteria: ["x"] }, fakeExec(sid));
+  const v = await verify.execute({ status: "PASS", evidenceClass: "file_hash", evidence: "I definitely wrote the file, hash looks right", criterionIndex: 0, milestoneStep: "prose milestone" }, fakeExec(sid));
+  const rec = v.autonomy.criteriaEvidence[0];
+  assert(rec.status === "UNVERIFIED" && String(rec.evidence).includes("format_invalid"), "prose -> UNVERIFIED + format_invalid", rec.evidence);
+  assert(v.autonomy.verifiedMilestones.length === 0 && v.autonomy.lastVerifiedCheckpoint === null, "no milestone/checkpoint from prose");
+}
+
+section("I13: system_api real loopback — PASS on match, downgrade on mismatch/unreachable");
+{
+  const ctx = makeMockCtx(true);
+  MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i13";
+  await report.execute({ acceptanceCriteria: ["api ok"] }, fakeExec(sid));
+  const srv = await httpServer((req, res) => { res.writeHead(200, { "content-type": "text/plain" }); res.end("verificationState=VERIFIED"); });
+  const port = srv.address().port;
+  const vOk = await verify.execute({
+    status: "PASS", evidenceClass: "system_api",
+    evidence: `api:port=${port}|path=/ok|expectStatus=200|expectContains=verificationState`,
+    criterionIndex: 0, milestoneStep: "api checked", checkpoint: "ckpt-i13",
+  }, fakeExec(sid));
+  assert(vOk.autonomy.criteriaEvidence[0].status === "PASS" && vOk.verificationState === "VERIFIED", "matching 200+contains -> PASS -> VERIFIED", JSON.stringify(vOk.autonomy.criteriaEvidence[0]));
+  assert(String(vOk.autonomy.criteriaEvidence[0].evidence).startsWith("HOST-VERIFIED"), "HOST-VERIFIED recorded for system_api");
+  const vBad = await verify.execute({
+    status: "PASS", evidenceClass: "system_api",
+    evidence: `api:port=${port}|path=/ok|expectStatus=201`,
+    criterionIndex: 0,
+  }, fakeExec(sid));
+  assert(vBad.autonomy.criteriaEvidence[0].status === "UNVERIFIED" && String(vBad.autonomy.criteriaEvidence[0].evidence).includes("status_mismatch"), "wrong expected status -> downgraded", vBad.autonomy.criteriaEvidence[0].evidence);
+  assert(vBad.verificationState === "UNVERIFIED", "state back to UNVERIFIED after mismatch upsert");
+  await new Promise((r) => srv.close(r));
+  const vDead = await verify.execute({
+    status: "PASS", evidenceClass: "system_api",
+    evidence: `api:port=${port}|path=/ok|expectStatus=200`,
+    criterionIndex: 0,
+  }, fakeExec(sid));
+  assert(vDead.autonomy.criteriaEvidence[0].status === "UNVERIFIED" && String(vDead.autonomy.criteriaEvidence[0].evidence).includes("request_failed"), "unreachable -> downgraded (request_failed)", vDead.autonomy.criteriaEvidence[0].evidence);
+}
+
+section("I14: FAIL direction not host-gated (recorded as-is)");
+{
+  const ctx = makeMockCtx(true);
+  MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i14";
+  await report.execute({ acceptanceCriteria: ["x"] }, fakeExec(sid));
+  const v = await verify.execute({ status: "FAIL", evidenceClass: "file_hash", evidence: "hash mismatch found during build", criterionIndex: 0 }, fakeExec(sid));
+  assert(v.autonomy.criteriaEvidence[0].status === "FAIL", "FAIL recorded unchanged (no host gate on fail direction)");
+  assert(v.verificationState === "FAILED", "FAIL -> FAILED");
+}
+
+section("I15: ai_judgment prose PASS unaffected (no gate for non-host classes)");
+{
+  const ctx = makeMockCtx(true);
+  MOD.apply(ctx, { stateDir, enableAutoResume: false });
+  const report = ctx._registered.find((t) => t.name === "autonomy_report");
+  const verify = ctx._registered.find((t) => t.name === "autonomy_verify");
+  const sid = "sess-i15";
+  await report.execute({ acceptanceCriteria: ["visual check"] }, fakeExec(sid));
+  const v = await verify.execute({ status: "PASS", evidenceClass: "ai_judgment", evidence: "screenshot reviewed, layout correct", criterionIndex: 0, milestoneStep: "ui verified" }, fakeExec(sid));
+  assert(v.verificationState === "VERIFIED" && v.autonomy.verifiedMilestones.length === 1, "ai_judgment PASS works without host verification");
 }
 
 console.log(`\n${"=".repeat(60)}`);

@@ -1,0 +1,192 @@
+{
+    "goals":  [
+                  {
+                      "supervisorGoalId":  "sg-c2047ccc-8c76-53b7-97d5-353c069ac3ba",
+                      "harnessGoalId":  "goal-4eb6c780-9c92-4870-9cf5-64db4a50e9b7",
+                      "harnessSessionId":  "session-aedf88ce-cce2-50f3-a288-c80588892be7",
+                      "runId":  "run-g2-1eec77e4-fac8-57d5-8936-3992b3d2bb25",
+                      "generation":  2,
+                      "revision":  7,
+                      "currentControlState":  "CANCELLED",
+                      "latestEvidenceId":  null,
+                      "latestReviewVerdict":  null,
+                      "nextExpectedAction":  null,
+                      "correctionsUsed":  1,
+                      "correctionsLeft":  2,
+                      "acceptance":  {
+                                         "criteria":  [
+
+                                                      ],
+                                         "total":  0,
+                                         "pass":  0,
+                                         "fail":  0,
+                                         "unknown":  0
+                                     },
+                      "objective":  "HOTFIX R1 live activation probe (LP89411): confirm readiness then stop",
+                      "createdAt":  1788099744983,
+                      "updatedAt":  1788099755124,
+                      "pendingMutation":  null
+                  },
+                  {
+                      "supervisorGoalId":  "sg-15fc877d-d622-5c1a-aebe-a9316e1fd99e",
+                      "harnessGoalId":  "goal-834e0c06-eb93-4e81-9b60-571a194da4fb",
+                      "harnessSessionId":  "session-65e09880-7ab4-52f1-8c85-9eeceb242735",
+                      "runId":  "run-g3-be181f97-8be7-580e-94d3-77199c6aa001",
+                      "generation":  3,
+                      "revision":  8,
+                      "currentControlState":  "RUNNING",
+                      "latestEvidenceId":  "ev-sg-15fc877d-d622-5c1a-aebe-a9316e1fd99e-g3-r8",
+                      "latestReviewVerdict":  null,
+                      "nextExpectedAction":  "observe",
+                      "correctionsUsed":  2,
+                      "correctionsLeft":  1,
+                      "acceptance":  {
+                                         "criteria":  [
+                                                          {
+                                                              "criterion":  "能稳定复现并用调用链证据定位 supervisor_send_correction → Harness session.prompt 丢失/错误 sessionId 的真实根因。",
+                                                              "result":  "unknown"
+                                                          },
+                                                          {
+                                                              "criterion":  "最小修复后，session_id 与 supervisor_goal_id 两种寻址都能把 correction 注入 canonical 原 Session，steer/queue 语义正确且不创建第二 Goal/Session。",
+                                                              "result":  "unknown"
+                                                          },
+                                                          {
+                                                              "criterion":  "失败注入不错误消耗 correction/generation，不遗留 pending mutation 或 reconcile 卡死；相同 command_id 重放零额外副作用，ledger 保持 OK。",
+                                                              "result":  "unknown"
+                                                          },
+                                                          {
+                                                              "criterion":  "完成真实 disposable probe E2E：review FAIL → same Goal correction → 唯一 marker 在同一原 Session 被执行/回显，并覆盖 invalid generation/target 与失败回滚负向测试。",
+                                                              "result":  "unknown"
+                                                          },
+                                                          {
+                                                              "criterion":  "Hotfix 通过相关回归与真实 CI/等价 gate，经正常 PR merge 和受控 Supervisor bridge 激活；运行中 bridge/core SHA 与 canonical artifact 一致。",
+                                                              "result":  "unknown"
+                                                          },
+                                                          {
+                                                              "criterion":  "P3 Goal/Session 全程只读冻结，acceptance/correction count/generation/evidence 未被 Hotfix 改动，Phase 04 仍未启动；Hotfix 完成后仅停在 External Review。",
+                                                              "result":  "unknown"
+                                                          }
+                                                      ],
+                                         "total":  6,
+                                         "pass":  0,
+                                         "fail":  0,
+                                         "unknown":  6
+                                     },
+                      "objective":  "SUPERVISOR CORRECTION INJECTION HOTFIX R1。只修复 ChatGPT/Harness Supervisor 对已有 supervised Goal 发送 correction 时，supervisor_send_correction 已解析出正确目标 Session，但下游调用 Harness session.prompt 时出现参数校验失败/丢失 sessi",
+                      "createdAt":  1788093772626,
+                      "updatedAt":  1788095904331,
+                      "pendingMutation":  null
+                  },
+                  {
+                      "supervisorGoalId":  "sg-b734914c-c8d9-5909-879c-28fd96073be0",
+                      "harnessGoalId":  "goal-11bf9bef-7543-4f2c-962c-59fd6859fbe4",
+                      "harnessSessionId":  "session-7177d0c5-c594-5473-84f8-23d2ddb9e13d",
+                      "runId":  "run-g2-9b65479f-e7b1-5285-ae99-cd6df6e85225",
+                      "generation":  2,
+                      "revision":  13,
+                      "currentControlState":  "AWAITING_REVIEW",
+                      "latestEvidenceId":  "ev-sg-b734914c-c8d9-5909-879c-28fd96073be0-g2-r12",
+                      "latestReviewVerdict":  "FAIL",
+                      "nextExpectedAction":  "reconcile",
+                      "correctionsUsed":  1,
+                      "correctionsLeft":  2,
+                      "acceptance":  {
+                                         "criteria":  [
+                                                          {
+                                                              "criterion":  "Task identity 仍以 Official Session/Goal 为唯一任务事实源。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "新增 metadata 最小且无重复状态源/第二 Authority。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "acceptance criteria 可持久化并在重启/恢复后正确恢复。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "verified milestone / last verified checkpoint 可持久化并恢复。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "false completion 能被 deterministic verifier 阻止，Executor Claim 不等于完成事实。",
+                                                              "result":  "fail"
+                                                          },
+                                                          {
+                                                              "criterion":  "CURRENT/BLOCKED 新问题修复后能返回原 Task Checklist/原目标链继续执行。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "普通可逆技术选择不再频繁触发 question/requested，能自动执行→验证→记录。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "真正需要用户信息/高风险决策的情况仍进入 WAITING_USER，且重启不绕过 P1-A。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "至少完成多任务、重启/断线、恢复/完成验证中的真实 Runtime E2E 验证，并提供至少 3 条真实 E2E 证据。",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "不新增常驻 Task Supervisor 服务、不创建第二 Task Engine/Task DB；完成后仅 AWAITING_REVIEW，禁止进入 Phase 04。",
+                                                              "result":  "pass"
+                                                          }
+                                                      ],
+                                         "total":  10,
+                                         "pass":  9,
+                                         "fail":  1,
+                                         "unknown":  0
+                                     },
+                      "objective":  "执行 Phase 03：AUTONOMY / Task Autonomy — R1。前置 Gate 已由 ChatGPT Supervisor 核验：Phase 02.5 CONTEXT MEMORY = external VERIFIED；Phase 02.6 RETRY SEMANTICS = external VERIFIED；Phase 02.75 SUPERVISOR = externa",
+                      "createdAt":  1788030484089,
+                      "updatedAt":  1788093376153,
+                      "pendingMutation":  null
+                  },
+                  {
+                      "supervisorGoalId":  "sg-924626d6-4aa9-5131-ba5e-4d25c66c2b86",
+                      "harnessGoalId":  "goal-740ff7d4-94bd-45dc-b6d1-14562c230493",
+                      "harnessSessionId":  "session-671a9e62-f5bb-536a-b37d-240c1f16038f",
+                      "runId":  "run-g1-2ed2dd42-accd-5fe2-a255-e161191f0ef3",
+                      "generation":  1,
+                      "revision":  6,
+                      "currentControlState":  "VERIFIED",
+                      "latestEvidenceId":  "ev-sg-924626d6-4aa9-5131-ba5e-4d25c66c2b86-g1-r5",
+                      "latestReviewVerdict":  "PASS",
+                      "nextExpectedAction":  null,
+                      "correctionsUsed":  0,
+                      "correctionsLeft":  3,
+                      "acceptance":  {
+                                         "criteria":  [
+                                                          {
+                                                              "criterion":  "A supervised Harness session is created and reachable from ChatGPT through the bound MCP app.",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "The Harness produces the exact response READY without modifying files, configuration, repositories, services, processes, credentials, or external state.",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "Replaying the identical dispatch with the same idempotency key produces zero additional side effects.",
+                                                              "result":  "pass"
+                                                          },
+                                                          {
+                                                              "criterion":  "Reusing the same idempotency key with a semantically different payload is rejected with idempotency_conflict and produces zero new goal/session side effects.",
+                                                              "result":  "pass"
+                                                          }
+                                                      ],
+                                         "total":  4,
+                                         "pass":  4,
+                                         "fail":  0,
+                                         "unknown":  0
+                                     },
+                      "objective":  "ChatGPT Client Binding E2E probe: report READY and stop. Do not modify files, configuration, repositories, services, processes, credentials, or external state.",
+                      "createdAt":  1788030150507,
+                      "updatedAt":  1788030206273,
+                      "pendingMutation":  null
+                  }
+              ],
+    "purpose":  "HOTFIX R1 AC6 P3-freeze post-restart evidence",
+    "source":  "live 3080 /supervisor/get_snapshot (read-only)",
+    "capturedAt":  "2026-08-30T14:26:56.8821987+00:00"
+}

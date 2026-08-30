@@ -1,0 +1,24 @@
+{
+  "expect": "pre",
+  "mode": "ci",
+  "run": "repro3",
+  "pass": 15,
+  "fail": 0,
+  "results": [
+    "PASS T0 token exists (64 hex)",
+    "PASS T0 health ok",
+    "PASS T1 dispatch A → 200 dispatched",
+    "PASS T1 A ids",
+    "PASS T1 dispatch B → 200 dispatched",
+    "PASS T1 B ids",
+    "PASS LEG A session_id+steer → 200 accepted",
+    "PASS LEG A same supervisorGoalId",
+    "PASS LEG B sg-only → 宿主拒绝（复现根因）",
+    "PASS LEG B pre: corrections 未消耗（generation 仍 1）",
+    "PASS LEG B ledger: pendingMutation 幽灵检查",
+    "PASS LEG C sg+wrong session → 409 supervisor_goal_mismatch",
+    "PASS LEG D replay → duplicate:true no gen bump",
+    "PASS cleanup cancel 85bfe0",
+    "PASS cleanup cancel 94d3f8"
+  ]
+}

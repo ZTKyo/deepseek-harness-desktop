@@ -1,0 +1,27 @@
+{
+  "expect": "post",
+  "mode": "full",
+  "run": "full1",
+  "pass": 18,
+  "fail": 0,
+  "results": [
+    "PASS T0 token exists (64 hex)",
+    "PASS T0 health ok",
+    "PASS T1 dispatch A → 200 dispatched",
+    "PASS T1 A ids",
+    "PASS T1 dispatch B → 200 dispatched",
+    "PASS T1 B ids",
+    "PASS LEG A session_id+steer → 200 accepted",
+    "PASS LEG A same supervisorGoalId",
+    "PASS LEG B sg-only → 200 accepted（修复后）",
+    "PASS LEG B post: 解析回 canonical sessionId",
+    "PASS LEG B post: 无第二 Goal（harnessGoalId 不变）",
+    "PASS LEG B ledger: pendingMutation 幽灵检查",
+    "PASS LEG C sg+wrong session → 409 supervisor_goal_mismatch",
+    "PASS LEG D replay → duplicate:true no gen bump",
+    "PASS FULL LEG A marker in sidA history",
+    "PASS FULL LEG B marker in sidB history（sg-only 同 Session 注入）",
+    "PASS cleanup cancel 25857c",
+    "PASS cleanup cancel 9d0b3e"
+  ]
+}

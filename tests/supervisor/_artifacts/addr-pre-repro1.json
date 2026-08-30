@@ -1,0 +1,8 @@
+{
+  "expect": "pre",
+  "mode": "ci",
+  "run": "repro1",
+  "pass": 0,
+  "fail": 0,
+  "results": []
+}

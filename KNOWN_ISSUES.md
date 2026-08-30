@@ -130,3 +130,20 @@ verify-r2-restart-recovery 应回到 36/36。
 **附带改进建议（未实施）**：`plugins/autonomy-state-core.mjs` 是 EC 的相对 import 依赖，
 但不在 cordis.patch.yml 的 16 个挂载清单里——install-plugin 不会自动同步它，当前靠手动
 copy 到 profile。建议后续把它加进挂载清单（属配置变更，需重启生效，故本任务未动）。
+
+## 2026-08-30 P3 R1C 收口时发现：session.list goal 投影落后真实会话状态（observability debt，non-blocking）
+
+**现象**：execution 会话（7177d0c5）真实停止于 14:09（IntentStore lastProgressAt=14:08:55
+本地，state=COMPLETED、autonomy.verificationState=VERIFIED），但 `session.list` 的
+`projections.values.goal` 仍显示 `updatedAt=13:01:26`（goal 标记 complete rev=3 的时刻）——
+比真实会话最后活动早约 67 分钟。
+
+**影响**：仅可观测性/门面展示（消费该投影的界面会看到偏旧的时间戳与 phase）。
+不影响 EC 恢复与 autonomy 元数据真源（IntentStore 是唯一真源，恢复逻辑不读该投影）。
+
+**为何本任务不修**：属 `@deepseek-ai/dsh` host 侧 session.list 投影刷新语义，与本轮 P3
+修复无关；修复涉及运行中服务进程行为，须专项处理。
+
+**修复路径（供后续专项）**：排查 session.list 投影 updatedAt 的刷新时机（goal phase 变更
+后是否不再刷新），确认语义后二选一：修复刷新链路，或文档化"updatedAt=goal 状态变更时刻"
+以免误读为会话活动时间。

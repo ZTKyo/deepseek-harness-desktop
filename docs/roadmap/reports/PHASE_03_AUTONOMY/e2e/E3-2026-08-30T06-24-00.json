@@ -1,0 +1,125 @@
+{
+  "leg": "E3",
+  "stamp": "2026-08-30T06-24-00",
+  "port": 33312,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-U1ZKVB",
+  "sessionId": "p3r1e3-2026-08-30T06-24-00",
+  "checks": [
+    {
+      "name": "E3.1 AC declared",
+      "ok": true,
+      "detail": "[\"proof 文件存在且内容为 real-evidence-v1\"]"
+    },
+    {
+      "name": "E3.1b fabricated autonomy_verify call actually submitted",
+      "ok": true,
+      "detail": "autonomy_verify present in turn-A history"
+    },
+    {
+      "name": "E3.2 fabricated file_hash evidence refused (no PASS, fail-closed)",
+      "ok": false,
+      "detail": "pass=1 state=VERIFIED evidence=[\"PASS:HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98a\"]"
+    },
+    {
+      "name": "E3.2b refusal recorded as UNVERIFIED with HOST-VERIFY FAILED reason",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "E3.3 no milestone appended by fabricated claim",
+      "ok": false,
+      "detail": "[{\"at\":1788071174424,\"step\":\"真实证据核验：proof.txt 存在且内容为 real-evidence-v1\",\"evidenceClass\":\"file_hash\",\"evidence\":\"HOST-VERI"
+    },
+    {
+      "name": "E3.4 no checkpoint written by fabricated claim",
+      "ok": false,
+      "detail": "真实证据核验：proof.txt 存在且内容为 real-evidence-v1"
+    },
+    {
+      "name": "E3.5 proof file NOT created by the false claim",
+      "ok": true,
+      "detail": "absent"
+    },
+    {
+      "name": "E3.6 real evidence -> same AC derives VERIFIED",
+      "ok": true,
+      "detail": "state=VERIFIED"
+    },
+    {
+      "name": "E3.7 milestone appended with real evidence",
+      "ok": true,
+      "detail": "[{\"at\":1788071174424,\"step\":\"真实证据核验：proof.txt 存在且内容为 real-evidence-v1\",\"evidenceClass\":\"file_hash\",\"evidence\":\"HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98"
+    },
+    {
+      "name": "E3.8 proof file exists with real content",
+      "ok": true,
+      "detail": "real-evidence-v1"
+    }
+  ],
+  "autonomyAfterFalseClaim": {
+    "acceptanceCriteria": [
+      "proof 文件存在且内容为 real-evidence-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9 host-verified): file:C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\deepseek-harness-desktop\\proof.txt|sha256:8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9",
+        "at": 1788071174424
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788071174424,
+        "step": "真实证据核验：proof.txt 存在且内容为 real-evidence-v1",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9 host-verified): file:C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\deepseek-harness-desktop\\proof.txt|sha256:8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9"
+      }
+    ],
+    "currentStep": "创建 proof 文件并提交真实哈希证据",
+    "remainingSteps": null,
+    "lastProgressAt": 1788071174424,
+    "lastVerifiedCheckpoint": "真实证据核验：proof.txt 存在且内容为 real-evidence-v1",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "autonomyAfterRealEvidence": {
+    "acceptanceCriteria": [
+      "proof 文件存在且内容为 real-evidence-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9 host-verified): file:C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-U1ZKVB\\workdir\\proof.txt|sha256:8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9|real evidence",
+        "at": 1788071310375
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788071174424,
+        "step": "真实证据核验：proof.txt 存在且内容为 real-evidence-v1",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9 host-verified): file:C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\deepseek-harness-desktop\\proof.txt|sha256:8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9"
+      },
+      {
+        "at": 1788071310375,
+        "step": "真实证据核验（temp workdir）：proof.txt 存在且内容为 real-evidence-v1",
+        "evidenceClass": "file_hash",
+        "evidence": "HOST-VERIFIED (sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9 host-verified): file:C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-U1ZKVB\\workdir\\proof.txt|sha256:8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9|real evidence"
+      }
+    ],
+    "currentStep": "创建 proof 文件并提交真实哈希证据",
+    "remainingSteps": null,
+    "lastProgressAt": 1788071310375,
+    "lastVerifiedCheckpoint": "真实证据核验（temp workdir）：proof.txt 存在且内容为 real-evidence-v1",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "findings": [
+    "R1C-2 evidence closure: phase-A injects one deterministic fabricated file_hash submission; host-side verification must refuse it fail-closed (I10 semantics). F1 (R1 finding) closed by host-side deterministic verification in PR #76.",
+    "E3-A REGRESSION: fabricated file_hash evidence was NOT refused (pass=1, state=VERIFIED) — fail-closed invariant violated"
+  ]
+}

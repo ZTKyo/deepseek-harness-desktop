@@ -61,3 +61,29 @@ instruction 仅要求回复 READY）→ `send_correction` **仅带 supervisorGoa
 
 sg-only 与 session_id 双寻址现均规范注入 canonical 原 Session；steer/queue 语义正确；
 失败零副作用、重放幂等、账本 fail-closed 全部保持。P3 Goal/Session 全程只读冻结未受影响。
+
+## 7. 收口（2026-08-31）— EXTERNAL REVIEW APPROVED → VERIFIED
+
+- **External Review = APPROVED / PASS**（外部审核员裁决）；Status = **VERIFIED**；Waiting For = **NONE**。
+- Supervisor review 受控记录：`/supervisor/review_goal`，commandId
+  `sg-15fc877d-d622-5c1a-aebe-a9316e1fd99e:g4:REVIEW:1`（generation 4，verdict PASS，
+  evidenceId `ev-sg-15fc877d-d622-5c1a-aebe-a9316e1fd99e-g4-r11`）→ 响应实测
+  `ok=true duplicate=false controlState=VERIFIED nextExpectedAction=null correctionsLeft=0`。
+- 收口时活体：ledger `state=OK trusted=true receipts=4 error=null`；P3（sg-b734914c…）复核未动
+  （AWAITING_REVIEW / gen 2 / corr 1 / latestReviewVerdict=FAIL / nextExpectedAction=reconcile /
+  pendingMutation=null，updatedAt 停在 12:36Z）；Phase 04 未启动。
+  **Next = Phase 02.8 WATCHDOG / MOBILE MONITOR（仅记录，未启动）**。
+
+### NON-BLOCKING OBSERVATIONS（仅记录，不重开 Hotfix）
+
+- **O1 版本标签陈旧**：本报告头部与 §5 的"core `0.2.1` 不变"为陈旧标签；真实代码/部署事实以
+  三方 SHA256 逐字节一致（bridge `057bbc0f…`、core `59e3b5df…`）及运行中 health v0.2.2 为准。
+  历史原文保留不改写。
+- **O2 交接期一次无归因 correction**：Hotfix 自身 receipt（sg-15fc877d…）在交接阶段出现第 3 次
+  correction（gen 3→4，corrections 2→3，15:58Z），现有证据无法归因操作方。当前无 pending mutation、
+  无 P3 污染，故不作为 blocker；保留记录，后续若再次出现无来源 mutation，作为 Supervisor audit
+  issue 单独处理。
+- **O3 acceptance 矩阵 6/12（6 pass + 6 unknown）**：review:1 提交 criteriaResults 时 PowerShell 5.1
+  JSON body 将 CJK 字符编码侵蚀为 `?`（与 dispatch criteria 精确串不匹配 → 追加为独立行；原始
+  dispatch 的 6 行保持 unknown）。controlState=VERIFIED 与 verdict=PASS 为权威事实；VERIFIED 为
+  终态（review 仅允许 AWAITING_REVIEW 状态，bridge.mjs 守卫），矩阵文本行按设计不可修复，如实留档。

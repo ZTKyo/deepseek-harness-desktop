@@ -502,6 +502,18 @@ export function apply(ctx) {
 			adoptedNow = true;
 		}
 		const key = receipt.key;
+		// HOTFIX R1（correction 注入目标规范化，2026-08-31）：supervisor_goal_id-only 寻址时
+		// validateCommand 返回的 sessionId 是 null（那是"请求携带值"的事实，不是"目标解析"的
+		// 事实），下游 session.prompt RPC 必须使用 receipt 的 canonical sessionId
+		//（uuidV5(key) 确定性会话），否则宿主 sessions.schema.js 的 sessionId=z.string().min(1)
+		// 会 definite 拒绝（P3 真实指纹：pending:CORRECTION 后零事件、corrections 不变、回滚）。
+		// 双目标（sg+session）不一致已在 findReceiptByTarget fail-closed（409
+		// supervisor_goal_mismatch）；此检查只兜底 receipt 自身目标缺失的异常态，先于任何
+		// 消耗/记账触发，fail-closed 零副作用。
+		const targetSessionId = receipt.sessionId;
+		if (!core.isValidSessionId(targetSessionId)) {
+			throw httpError(400, 'invalid_correction_target', { supervisorGoalId: receipt.supervisorGoalId ?? null });
+		}
 		const dup = core.lookupExecuted(receipt, commandId);
 		if (dup) {
 			// §5：同 commandId 重放 → 返回已应用凭据，真实副作用不再发生
@@ -539,7 +551,7 @@ export function apply(ctx) {
 			persistLedger();
 		}
 		try {
-			await rpc('session.prompt', { sessionId, mode, content: [{ type: 'text', text }] });
+			await rpc('session.prompt', { sessionId: targetSessionId, mode, content: [{ type: 'text', text }] });
 		} catch (e) {
 			if (e.ambiguous) {
 				receipts.set(key, core.markAmbiguous(receipts.get(key), commandId, Date.now(), e.message));

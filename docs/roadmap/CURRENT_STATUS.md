@@ -13,7 +13,7 @@
 | 02.5 | CONTEXT MEMORY / Session Continuity | `VERIFIED`（**External Review Round 10 = APPROVED**，2026-08-28；P2.5 封板，不再 Round 11。历史：be76a55 曾误标 VERIFIED，已按 Reviewer Round 2 纠正） | —（APPROVED；R3–R5.1-F 证据链闭环，见时间线） | docs/roadmap/reports/PHASE_02_5_CONTEXT_MEMORY/REPORT_R5.md ＋ R5_1_D_FINAL_TRUTH_CLOSURE.md ＋ R5_1_F_FINAL_VERACITY_CLOSURE.md |
 | 02.6 | RETRY SEMANTICS / Provider Failure Classification | `VERIFIED`（**External Review Round 3 = APPROVED**，2026-08-29；Round 4 = NONE；canonical main=a332ebc、classifier=2ea1059f、全量回归 136/0。historical：批准前曾为 IMPLEMENTATION_COMPLETE（R1+R1.1+R2+R3+R3-A1+R1.2）/ AWAITING_EXTERNAL_REVIEW ROUND 3；R1 PR #59 merged；R1.1/R2/R3/R3-A1/R1.2 合入 PR #60 merged=f0a6c47 2026-08-28、PR #61 merged=a332ebc 2026-08-28；事务化部署+受控重启加载完成 2026-08-29） | —（APPROVED；Waiting For = NONE） | docs/roadmap/reports/PHASE_02_6_RETRY_SEMANTICS/P26_R1_FAILURE_TAXONOMY_REPORT.md ＋ P26_R1_1_MANAGED_DIRECT_QUOTA_REPORT.md ＋ P26_R1_2_FINAL_CLOSURE_REPORT.md |
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `VERIFIED`（**外部评审 Round 3 = APPROVED（2026-08-29 Reviewer 裁决）→ VERIFIED AUTHORIZED；Round 4 = NONE；production code 封板**。历史（保留不改写）：R1 实施收口＝零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26，PR #63 merged=f2d94f9。R1.1＝Round 1 verdict（CHANGES_REQUIRED）合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 2 verdict（CHANGES_REQUIRED）唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | NONE（Round 3 APPROVED；Round 4 = NONE；**Next = ChatGPT Client Binding → P3 bootstrap**） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
-| 03 | AUTONOMY / Task Autonomy | 未开始 | 前置 P2.75 `VERIFIED` 已满足；**P3 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding（Custom MCP App）dispatch 启动，禁止由 Harness 自行开始** | — |
+| 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）；部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据） | External Review（R1 verdict 待裁决；F1 定级与 R2 范围由 Reviewer 判定） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ e2e/ |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -512,3 +512,16 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   由 cloudflared 备选升级为 **Secure MCP Tunnel 首选**；§7 全量落地（含用户操作清单 7.4 与
   本机落地模板 7.5）。cloudflared 仅作无 tunnel 权限时兜底。文档更新 commit 待合（branch
   p275-txb-mcp-adapter）。
+- **2026-08-30：P3 AUTONOMY R1 实现收口 → AWAITING_EXTERNAL_REVIEW**：IntentStore
+  schema v3 autonomy 元数据（write-once acceptanceCriteria / criteriaEvidence 证据
+  台账 / verifiedMilestones / 派生 verificationState）+ autonomy_report/verify/state
+  三工具 + 恢复注入 composeResumeMessage（空状态零注入）+ 无人值守决策策略（P1-A
+  WAIT-GATE 不变量不动）。测试：54+32 断言 + EC 20 套件回归全绿；事务化部署
+  （SHA256==仓库，.bak 回滚锚点）+ 受控重启后工具面活体证据。**三条真实 Runtime
+  E2E（隔离实例）**：E1 无人值守二选一 8/8（无 ask_user_question）、E2B 重启自动
+  恢复 7/7（确定性：官方 RUNNING intent → SCAN restart → CT persisted-log fallback
+  clean → RESUME-OK；副作用恰好一次）、E3 完成验证真相 8/8×2（裸断言被拒，真实
+  证据 VERIFIED）。**根因修复**：重启自动恢复 happy path 此前从未工作（CT 事件源
+  仅内存注册表 → boot scan 必 defer 超限钉死）→ 回退 session.history 持久日志冷读
+  （RESTART_RESUME_REPAIR.md）。诚实发现 F1：verify 信任模型自述证据串（R2 候选
+  宿主侧复核）。分支 p3-autonomy-r1（466abc9 + 69ade9b + 修复提交），PR 待评审。

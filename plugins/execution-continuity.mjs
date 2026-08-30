@@ -259,9 +259,24 @@ export class IntentStore {
         goalRevisionObserved: null,
         goalObservedAt: null,
         livenessUnknownCount: 0,
+        // P3 R1 (F2 fix 2026-08-30): intra-turn liveness — last seen session
+        // event count. Event-count delta is the direct "turn is actively
+        // streaming" signal; goal rounds do NOT advance during a single long
+        // turn, so goal-round-only liveness declared zombies mid-turn (E2
+        // real-runtime evidence: healthy turn CT-pinned NEEDS_VERIFICATION on
+        // its own in-flight pwsh call).
+        lastEventCountObserved: null,
+        // P3 R1 (F2b fix): bounded defers when CT sees a transient unresolved
+        // side-effect call on an ACTIVELY RUNNING session (in-flight call whose
+        // result lands seconds later).
+        ctTransientDeferCount: 0,
       };
       this.data.intents[sessionId] = it;
     }
+    // P3 R1 (F2 fix): additive fields for legacy intents (same idempotent
+    // additive-only pattern as the autonomy migration below).
+    if (it.lastEventCountObserved === undefined) it.lastEventCountObserved = null;
+    if (it.ctTransientDeferCount === undefined) it.ctTransientDeferCount = 0;
     // P3 AUTONOMY R1: schema v3 migration — additive-only, idempotent. Every
     // touch of an intent (new or legacy v1/v2) gains the `autonomy` sub-object
     // (empty defaults); nothing pre-existing is cleared or rewritten. The
@@ -580,21 +595,68 @@ export function apply(ctx, config = {}) {
   async function completionTruth(sessionId, it) {
     try {
       const session = ctx.sessions?.get ? ctx.sessions.get(sessionId) : null;
-      if (!session || !Array.isArray(session.events)) {
-        // Phase 02 R5 Addendum (transient CT evidence defer): events temporarily
-        // unavailable is NOT the same as "we read events and found an unresolved
-        // side-effect call". Return a TRANSIENT marker so the caller defers with
-        // backoff instead of pinning the session to permanent NEEDS_VERIFICATION.
-        diag(`CT sid=${sessionId} session events unavailable -> evidence_defer (transient, bounded)`);
-        return { state: "evidence_unavailable", detail: "session events unavailable" };
+      if (session && Array.isArray(session.events)) {
+        const res = evaluateCompletion(session.events);
+        diag(`CT sid=${sessionId} -> ${res.state}${res.detail ? " " + res.detail : ""} (in-memory, ${session.events.length} events)`);
+        return res;
       }
-      const res = evaluateCompletion(session.events);
-      diag(`CT sid=${sessionId} -> ${res.state}${res.detail ? " " + res.detail : ""}`);
-      return res;
+      // P3 AUTONOMY R2 (F3 fix 2026-08-30): after a server restart the
+      // in-memory session registry is EMPTY for every not-yet-reopened
+      // session, so the boot scan's CT gate could never see events —
+      // "session events unavailable" -> bounded defers -> permanent
+      // NEEDS_VERIFICATION manual review -> restart auto-resume was
+      // structurally dead for ALL sessions (E2B deterministic-leg runtime
+      // evidence; also re-explains the R1 E2 pins from runs 4/6/7 — the
+      // earlier "dirty kill race" hypothesis was wrong). Fall back to the
+      // PERSISTENT event log via the loopback API: session.history serves a
+      // contiguous raw event range from cold storage (dsh-host-apiproxy
+      // contract), which includes tool-call/tool-result records, so
+      // evaluateCompletion sees exactly what it would have seen in memory.
+      // In-memory events remain the first choice for live sessions; this
+      // fallback only activates when they are unavailable, and any error
+      // falls through to the existing fail-closed defer path.
+      try {
+        const hist = await apiRpc("session.history", { sessionId, maxMessages: 4000 });
+        const events = hist && Array.isArray(hist.events) ? hist.events : null;
+        if (events) {
+          const res = evaluateCompletion(events);
+          diag(`CT sid=${sessionId} -> ${res.state}${res.detail ? " " + res.detail : ""} (persisted-log fallback, ${events.length} events)`);
+          return res;
+        }
+      } catch (e) {
+        diag(`CT sid=${sessionId} persisted-events fallback error (${String(e.message).slice(0, 80)}) -> evidence_defer (transient, bounded)`);
+      }
+      // Phase 02 R5 Addendum (transient CT evidence defer): events temporarily
+      // unavailable is NOT the same as "we read events and found an unresolved
+      // side-effect call". Return a TRANSIENT marker so the caller defers with
+      // backoff instead of pinning the session to permanent NEEDS_VERIFICATION.
+      diag(`CT sid=${sessionId} session events unavailable -> evidence_defer (transient, bounded)`);
+      return { state: "evidence_unavailable", detail: "session events unavailable" };
     } catch (e) {
       diag(`CT sid=${sessionId} events check error (${String(e.message).slice(0, 80)}) -> evidence_defer (transient)`);
       return { state: "evidence_unavailable", detail: "completion-truth check error" };
     }
+  }
+
+  // P3 R1 (F2 fix 2026-08-30): intra-turn activity probes. The session event
+  // log is the ground truth for "is this turn actually doing anything" —
+  // streaming deltas and tool events append continuously during a live turn,
+  // while a frozen/hung session stops appending. Both probes are read-only and
+  // fail-soft (null) when the session is unavailable.
+  function sessionLastEventAt(sessionId) {
+    try {
+      const sess = ctx.sessions && ctx.sessions.get ? ctx.sessions.get(sessionId) : null;
+      if (!sess || !Array.isArray(sess.events) || sess.events.length === 0) return null;
+      const lastEv = sess.events[sess.events.length - 1];
+      return lastEv && typeof lastEv.time === "number" ? lastEv.time : null;
+    } catch { return null; }
+  }
+  function sessionEventCount(sessionId) {
+    try {
+      const sess = ctx.sessions && ctx.sessions.get ? ctx.sessions.get(sessionId) : null;
+      if (!sess || !Array.isArray(sess.events)) return null;
+      return sess.events.length;
+    } catch { return null; }
   }
 
   // Phase 02 R7 (R6-2): run the Completion Truth gate. Returns true when the
@@ -603,7 +665,7 @@ export function apply(ctx, config = {}) {
   // WAITING_NETWORK defer; needs_verification -> permanent NEEDS_VERIFICATION).
   // This is the SINGLE CT decision used by both the normal resume path and the
   // liveness (zombie/no-progress) recovery path — no duplicated algorithm.
-  async function runCtGate(sessionId, it) {
+  async function runCtGate(sessionId, it, sessionRunning = false) {
     const ct = await completionTruth(sessionId, it);
     if (ct.state === "evidence_unavailable") {
       const ctCap = 5;
@@ -629,17 +691,58 @@ export function apply(ctx, config = {}) {
       return false;
     }
     if (ct.state === "needs_verification") {
+      // P3 R1 (F2b fix 2026-08-30): CT is a POINT-IN-TIME evaluation. On an
+      // ACTIVELY RUNNING session, "side-effect call without result" is usually
+      // the CURRENT in-flight call — its tool/result lands seconds later (E2
+      // real-runtime evidence: the pin was written 414ms BEFORE the pwsh
+      // tool/result event, while the model was still streaming). Pinning
+      // permanent NEEDS_VERIFICATION from transient evidence welds recovery
+      // shut mid-turn. If the session shows recent event activity -> bounded
+      // transient defer and re-evaluate later; keep the permanent pin ONLY for
+      // genuinely stale/interrupted sessions (unknown outcome semantics).
+      const lastEventAt = sessionLastEventAt(sessionId);
+      const ctTransientWindowMs = 90000;
+      // Transient ONLY when the turn is actually still running (caller-attested)
+      // AND events are fresh — a post-restart session has recent events but a
+      // dead turn; there CT's verdict is authoritative (clean resume / pin).
+      const ctTransient = sessionRunning && lastEventAt !== null && (Date.now() - lastEventAt) < ctTransientWindowMs;
+      if (ctTransient) {
+        const ctTransCap = 10;
+        it.ctTransientDeferCount = (it.ctTransientDeferCount || 0) + 1;
+        if (it.ctTransientDeferCount > ctTransCap) {
+          // Bounded: a session that stays "recently active" for >10 defers while
+          // the call never resolves is treated as genuinely unknown outcome.
+          store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
+            reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"}; transient-defer cap ${ctTransCap} exceeded)`,
+            schemaVersion: 2,
+            verificationKind: "UNRESOLVED_SIDE_EFFECT",
+            ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
+          });
+          diag(`CT sid=${sessionId} transient defer cap exceeded (${it.ctTransientDeferCount} > ${ctTransCap}) -> NEEDS_VERIFICATION (manual review)`);
+          return false;
+        }
+        store.setState(sessionId, STATE.WAITING_NETWORK, {
+          reason: `CT-transient-defer: in-flight side-effect call on actively running session (${ct.detail || "outcome unknown"}; ${it.ctTransientDeferCount}/${ctTransCap})`,
+          nextRetryAt: Date.now() + 15000,
+          schemaVersion: 2,
+          verificationKind: "EVIDENCE_DEFER",
+          ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
+        });
+        diag(`CT sid=${sessionId} unresolved call on ACTIVELY RUNNING session -> bounded transient defer #${it.ctTransientDeferCount}/${ctTransCap} (last event ${Math.round((Date.now() - lastEventAt) / 1000)}s ago)`);
+        return false;
+      }
       store.setState(sessionId, STATE.NEEDS_VERIFICATION, {
         reason: `completion-unknown: side-effect tool-call without result (${ct.detail || "outcome unknown"})`,
         schemaVersion: 2,
         verificationKind: "UNRESOLVED_SIDE_EFFECT",
         ctUnresolvedCall: ct.detail ? String(ct.detail).slice(0, 200) : null,
       });
-      diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay)`);
+      diag(`CT sid=${sessionId} side-effect tool-call w/o result -> NEEDS_VERIFICATION (no blind replay; session stale)`);
       return false;
     }
     // clean
     if (it.ctDeferCount) { it.ctDeferCount = 0; }
+    if (it.ctTransientDeferCount) { it.ctTransientDeferCount = 0; }
     return true;
   }
 
@@ -716,7 +819,7 @@ export function apply(ctx, config = {}) {
   // (the SAME tail as normal resume); evidence unavailable / unresolved ->
   // handled by runCtGate (defer / NEEDS_VERIFICATION). Returns the state written.
   async function ctGatedRecovery(sessionId, it, why) {
-    const proceed = await runCtGate(sessionId, it);
+    const proceed = await runCtGate(sessionId, it, true);
     if (!proceed) return it.state; // defer / needs_verification already written
     return await resumeAfterCtClean(sessionId, it, why);
   }
@@ -724,6 +827,11 @@ export function apply(ctx, config = {}) {
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
+    // P3 R1 (F2c): capture BEFORE the budget-epoch reset below — a mismatch at
+    // entry means THIS call is the first recovery of a NEW BOOT. Post-restart
+    // the old turn is dead even if its events are still recent, so boot
+    // auto-resume must NOT be delayed by the actively-running guard.
+    const newBoot = serverGeneration && it.autoResumeBudgetGeneration !== serverGeneration;
     // Phase 02 R9 (R9-4): a REAL server restart is a NEW BOOT — reset the
     // auto-resume cycle budget so a long-lived session (historical cycles
     // accumulated across many prior boots) gets a fresh recovery opportunity.
@@ -768,6 +876,25 @@ export function apply(ctx, config = {}) {
       diag(`RESUME-BUDGET-EXHAUSTED sid=${sessionId} -> FAILED_FATAL`);
       return;
     }
+    // P3 R1 (F2c fix 2026-08-30): ACTIVELY-RUNNING GUARD. A due intent whose
+    // session turn is demonstrably alive (events appended within the last 90s)
+    // must NOT be CT-gated or kicked — CT on a live session evaluates its own
+    // in-flight tool call (guaranteed transient "without result"), and a kick
+    // on a live turn is a double-kick. Leave a bounded recheck so the timer
+    // returns once the turn settles. (E2 real-runtime evidence: RECOVERY_QUEUED
+    // -> resumeViaApi -> CT pinned the in-flight pwsh call mid-turn.)
+    {
+      const lastEventAt = sessionLastEventAt(sessionId);
+      if (!newBoot && lastEventAt !== null && (Date.now() - lastEventAt) < 90000) {
+        const recheckAt = Date.now() + 60000;
+        store.setState(sessionId, STATE.RUNNING, {
+          note: `actively running (last event ${Math.round((Date.now() - lastEventAt) / 1000)}s ago); recovery skipped, recheck at ${new Date(recheckAt).toISOString()}`,
+          nextRetryAt: recheckAt,
+        });
+        diag(`RESUME-SKIP sid=${sessionId} session actively running -> no CT/kick, recheck at ${recheckAt} (${reason})`);
+        return;
+      }
+    }
     // Phase 02 R1 (BLOCKING-6): Completion Truth — deterministic idempotency
     // guard before ANY resume. Phase 02 R7 (R6-2): single CT decision shared
     // with the liveness recovery path (runCtGate); clean -> continue, else the
@@ -803,6 +930,18 @@ export function apply(ctx, config = {}) {
       // return WITHOUT kicking — the timer re-checks later (never kick in the
       // same call).
       if (found.running === true) {
+        // --- intra-turn activity (P3 R1 F2a fix 2026-08-30) ---
+        // Goal rounds are BLIND to intra-turn activity: a healthy 5-minute turn
+        // streams events and runs tool calls without starting a new goal round,
+        // so goal-round-only liveness declared zombies mid-turn and CT then
+        // pinned the session's own in-flight side-effect call (E2 evidence).
+        // Event-count delta is the direct activity signal; a frozen session
+        // stops appending events and still reaches the bounded recheck path.
+        const eventCountNow = sessionEventCount(sessionId);
+        const eventsProgressed =
+          eventCountNow !== null &&
+          typeof it.lastEventCountObserved === "number" &&
+          eventCountNow > it.lastEventCountObserved;
         // --- goal projection (official truth from session.list) ---
         let goal = null;
         try {
@@ -826,6 +965,21 @@ export function apply(ctx, config = {}) {
         // in RUNNING (one-shot dead-end: timer only drives WAITING_*/QUEUED).
         // Treat as LIVENESS_UNKNOWN with a bounded nextRetryAt recheck.
         if (!goal) {
+          // P3 R1 (F2a fix): goal projection missing is only a zombie signal
+          // when the session is NOT visibly active. An actively streaming
+          // session (events progressing) is alive — observe + SKIP.
+          if (eventsProgressed) {
+            const graceEnd = Date.now() + graceMs;
+            store.setState(sessionId, STATE.RUNNING, {
+              note: `liveness: no goal projection but events progressing (${eventCountNow}) -> alive`,
+              lastEventCountObserved: eventCountNow,
+              goalObservedAt: Date.now(),
+              nextRetryAt: graceEnd,
+              livenessUnknownCount: 0,
+            });
+            diag(`RESUME-SKIP sid=${sessionId} no goal projection but events progressing -> alive, recheck at ${graceEnd}`);
+            return;
+          }
           it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
           const livenessCap = 6;
           if (it.livenessUnknownCount > livenessCap) {
@@ -839,6 +993,7 @@ export function apply(ctx, config = {}) {
             note: `liveness-unknown (no goal projection) recheck #${it.livenessUnknownCount}`,
             nextRetryAt: nextRetry,
             serverGenerationSeen: serverGeneration,
+            lastEventCountObserved: eventCountNow,
             livenessUnknownCount: it.livenessUnknownCount,
           });
           diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} goal projection missing -> RECOVERY_QUEUED recheck #${it.livenessUnknownCount} nextRetryAt=${nextRetry}`);
@@ -850,6 +1005,20 @@ export function apply(ctx, config = {}) {
         // identity — treat as liveness unknown (bounded recheck below), never
         // the grace-RUNNING branch (that would recreate the one-shot dead-end).
         if (!serverGeneration) {
+          // P3 R1 (F2a fix): no authoritative generation is an observation
+          // gap, not a death signal — an actively streaming session is alive.
+          if (eventsProgressed) {
+            const graceEnd = Date.now() + graceMs;
+            store.setState(sessionId, STATE.RUNNING, {
+              note: `liveness: no authoritative generation but events progressing (${eventCountNow}) -> alive`,
+              lastEventCountObserved: eventCountNow,
+              goalObservedAt: Date.now(),
+              nextRetryAt: graceEnd,
+              livenessUnknownCount: 0,
+            });
+            diag(`RESUME-SKIP sid=${sessionId} no generation but events progressing -> alive, recheck at ${graceEnd}`);
+            return;
+          }
           it.livenessUnknownCount = (it.livenessUnknownCount || 0) + 1;
           if (it.livenessUnknownCount > 6) {
             diag(`RESUME-LIVENESS sid=${sessionId} no authoritative generation beyond cap -> CT-gated recovery`);
@@ -860,6 +1029,7 @@ export function apply(ctx, config = {}) {
             note: `liveness-unknown (no server generation) recheck #${it.livenessUnknownCount}`,
             nextRetryAt: nextRetry,
             serverGenerationSeen: null,
+            lastEventCountObserved: eventCountNow,
             livenessUnknownCount: it.livenessUnknownCount,
           });
           diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no authoritative generation -> RECOVERY_QUEUED #${it.livenessUnknownCount} nextRetryAt=${nextRetry}`);
@@ -876,6 +1046,7 @@ export function apply(ctx, config = {}) {
             goalIdObserved: goal ? goal.id : null,
             goalRevisionObserved: goal ? goal.revision : null,
             goalRoundsObserved: goal && goal.roundsStarted !== null ? goal.roundsStarted : it.goalRoundsObserved,
+            lastEventCountObserved: eventCountNow,
             goalObservedAt: Date.now(),
             nextRetryAt: graceEnd,
             livenessUnknownCount: 0,
@@ -890,6 +1061,7 @@ export function apply(ctx, config = {}) {
             note: `liveness grace: goal revision changed ${it.goalRevisionObserved}->${goal.revision}`,
             goalRevisionObserved: goal.revision,
             goalRoundsObserved: goal.roundsStarted,
+            lastEventCountObserved: eventCountNow,
             goalObservedAt: Date.now(),
             nextRetryAt: graceEnd,
             livenessUnknownCount: 0,
@@ -898,18 +1070,24 @@ export function apply(ctx, config = {}) {
           return;
         }
         // 3) same generation + same goal + progress -> genuine SKIP
-        if (goalProgressed) {
+        //    P3 R1 (F2a fix): event-count progression is ALSO genuine progress —
+        //    a live turn (streaming/tool events) is alive even when goal rounds
+        //    have not advanced within one turn.
+        if (goalProgressed || eventsProgressed) {
           // R9-1: genuine progress -> RUNNING must CLEAR the stale nextRetryAt
           // (a previously grace-set due timestamp must not keep this healthy
           // intent due forever).
           store.setState(sessionId, STATE.RUNNING, {
-            note: `already running; goal rounds progressed ${it.goalRoundsObserved}->${goal.roundsStarted}`,
+            note: goalProgressed
+              ? `already running; goal rounds progressed ${it.goalRoundsObserved}->${goal.roundsStarted}`
+              : `already running; events progressing (${it.lastEventCountObserved}->${eventCountNow}, intra-turn activity)`,
             goalRoundsObserved: goal.roundsStarted,
             goalObservedAt: Date.now(),
+            lastEventCountObserved: eventCountNow,
             livenessUnknownCount: 0,
             nextRetryAt: null,
           });
-          diag(`RESUME-SKIP sid=${sessionId} goal progress (rounds ${it.goalRoundsObserved}->${goal.roundsStarted}) (${reason})`);
+          diag(`RESUME-SKIP sid=${sessionId} ${goalProgressed ? `goal progress (rounds ${it.goalRoundsObserved}->${goal.roundsStarted})` : `events progressing (${it.lastEventCountObserved}->${eventCountNow})`} (${reason})`);
           return;
         }
         // 4) same generation + same goal but NO progress: bounded recheck.
@@ -922,12 +1100,15 @@ export function apply(ctx, config = {}) {
           store.setState(sessionId, STATE.RUNNING, {
             note: `liveness grace: goal ${goal.id.slice(0, 12)} observed ${Math.round(elapsed / 1000)}s ago, no progress yet`,
             goalObservedAt: it.goalObservedAt || Date.now(),
+            lastEventCountObserved: eventCountNow,
             nextRetryAt: graceEnd,
           });
           diag(`RESUME-GRACE sid=${sessionId} no progress within grace (${Math.round(elapsed / 1000)}s/${graceMs / 1000}s) -> SKIP, recheck at ${graceEnd}`);
           return;
         }
         // grace elapsed, no progress -> LIVENESS_UNKNOWN (bounded, no kick now).
+        //    P3 R1 (F2a): this path now only runs when goal rounds AND session
+        //    events are both static — a genuinely silent session.
         // Phase 02 R7 (R6-2): after the bounded recheck cap, enter CT-GATED
         // recovery — Completion Truth decides (clean -> resume; evidence
         // unavailable -> bounded defer; exact unresolved mutating ->
@@ -943,6 +1124,7 @@ export function apply(ctx, config = {}) {
         store.setState(sessionId, STATE.RECOVERY_QUEUED, {
           note: `liveness-unknown recheck #${it.livenessUnknownCount}: goal ${goal.id.slice(0, 12)} no progress in ${Math.round(elapsed / 1000)}s`,
           nextRetryAt: nextRetry,
+          lastEventCountObserved: eventCountNow,
           livenessUnknownCount: it.livenessUnknownCount,
         });
         diag(`RESUME-LIVENESS-UNKNOWN sid=${sessionId} no progress after grace -> RECOVERY_QUEUED recheck #${it.livenessUnknownCount} nextRetryAt=${nextRetry} (no kick now)`);

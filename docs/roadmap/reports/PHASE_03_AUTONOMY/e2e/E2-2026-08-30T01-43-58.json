@@ -1,0 +1,144 @@
+{
+  "leg": "E2",
+  "stamp": "2026-08-30T01-43-58",
+  "port": 33311,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-7nBemk",
+  "sessionId": "p3r1e2-2026-08-30T01-43-58",
+  "checks": [
+    {
+      "name": "E2.1 pre-kill: 1 verified milestone persisted",
+      "ok": true,
+      "detail": "[{\"at\":1788054427304,\"step\":\"阶段1副作用文件已创建并核验（side-effect-v1）\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e2-7nBemk\\\\workdir\\\\side-effect.txt\"}]"
+    },
+    {
+      "name": "E2.2 pre-kill: side-effect file exists v1",
+      "ok": true,
+      "detail": "side-effect-v1"
+    },
+    {
+      "name": "E2.0 pre-kill: intent recoverable (RUNNING + autoResume)",
+      "ok": true,
+      "detail": "state=RUNNING autoResume=true (COMPLETED/终态=场景构造失败：模型提前结束 goal)"
+    },
+    {
+      "name": "E2.3 resume message contains \"Verified progress:\" line",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "E2.4 resume line carries last verified checkpoint + no-redo directive",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "E2.5 autonomy state persisted across restart (milestones intact)",
+      "ok": true,
+      "detail": "pre=[{\"at\":1788054427304,\"step\":\"阶段1副作用文件已创建并核验（side-effect-v1）\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users\\\\Administ post=[{\"at\":1788054427304,\"step\":\"阶段1副作用文件已创建并核验（side-effect-v1）\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users\\\\Administ"
+    },
+    {
+      "name": "E2.6 acceptance criteria + evidence persisted across restart",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "E2.7 recovery actually happened (RESUME-OK this boot)",
+      "ok": false,
+      "detail": "state=NEEDS_VERIFICATION autoResumeCycles=0 lastResumeAt>1788054664791=false"
+    },
+    {
+      "name": "E2.8 side-effect file exactly-once (content unchanged, no duplicate write)",
+      "ok": true,
+      "detail": "content=side-effect-v1 mtimeDelta=0"
+    }
+  ],
+  "preAutonomy": {
+    "acceptanceCriteria": [
+      "side-effect 文件存在且内容为 side-effect-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-7nBemk\\workdir\\side-effect.txt",
+        "at": 1788054427304
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788054427304,
+        "step": "阶段1副作用文件已创建并核验（side-effect-v1）",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-7nBemk\\workdir\\side-effect.txt"
+      }
+    ],
+    "currentStep": "里程碑已建立",
+    "remainingSteps": [
+      "等待重启",
+      "重启后核对副作用不重复"
+    ],
+    "lastProgressAt": 1788054427304,
+    "lastVerifiedCheckpoint": "阶段1副作用已落盘并通过核验，等待重启恢复",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "postAutonomy": {
+    "acceptanceCriteria": [
+      "side-effect 文件存在且内容为 side-effect-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-7nBemk\\workdir\\side-effect.txt",
+        "at": 1788054427304
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788054427304,
+        "step": "阶段1副作用文件已创建并核验（side-effect-v1）",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-7nBemk\\workdir\\side-effect.txt"
+      }
+    ],
+    "currentStep": "里程碑已建立",
+    "remainingSteps": [
+      "等待重启",
+      "重启后核对副作用不重复"
+    ],
+    "lastProgressAt": 1788054427304,
+    "lastVerifiedCheckpoint": "阶段1副作用已落盘并通过核验，等待重启恢复",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "preState": "RUNNING",
+  "postState": "NEEDS_VERIFICATION",
+  "autoResumeCycles": 0,
+  "lastResumeAt": null,
+  "preKillTs": 1788054664791,
+  "sideEffectContent": "side-effect-v1",
+  "sideEffectToolRecordMentions": [
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":3168,\"time\":1788054369040,\"data\":{\"turn\":1,\"step\":3,\"chunk\":{\"type\":\"tool-call-delta\",\"index\":2,\"id\":\"call_03920f1fc7ae4238956d7fa8\",\"name\":\"write\",\"argumentsDelta\":\"{\\\"content\\\":\\\"side-effect-v1\\\",\\\"file_path\\\":\\\"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\AppData\\\\\\\\Lo"
+    },
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":3171,\"time\":1788054369208,\"data\":{\"turn\":1,\"step\":3,\"chunk\":{\"type\":\"block-end\",\"index\":2,\"block\":{\"type\":\"tool-call\",\"id\":\"call_03920f1fc7ae4238956d7fa8\",\"name\":\"write\",\"arguments\":\"{\\\"content\\\":\\\"side-effect-v1\\\",\\\"file_path\\\":\\\"C:\\\\\\\\Users\\\\\\\\Administrator"
+    },
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"assistant/message\",\"seq\":3174,\"time\":1788054369209,\"data\":{\"turn\":1,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"The long form resolves to the same directory and no file exists yet. Now write the file with the write tool, content exactly `side-effec"
+    },
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"tool/call\",\"seq\":3175,\"time\":1788054369210,\"data\":{\"turn\":1,\"step\":3,\"callId\":\"call_03920f1fc7ae4238956d7fa8\",\"name\":\"write\",\"arguments\":\"{\\\"content\\\":\\\"side-effect-v1\\\",\\\"file_path\\\":\\\"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\p3r1-e2e-e2-7nBemk\\\\\\\\workdir\\\\\\\\sid"
+    }
+  ],
+  "resumeHistoryEventCount": 11650,
+  "instanceLog": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\deepseek-harness-desktop\\docs\\roadmap\\reports\\PHASE_03_AUTONOMY\\e2e\\instance-E2-2026-08-30T01-43-58.log",
+  "cleanKill": true,
+  "ecDiagLines": []
+}

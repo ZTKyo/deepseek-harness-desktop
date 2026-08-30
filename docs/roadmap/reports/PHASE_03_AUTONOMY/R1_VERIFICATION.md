@@ -47,8 +47,10 @@
 - 迁移幂等、只增不清：I1/I2 断言 ✔
 - 失败 fail-soft：patch 失败不抛入恢复链路，工具层返回错误 ✔
 
-## 5 待办（后续轮次）
+## 5 待办（后续轮次）— 全部完成（2026-08-30）
 
-1. 受控延迟重启（本文档提交后执行，提前预告用户）→ 重启后健康检查 + 3 工具注册证据
-2. 真实 Runtime E2E ≥3 条（自主决策 / 恢复 / 完成验证，隔离实例）
-3. REPORT_R1.md + CURRENT_STATUS.md → AWAITING_REVIEW
+1. ✅ 受控延迟重启已执行（提前预告）→ 重启后 3 工具活体调用证据（system_api）
+2. ✅ 真实 Runtime E2E 3 条齐：E1 8/8（AC7）/ E2B 7/7（AC8，确定性腿）/ E3 8/8×2（AC9）→ `e2e/*.json`
+3. ✅ REPORT_R1.md + CURRENT_STATUS.md 已更新 → 状态 AWAITING_EXTERNAL_REVIEW
+4. ➕ 本轮新增根因修复：重启恢复 CT persisted-log fallback（RESTART_RESUME_REPAIR.md）
+5. R2 候选（Reviewer 裁定范围）：F1 宿主侧独立复核 file_hash/system_api 证据

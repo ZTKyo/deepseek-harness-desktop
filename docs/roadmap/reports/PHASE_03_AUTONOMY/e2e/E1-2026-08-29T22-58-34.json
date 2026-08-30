@@ -1,0 +1,80 @@
+{
+  "leg": "E1",
+  "stamp": "2026-08-29T22-58-34",
+  "port": 33310,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-MUb4F1",
+  "sessionId": "p3r1e1-2026-08-29T22-58-34",
+  "checks": [
+    {
+      "name": "E1.1 turn produced history events",
+      "ok": true,
+      "detail": "events=3148"
+    },
+    {
+      "name": "E1.2 NO ask_user_question tool-call event in whole session",
+      "ok": false,
+      "detail": "count=1"
+    },
+    {
+      "name": "E1.3 decision file exists with chose-A|chose-B",
+      "ok": true,
+      "detail": "content=\"chose-A\""
+    },
+    {
+      "name": "E1.4 autonomy acceptanceCriteria persisted (write-once)",
+      "ok": true,
+      "detail": "[\"决策文件已创建且内容恰为 chose-A 或 chose-B\"]"
+    },
+    {
+      "name": "E1.5 autonomy_verify PASS evidence persisted",
+      "ok": true,
+      "detail": "{\"index\":0,\"status\":\"PASS\",\"evidenceClass\":\"file_hash\",\"evidence\":\"文件真实路径 C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e1-MUb4F1\\\\workdir\\\\decision-log.txt（短路径 C:\\\\Users\\\\ADMINI~1\\\\AppData"
+    },
+    {
+      "name": "E1.6 verificationState derived VERIFIED",
+      "ok": true,
+      "detail": "state=VERIFIED"
+    },
+    {
+      "name": "E1.7 lastVerifiedCheckpoint recorded",
+      "ok": true,
+      "detail": "P3 AUTONOMY 演练：决策文件已写入 chose-A 并通过哈希核验"
+    },
+    {
+      "name": "E1.8 intent not WAITING_USER",
+      "ok": true,
+      "detail": "state=COMPLETED"
+    }
+  ],
+  "autonomy": {
+    "acceptanceCriteria": [
+      "决策文件已创建且内容恰为 chose-A 或 chose-B"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "文件真实路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e1-MUb4F1\\workdir\\decision-log.txt（短路径 C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-MUb4F1\\workdir\\decision-log.txt 解析所得）；Get-Content 原始读取内容恰为 chose-A，长度 7 字节；SHA256=252549F17E3A689F46BF5708FE76A9F2BCBCC034D94208DEE84F0B69F57B48CE",
+        "at": 1788044396910
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788044396910,
+        "step": "P3 AUTONOMY 演练：决策文件已写入 chose-A 并通过哈希核验",
+        "evidenceClass": "file_hash",
+        "evidence": "文件真实路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e1-MUb4F1\\workdir\\decision-log.txt（短路径 C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e1-MUb4F1\\workdir\\decision-log.txt 解析所得）；Get-Content 原始读取内容恰为 chose-A，长度 7 字节；SHA256=252549F17E3A689F46BF5708FE76A9F2BCBCC034D94208DEE84F0B69F57B48CE"
+      }
+    ],
+    "currentStep": "演练完成：决策为 A，文件已写入并验收通过（verificationState=VERIFIED）",
+    "remainingSteps": null,
+    "lastProgressAt": 1788044404236,
+    "lastVerifiedCheckpoint": "P3 AUTONOMY 演练：决策文件已写入 chose-A 并通过哈希核验",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "intentState": "COMPLETED",
+  "decisionFileContent": "chose-A",
+  "historyEventCount": 3148
+}

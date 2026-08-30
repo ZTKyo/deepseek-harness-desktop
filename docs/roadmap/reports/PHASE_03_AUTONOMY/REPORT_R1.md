@@ -59,7 +59,8 @@ E2B 说明：里程碑/副作用为**运行器按官方 store 预置**（把"任
 
 ## 5 交付与状态
 
-- 提交：`p3-autonomy-r1`（466abc9 实现 + 69ade9b 验证证据 + 本轮修复与报告）。
+- 提交：`p3-autonomy-r1`（466abc9 实现 + 69ade9b 验证证据 + 9274418 修复与报告）
+  → **PR #75 merged = 92240cb**（2026-08-30，CI 3/3 绿：static+secret gate / boot smoke / reliability）。
 - 回滚锚点：`~/.dsh/profiles/web/_pre-p3r1-20260830-034456-execution-continuity.mjs.bak`
   + `plugins/execution-continuity.mjs.bak-p3r2-ctfallback`（CT 修复前）+ git 分支。
 - 状态机：IMPLEMENTATION_COMPLETE → **AWAITING_EXTERNAL_REVIEW**（评审通过后

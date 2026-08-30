@@ -524,4 +524,5 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   证据 VERIFIED）。**根因修复**：重启自动恢复 happy path 此前从未工作（CT 事件源
   仅内存注册表 → boot scan 必 defer 超限钉死）→ 回退 session.history 持久日志冷读
   （RESTART_RESUME_REPAIR.md）。诚实发现 F1：verify 信任模型自述证据串（R2 候选
-  宿主侧复核）。分支 p3-autonomy-r1（466abc9 + 69ade9b + 修复提交），PR 待评审。
+  宿主侧复核）。分支 p3-autonomy-r1（466abc9 + 69ade9b + 9274418）→ **PR #75
+  merged=92240cb（CI 3/3 绿）**；状态 AWAITING_EXTERNAL_REVIEW。

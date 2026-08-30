@@ -1,0 +1,140 @@
+{
+  "leg": "E2",
+  "stamp": "2026-08-30T01-24-05",
+  "port": 33311,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB",
+  "sessionId": "p3r1e2-2026-08-30T01-24-05",
+  "checks": [
+    {
+      "name": "E2.1 pre-kill: 1 verified milestone persisted",
+      "ok": true,
+      "detail": "[{\"at\":1788053353157,\"step\":\"阶段1：side-effect 副作用文件已创建并通过 file_hash 校验\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e2-8z4mlB\\\\workdir\\\\side-effect.txt（等"
+    },
+    {
+      "name": "E2.2 pre-kill: side-effect file exists v1",
+      "ok": true,
+      "detail": "side-effect-v1"
+    },
+    {
+      "name": "E2.0 pre-kill: intent recoverable (RUNNING + autoResume)",
+      "ok": true,
+      "detail": "state=RUNNING autoResume=true (COMPLETED/终态=场景构造失败：模型提前结束 goal)"
+    },
+    {
+      "name": "E2.3 resume message contains \"Verified progress:\" line",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "E2.4 resume line carries last verified checkpoint + no-redo directive",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "name": "E2.5 autonomy state persisted across restart (milestones intact)",
+      "ok": true,
+      "detail": "pre=[{\"at\":1788053353157,\"step\":\"阶段1：side-effect 副作用文件已创建并通过 file_hash 校验\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users post=[{\"at\":1788053353157,\"step\":\"阶段1：side-effect 副作用文件已创建并通过 file_hash 校验\",\"evidenceClass\":\"file_hash\",\"evidence\":\"C:\\\\Users"
+    },
+    {
+      "name": "E2.6 acceptance criteria + evidence persisted across restart",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "E2.7 recovery actually happened (RESUME-OK this boot)",
+      "ok": false,
+      "detail": "state=NEEDS_VERIFICATION autoResumeCycles=0 lastResumeAt>1788053612981=false"
+    },
+    {
+      "name": "E2.8 side-effect file exactly-once (content unchanged, no duplicate write)",
+      "ok": true,
+      "detail": "content=side-effect-v1 mtimeDelta=0"
+    }
+  ],
+  "preAutonomy": {
+    "acceptanceCriteria": [
+      "side-effect 文件存在且内容为 side-effect-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt（等价长路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt）；实测 14 字节，内容恰为 side-effect-v1；SHA256=10246C304E9F332014CBBD91D1775E4B1C0BB4DD2392DDE9F1E0135097188465",
+        "at": 1788053353157
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788053353157,
+        "step": "阶段1：side-effect 副作用文件已创建并通过 file_hash 校验",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt（等价长路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt）；实测 14 字节，内容恰为 side-effect-v1；SHA256=10246C304E9F332014CBBD91D1775E4B1C0BB4DD2392DDE9F1E0135097188465"
+      }
+    ],
+    "currentStep": "里程碑已建立",
+    "remainingSteps": [
+      "等待重启",
+      "重启后核对副作用不重复"
+    ],
+    "lastProgressAt": 1788053353157,
+    "lastVerifiedCheckpoint": "阶段1完成：side-effect.txt 已创建且内容为 side-effect-v1，等待系统重启进入阶段2",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "postAutonomy": {
+    "acceptanceCriteria": [
+      "side-effect 文件存在且内容为 side-effect-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt（等价长路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt）；实测 14 字节，内容恰为 side-effect-v1；SHA256=10246C304E9F332014CBBD91D1775E4B1C0BB4DD2392DDE9F1E0135097188465",
+        "at": 1788053353157
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788053353157,
+        "step": "阶段1：side-effect 副作用文件已创建并通过 file_hash 校验",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt（等价长路径 C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e2-8z4mlB\\workdir\\side-effect.txt）；实测 14 字节，内容恰为 side-effect-v1；SHA256=10246C304E9F332014CBBD91D1775E4B1C0BB4DD2392DDE9F1E0135097188465"
+      }
+    ],
+    "currentStep": "里程碑已建立",
+    "remainingSteps": [
+      "等待重启",
+      "重启后核对副作用不重复"
+    ],
+    "lastProgressAt": 1788053353157,
+    "lastVerifiedCheckpoint": "阶段1完成：side-effect.txt 已创建且内容为 side-effect-v1，等待系统重启进入阶段2",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "preState": "RUNNING",
+  "postState": "NEEDS_VERIFICATION",
+  "autoResumeCycles": 0,
+  "lastResumeAt": null,
+  "preKillTs": 1788053612981,
+  "sideEffectContent": "side-effect-v1",
+  "sideEffectToolRecordMentions": [
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"assistant/chunk\",\"seq\":4590,\"time\":1788053328285,\"data\":{\"turn\":1,\"step\":1,\"chunk\":{\"type\":\"block-end\",\"index\":1,\"block\":{\"type\":\"tool-call\",\"id\":\"call_74204f8a7ddd45ccb9f417f0\",\"name\":\"write\",\"arguments\":\"{\\\"content\\\":\\\"side-effect-v1\\\",\\\"file_path\\\":\\\"C:\\\\\\\\Users\\\\\\\\Administrator"
+    },
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"assistant/message\",\"seq\":4593,\"time\":1788053328294,\"data\":{\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"Let me analyze the task:\\n\\n1. Create a file at `C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\p3r1-e2e-e2-8z4mlB\\\\workdir\\\\side-effect.txt"
+    },
+    {
+      "type": null,
+      "preview": "{\"event\":{\"type\":\"tool/call\",\"seq\":4594,\"time\":1788053328301,\"data\":{\"turn\":1,\"step\":1,\"callId\":\"call_74204f8a7ddd45ccb9f417f0\",\"name\":\"write\",\"arguments\":\"{\\\"content\\\":\\\"side-effect-v1\\\",\\\"file_path\\\":\\\"C:\\\\\\\\Users\\\\\\\\Administrator\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\p3r1-e2e-e2-8z4mlB\\\\\\\\workdir\\\\\\\\sid"
+    }
+  ],
+  "resumeHistoryEventCount": 13773,
+  "instanceLog": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\deepseek-harness-desktop\\docs\\roadmap\\reports\\PHASE_03_AUTONOMY\\e2e\\instance-E2-2026-08-30T01-24-05.log",
+  "cleanKill": false,
+  "ecDiagLines": []
+}

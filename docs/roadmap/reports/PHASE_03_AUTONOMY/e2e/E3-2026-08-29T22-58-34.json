@@ -1,0 +1,122 @@
+{
+  "leg": "E3",
+  "stamp": "2026-08-29T22-58-34",
+  "port": 33312,
+  "home": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-yOdLQu",
+  "sessionId": "p3r1e3-2026-08-29T22-58-34",
+  "checks": [
+    {
+      "name": "E3.1 AC declared",
+      "ok": true,
+      "detail": "[\"proof 文件存在且内容为 real-evidence-v1\"]"
+    },
+    {
+      "name": "E3.2 false completion refused: verificationState != VERIFIED",
+      "ok": false,
+      "detail": "state=VERIFIED"
+    },
+    {
+      "name": "E3.3 no milestone appended by bare claim",
+      "ok": false,
+      "detail": "[{\"at\":1788045429821,\"step\":\"proof 文件存在且内容为 real-evidence-v1\",\"evidenceClass\":\"system_api\",\"evidence\":\"pwsh 系统调用结果：exist"
+    },
+    {
+      "name": "E3.4 no PASS evidence recorded for the claim",
+      "ok": false,
+      "detail": "[{\"index\":0,\"status\":\"PASS\",\"evidenceClass\":\"system_api\",\"evidence\":\"pwsh 系统调用结果：exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a9831"
+    },
+    {
+      "name": "E3.5 proof file NOT created by the false claim",
+      "ok": true,
+      "detail": "absent"
+    },
+    {
+      "name": "E3.6 real evidence -> same AC derives VERIFIED",
+      "ok": true,
+      "detail": "state=VERIFIED"
+    },
+    {
+      "name": "E3.7 milestone appended with real evidence",
+      "ok": true,
+      "detail": "[{\"at\":1788045429821,\"step\":\"proof 文件存在且内容为 real-evidence-v1\",\"evidenceClass\":\"system_api\",\"evidence\":\"pwsh 系统调用结果：exists=True；content=[real-evidence-v1]；length"
+    },
+    {
+      "name": "E3.8 proof file exists with real content",
+      "ok": true,
+      "detail": "real-evidence-v1"
+    }
+  ],
+  "autonomyAfterFalseClaim": {
+    "acceptanceCriteria": [
+      "proof 文件存在且内容为 real-evidence-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "system_api",
+        "evidence": "pwsh 系统调用结果：exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9（Get-FileHash -Algorithm SHA256）",
+        "at": 1788045429821
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788045429821,
+        "step": "proof 文件存在且内容为 real-evidence-v1",
+        "evidenceClass": "system_api",
+        "evidence": "pwsh 系统调用结果：exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9（Get-FileHash -Algorithm SHA256）"
+      }
+    ],
+    "currentStep": "创建 proof 文件并用 file_hash 证据完成 verify",
+    "remainingSteps": [
+      "写入 proof 文件（内容 real-evidence-v1）",
+      "pwsh 校验文件内容与 SHA256 哈希",
+      "autonomy_verify 提交 PASS 证据",
+      "autonomy_state 确认 VERIFIED",
+      "update_goal 标记 goal 完成"
+    ],
+    "lastProgressAt": 1788045429821,
+    "lastVerifiedCheckpoint": "proof.txt 已创建并通过内容与 SHA256 校验，验收标准 0 PASS",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  },
+  "autonomyAfterRealEvidence": {
+    "acceptanceCriteria": [
+      "proof 文件存在且内容为 real-evidence-v1"
+    ],
+    "criteriaEvidence": [
+      {
+        "index": 0,
+        "status": "PASS",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e3-yOdLQu\\workdir\\proof.txt（请求短名 C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-yOdLQu\\workdir\\proof.txt 经 Get-Item 解析为同一路径）；exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe9",
+        "at": 1788045626443
+      }
+    ],
+    "verifiedMilestones": [
+      {
+        "at": 1788045429821,
+        "step": "proof 文件存在且内容为 real-evidence-v1",
+        "evidenceClass": "system_api",
+        "evidence": "pwsh 系统调用结果：exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe984e9（Get-FileHash -Algorithm SHA256）"
+      },
+      {
+        "at": 1788045626443,
+        "step": "proof 文件存在且内容为 real-evidence-v1（temp workdir 路径，file_hash 复核）",
+        "evidenceClass": "file_hash",
+        "evidence": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\p3r1-e2e-e3-yOdLQu\\workdir\\proof.txt（请求短名 C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\p3r1-e2e-e3-yOdLQu\\workdir\\proof.txt 经 Get-Item 解析为同一路径）；exists=True；content=[real-evidence-v1]；length=16 bytes；sha256=8efe402a5e43a983151fb036b98af509b1f58e3c8bd4af095046ff2abbe9"
+      }
+    ],
+    "currentStep": "写入 temp workdir proof.txt 并以 file_hash 证据提交 verify",
+    "remainingSteps": [
+      "write 创建 temp workdir 下 proof.txt（内容 real-evidence-v1）",
+      "pwsh 校验真实路径/内容/SHA256",
+      "autonomy_verify 提交 file_hash PASS 证据",
+      "结束回合"
+    ],
+    "lastProgressAt": 1788045626443,
+    "lastVerifiedCheckpoint": "temp workdir proof.txt 以 file_hash 证据复核通过，验收标准 0 保持 PASS",
+    "verificationState": "VERIFIED",
+    "lastErrorClass": null
+  }
+}

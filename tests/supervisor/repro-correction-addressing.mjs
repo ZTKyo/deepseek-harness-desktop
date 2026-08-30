@@ -135,6 +135,17 @@ async function countMarker(sessionId, marker) {
 		return JSON.stringify(value?.events ?? []).split(marker).length - 1;
 	} catch { return -1; }
 }
+// steer 注入后模型需要真实回合时间处理，marker 回显有延迟 —— 轮询等待窗口，避免时序 flake
+async function waitForMarker(sessionId, marker, timeoutMs = 180000) {
+	const deadline = Date.now() + timeoutMs;
+	let last = -1;
+	while (Date.now() < deadline) {
+		last = await countMarker(sessionId, marker);
+		if (last >= 1) return last;
+		await sleep(6000);
+	}
+	return last;
+}
 async function snapshotRow(token, sgid) {
 	const snap = await sb('get_snapshot', {}, token);
 	return snap.body?.supervisorGoals?.find((r) => r.supervisorGoalId === sgid) ?? null;
@@ -226,10 +237,10 @@ try {
 
 	// ---------- full 模式：真实 marker 回显 ----------
 	if (MODE === 'full') {
-		const cA = await countMarker(sidA, markerA);
+		const cA = await waitForMarker(sidA, markerA);
 		ok('FULL LEG A marker in sidA history', cA >= 1, `count=${cA}`);
 		if (EXPECT === 'post') {
-			const cB = await countMarker(sidB, markerB);
+			const cB = await waitForMarker(sidB, markerB);
 			ok('FULL LEG B marker in sidB history（sg-only 同 Session 注入）', cB >= 1, `count=${cB}`);
 		}
 	} else {

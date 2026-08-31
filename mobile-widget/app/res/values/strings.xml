@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">DSH Watchdog</string>
-    <string name="widget_label">DSH 看板</string>
-    <string name="widget_desc">DeepSeek Harness 任务看板（只读）：状态/任务/代次/模型</string>
-    <string name="config_title">DSH 看板设置</string>
-    <string name="save">保存并刷新</string>
-    <string name="init_state">DSH</string>
-</resources>

@@ -55,3 +55,6 @@ node tests/supervisor/run-supervisor-ci-e2e.mjs                   # 三阶段真
   HF1 VERIFIED 态完好（sg-15fc877d… gen=4 / VERIFIED / PASS）。
 - **CI**：PR #80 三 gate 全绿后 merged=`2bf4194`；02.8 分支同步 main 后 head `7399a0b`
   CI L1/L2/L3 全部 success。
+- **治理事件（同日如实记录）**：收口文档初版 PR #81 的分支误从含 02.8 实现面的本地检出创建，
+  squash 后把 02.8 实现面带入 main；已 revert 并在干净基线（2bf4194）重新应用本文档收口，
+  02.8 内容保持由 PR #79 承载（OPEN）待 External Review。

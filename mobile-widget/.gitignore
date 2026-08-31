@@ -1,5 +1,0 @@
-# 本地签名材料与构建产物不入库（keystore 含私钥；repo 无 .apk 追踪惯例）
-keystore/
-build/
-*.apk
-*.idsig

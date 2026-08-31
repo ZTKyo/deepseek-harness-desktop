@@ -267,27 +267,3 @@
     - id: supervisor-bridge
       name: './supervisor-bridge.mjs'
       config: {}
-
-# --- Supervisor Runtime Watchdog（watchdog，Phase 02.8 2026-08-31）---
-# Supervisor 轻量观察/有界恢复层（不是第二 Task Supervisor Authority），详见
-# docs/roadmap/reports/PHASE_02_8_WATCHDOG_MOBILE_MONITOR/GAP_AUDIT.md。
-# 只读权威（回环 get_snapshot/get_state）+ in-host session/event 心跳 + watchdog-core
-# 纯函数投影（IDLE/RUNNING/STALLED/RECOVERING/AWAITING_REVIEW/BLOCKED/VERIFIED，
-# UI 层补充 OFFLINE/UNKNOWN）；自动恢复仅经既有 /supervisor/send_correction
-# （幂等 commandId WD:g<gen>:CORRECTION:<seq> + generation gate + bridge 预算闸 +
-# 本层 episode/日预算 + denylist）；状态变化推送走既有 telegram-alert.ps1；
-# 落盘仅 ~/.dsh/watchdog/last-snapshot.json（脱敏投影）。
-# 删除本段即还原（插件进入 QUARANTINED：源码保留，注册禁用）。
-- insert:
-    - id: watchdog
-      name: './watchdog.mjs'
-      config:
-        pollMs: 60000
-        stallAfterMs: 1800000
-        stallConfirmations: 2
-        recoverAfterMs: 3600000
-        recoveryWindowMs: 900000
-        maxCorrectionsPerEpisode: 1
-        maxCorrectionsPerDay: 3
-        pendingStuckMs: 600000
-        pushOnStateChange: true

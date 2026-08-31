@@ -598,6 +598,16 @@ export function deriveControlState(receipt, projection) {
 	if (receipt?.pendingMutation) {
 		return { controlState: current, changed: false, completionReason };
 	}
+	// 02.75-HF2 CORRECTING 粘滞（2026-09-01）：纠偏窗口内宿主 projection 的 phase=complete
+	// 不得在读时把 CORRECTING 压回 AWAITING_REVIEW——review FAIL 是显式监督裁定，已写入
+	// receipt（§13），其唯一合法出口也是显式命令（send_correction → RUNNING ·
+	// recordReview PASS/FAIL → VERIFIED/CORRECTING/BLOCKED · cancel → CANCELLED）。
+	// 读时真值推导只应生效于 RUNNING/DISPATCHED（与上方 pendingMutation 持有同构：
+	// 真实复现：02.8 R1 交付后，host goal 已 complete 的会话纠偏，get_goal 首读即把
+	// CORRECTING 抹掉，reviewer/guardian 看不到纠偏态）。completionReason 仍随读返回。
+	if (current === 'CORRECTING' && phase === 'complete') {
+		return { controlState: current, changed: false, completionReason };
+	}
 	const event = phase === 'complete' ? 'harness_complete' : (phase === 'active' || phase === 'paused') ? 'prompt_running' : null;
 	if (!event) return { controlState: current, changed: false, completionReason };
 	const next = controlReducer(current, event, { correctionsLeft: receipt?.correctionsLeft });

@@ -72,8 +72,16 @@
 
 - 全部改动仍在工作树未提交（R1/R2/R3 连续演进，待与 PR_BODY.md 一起打包提交）。
 - `plugins/execution-continuity.mjs.bak-p3r2-ctfallback`：更早阶段遗留的未跟踪备份文件，非本改造产物，待确认后清理。
-- FCM 真实推送链（FCM_PROJECT_ID / 服务账号）为服务端可选路径，CI 隔离 home 无凭据时跳过；
-  Android 真机验证 → WAITING_USER（与 R1 报告同口径）。
+- **02.8 真实状态校正（2026-09-01，External Review 授权 truth correction；纯文档，零代码改动）**：
+  - **FCM sender = IMPLEMENTED / NOT ACTIVATED**：服务端 `buildFcmPushPayload`/`buildFcmRequest`
+    代码与单测在案（IMPLEMENTED）；真实发送链未激活——Firebase 项目/凭据
+    （FCM_PROJECT_ID / 服务账号）未配置（NOT ACTIVATED）；
+  - **Android FCM receiver = NOT IMPLEMENTED**：APK 零第三方依赖红线，无 FCM SDK/接收组件；
+    即使 sender 激活，真机也无接收路径；
+  - **当前有效通道（fallback）= JobScheduler 15min 只读轮询 + widget_info 30min 兜底 + 手动点击刷新**
+    （zero mutation 不变量不变）；
+  - **AC1 / AC3 = UNVERIFIED**：真实 Firebase 推送链未建立 + 真机未验证（推送发射仅 spy 级 E5）；
+  - **Waiting For = FIREBASE（项目/凭据）+ PHONE（真机安装验证）**，均为用户侧动作（WAITING_USER）。
 
 ## 6. REAL E2E 结果（已回填）
 

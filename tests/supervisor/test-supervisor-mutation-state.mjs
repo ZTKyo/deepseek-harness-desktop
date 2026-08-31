@@ -518,8 +518,6 @@ t('M9b review FAIL → CORRECTING → correction 回 RUNNING（同一 Goal conti
 	assert.equal(core.deriveSupervisorGoalId(KEY), r0.supervisorGoalId);
 });
 
-// ---------- M9c CORRECTING 粘滞：已移交 02.75-HF2（PR #80 独立承载，test e2e-hf2-correcting-persistence.mjs） ----------
-
 // ---------- M10 Bridge restart：persisted receipts 重载后 replay 无第二副作用 ----------
 t('M10 restart replay: no second side effects after reload', async () => {
 	const host1 = new FakeHost();

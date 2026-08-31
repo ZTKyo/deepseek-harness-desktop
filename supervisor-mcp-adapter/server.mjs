@@ -32,7 +32,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const ADAPTER_VERSION = '0.3.0';
+const ADAPTER_VERSION = '0.1.0';
 const PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'dsh-supervisor-bridge';
 
@@ -46,10 +46,6 @@ const BRIDGE_BASE = (process.env.BRIDGE_BASE || 'http://127.0.0.1:3080').replace
 const TOKEN_FILE = process.env.MCP_TOKEN_FILE || join(homedir(), '.dsh', 'supervisor-mcp', 'token');
 const BRIDGE_TOKEN_FILE = process.env.BRIDGE_TOKEN_FILE || join(homedir(), '.dsh', 'supervisor-bridge', 'token');
 const REQUIRE_AUTH = process.env.MCP_REQUIRE_AUTH !== '0';
-// P2.8：Widget 只读通道——独立 WATCHDOG token（默认 ~/.dsh/watchdog/token，与入口/上游 token 三分离）。
-// 该 token 由宿主 watchdog 插件首次启动时生成；adapter 只读同文件做入口鉴权，并原样透传给 3080。
-const WATCHDOG_TOKEN_FILE = process.env.WATCHDOG_TOKEN_FILE || join(homedir(), '.dsh', 'watchdog', 'token');
-const WATCHDOG_REQUIRE_AUTH = process.env.WATCHDOG_REQUIRE_AUTH !== '0';
 
 // 两个 token 职责分离（不得混用）：
 //   bridgeToken   —— adapter → supervisor-bridge 的上游鉴权（BRIDGE_TOKEN / BRIDGE_TOKEN_FILE）
@@ -372,49 +368,6 @@ async function healthz() {
 	return { ok: true, adapter: SERVER_NAME, version: ADAPTER_VERSION, protocol: PROTOCOL_VERSION, auth: REQUIRE_AUTH ? 'bearer' : 'none', bridge, tools: TOOLS.length };
 }
 
-// P2.8：Widget 只读代理（GET /watchdog/health | /watchdog/status）。
-// 零缓存、零 mutation：入口用 WATCHDOG token 鉴权，上游用同一 token 打 3080 /watchdog/*。
-async function proxyWatchdog(pathname) {
-	const token = watchdogToken();
-	if (!token) return { status: 503, body: { ok: false, error: 'watchdog_token_unavailable' } };
-	try {
-		const res = await fetch(`${BRIDGE_BASE}${pathname}`, {
-			headers: { Authorization: `Bearer ${token}` },
-			signal: AbortSignal.timeout(6000),
-		});
-		const body = await res.json().catch(() => ({ ok: false, error: 'bad_json' }));
-		return { status: res.status, body };
-	} catch (e) {
-		return { status: 502, body: { ok: false, error: 'watchdog_upstream_unreachable', detail: String(e?.message ?? e).slice(0, 120) } };
-	}
-}
-
-function watchdogToken() {
-	const explicit = process.env.WATCHDOG_TOKEN;
-	if (typeof explicit === 'string' && explicit.trim().length >= 32) return explicit.trim();
-	try {
-		const raw = readFileSync(WATCHDOG_TOKEN_FILE, 'utf8').trim();
-		return raw.length >= 32 ? raw : null;
-	} catch {
-		return null;
-	}
-}
-
-function checkWatchdogAuth(header) {
-	if (!WATCHDOG_REQUIRE_AUTH) return false; // watchdog 只读面不提供无鉴权模式（fail-closed）
-	const token = watchdogToken();
-	if (!token) return false;
-	const m = /^Bearer\s+(.+)$/.exec(String(header ?? '').trim());
-	if (!m) return false;
-	const given = Buffer.from(m[1], 'utf8');
-	const want = Buffer.from(token, 'utf8');
-	if (given.length !== want.length) {
-		timingSafeEqual(given.subarray(0, 1), want.subarray(0, 1)); // 平滑时序
-		return false;
-	}
-	return timingSafeEqual(given, want);
-}
-
 const httpServer = createServer(async (req, res) => {
 	const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 	try {
@@ -422,35 +375,6 @@ const httpServer = createServer(async (req, res) => {
 			const body = JSON.stringify(await healthz());
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(body);
-			return;
-		}
-		if (url.pathname === '/watchdog/health' || url.pathname === '/watchdog/status') {
-			if (req.method !== 'GET') { res.writeHead(405, { Allow: 'GET' }); res.end(); return; }
-			if (!checkWatchdogAuth(req.headers.authorization)) {
-				log(`watchdog auth=fail ip=${req.socket.remoteAddress}`);
-				res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer realm="dsh-watchdog"' });
-				res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
-				return;
-			}
-			const out = await proxyWatchdog(url.pathname);
-			res.writeHead(out.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-			res.end(JSON.stringify(out.body));
-			return;
-		}
-		// P2.8 R2 B（External Review）：watchdog SSE 端点已随 FCM 改造移除（服务端
-		// /watchdog/events 不复存在，手机侧改为 FCM data-message 唤醒 + 30min 兜底轮询）。
-		// 入口保留显式 410 Gone（而非 404），给旧客户端一个可判定的停用信号；零 mutation。
-		if (url.pathname === '/watchdog/events') {
-			if (req.method !== 'GET') { res.writeHead(405, { Allow: 'GET' }); res.end(); return; }
-			if (!checkWatchdogAuth(req.headers.authorization)) {
-				log(`watchdog-events-gone auth=fail ip=${req.socket.remoteAddress}`);
-				res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer realm="dsh-watchdog"' });
-				res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
-				return;
-			}
-			log(`watchdog-events-gone ip=${req.socket.remoteAddress}`);
-			res.writeHead(410, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-			res.end(JSON.stringify({ ok: false, error: 'watchdog_sse_removed', replacement: 'fcm_data_message+poll_fallback', detail: 'push moved to FCM data-message; poll GET /watchdog/status remains (PHASE_02_8 R2 B).' }));
 			return;
 		}
 		if (url.pathname !== '/mcp') {

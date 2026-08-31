@@ -83,6 +83,43 @@
   - **AC1 / AC3 = UNVERIFIED**：真实 Firebase 推送链未建立 + 真机未验证（推送发射仅 spy 级 E5）；
   - **Waiting For = FIREBASE（项目/凭据）+ PHONE（真机安装验证）**，均为用户侧动作（WAITING_USER）。
 
+## 5.1 R2 C FCM 激活 + R3 C Android FCM 客户端真实实现（2026-09-01 晚，commit ccb3d55）
+
+前置变化：用户侧 FIREBASE 已完成（Firebase 项目 `dsh-watchdog` 建立，服务账号凭据
+`FCM_SERVICE_ACCOUNT_JSON` 经 Secret Store 注入 `~/.dsh/.credentials.yaml`，凭据不入仓不入日志）。
+本节取代 §5 中「NOT ACTIVATED / NOT IMPLEMENTED」两条校正的**现状**（校正本身作为当时事实保留）。
+
+- **FCM sender = ACTIVATED（服务端真实发送 PASS）**：
+  新增 `tests/watchdog/fcm-send-test.mjs` —— 与插件 `fcmAccessToken`/`watchdog-core.buildFcmRequest`
+  同线格式（SA → OAuth2 JWT → FCM HTTP v1 `messages:send`），topic=watchdog，载荷与
+  `buildFcmPushPayload` 白名单同构（data 全字符串 + wake）。实测：
+  **http=200，`message=projects/dsh-watchdog/messages/1204…`，FCM SERVER-SIDE ACTIVATION PASS**
+  （输出全程脱敏：不打印 SA 内容/private key/access token）。
+- **Android FCM receiver = IMPLEMENTED IN APK（构建+内容验证 PASS）**：
+  - 新增 `WatchdogFcmReceiver`（继承 `FirebaseMessagingService`，intent-filter
+    `com.google.firebase.MESSAGING_EVENT`）：data-message 唤醒 → `requestFetch(ctx,"fcm")`，
+    复用既有只读轮询管线（zero mutation 不变量不变）；通知通道 watchdog_alert，Android 13+
+    POST_NOTIFICATIONS 运行时申请；notification 载荷走系统通知，data 载荷走唤醒拉取。
+  - 新增 `WatchdogTopicSubscriber`：配置完成/启动后 `FirebaseMessaging.getInstance()
+    .subscribeToTopic("watchdog")`，持久化 fcmSubscribed，避免每次启动重复订阅。
+  - 构建：迁移 **Gradle 8.10.2（JDK17）**（旧 4.x AGP 不兼容 google-services 插件）；
+    `build.ps1` 保持同一入口（自动探测 JDK/Gradle，未装则退回 4.x 旧路径）；
+    `copyFinalApk` 改普通任务 + doLast 拷贝（dest 目录与 `.gradle` 项目目录重叠，Copy 任务
+    dest 状态快照的 MD5 必然失败；`doNotTrackState()` 对 Copy 同样抛 notTrackingReason null，
+    实测 5 轮定位后采用此方案）。
+  - 「零第三方依赖」红线如实变更：仅引入 **firebase-messaging 官方 AAR + google-services
+    插件**（FCM 接收的最低必要面），其余仍零依赖；google-services.json / keystore / build
+    产物全部入 `.gitignore` 不入仓。
+  - 产物：`dsh-watchdog-widget.apk` **2.45MB**，debug 签名（CN=DSH Watchdog Widget）不变，
+    老版本可覆盖升级；验证：aapt2 manifest 树（MESSAGING_EVENT service + 官方
+    FirebaseInstanceIdReceiver/FirebaseMessagingService 注入 + c2dm.RECEIVE 权限）+
+    dex 扫描（5 个自有类含 FCM 两类全在）双 PASS。
+- **当前有效通道（升级后）= FCM 唤醒（APK 安装并联网后自动生效）+ JobScheduler 15min 只读轮询
+  （兜底不变）+ widget_info 30min + 手动点击刷新**（zero mutation 不变量不变）。
+- **AC1 = 服务端半环 VERIFIED（真实 FCM 唤醒推送发送成功）；真机半环 / AC3 = 待 PHONE**
+  （新 APK 真机安装 + 配置页登录 + 观察 FCM 实收，用户侧动作 WAITING_USER）。
+- **Waiting For = PHONE（真机安装新 APK + FCM 实收验证）；FIREBASE 已完成。**
+
 ## 6. REAL E2E 结果（已回填）
 
 **最终：WATCHDOG REAL E2E PASS — 43 passed, 0 failed（run=wd-mtgvboh7，exit 0）**

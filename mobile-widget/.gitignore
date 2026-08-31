@@ -1,5 +1,9 @@
 # 本地签名材料与构建产物不入库（keystore 含私钥；repo 无 .apk 追踪惯例）
 keystore/
 build/
+.gradle/
+local.properties
 *.apk
 *.idsig
+# Firebase app config（含 api_key 等；仅本机使用，不入库）
+google-services.json

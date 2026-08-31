@@ -44,6 +44,9 @@ public class WatchdogConfigActivity extends Activity {
 						.putString("token", tok.getText().toString().trim()).apply();
 				// R3 B：无常驻连接 — 只注册 15 分钟 JobScheduler 轮询（幂等），无前台服务
 				WatchdogWidgetProvider.schedulePoll(WatchdogConfigActivity.this);
+				// R2 C：配置成功 → 幂等订阅 FCM topic watchdog（官方 API；
+				// 失败仅记录本地诊断，15min/30min/手动三路 fallback 照常）
+				WatchdogTopicSubscriber.subscribe(WatchdogConfigActivity.this);
 				WatchdogWidgetProvider.refreshOne(WatchdogConfigActivity.this,
 						AppWidgetManager.getInstance(WatchdogConfigActivity.this), appWidgetId, true);
 				Intent out = new Intent();

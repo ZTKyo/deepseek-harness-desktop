@@ -37,11 +37,21 @@ import java.util.Locale;
  *  - 兜底 = widget_info updatePeriodMillis 30 分钟 + 点击手动刷新；
  *  - 近实时状态告警由服务端承担（watchdog 插件 R2 B：Telegram 旁路 / 可选 FCM）。
  * 零 mutation：本类没有任何写/恢复调用；恢复仅由宿主 watchdog 插件执行。
+ *
+ * R2 C（Firebase 前置就绪）：新增 FCM 唤醒入口——
+ *  - requestFetch(ctx, trigger)：WatchdogFcmReceiver 收到 data-message 后调用的
+ *    显式广播（静默刷新，不渲染「拉取中」占位）；触发源记录到本地诊断；
+ *  - markDiag：最小本地诊断（时间戳/事件 id/触发源；不含 token，不上报远端）；
+ *  - 15min JobScheduler / 30min widget / 手动刷新三路 fallback 语义全部保留。
  */
 public class WatchdogWidgetProvider extends AppWidgetProvider {
 
 	public static final String ACTION_FETCH = "com.dsh.watchdog.widget.ACTION_FETCH";
+	/** R2 C：ACTION_FETCH 触发源 extra（"fcm"=推送唤醒；缺省=小组件点击手动刷新）。 */
+	public static final String EXTRA_TRIGGER = "trigger";
 	private static final String PREFS = "dsh_watchdog_widget";
+	/** R2 C：最小本地诊断独立 prefs（只记时间戳/事件 id/触发源；不含 token）。 */
+	private static final String PREFS_DIAG = "dsh_watchdog_diag";
 	private static final String KEY_BASE_URL = "baseUrl";
 	private static final String KEY_TOKEN = "token";
 	private static final int POLL_JOB_ID = 1001;
@@ -58,10 +68,15 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 	public void onReceive(Context ctx, Intent intent) {
 		super.onReceive(ctx, intent);
 		if (ACTION_FETCH.equals(intent.getAction())) {
-			// R3 B 后 ACTION_FETCH 仅来自小组件点击 → 用户手动刷新，渲染「拉取中」反馈
+			// R3 B：小组件点击（PendingIntent，无 trigger extra）→ 手动刷新，渲染「拉取中」反馈；
+			// R2 C：FCM 唤醒（trigger="fcm"）→ 静默刷新（推送即状态变化信号，不打扰界面）
+			String trigger = intent.getStringExtra(EXTRA_TRIGGER);
+			WatchdogWidgetProvider.markDiag(ctx, "last_fetch_trigger",
+					trigger == null ? "manual" : trigger);
+			boolean manual = trigger == null;
 			AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
 			int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, WatchdogWidgetProvider.class));
-			for (int id : ids) refreshOne(ctx, mgr, id, true);
+			for (int id : ids) refreshOne(ctx, mgr, id, manual);
 		}
 	}
 
@@ -80,19 +95,23 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 		} catch (Exception ignore) { /* 部分厂商调度限制时不致崩溃；仍有 30min 兜底 */ }
 	}
 
-	/** R3 B：同步拉取全部小组件实例（JobScheduler 工作线程调用）。 */
-	static void fetchAllSync(Context ctx) {
-		AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
-		int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, WatchdogWidgetProvider.class));
-		for (int id : ids) refreshOne(ctx, mgr, id, false);
+	/**
+	 * R2 C：外部唤醒入口（WatchdogFcmReceiver 等后台组件调用）。
+	 * 显式组件广播（API 26+ 显式广播不受 implicit-broadcast 限制）；
+	 * 带 trigger extra → onReceive 静默刷新，与手动点击（渲染占位）区分。
+	 */
+	public static void requestFetch(Context ctx, String trigger) {
+		Intent i = new Intent(ACTION_FETCH);
+		i.setClassName(ctx.getPackageName(), WatchdogWidgetProvider.class.getName());
+		i.putExtra(EXTRA_TRIGGER, trigger == null ? "manual" : trigger);
+		ctx.sendBroadcast(i);
 	}
 
-	@Override
-	public void onDisabled(Context ctx) {
-		// 最后一个小组件被移除 → 取消 15 分钟周期任务（无常驻连接，无需停任何服务）
+	/** R2 C：最小本地诊断（时间戳/事件 id/触发源；不含 token，不上报远端；失败静默）。 */
+	static void markDiag(Context ctx, String key, String value) {
 		try {
-			JobScheduler js = (JobScheduler) ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);
-			if (js != null) js.cancel(POLL_JOB_ID);
+			ctx.getSharedPreferences(PREFS_DIAG, Context.MODE_PRIVATE)
+					.edit().putString(key, value).apply();
 		} catch (Exception ignore) { }
 	}
 
@@ -105,7 +124,7 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 		String baseUrl = p.getString(KEY_BASE_URL, "");
 		String token = p.getString(KEY_TOKEN, "");
 		// 仅用户主动触发时渲染「拉取中」占位（防止点刷新后界面无反馈）；
-		// 后台周期轮询静默拉取，避免每 15 分钟闪一次占位
+		// 后台周期轮询/FCM 唤醒静默拉取，避免每 15 分钟闪一次占位
 		if (showFetching) {
 			render(ctx, mgr, appWidgetId, "…", "拉取中", "", "", 0xFF8A9AA6, "点击重试");
 		}
@@ -133,10 +152,14 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 		@Override
 		protected void onPostExecute(Snapshot s) {
 			if (s.error != null) {
+				WatchdogWidgetProvider.markDiag(ctx, "last_fetch_error_at",
+						String.valueOf(System.currentTimeMillis()));
 				render(ctx, mgr, appWidgetId, "OFFLINE", "无法连接", s.error, "", 0xFFD05050,
 						"点击重试");
 				return;
 			}
+			WatchdogWidgetProvider.markDiag(ctx, "last_fetch_updated_at",
+					String.valueOf(System.currentTimeMillis()));
 			int color = colorFor(s.state);
 			String task = s.taskName == null ? "" : trunc(s.taskName, 72);
 			StringBuilder meta = new StringBuilder();

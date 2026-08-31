@@ -12,6 +12,8 @@ import android.app.job.JobService;
  *
  * - 周期由 WatchdogWidgetProvider.schedulePoll 注册（setPersisted 跨重启保活，
  *   所需 RECEIVE_BOOT_COMPLETED 仅服务于此，无 BOOT receiver 组件）。
+ * - R2 C：拉取统一走 requestFetch(ctx, "poll") 显式广播（触发源 diag="poll"，
+ *   静默刷新，与 FCM "fcm"/手动 "manual" 三路 fallback 语义一致）。
  * - 系统兜底：widget_info updatePeriodMillis 30 分钟 + 点击手动刷新。
  * - 近实时状态告警由服务端承担（watchdog 插件 R2 B：Telegram 旁路 /
  *   可选 FCM），手机侧零长连接。
@@ -25,7 +27,8 @@ public class WatchdogPollReceiver extends JobService {
 		new Thread(new Runnable() {
 			@Override public void run() {
 				try {
-					WatchdogWidgetProvider.fetchAllSync(WatchdogPollReceiver.this);
+					// R2 C：fetchAllSync 已由 requestFetch 广播机制取代（WidgetProvider 内部异步执行）
+					WatchdogWidgetProvider.requestFetch(WatchdogPollReceiver.this, "poll");
 				} finally {
 					jobFinished(params, false);
 				}

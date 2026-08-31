@@ -42,3 +42,16 @@ node tests/supervisor/run-supervisor-ci-e2e.mjs                   # 三阶段真
 
 ## 回滚
 `git revert b32852d`（分支内单 commit 修复 + 单 commit 文档；无部署侧状态）。
+
+## 运行时部署证据（2026-09-01 收口补充）
+- **事务化部署**：部署前备份 `~/.dsh/profiles/web/supervisor-bridge-core.mjs.bak-hf2-20260901`（回滚锚）；
+  部署字节 == 仓库字节（core `5d012c56…` / bridge `057bbc0f…` 双文件 sha256 MATCH）。
+- **受控重启**：经 `restart-dsh-server-delayed.ps1`（已提前告知用户）重启加载；
+  `GET /supervisor/health` identity 三环一致：loaded sha256（bridge `057bbc0f…` / core `5d012c56…`）
+  == deployed == repo；`ledger.state=OK`（receipts=4, error=null）。
+- **重启后回归（全部真实执行）**：HF2 sticky E2E `32 passed, 0 failed`（transient500(get_goal)=0
+  观察项）＋ mutation 套件 `19 passed, 0 failed`；活体态复查：P3 冻结态完好
+  （sg-b734914c… gen=2 / AWAITING_REVIEW / verdict=FAIL，未执行 reconcile）＋
+  HF1 VERIFIED 态完好（sg-15fc877d… gen=4 / VERIFIED / PASS）。
+- **CI**：PR #80 三 gate 全绿后 merged=`2bf4194`；02.8 分支同步 main 后 head `7399a0b`
+  CI L1/L2/L3 全部 success。

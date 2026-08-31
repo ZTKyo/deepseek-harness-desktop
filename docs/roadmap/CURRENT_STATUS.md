@@ -593,3 +593,9 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   FirebaseInstanceIdReceiver 注入、c2dm/POST_NOTIFICATIONS 权限、5 自有类在 dex）；
   google-services.json/keystore/build 产物全部入 .gitignore；总览 02.8 行同步（AC1 服务端
   半环 VERIFIED，真机半环与 AC3 待 PHONE）。
+- **2026-09-01 晚（续）：02.8 分支推送 + CI 三 gate 全绿收口（commit c1c540b）**：未推送的
+  ccb3d55/c1c540b 推送至 origin/phase-02-8-watchdog-mobile-monitor（PR #79 head 更新，
+  未 merge、未开新 PR）；c1c540b 上 CI L1 Static Gate（run 33408755113）+ L2 Reliability
+  State Machines（run 33408755215）+ L3 Harness Smoke（run 33408755279）全部 success；
+  adb devices gate：无设备 → WAITING PHONE（PHONE-1..5 未执行，AC1 真机半环与 AC3 待用户
+  侧装新 APK + FCM 实收验证）；Notion 02.8 追踪页同步（R2 C/R3 C 现状 + CI 十二 run 全绿）。

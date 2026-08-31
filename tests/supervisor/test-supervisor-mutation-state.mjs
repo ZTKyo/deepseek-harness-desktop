@@ -518,6 +518,28 @@ t('M9b review FAIL → CORRECTING → correction 回 RUNNING（同一 Goal conti
 	assert.equal(core.deriveSupervisorGoalId(KEY), r0.supervisorGoalId);
 });
 
+// ---------- M9c CORRECTING 粘滞（R1 Correction B6，P3 真实指纹） ----------
+t('M9c CORRECTING sticky: read-time derive must not override review FAIL with harness_complete', async () => {
+	const host = new FakeHost();
+	const d = new Driver(host);
+	await d.dispatch({ idempotencyKey: KEY, objective: 'objective m9c', initialInstruction: 'KICK' });
+	d.receipts.set(KEY, { ...d.receipts.get(KEY), controlState: 'AWAITING_REVIEW' });
+	await d.review({ commandId: CID(1, 'REVIEW', 1), generation: 1, sessionId: SID, verdict: 'FAIL', criteriaResults: [{ criterion: 'x', result: 'fail' }] });
+	assert.equal(d.receipts.get(KEY).controlState, 'CORRECTING');
+	// round 完成后宿主投影恒 phase=complete；读时推导不得把 CORRECTING 压回 AWAITING_REVIEW
+	const r = d.receipts.get(KEY);
+	const d1 = core.deriveControlState(r, { goal: r.goalRef, phase: 'complete' });
+	assert.equal(d1.controlState, 'CORRECTING');
+	assert.equal(d1.changed, false);
+	// correction → RUNNING 后，complete 投影才合法推导回 AWAITING_REVIEW
+	const c = await d.correction(CORR);
+	assert.equal(c.controlState, 'RUNNING');
+	const r2 = d.receipts.get(KEY);
+	const d2 = core.deriveControlState(r2, { goal: r2.goalRef, phase: 'complete' });
+	assert.equal(d2.controlState, 'AWAITING_REVIEW');
+	assert.equal(d2.changed, true);
+});
+
 // ---------- M10 Bridge restart：persisted receipts 重载后 replay 无第二副作用 ----------
 t('M10 restart replay: no second side effects after reload', async () => {
 	const host1 = new FakeHost();

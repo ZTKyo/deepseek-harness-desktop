@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -40,6 +41,8 @@ public class WatchdogConfigActivity extends Activity {
 			@Override public void onClick(View v) {
 				p.edit().putString("baseUrl", url.getText().toString().trim())
 						.putString("token", tok.getText().toString().trim()).apply();
+				requestNotificationPermissionIfNeeded();
+				startEventService();
 				WatchdogWidgetProvider.refreshOne(WatchdogConfigActivity.this,
 						AppWidgetManager.getInstance(WatchdogConfigActivity.this), appWidgetId);
 				Intent out = new Intent();
@@ -48,5 +51,23 @@ public class WatchdogConfigActivity extends Activity {
 				finish();
 			}
 		});
+	}
+
+	/** R1 B1：保存配置后启动/重载事件推送前台服务（前台上下文启动，合规）。 */
+	private void startEventService() {
+		Intent svc = new Intent(this, WatchdogEventService.class);
+		svc.setAction(WatchdogEventService.ACTION_START);
+		if (Build.VERSION.SDK_INT >= 26) {
+			startForegroundService(svc);
+		} else {
+			startService(svc);
+		}
+	}
+
+	/** Android 13+ 前台服务通知需要通知权限；拒绝时推送服务仍运行，仅通知不可见。 */
+	private void requestNotificationPermissionIfNeeded() {
+		if (Build.VERSION.SDK_INT >= 33) {
+			requestPermissions(new String[]{ "android.permission.POST_NOTIFICATIONS" }, 1);
+		}
 	}
 }

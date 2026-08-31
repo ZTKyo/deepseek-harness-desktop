@@ -22,4 +22,25 @@
 ## Rollback
 Delete watchdog section in cordis.patch.yml (plugin → QUARANTINED) / revert adapter segment / branch not merging has zero effect on main (anchor fd26b08).
 
+---
+
+## R1 Correction — External Review Round 1 (all 5 blockers resolved, real E2E)
+
+**B1 event-driven widget**: new `WatchdogEventService` (foreground dataSync, SSE `GET /watchdog/events`, payload = state/revision/event-id metadata only) + `WatchdogBootReceiver` + manifest perms; exponential backoff 1s→60s; 30-min poll kept as fallback. Zero mutation, zero third-party deps.
+
+**B2 model truth**: `model.default` from settings only (single source); `model.actual` stays `UNKNOWN` until a runtime authority exists (`source: runtime_authority_unavailable_v1`) — default never masquerades as actual.
+
+**B3 budget persistence**: watchdog budget/ledger persisted + reloaded across restart; accepted-only counting, duplicates never double-count, definite failures consume nothing; bridge receipts: conflicting replay after reload → `409 idempotency_conflict` (zero RPC).
+
+**B4 in-flight fail-safe**: authoritative in-flight signal → `RUNNING` (`in_flight_work_failsafe`), never STALLED, no correction while in-flight.
+
+**B5 REAL E2E** (`tests/watchdog/e2e-watchdog-real.mjs`): disposable isolated home per run (no P3, denylist double-guard). Instance A (CI legs, 36 checks): E1 STALLED timing → E2 auto-recovery timing/ledger/idempotency → E3 denylist + reboot persistence + SSE reconnect → E5 alert spy → E6 SSE metadata whitelist → E7 token removal → OFFLINE → restore. Instance B (full legs, 11 checks): real model round-1 → AWAITING_REVIEW → review FAIL → CORRECTING/RECOVERING → correction seam accepted → **text really injected into session history** → real round-2 → review PASS → **watchdog terminal VERIFIED**.
+
+### Verification (final run `wd-mtgmpw88`)
+- Unit: supervisor-mutation-state **20/20**, watchdog-core **48/48** (27 → +21 new-behavior cases)
+- REAL E2E: **47 passed, 0 failed — WATCHDOG REAL E2E PASS** (A 36 + B 11, single run)
+- APK rebuilt including B1 event service (classes.dex + apksigner + timestamp verified)
+
+Honest notes: 3 test-harness defects found & fixed during verification (`countMarker` await, B2 gen source, SSE wire filter) — documented in REPORT_R1.md §9. Status stays **AWAITING_REVIEW** (waiting Round 2); P3 frozen, no P4.
+
 Docs: `docs/roadmap/reports/PHASE_02_8_WATCHDOG_MOBILE_MONITOR/{GAP_AUDIT,REPORT_R1}.md`

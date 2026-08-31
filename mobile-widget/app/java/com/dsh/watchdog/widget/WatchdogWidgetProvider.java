@@ -53,6 +53,14 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 		}
 	}
 
+	@Override
+	public void onDisabled(Context ctx) {
+		// 最后一个小组件被移除 → 停止事件推送前台服务
+		Intent stop = new Intent(ctx, WatchdogEventService.class);
+		stop.setAction(WatchdogEventService.ACTION_STOP);
+		try { ctx.startService(stop); } catch (Exception ignore) { /* 未运行 */ }
+	}
+
 	static SharedPreferences prefs(Context ctx) {
 		return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
 	}

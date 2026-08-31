@@ -31,8 +31,9 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Readable } from 'node:stream';
 
-const ADAPTER_VERSION = '0.2.0';
+const ADAPTER_VERSION = '0.3.0';
 const PROTOCOL_VERSION = '2025-06-18';
 const SERVER_NAME = 'dsh-supervisor-bridge';
 
@@ -435,6 +436,63 @@ const httpServer = createServer(async (req, res) => {
 			const out = await proxyWatchdog(url.pathname);
 			res.writeHead(out.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
 			res.end(JSON.stringify(out.body));
+			return;
+		}
+		// P2.8 R1 B1：watchdog SSE 事件流代理（GET /watchdog/events）。
+		// 只读、长连接：入口与上游共用同一 WATCHDOG token；上游 text/event-stream 原样
+		// 管道转发（状态变化事件 + 心跳注释）；客户端断开 → 中止上游。零缓存零 mutation。
+		if (url.pathname === '/watchdog/events') {
+			if (req.method !== 'GET') { res.writeHead(405, { Allow: 'GET' }); res.end(); return; }
+			if (!checkWatchdogAuth(req.headers.authorization)) {
+				log(`watchdog-sse auth=fail ip=${req.socket.remoteAddress}`);
+				res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer realm="dsh-watchdog"' });
+				res.end(JSON.stringify({ ok: false, error: 'unauthorized' }));
+				return;
+			}
+			const token = watchdogToken();
+			if (!token) {
+				res.writeHead(503, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ ok: false, error: 'watchdog_token_unavailable' }));
+				return;
+			}
+			const ac = new AbortController();
+			req.on('close', () => ac.abort());
+			let upstream;
+			try {
+				upstream = await fetch(`${BRIDGE_BASE}/watchdog/events`, {
+					headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+					signal: ac.signal,
+				});
+			} catch (e) {
+				res.writeHead(502, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ ok: false, error: 'watchdog_upstream_unreachable', detail: String(e?.message ?? e).slice(0, 120) }));
+				return;
+			}
+			if (!upstream.ok || !upstream.body) {
+				res.writeHead(upstream.status === 401 ? 401 : 502, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ ok: false, error: 'watchdog_sse_upstream_bad_status', status: upstream.status }));
+				return;
+			}
+			log(`watchdog-sse client=connected ip=${req.socket.remoteAddress}`);
+			res.writeHead(200, {
+				'Content-Type': 'text/event-stream; charset=utf-8',
+				'Cache-Control': 'no-store',
+				'Connection': 'keep-alive',
+				'X-Accel-Buffering': 'no',
+			});
+			try {
+				await new Promise((resolve) => {
+					const stream = Readable.fromWeb(upstream.body);
+					stream.on('data', (chunk) => {
+						try { res.write(chunk); } catch { /* closed */ }
+					});
+					stream.on('end', () => { try { res.end(); } catch { /* ignore */ } resolve(); });
+					stream.on('error', () => { try { res.end(); } catch { /* ignore */ } resolve(); });
+					res.on('close', () => { ac.abort(); try { stream.destroy(); } catch { /* ignore */ } resolve(); });
+				});
+			} finally {
+				log(`watchdog-sse client=disconnected ip=${req.socket.remoteAddress}`);
+			}
 			return;
 		}
 		if (url.pathname !== '/mcp') {

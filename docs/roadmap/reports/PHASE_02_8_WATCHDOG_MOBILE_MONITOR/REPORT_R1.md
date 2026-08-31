@@ -71,3 +71,71 @@
 ## 8. Next
 
 **AWAITING_REVIEW — 停等 External Review**。PASS 后：手机安装配置（用户动作）→ live-fire 恢复演练（受控测试 goal）→ 回归 P3。
+
+---
+
+# 增补：External Review Round 1 → R1 Correction（2026-08-31）
+
+## 9. Review 结论与逐条修复（CHANGES_REQUIRED → 已全部落地）
+
+External Review Round 1 判定 **CHANGES_REQUIRED**，5 个 blocker（B1–B5）。以下逐条记录修复实现与真实证据（全部实测，非声明）。
+
+### B1 — Widget 事件驱动近实时推送 ✅
+- **要求**：不能只靠 30 分钟系统轮询；需要 SSE/事件级近实时链路，push 载荷仅含 wake/revision/event-id 元数据。
+- **实现**：新增 `WatchdogEventService`（前台 `dataSync` 服务，持有 SSE 长连接 `GET /watchdog/events`，Bearer WATCHDOG token；收到 `state_change` → 广播 `ACTION_FETCH` → `WatchdogWidgetProvider` 拉取脱敏投影刷新 widget）；`WatchdogBootReceiver` 开机自动恢复推送；Manifest 增 FOREGROUND_SERVICE(_DATA_SYNC)/RECEIVE_BOOT_COMPLETED/POST_NOTIFICATIONS（13+ 拒授权仅通知不可见，服务照常）。服务端 `watchdog.mjs` 增 SSE 端点：15s 心跳、载荷仅 state/revision/event-id（metadata 白名单，不含 prompt/log/secret/snapshot）。30 分钟 updatePeriodMillis 保留为 stale/fallback。零第三方依赖（HttpURLConnection 手写最小 SSE 解析）、断线指数退避 1s→60s、凭据只读本机 SharedPreferences 不进日志/intent/通知。仍零 mutation。
+- **证据**：REAL E2E E6 腿（SSE 通道元数据白名单 + event-id 格式校验）；APK 重建含 dex 与新组件（7:25:45 > 最后 Java 编辑 7:25:24；classes.dex + DSHWIDGE.RSA 签名核验）。
+
+### B2 — model.actual 真值或 UNKNOWN（禁止 default 冒充 actual）✅
+- **要求**：actualModel/actualProvider 必须是运行时真值；拿不到就明确 UNKNOWN，不得用 settings default 冒充。
+- **实现**：投影拆分 `model.default`（唯一来源 settings.agent-default-model，即 switch_primary_model 单一事实源）与 `model.actual`（仅当存在运行时权威信号才填真值，否则 `UNKNOWN` + `source: runtime_authority_unavailable_v1`）。
+- **证据**：REAL E2E B2 腿：`model.default` 来自真实 settings（非 UNKNOWN）且 `model.actual` 保持 UNKNOWN；E7 隔离 CI home 腿：无 settings → default 也 UNKNOWN、actual UNKNOWN + source 标注；单测覆盖（watchdog-core 48/48）。
+
+### B3 — recovery budget 持久化/可重启 ✅
+- **要求**：预算必须跨重启持久；accepted 才计数、duplicate 不重复计数、definite failure 不消耗预算。
+- **实现**：`watchdog-core.mjs` 预算/账本落盘持久化（watchdog home 目录，重启后重载）；`supervisor-bridge-core.mjs` 收据账本强化（重启后同 fingerprint 重放 → `409 idempotency_conflict`，零副作用）。
+- **证据**：单测（supervisor-mutation-state 20/20，含重启指纹持久化与冲突重放 409 零 RPC 用例）；REAL E2E E2 腿：`budget.acceptedToday >= 1` 由账本推导（非 fail-closed）、恢复恰好 1 次、无重复、left 正确递减；E3 重启腿 token/状态持久化存活。
+
+### B4 — 长命令 fail-safe（in-flight 不判 STALLED）✅
+- **要求**：存在权威 in-flight 信号时必须复用该信号；无信号时不得判 STALLED、不得纠正。
+- **实现**：`watchdog-core.mjs` stall 判定前置 in-flight fail-safe：权威 in-flight 信号（会话运行/回合进行中）→ 保持 `RUNNING`（reason=`in_flight_work_failsafe`），绝不 STALLED、绝不注入 correction。
+- **证据**：REAL E2E B4 腿：真实长回合进行中投影 = RUNNING/in_flight_work_failsafe（从未 STALLED、零 correction）；单测覆盖。
+
+### B5 — REAL E2E E1–E7（隔离实例，禁 P3）✅
+- **要求**：真实端到端演练必须使用专用 disposable 隔离实例，禁止触碰 P3 goal（sg-b734914c / session-7177d0c5）。
+- **实现**：新增 `tests/watchdog/e2e-watchdog-real.mjs`（616 行）：每次运行创建一次性隔离 home（`wd-e2e-*`，run id `wd-mt*`），自建真实 supervisor-bridge + watchdog 插件 + adapter + 隔离 supervisor 会话；**全链路不涉及 P3**（denylist 双保险）。两个实例：
+  - **实例 A（CI 腿，36 项）**：E1 STALLED 判定时序（≥ stallAfterMs、2 次确认、判前预算未动）→ E2 自动恢复时序（≥ recoverAfterMs 才 RECOVERING、账本恰好 1 条、correctionsUsed/left 正确、acceptedToday 由账本推导）→ E3 denylist goal 永不自动恢复 + 重启后 token 持久 + SSE 重连 → E5 告警链路 spy 验证 → E6 SSE 元数据白名单 + event-id → E7 bridge token 摘除 → OFFLINE/supervisor_bridge_unreachable/degraded + SSE state_change、token 恢复 → 自愈回归。
+  - **实例 B（full 腿，11 项）**：真实模型回合实弹——真实 dispatch → 真实 round-1 完成 → watchdog AWAITING_REVIEW → review FAIL 采纳 → bridge 原生 CORRECTING → watchdog RECOVERING → seam correction 采纳 → **correction 文本真实注入会话历史**（历史计数 ≥1，修复了此前 count=Promise 的 await 缺陷与测试期 generation 竞态）→ 真实 round-2 → review PASS → **watchdog 终态 VERIFIED**；另 B4 in-flight fail-safe、B2 模型真值。
+- **证据**：定版运行 `run=wd-mtgmpw88`：**47 passed, 0 failed — WATCHDOG REAL E2E PASS**（A 36 + B 11 单次同跑全绿）。
+
+### E2E harness 自身缺陷修复（诚实记录）
+验证过程中发现并修复 3 个**测试工具**缺陷（非被测代码缺陷）：① correction 注入计数 `countMarker` 少了 `await`（返回 Promise 导致 count=[object Promise]）；② B2 断言曾误读 default 代际，改为读权威 gen 源（genB2）；③ SSE 断言曾把非元数据线误入白名单过滤。均修复后定版运行全绿。
+
+## 10. T1–T12 复核（R1 Correction 后如实重判）
+
+| # | 复核结论 | 说明 |
+|---|---|---|
+| T1 | **PASS（口径更新）** | 7 态 + in-flight fail-safe 路径；单测 48/48（R1 时 27 → +21 新行为用例） |
+| T2 | PASS | REAL E2E E1 实测 STALLED 时序与确认次数 |
+| T3 | **PASS（证据升级）** | 由"仅单测"升级为 REAL E2E E2/E3 实弹（真实账本、真实 denylist、真实重启）；预算三规则（accepted 计数/duplicate 不重复/definite failure 不消耗）单测+实测双证据 |
+| T4 | PASS | 不变（E2E 隔离 home 全程脱敏投影） |
+| T5 | PASS | 隔离实例快照落盘/重载实测（E3 重启腿） |
+| T6 | PASS | 3080 路由既有证据不变 |
+| T7 | PASS | 8091 代理 + 三分离 token 不变；E7 摘 token → 401/OFFLINE 实测 |
+| T8 | **PASS（产物更新）** | APK 重建含 B1 事件服务与 BootReceiver（classes.dex + 签名 + 时间戳核验） |
+| T9 | PASS | E7 实测 OFFLINE 投影与恢复 |
+| T10 | **PASS（口径修正）** | R1 曾以 default 充当投影；现 actual=UNKNOWN + source 标注，default 仅单独字段（B2） |
+| T11 | PASS | 计费仍零猜测（UNAVAILABLE） |
+| T12 | PASS | 单测复跑 48/48 + 20/20；REAL E2E 47/47 定版；git 工作区仅本阶段预期改动 |
+
+## 11. AC 映射更新（仅列变化项）
+
+- **AC3（近实时推送）**：由"Telegram 推送 + 30min 轮询"升级为 **SSE 事件链近实时（B1）**，Telegram 推送保留为桌面侧旁路；推送发射验证为 spy 级（E5），真实 Telegram 首次迁移推送仍是自然验证点（见 F2）。
+- **AC5（可检测+预算内恢复）**：由"仅 core 单测"升级为 **REAL E2E 实弹全链路证据**（F1 关闭）。
+- **AC7（模型真值）**：actual/default 语义修正（B2/T10）。
+
+## 12. 诚实发现（Round 1 增量）
+
+- **F1 已关闭**：live-fire 恢复演练已在隔离实例内真实完成（真实模型回合 + 真实 correction 注入 + VERIFIED 终态），未触碰 P3。
+- **F2 维持（spy 级）**：告警链路以 spy 捕获 spawn 参数验证；真实 Telegram 投递依赖首次真实状态迁移（隔离 home 无凭据，属预期）。
+- **F3 不变**：APK 安装 + 配置仍为用户侧动作。
+- **状态保持 AWAITING_REVIEW**：等 External Review Round 2；P3 冻结、禁 P4 不变。

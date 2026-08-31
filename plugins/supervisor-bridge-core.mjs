@@ -595,6 +595,16 @@ export function deriveControlState(receipt, projection) {
 	}
 	const phase = projection?.phase ?? projection?.goal?.phase ?? null;
 	const completionReason = phase === 'complete' ? 'harness_goal_complete' : null;
+	// R1 Correction B6（2026-08-31 P3 真实指纹）：review FAIL → CORRECTING 是 supervisor
+	// 显式裁决，优先级高于宿主 harness_complete 投影。round 完成后宿主 goal 恒为
+	// phase=complete，若不粘滞，读时推导（syncControlState，每次 get_goal/watchdog 轮询）
+	// 会用 harness_complete 把 CORRECTING 立即压回 AWAITING_REVIEW——CORRECTING 只存活于
+	// 两次轮询之间，watchdog RECOVERING 永不可达（E2E run5：bridgeCs=AWAITING_REVIEW）。
+	// CORRECTING 只经 correction_accepted（recordCorrection → RUNNING）/
+	// corrections_exhausted（→ BLOCKED）/ cancel 退出。
+	if (current === 'CORRECTING') {
+		return { controlState: current, changed: false, completionReason: null };
+	}
 	if (receipt?.pendingMutation) {
 		return { controlState: current, changed: false, completionReason };
 	}

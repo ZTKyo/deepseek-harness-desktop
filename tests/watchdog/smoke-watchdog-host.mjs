@@ -4,14 +4,18 @@
 // 运行：node tests/watchdog/smoke-watchdog-host.mjs
 
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
-const home = process.env.DSH_HOME ?? join(homedir(), '.dsh');
-const snapFile = join(home, 'watchdog', 'last-snapshot.json');
+// 隔离写盘：smoke 实例与真实 3080 宿主 watchdog 写同一 last-snapshot.json 会产生
+// schemaVersion 竞态（宿主旧代码写 v1 会先到）。指到临时目录，只验证本实例产物。
+const realHome = join(homedir(), '.dsh');
+const smokeHome = mkdtempSync(join(tmpdir(), 'dsh-watchdog-smoke-'));
+process.env.DSH_HOME = smokeHome;
+const snapFile = join(smokeHome, 'watchdog', 'last-snapshot.json');
 
-// 清掉旧产物，确保读到的是本次冒烟写出的
+// 清掉旧产物，确保读到的是本次冒烟写出的（DSH_HOME 已隔离，防御性保留）
 try { rmSync(snapFile); } catch { /* absent */ }
 
 const routes = [];
@@ -24,19 +28,20 @@ const ctx = {
 };
 
 const { apply } = await import('../../plugins/watchdog.mjs');
-apply(ctx, { pollMs: 3000, stallAfterMs: 1_800_000, alertPs1: null, pushOnStateChange: true });
+apply(ctx, { pollMs: 3000, stallAfterMs: 1_800_000, alertPs1: null, pushOnStateChange: true, bridgeTokenFile: join(realHome, 'supervisor-bridge', 'token') });
 
-assert.equal(routes.length, 2, `expected 2 registered routes, got ${routes.length}`);
+assert.equal(routes.length, 3, `expected 3 registered routes, got ${routes.length}`);
 assert.ok(routes.some((r) => r.path === '/watchdog/health'));
 assert.ok(routes.some((r) => r.path === '/watchdog/status'));
-console.log('PASS plugin applied + 2 read-only routes registered');
+assert.ok(routes.some((r) => r.path === '/watchdog/events'));
+console.log('PASS plugin applied + 3 read-only routes registered (health/status/events-SSE)');
 
 // session/event 心跳不抛错
 assert.equal(typeof eventHandler, 'function');
 eventHandler({ id: 'session-00000000-0000-4000-8000-000000000000' }, { type: 'turn/start' });
 console.log('PASS session/event heartbeat hook accepts events');
 
-// 轮询至 snapshot 落盘（首次 poll 在 5s 后，pollMs 3s；上限 25s）
+// 轮询至 snapshot 落盘（pollMs 3000 会被 normalizeConfig 钳到下限 10s；上限 25s）
 let snap = null;
 for (let i = 0; i < 25 && !snap; i++) {
 	await new Promise((r) => setTimeout(r, 1000));
@@ -44,10 +49,16 @@ for (let i = 0; i < 25 && !snap; i++) {
 }
 assert.ok(snap, `last-snapshot.json not written within 25s; logs=${JSON.stringify(logs.slice(-3))}`);
 assert.equal(snap.kind, 'dsh-watchdog-snapshot');
-assert.equal(snap.schemaVersion, 1);
+assert.equal(snap.schemaVersion, 2);
 assert.ok(['IDLE', 'RUNNING', 'STALLED', 'RECOVERING', 'AWAITING_REVIEW', 'BLOCKED', 'VERIFIED', 'OFFLINE', 'UNKNOWN'].includes(snap.state), `state=${snap.state}`);
 assert.equal(snap.cost.quota, 'UNAVAILABLE');
+assert.ok(snap.model?.default, 'model.default block missing (R1 B2)');
+assert.equal(snap.model.actual?.model, 'UNKNOWN');
+assert.ok(snap.recoveryBudget, 'recoveryBudget block missing (R1 B3)');
+assert.equal(snap.push?.channel, 'sse');
 const json = JSON.stringify(snap);
 for (const banned of ['Bearer', 'authorization', 'sk-', 'password']) assert.ok(!json.includes(banned), `leak: ${banned}`);
 console.log(`PASS polled snapshot written: state=${snap.state} reason=${snap.stateReason} task=${snap.task.name ?? '(none)'}`);
+if (process.env.WD_SMOKE_DEBUG === '1' && snap.state === 'OFFLINE') console.log('LOGS', JSON.stringify(logs, null, 1));
 console.log('SMOKE-OK');
+try { rmSync(smokeHome, { recursive: true, force: true }); } catch { /* best effort */ }

@@ -532,7 +532,9 @@ export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget }) {
 		schemaVersion: SCHEMA_VERSION,
 		kind: 'dsh-watchdog-snapshot',
 		generatedAt: new Date(now).toISOString(),
-		freshness: { policy: 'poll+sse', pollMs: Number(pollMs) || null },
+		// R2（External Review B）：freshness 策略 = 30min 兜底轮询 + 服务端 FCM push 即时唤醒；
+		// SSE 前台长连接已被移除（常驻前台服务违背最小权限/最省电目标）。
+		freshness: { policy: 'poll+fcm', pollMs: Number(pollMs) || null, push: 'fcm-data-message' },
 		watchdog: {
 			version: WATCHDOG_VERSION,
 			health: evaluated?.watchdogHealth ?? 'unknown',
@@ -561,7 +563,11 @@ export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget }) {
 			source: typeof b?.source === 'string' ? b.source : 'missing_fail_closed',
 			failClosed: !!b?.failClosed,
 		},
-		push: { channel: 'sse', path: '/watchdog/events', events: 'state_change', heartbeatSec: 15 },
+		// R2（External Review B）：手机侧推送通道 = FCM data-message（载荷仅 eventId/revision/wake
+		// 白名单元数据；客户端收到后自行拉取 /watchdog/status）。channel 保留 'sse' 字符串仅为
+		// schema 兼容（v1 Widget/schemaVersion=2 消费方按字段名读取），path 指向语义等价的
+		// status 快照路由；桌面侧 SSE 端点已随本改造移除。
+		push: { channel: 'sse', path: '/watchdog/status', events: 'fcm_state_change', heartbeatSec: 0, fcm: true },
 		cost: {
 			freePaid: 'UNAVAILABLE',
 			quota: 'UNAVAILABLE',
@@ -573,5 +579,38 @@ export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget }) {
 			.filter((g) => g !== evaluated?.primary)
 			.slice(0, 10)
 			.map((g) => ({ id: g.id, state: g.state, controlState: g.controlState, generation: g.generation, revision: g.revision, updatedAt: g.updatedAt })),
+	};
+}
+
+// ---------- R2（External Review B）：FCM 推送元数据构造（纯函数；密钥绝不入此层） ----------
+// 与 R1 SSE 载荷同一白名单哲学：只给「有变化，来拉」所需的最小元数据（eventId/revision/
+// wake），不给 state 文本、不给内容。Widget 收到后自行 GET /watchdog/status（同一 token）。
+// data-message（非 notification）：Android 10+ 无 POST_NOTIFICATIONS 授权也能收到，
+// 不产生系统通知横幅，纯唤醒信号。
+export function buildFcmPushPayload({ evaluated, eventId }) {
+	const seq = Number.isFinite(Number(eventId)) ? Number(eventId) : 0;
+	return {
+		v: 1,
+		ev: 'state_change',
+		eid: `fcm-${seq}`,
+		rev: evaluated?.primary?.revision ?? null,
+		gen: evaluated?.primary?.generation ?? null,
+		wake: true,
+		ts: new Date().toISOString(),
+	};
+}
+
+// 构造 FCM HTTP v1 请求体（project 接收端；data 字段值必须全为字符串）。
+export function buildFcmRequest({ projectId, payload }) {
+	if (typeof projectId !== 'string' || !/^[a-z0-9-]{6,63}$/.test(projectId)) {
+		return { ok: false, error: 'invalid_project_id' };
+	}
+	if (!payload || typeof payload !== 'object') return { ok: false, error: 'invalid_payload' };
+	const data = {};
+	for (const [k, val] of Object.entries(payload)) data[k] = String(val ?? '');
+	return {
+		ok: true,
+		url: `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+		body: { message: { topic: 'watchdog', data, android: { priority: 'HIGH', ttl: '900s' } } },
 	};
 }

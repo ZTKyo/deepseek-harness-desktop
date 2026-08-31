@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -35,39 +34,23 @@ public class WatchdogConfigActivity extends Activity {
 		((TextView) findViewById(R.id.tvHint)).setText(
 				"地址填 supervisor-mcp-adapter 的公网地址（如 https://xxx.trycloudflare.com），\n"
 				+ "token 填 ~/.dsh/watchdog/token 的内容（与 MCP/bridge token 三分离）。\n"
-				+ "本小组件为纯只读：只调用 GET /watchdog/status。");
+				+ "本小组件为纯只读：只调用 GET /watchdog/status；"
+				+ "每 15 分钟自动轮询（无常驻连接），点小组件可手动刷新；"
+				+ "状态异常告警走 Telegram 推送。");
 		Button ok = findViewById(R.id.btnSave);
 		ok.setOnClickListener(new View.OnClickListener() {
 			@Override public void onClick(View v) {
 				p.edit().putString("baseUrl", url.getText().toString().trim())
 						.putString("token", tok.getText().toString().trim()).apply();
-				requestNotificationPermissionIfNeeded();
-				startEventService();
+				// R3 B：无常驻连接 — 只注册 15 分钟 JobScheduler 轮询（幂等），无前台服务
+				WatchdogWidgetProvider.schedulePoll(WatchdogConfigActivity.this);
 				WatchdogWidgetProvider.refreshOne(WatchdogConfigActivity.this,
-						AppWidgetManager.getInstance(WatchdogConfigActivity.this), appWidgetId);
+						AppWidgetManager.getInstance(WatchdogConfigActivity.this), appWidgetId, true);
 				Intent out = new Intent();
 				out.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
 				setResult(RESULT_OK, out);
 				finish();
 			}
 		});
-	}
-
-	/** R1 B1：保存配置后启动/重载事件推送前台服务（前台上下文启动，合规）。 */
-	private void startEventService() {
-		Intent svc = new Intent(this, WatchdogEventService.class);
-		svc.setAction(WatchdogEventService.ACTION_START);
-		if (Build.VERSION.SDK_INT >= 26) {
-			startForegroundService(svc);
-		} else {
-			startService(svc);
-		}
-	}
-
-	/** Android 13+ 前台服务通知需要通知权限；拒绝时推送服务仍运行，仅通知不可见。 */
-	private void requestNotificationPermissionIfNeeded() {
-		if (Build.VERSION.SDK_INT >= 33) {
-			requestPermissions(new String[]{ "android.permission.POST_NOTIFICATIONS" }, 1);
-		}
 	}
 }

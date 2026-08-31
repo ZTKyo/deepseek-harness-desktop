@@ -1,12 +1,13 @@
 package com.dsh.watchdog.widget;
 
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.widget.RemoteViews;
@@ -25,10 +26,16 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * DSH Watchdog Widget — 纯只读消费端（Phase 02.8）。
+ * DSH Watchdog Widget — 纯只读消费端（Phase 02.8 → R3 B 无常驻连接改造）。
  * 数据面：GET {baseUrl}/watchdog/status，Authorization: Bearer {token}
  * （baseUrl 通常为既有 p275 tunnel → supervisor-mcp-adapter:8091 的公网地址；
  *  adapter 侧 WATCHDOG token 独立鉴权后透传到 3080 同名路由）。
+ *
+ * R3 B（External Review B）：取消 R1 B1 的 SSE 前台服务长连接——
+ *  - 周期更新 = JobScheduler 每 15 分钟只读轮询（WatchdogPollReceiver，系统
+ *    在 Doze/网络受限时自动推迟，无前台通知、无常驻进程）；
+ *  - 兜底 = widget_info updatePeriodMillis 30 分钟 + 点击手动刷新；
+ *  - 近实时状态告警由服务端承担（watchdog 插件 R2 B：Telegram 旁路 / 可选 FCM）。
  * 零 mutation：本类没有任何写/恢复调用；恢复仅由宿主 watchdog 插件执行。
  */
 public class WatchdogWidgetProvider extends AppWidgetProvider {
@@ -37,41 +44,73 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 	private static final String PREFS = "dsh_watchdog_widget";
 	private static final String KEY_BASE_URL = "baseUrl";
 	private static final String KEY_TOKEN = "token";
+	private static final int POLL_JOB_ID = 1001;
+	private static final long POLL_INTERVAL_MS = 15 * 60_000L; // R3 B：15 分钟只读轮询
 
 	@Override
 	public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
-		for (int id : ids) refreshOne(ctx, mgr, id);
+		// 系统周期 onUpdate（30min 兜底）：静默刷新，不渲染「拉取中」占位
+		for (int id : ids) refreshOne(ctx, mgr, id, false);
+		schedulePoll(ctx); // 幂等：确保 15min JobScheduler 任务已注册（覆盖重装/恢复场景）
 	}
 
 	@Override
 	public void onReceive(Context ctx, Intent intent) {
 		super.onReceive(ctx, intent);
 		if (ACTION_FETCH.equals(intent.getAction())) {
+			// R3 B 后 ACTION_FETCH 仅来自小组件点击 → 用户手动刷新，渲染「拉取中」反馈
 			AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
 			int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, WatchdogWidgetProvider.class));
-			for (int id : ids) refreshOne(ctx, mgr, id);
+			for (int id : ids) refreshOne(ctx, mgr, id, true);
 		}
+	}
+
+	/** R3 B：注册 15 分钟周期 JobScheduler 任务（幂等；setPersisted 跨重启保活）。 */
+	static void schedulePoll(Context ctx) {
+		try {
+			JobScheduler js = (JobScheduler) ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+			if (js == null) return;
+			JobInfo job = new JobInfo.Builder(POLL_JOB_ID,
+					new ComponentName(ctx, WatchdogPollReceiver.class))
+					.setPeriodic(POLL_INTERVAL_MS)
+					.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+					.setPersisted(true)
+					.build();
+			js.schedule(job); // 同 ID 重调度 = 覆盖，天然幂等
+		} catch (Exception ignore) { /* 部分厂商调度限制时不致崩溃；仍有 30min 兜底 */ }
+	}
+
+	/** R3 B：同步拉取全部小组件实例（JobScheduler 工作线程调用）。 */
+	static void fetchAllSync(Context ctx) {
+		AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
+		int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, WatchdogWidgetProvider.class));
+		for (int id : ids) refreshOne(ctx, mgr, id, false);
 	}
 
 	@Override
 	public void onDisabled(Context ctx) {
-		// 最后一个小组件被移除 → 停止事件推送前台服务
-		Intent stop = new Intent(ctx, WatchdogEventService.class);
-		stop.setAction(WatchdogEventService.ACTION_STOP);
-		try { ctx.startService(stop); } catch (Exception ignore) { /* 未运行 */ }
+		// 最后一个小组件被移除 → 取消 15 分钟周期任务（无常驻连接，无需停任何服务）
+		try {
+			JobScheduler js = (JobScheduler) ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+			if (js != null) js.cancel(POLL_JOB_ID);
+		} catch (Exception ignore) { }
 	}
 
 	static SharedPreferences prefs(Context ctx) {
 		return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
 	}
 
-	static void refreshOne(Context ctx, AppWidgetManager mgr, int appWidgetId) {
+	static void refreshOne(Context ctx, AppWidgetManager mgr, int appWidgetId, boolean showFetching) {
 		SharedPreferences p = prefs(ctx);
 		String baseUrl = p.getString(KEY_BASE_URL, "");
 		String token = p.getString(KEY_TOKEN, "");
-		// 先渲染「拉取中」占位，防止点刷新后界面无反馈
-		render(ctx, mgr, appWidgetId, "…", "拉取中", "", "", 0xFF8A9AA6, "点击重试");
-		new FetchTask(ctx, mgr, appWidgetId, baseUrl, token).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+		// 仅用户主动触发时渲染「拉取中」占位（防止点刷新后界面无反馈）；
+		// 后台周期轮询静默拉取，避免每 15 分钟闪一次占位
+		if (showFetching) {
+			render(ctx, mgr, appWidgetId, "…", "拉取中", "", "", 0xFF8A9AA6, "点击重试");
+		}
+		new FetchTask(ctx, mgr, appWidgetId, baseUrl, token)
+				.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 	}
 
 	/** 后台只读拉取 + JSON 解析（org.json 为 Android 内置，零第三方依赖）。 */

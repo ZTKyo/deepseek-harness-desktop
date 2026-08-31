@@ -11,8 +11,9 @@
 //   - 预算（R1 §1.4）：每日自动 correction 预算 = 从既有 bridge receipts 账本只读推导的
 //           「今日已接受数」——bridge 真正执行才计数；definite 注入失败不消耗（同 commandId
 //           幂等重试，上限内）；ambiguous fail-closed 不重发转人工；重启不丢（每轮重推导）；
-//   - 推送：投影状态变化 → ① 既有 telegram-alert.ps1；② SSE 事件通道 /watchdog/events
-//           （R1 B1：只推 wake/revision/event-id 元数据，不推内容；Widget 实时刷新）；
+//   - 推送：投影状态变化 → ① 既有 telegram-alert.ps1（桌面旁路）；② FCM data-message
+//           （R2 B，取代 R1 B1 SSE：Widget 收到 eventId/revision/wake 白名单元数据后
+//           自行 GET /watchdog/status；凭据仅 Secret Store，不入 Git/日志/路由）；
 //   - 落盘：~/.dsh/watchdog/last-snapshot.json（脱敏投影）+ budget.json（预算交叉核对元数据，
 //           非权威——权威是账本重推导）；
 //   - 红线：无 shell/write 通道（除 telegram-alert spawn）；不读写 sessions/** storages/**；
@@ -21,13 +22,14 @@
 // 只读路由（Bearer = ~/.dsh/watchdog/token）：
 //   GET /watchdog/health   → { ok, plugin, version, state, watchdogHealth }
 //   GET /watchdog/status   → 脱敏 snapshot（adapter 8091 同名路由的 upstream）
-//   GET /watchdog/events   → text/event-stream（SSE；state_change 事件 + 15s 心跳注释）
+//   （R2 B：原 GET /watchdog/events SSE 端点已移除——手机侧改 FCM data-message 唤醒，
+//     桌面侧 Telegram 保留；不再有前台长连接消费方）
 
 import * as core from './watchdog-core.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual, createSign } from 'node:crypto';
 import { spawn } from 'node:child_process';
 
 export const name = 'watchdog';
@@ -37,8 +39,13 @@ const PLUGIN_NAME = 'watchdog';
 const FETCH_TIMEOUT_MS = 10_000;
 const SETTINGS_POLL_MS = 30_000;
 const LEDGER_POLL_MS = 10_000;
-const SSE_HEARTBEAT_MS = 15_000;
-const SSE_MAX_CLIENTS = 3;
+// ---------- R2 B：FCM 推送常量 ----------
+const FCM_OAUTH_URL = 'https://oauth2.googleapis.com/token';
+const FCM_OAUTH_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
+const FCM_SA_REF = 'FCM_SERVICE_ACCOUNT_JSON';   // 服务账号 JSON（单行字符串；Secret Store）
+const FCM_JWT_TTL_SEC = 3600;
+const FCM_TOKEN_REFRESH_MARGIN_MS = 120_000;
+const FCM_SA_CACHE_MS = 300_000;                 // SA JSON 解析缓存（内存；不落盘不打日志）
 
 function dshHome() {
 	return process.env.DSH_HOME ?? join(homedir(), '.dsh');
@@ -192,54 +199,136 @@ export function apply(ctx, config = {}) {
 		}
 	}
 
-	// ---------- SSE 事件通道（R1 B1；只推状态/revision/event-id 元数据） ----------
-	const sseClients = new Set();
-	let sseEventSeq = 0;
-	function sseWrite(client, chunk) {
-		try { client.res.write(chunk); } catch { /* 下次遍历清理 */ }
-	}
-	function broadcastStateChange(sanitized) {
-		if (sseClients.size === 0) return;
-		sseEventSeq += 1;
-		const eid = `evt-${Date.now()}-${sseEventSeq}`;
-		const payload = JSON.stringify({
-			v: 1, ev: 'state_change', state: sanitized?.state ?? null,
-			prevState: lastPushState ?? null, rev: sanitized?.task?.revision ?? null,
-			gen: sanitized?.task?.generation ?? null, eid, ts: new Date().toISOString(),
-		});
-		for (const c of sseClients) sseWrite(c, `event: state_change\ndata: ${payload}\n\n`);
-	}
-	function sseHeartbeat() {
-		for (const c of sseClients) sseWrite(c, ': hb\n\n');
-	}
-	const sseHeartbeatTimer = setInterval(sseHeartbeat, SSE_HEARTBEAT_MS);
-	sseHeartbeatTimer.unref?.();
+	// ---------- FCM 推送（R2 B，取代 R1 B1 SSE 事件通道） ----------
+	// 凭据仅 Secret Store（FCM_SERVICE_ACCOUNT_JSON；SA JSON 单行字符串，含 project_id/
+	// client_email/private_key）。解析缓存仅内存；任何值不进日志/路由/落盘。
+	// 目标 = topic 'watchdog'（Widget 端 FirebaseMessaging 订阅；免存 device token）。
+	// 未配置 → 记一次 info 后静默跳过（Widget 自动落到 30min 兜底轮询 + 手动刷新）。
+	const fcmCache = { sa: null, saAt: 0, token: null, tokenExpAt: 0, seq: 0, missingLogged: false };
+	let lastFcmAt = 0;
+	let lastFcmRev = null;
+	let lastFcmState = null;
 
-	function openSse(req, res) {
-		if (sseClients.size >= SSE_MAX_CLIENTS) {
-			respond(res, 503, { ok: false, error: 'sse_client_limit_reached' });
+	function b64url(input) {
+		return Buffer.from(input).toString('base64url');
+	}
+
+	async function resolveFcmSecret() {
+		try {
+			const credentials = ctx.get?.('credentials');
+			const hit = credentials?.resolve ? await credentials.resolve(FCM_SA_REF) : undefined;
+			if (hit?.value) return String(hit.value).trim();
+		} catch { /* 回退直读凭据库 */ }
+		try {
+			const credFile = join(dshHome(), '.credentials.yaml');
+			const text = readFileSync(credFile, 'utf8');
+			const m = new RegExp(`^\\s*${FCM_SA_REF}\\s*:\\s*(.+?)\\s*$`, 'm').exec(text);
+			if (m?.[1]) return m[1].trim();
+		} catch { /* 凭据库不可读 = FCM 未配置 */ }
+		return null;
+	}
+
+	function parseServiceAccount(raw) {
+		const obj = JSON.parse(raw);
+		if (typeof obj?.client_email !== 'string' || typeof obj?.private_key !== 'string' || typeof obj?.project_id !== 'string') {
+			throw new Error('service_account_json_missing_fields');
+		}
+		return obj;
+	}
+
+	async function fcmAccessToken(sa) {
+		const now = Date.now();
+		if (fcmCache.token && now < fcmCache.tokenExpAt) return fcmCache.token;
+		const nowSec = Math.floor(now / 1000);
+		const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+		const claims = b64url(JSON.stringify({
+			iss: sa.client_email,
+			scope: FCM_OAUTH_SCOPE,
+			aud: FCM_OAUTH_URL,
+			iat: nowSec,
+			exp: nowSec + FCM_JWT_TTL_SEC,
+		}));
+		const signingInput = `${header}.${claims}`;
+		const signature = createSign('RSA-SHA256').update(signingInput).sign(sa.private_key, 'base64url');
+		const assertion = `${signingInput}.${signature}`;
+		const ac = new AbortController();
+		const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+		try {
+			const res = await fetch(FCM_OAUTH_URL, {
+				method: 'POST',
+				headers: { 'content-type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }).toString(),
+				signal: ac.signal,
+			});
+			const json = await res.json().catch(() => null);
+			if (!res.ok || typeof json?.access_token !== 'string' || !json.access_token) {
+				throw new Error(`oauth_http_${res.status}`);
+			}
+			fcmCache.token = json.access_token;
+			fcmCache.tokenExpAt = now + Math.max(60, (Number(json.expires_in) || 3600) * 1000 - FCM_TOKEN_REFRESH_MARGIN_MS);
+			return fcmCache.token;
+		} finally {
+			clearTimeout(t);
+		}
+	}
+
+	// 状态/revision 变化即推送（fire-and-forget；失败仅 warn 状态码，绝不影响观察主循环）。
+	// 节流由 fcmPushState 的「变化才触发」承担，这里不再重复设窗（避免自我阻塞）。
+	async function fcmSendStateChange(sanitized) {
+		try {
+			const now = Date.now();
+			if (!fcmCache.sa || now - fcmCache.saAt > FCM_SA_CACHE_MS) {
+				const raw = await resolveFcmSecret();
+				fcmCache.sa = raw ? parseServiceAccount(raw) : null;
+				fcmCache.saAt = now;
+				if (!fcmCache.sa && !fcmCache.missingLogged) {
+					fcmCache.missingLogged = true;
+					ctx.logger?.info?.('watchdog: fcm disabled (FCM_SERVICE_ACCOUNT_JSON not configured; widget falls back to 30min poll)');
+				}
+			}
+			const sa = fcmCache.sa;
+			if (!sa) return;
+			fcmCache.seq += 1;
+			const payload = core.buildFcmPushPayload({ evaluated: sanitized, eventId: fcmCache.seq });
+			const request = core.buildFcmRequest({ projectId: sa.project_id, payload });
+			if (!request.ok) {
+				ctx.logger?.warn?.(`watchdog: fcm request build failed (${request.error})`);
+				return;
+			}
+			const bearer = await fcmAccessToken(sa);
+			const ac = new AbortController();
+			const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+			try {
+				const res = await fetch(request.url, {
+					method: 'POST',
+					headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+					body: JSON.stringify(request.body),
+					signal: ac.signal,
+				});
+				if (!res.ok) ctx.logger?.warn?.(`watchdog: fcm push failed (http ${res.status})`);
+			} finally {
+				clearTimeout(t);
+			}
+		} catch (e) {
+			ctx.logger?.warn?.(`watchdog: fcm push error (${String(e?.message ?? e).slice(0, 80)})`);
+		}
+	}
+
+	function fcmPushState(sanitized) {
+		const state = sanitized?.state ?? null;
+		const rev = sanitized?.task?.revision ?? null;
+		if (lastFcmState === null && lastFcmRev === null) {
+			// 首轮观测只登记基线，不推送（冷启动由 Widget 兜底轮询覆盖）。
+			lastFcmState = state;
+			lastFcmRev = rev;
 			return;
 		}
-		res.writeHead(200, {
-			'content-type': 'text/event-stream; charset=utf-8',
-			'cache-control': 'no-store',
-			'connection': 'keep-alive',
-			'x-accel-buffering': 'no',
-		});
-		res.write(': connected\n\n');
-		const client = { res, req };
-		sseClients.add(client);
-		// 连接即补发当前状态快照（Widget 冷启动不必等下一次变更）
-		if (prev) {
-			sseEventSeq += 1;
-			const payload = JSON.stringify({
-				v: 1, ev: 'state_change', state: prev.state, prevState: null,
-				rev: prev.task?.revision ?? null, gen: prev.task?.generation ?? null,
-				eid: `evt-${Date.now()}-${sseEventSeq}`, ts: new Date().toISOString(),
-			});
-			sseWrite(client, `event: state_change\ndata: ${payload}\n\n`);
+		if (state !== lastFcmState || (rev !== null && rev !== lastFcmRev)) {
+			lastFcmState = state;
+			lastFcmRev = rev;
+			lastFcmAt = Date.now();
+			void fcmSendStateChange(sanitized);
 		}
-		req.on('close', () => { sseClients.delete(client); });
 	}
 
 	// ---------- 推送（状态变化 → 既有 Telegram 通道 + SSE；一次性状态迁移防抖） ----------
@@ -258,7 +347,7 @@ export function apply(ctx, config = {}) {
 			}
 			lastPushAt = Date.now();
 		}
-		broadcastStateChange(snapshot);
+		fcmPushState(snapshot);
 		lastPushState = state;
 	}
 
@@ -403,16 +492,25 @@ export function apply(ctx, config = {}) {
 		return { ok: true, ...prev };
 	});
 
-	// SSE 事件通道（R1 B1；同一 watchdog token 鉴权；头部鉴权，不用 query 传 token）
+	// （R2 B）原 /watchdog/events SSE 路由已删除：手机侧 FCM data-message 唤醒 +
+	// 30min 兜底轮询取代前台长连接；桌面侧 Telegram 旁路不变。
+	// 旧入口保留显式退役信号（与 supervisor-mcp-adapter/server.mjs 单一真值一致）：
+	// GET-only → Bearer 401 → 410 watchdog_sse_removed。旧客户端拿到可判定的
+	// Gone（而非 404/挂起），零 mutation、零状态读取。
 	ctx.webServer?.register({
 		kind: 'exact',
 		path: '/watchdog/events',
 		handler: async (req, res) => {
-			if (req.method !== 'GET') { respond(res, 405, { ok: false, error: 'method_not_allowed' }); return; }
-			if (!checkAuth(req.headers.authorization, token)) { respond(res, 401, { ok: false, error: 'unauthorized' }); return; }
-			openSse(req, res);
+			if (req.method !== 'GET') return respond(res, 405, { ok: false, error: 'method_not_allowed' });
+			if (!checkAuth(req.headers.authorization, token)) return respond(res, 401, { ok: false, error: 'unauthorized' });
+			return respond(res, 410, {
+				ok: false,
+				error: 'watchdog_sse_removed',
+				replacement: 'fcm_data_message+poll_fallback',
+				detail: 'push moved to FCM data-message; poll GET /watchdog/status remains (PHASE_02_8 R2 B).',
+			});
 		},
 	});
 
-	ctx.logger?.info?.(`watchdog: active (pollMs=${cfg.pollMs}, stallAfterMs=${cfg.stallAfterMs}, recoverAfterMs=${cfg.recoverAfterMs}, budgetSource=supervisor_receipt_ledger, sse=on)`);
+	ctx.logger?.info?.(`watchdog: active (pollMs=${cfg.pollMs}, stallAfterMs=${cfg.stallAfterMs}, recoverAfterMs=${cfg.recoverAfterMs}, budgetSource=supervisor_receipt_ledger, push=fcm+fallback-poll)`);
 }

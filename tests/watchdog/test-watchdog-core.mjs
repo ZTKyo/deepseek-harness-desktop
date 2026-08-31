@@ -423,8 +423,32 @@ step('B2 sanitize: snapshot carries actual/default split + recoveryBudget + push
 	assert.equal(s.model.default.model, 'glm-5.3-flash');
 	assert.equal(s.model.displayRule, 'actual_unavailable_shows_unknown');
 	assert.equal(s.recoveryBudget.left, 3);
+	// R2（External Review B）：SSE 端点已移除；push 元数据 = FCM 唤醒 + status 兜底轮询。
+	// channel 'sse' 为 schema 兼容保留（消费方按字段名读取），path 指向语义等价的 status 路由。
 	assert.equal(s.push.channel, 'sse');
-	assert.equal(s.push.path, '/watchdog/events');
+	assert.equal(s.push.path, '/watchdog/status');
+	assert.equal(s.push.fcm, true);
+	assert.equal(s.freshness.policy, 'poll+fcm');
+	assert.equal(s.freshness.push, 'fcm-data-message');
+});
+step('R2 FCM: push payload metadata whitelist + eid format; request shape + project-id guard', () => {
+	const ep = baseEpisode();
+	const evaluated = core.evaluate({ ...stalledSetup(), prev: null, episode: ep });
+	const p = core.buildFcmPushPayload({ evaluated, eventId: 7 });
+	assert.equal(p.v, 1);
+	assert.equal(p.ev, 'state_change');
+	assert.equal(p.eid, 'fcm-7');
+	assert.equal(p.wake, true);
+	const whitelist = new Set(['v', 'ev', 'eid', 'rev', 'gen', 'wake', 'ts']);
+	assert.ok(Object.keys(p).every((k) => whitelist.has(k)), `keys=${Object.keys(p).join(',')}`);
+	const req = core.buildFcmRequest({ projectId: 'dsh-watchdog', payload: p });
+	assert.equal(req.ok, true);
+	assert.equal(req.url, 'https://fcm.googleapis.com/v1/projects/dsh-watchdog/messages:send');
+	assert.equal(req.body?.message?.topic, 'watchdog');
+	assert.equal(req.body?.message?.android?.priority, 'HIGH');
+	assert.ok(Object.values(req.body?.message?.data ?? {}).every((x) => typeof x === 'string'), 'data values must be strings (FCM HTTP v1)');
+	assert.equal(core.buildFcmRequest({ projectId: 'BAD_ID!', payload: p }).ok, false);
+	assert.equal(core.buildFcmRequest({ projectId: 'dsh-watchdog', payload: null }).ok, false);
 });
 step('B2 E6-shape: default model switch reflects in snapshot while actual stays UNKNOWN', () => {
 	const ep = baseEpisode(); ep.confirmations = 2; ep.stallSince = NOW - 3600_000;

@@ -8,7 +8,7 @@
 //   E2 预算内幂等自动恢复（bridge send_correction accepted；WD:g<gen>:CORRECTION:<seq>；
 //      receipts 账本重推导预算；恢复窗内零重复发送）
 //   E3 denylist（boot#2 同 home 重启 + denyGoalIds=[sg]；goal_denylisted；零新 correction）
-//   E6 SSE state_change 事件通道（元数据白名单；STALLED/OFFLINE 事件在流上）
+//   E6 推送通道退役（R2 B：/watchdog/events → 410 watchdog_sse_removed 探针；FCM 线格式由 test-watchdog-core 覆盖）
 //   E7 OFFLINE（bridge token 移除 → supervisor_bridge_unreachable → 恢复）+ UNKNOWN 模型真值
 //   E5 服务器侧推送链（alertPs1 spy 真实 spawn）；Android 真机部分 → WAITING_USER（报告标注）
 // 实例B（full 模式，拷入真实凭据；真实模型回合）：
@@ -214,27 +214,14 @@ function wdCorrectionCount(home) {
 	return n;
 }
 
-// ---------- SSE 收集器 ----------
-function sseCollect(port, token, store) {
+// ---------- 推送通道退役探针（R2 B：SSE 端点已移除，入口须返回可判定的 410 Gone） ----------
+async function eventsGone(port, token) {
 	return new Promise((resolveP) => {
 		const req = http.get({ host: '127.0.0.1', port, path: '/watchdog/events', headers: { authorization: `Bearer ${token}` } }, (res) => {
+			let body = '';
 			res.setEncoding('utf8');
-			let buf = '';
-			res.on('data', (chunk) => {
-				buf += chunk;
-				let idx;
-				while ((idx = buf.indexOf('\n\n')) >= 0) {
-					const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
-					const evLine = frame.split('\n').find((l) => l.startsWith('event:'));
-					const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
-					if (!evLine || !dataLine) continue;
-					try { store.push(JSON.parse(dataLine.slice(5).trim())); } catch { /* ignore */ }
-				}
-			});
-			res.on('end', () => { store.push({ ev: '__stream_end', at: Date.now() }); resolveP(res); });
-			res.on('close', () => { store.push({ ev: '__stream_close', at: Date.now() }); resolveP(res); });
-			res.on('error', (e) => { store.push({ ev: '__stream_error', detail: String(e?.message ?? e).slice(0, 80), at: Date.now() }); resolveP(res); });
-			resolveP(res);
+			res.on('data', (c) => { body += c; });
+			res.on('end', () => resolveP({ status: res.statusCode, body }));
 		});
 		req.on('error', () => resolveP(null));
 	});
@@ -251,9 +238,6 @@ async function instanceA() {
 	writeManifest(home, { denyGoalIds: [], alertSpy: spy });
 	const port = await freePort(PORT_BASE);
 	const child = boot(port, home);
-	const events = [];
-	let sseRes = null;
-	let sseRes2 = null; // A3 重启后重连的收集器（原连接随旧进程死亡）
 	try {
 		await waitReady(port, 'A1');
 		const wdToken = readToken(join(home, 'watchdog', 'token'));
@@ -261,8 +245,9 @@ async function instanceA() {
 		ok('A0 watchdog token generated (isolated home)', !!wdToken && /^[0-9a-f]{64}$/.test(wdToken));
 		ok('A0 bridge token present', !!bridgeToken);
 
-		sseRes = await sseCollect(port, wdToken, events);
-		ok('A0 SSE connected', !!sseRes);
+		// E6（R2 B）：SSE 端点已随 FCM 改造退役 —— 入口必须给出可判定的 410 停用信号
+		const gone = await eventsGone(port, wdToken);
+		ok('E6 /watchdog/events retired → 410 watchdog_sse_removed', gone?.status === 410 && String(gone.body ?? '').includes('watchdog_sse_removed'), `status=${gone?.status} body=${String(gone.body ?? '').slice(0, 80)}`);
 
 		// E1+E2：P1 probe（唯一 goal → primary 确定性）
 		const keyA = `wd-a1-${RUN}`;
@@ -409,13 +394,9 @@ async function instanceA() {
 			const bridgeToken2 = readToken(join(home, 'supervisor-bridge', 'token'));
 			ok('A3 same watchdog token after reboot', wdToken2 === wdToken);
 			ok('A3 same bridge token after reboot', bridgeToken2 === bridgeToken);
-			// SSE 重连：旧连接已随 reboot 死亡，之后的状态迁移（denylisted STALLED / OFFLINE）必须从新连接收集
-			const events2 = [];
-			sseRes2 = await sseCollect(port, wdToken2, events2);
-			ok('A3 SSE reconnected after reboot', !!sseRes2);
-			log(`A3 sse2 connected at ${Date.now()} (ts=${new Date().toISOString()})`);
-			// 实时 wire 视图（跨两段连接；剔除测试侧 __stream* 诊断标记）
-			const wire = () => [...events, ...events2].filter((e) => typeof e?.ev === 'string' && !String(e.ev).startsWith('__stream'));
+			// E6（R2 B）：重启后推送通道仍为退役态（410），且无任何常驻长连接残留
+			const gone2 = await eventsGone(port, wdToken2);
+			ok('E6 after reboot: /watchdog/events still retired → 410', gone2?.status === 410, `status=${gone2?.status}`);
 			// P3probe ACTIVE 且 stalled → denylist 命中
 			log('E3 waiting STALLED/goal_denylisted after reboot...');
 			await waitFor(async () => {
@@ -438,7 +419,9 @@ async function instanceA() {
 			const st4 = (await wdStatus(port, wdToken2)).body;
 			ok('E7 OFFLINE reason=supervisor_bridge_unreachable', st4?.stateReason === 'supervisor_bridge_unreachable', st4?.stateReason);
 			ok('E7 watchdogHealth=degraded', st4?.watchdog?.health === 'degraded', st4?.watchdog?.health);
-			ok('E7 SSE got OFFLINE state_change event', wire().some((e) => e?.ev === 'state_change' && e?.state === 'OFFLINE'), `wire=${wire().length} tail=${JSON.stringify(wire().slice(-3))} at=${Date.now()}`);
+			// E7 状态迁移证据（R2 B）：SSE wire 断言随端点退役移除；状态变更证据 =
+			// 上方 waitFor 观测到的 OFFLINE 投影 + E5 alertPs1 spy 服务器侧状态变更链。
+			ok('E7 OFFLINE projection observed (push channel retired)', st4?.state === 'OFFLINE', st4?.state);
 			renameSync(tokenBak, tokenFile);
 			log('E7 bridge token restored; waiting recovery to STALLED/goal_denylisted...');
 			await waitFor(async () => {
@@ -452,14 +435,8 @@ async function instanceA() {
 			ok('E7 model.default UNKNOWN (no settings in isolated CI home)', st5?.model?.default?.provider === 'UNKNOWN' && st5?.model?.default?.model === 'UNKNOWN', JSON.stringify(st5?.model ?? {}).slice(0, 160));
 			ok('E7 model.actual UNKNOWN + source=runtime_authority_unavailable_v1 (B2)', st5?.model?.actual?.model === 'UNKNOWN' && st5?.model?.actual?.source === 'runtime_authority_unavailable_v1', JSON.stringify(st5?.model?.actual ?? {}).slice(0, 160));
 
-			// E6：SSE 事件白名单 + STALLED 事件在场（实时 wire 视图，含重启后重连段；诊断标记已剔除）
-			const whitelist = new Set(['v', 'ev', 'state', 'prevState', 'rev', 'gen', 'eid', 'ts']);
-			const bad = wire().find((e) => Object.keys(e ?? {}).some((k) => !whitelist.has(k)));
-			ok('E6 SSE payloads contain metadata fields only (whitelist)', !bad, JSON.stringify(bad ?? {}).slice(0, 160));
-			const scEvents = wire().filter((e) => e?.ev === 'state_change');
-			ok('E6 SSE events >= 3 with state_change', scEvents.length >= 3, `n=${scEvents.length} total=${wire().length}`);
-			ok('E6 SSE saw STALLED event', wire().some((e) => e?.state === 'STALLED'));
-			ok('E6 SSE eid format evt-<ts>-<seq>', scEvents.length >= 3 && scEvents.every((e) => /^evt-\d+-\d+$/.test(String(e?.eid ?? ''))), `n=${scEvents.length}`);
+			// E6（R2 B）：推送通道退役后的证据链 = A0/A3 的 410 探针 + FCM 线格式白名单
+			// （test-watchdog-core：buildFcmPushPayload/buildFcmRequest 单测）+ E5 alertPs1 状态变更链。
 
 			// E5（服务器侧）：alertPs1 spy 真实 spawn 写文件
 			await waitFor(() => (existsSync(join(home, 'alert-spy.log')) ? true : null), 90_000, 'alert spy file');
@@ -469,8 +446,6 @@ async function instanceA() {
 			stop(child2);
 		}
 	} finally {
-		try { sseRes?.destroy?.(); } catch { /* ignore */ }
-		try { sseRes2?.destroy?.(); } catch { /* ignore */ }
 		stop(child);
 		await sleep(2000);
 		if (!KEEP) { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } }

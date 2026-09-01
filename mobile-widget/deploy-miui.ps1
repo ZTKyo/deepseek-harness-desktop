@@ -8,11 +8,11 @@
 #   修复: adb shell cmd appops set <pkg> 10017 allow
 #   验证: dumpsys appwidget 显示 host=com.miui.home + provider=WatchdogWidgetProvider
 #         + 真实 RemoteViews 绑定实例（widget 真正出现在 MIUI 桌面）。
-$ErrorActionPreference = 'Stop'
 param(
     [string]$Serial = '',
     [switch]$Pin = $true       # 默认部署后自动点「添加到桌面」触发 pin
 )
+$ErrorActionPreference = 'Stop'
 
 # --- adb 定位 ---
 $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"

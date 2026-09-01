@@ -293,7 +293,7 @@ $script:wv = $null
 # RH1 Part D: reconnect state machine (ONLINE/DEGRADED/OFFLINE). A readiness
 # miss never triggers a reload; only a real OFFLINE (unreachable) recovery does,
 # at most once per episode, after a short cooldown. Probe runs off the UI thread
-# (background runspace) and publishes into $script:probe (thread-safe dict).
+# (background runspace) and publishes into $script:probeState (thread-safe dict).
 # RH1-R2 Part D (Blocker 1): reconnect state is a PURE state-machine object whose
 # transitions are computed by Invoke-DshReconnectTransition (dsh-reconnect.ps1).
 # Only this in-process object is mutated; nothing here touches the network/UI.
@@ -302,11 +302,11 @@ $script:reconn = New-DshReconnectState
 # page healed on its own (no client reload needed). Set $false right before a client
 # reload so a success AFTER a reload is not mistaken for self-recovery.
 $script:lastNavSucceeded = $false
-$script:probe = [System.Collections.Concurrent.ConcurrentDictionary[string,object]]::new()
-$script:probe['mode'] = 'unknown'   # online | degraded | offline | unknown
-$script:probe['httpStatus'] = $null
-$script:probe['latencyMs'] = 0
-$script:probe['checkedAt'] = 0
+$script:probeState = [System.Collections.Concurrent.ConcurrentDictionary[string,object]]::new()
+$script:probeState['mode'] = 'unknown'   # online | degraded | offline | unknown
+$script:probeState['httpStatus'] = $null
+$script:probeState['latencyMs'] = 0
+$script:probeState['checkedAt'] = 0
 $script:probePs = $null             # keep the background runspace alive
 
 function StepLog([string]$msg) {
@@ -2182,7 +2182,7 @@ TraceLog 'timer started'
 
 # ---------- auto-reconnect (RH1 Part D): non-blocking layered state machine ----------
 # The probe runs on a dedicated background runspace (never blocks the UI thread)
-# and publishes online/degraded/offline into $script:probe (thread-safe dict).
+# and publishes online/degraded/offline into $script:probeState (thread-safe dict).
 # This DispatcherTimer only READS the shared state and drives the window title/
 # status. A readiness miss (degraded) NEVER reloads; only a real OFFLINE
 # (unreachable) recovery reloads, at most once per episode, after a short cooldown.
@@ -2193,7 +2193,7 @@ if (-not $Probe) {
         $prs.Open()
         $ps = [powershell]::Create()
         $ps.Runspace = $prs
-        $prs.SessionStateProxy.SetVariable('DSH_PROBE_STATE', $script:probe)
+        $prs.SessionStateProxy.SetVariable('DSH_PROBE_STATE', $script:probeState)
         $prs.SessionStateProxy.SetVariable('DSH_PROBE_PORT', $Port)
         $loop = '
             $ErrorActionPreference = "Stop"
@@ -2221,7 +2221,7 @@ if (-not $Probe) {
         TraceLog 'reconnect background probe started (RH1 D2)'
     } catch {
         TraceLog ('reconnect background probe failed: ' + $_.Exception.Message)
-        $script:probe['mode'] = 'unknown'
+        $script:probeState['mode'] = 'unknown'
     }
 
     $reconnTimer = New-Object System.Windows.Threading.DispatcherTimer
@@ -2229,7 +2229,7 @@ if (-not $Probe) {
     $reconnTimer.Add_Tick({
         if ($script:st.phase -ne 'done' -or -not $script:st.wvReady -or -not $script:wv) { return }
         try {
-            $mode = [string]$script:probe['mode']
+            $mode = [string]$script:probeState['mode']
             $now = Get-Date
             # RH1-R2 (Blocker 1): the whole reconnect decision is computed by the PURE
             # Invoke-DshReconnectTransition (dsh-reconnect.ps1) with a clock injection.

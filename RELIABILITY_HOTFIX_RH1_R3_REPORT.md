@@ -147,7 +147,7 @@ periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)�
 ## 7. 仍未完成（诚实,原因）
 
 - **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5）。
-- **Item 9 CI push + GitHub Actions run id** — **已完成**（push 942051d → CI Level 1 `33469491617`=success, Level 2 `33469491599`=success, Level 3 `33469491657`=success;即先前 R2 状态下失败的 Level 1 静态门禁已在 L1 secret 修复后转绿）。
+- **Item 9 CI push + GitHub Actions run id** — **R3 复核后重新跑真实 CI（push `4a12d10`）:CI Level 1 `33473620619`=success，Level 2 `33473620620`=success，Level 3 `33473620664`=success**（全部 PR check 通过；Level 2 本轮已含新增 `RH1 R3 guardian health guard path` 步，该步 ✓ 通过）。先前 R2 状态下失败的 Level 1 静态门禁已在 L1 secret 修复后转绿，直至本轮仍绿。
 - **Item 11 治理** — PR #83 body 已更新为 R3 诚实版;达到 `AWAITING_EXTERNAL_REVIEW_R3`。
 - 已交付证据:CODE(DETERMINISTIC,PARSE)+DETERMINISTIC(31 + guardian-path 19 PASS)+ISOLATED REAL(**本轮 fail-closed 重跑:e2e=17, append-only=4, probe-overlap=5, ui-dispatcher=3, 全部 FAIL=0、退出码 0**)+CI Level 2 新增 guardian path 门禁;生产 3080 未触碰,无 merge,无 deploy。
 

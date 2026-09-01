@@ -599,3 +599,19 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   State Machines（run 33408755215）+ L3 Harness Smoke（run 33408755279）全部 success；
   adb devices gate：无设备 → WAITING PHONE（PHONE-1..5 未执行，AC1 真机半环与 AC3 待用户
   侧装新 APK + FCM 实收验证）；Notion 02.8 追踪页同步（R2 C/R3 C 现状 + CI 十二 run 全绿）。
+- **2026-09-01 深夜：02.8 R4 多任务运行时监控 + Internet 只读通道（PC 侧全 PASS，commit dac69f4）**：
+  服务端 `watchdog-core.mjs` 新增多任务投影 `projectTasks`（从权威 snapshot 派生 `tasks[]`：
+  project/task/session/generation/state/stateReason/heartbeats，+`terminalCache` 完成冻结转承防漂移，
+  +`summaryVersion` 并行任务间变更序号）；`watchdog.mjs` 接线 `projectTasks`（`/watchdog/status` 暴露
+  `tasks[]`/`taskCount`/`summary`）+ FCM 多任务指纹（`taskSig+count` 任一变化 → `fcmSendStateChange`
+  真实推送）+ `sanitizeSnapshot` 携 `tasks[]`；Android Widget `WatchdogWidgetProvider` 改 R4 多任务矩阵
+  （`taskCount`/`taskStates` 替代单一 `otherGoals`，`summarizeTasks` → “R x2 W x1…”）+ timezone 修复
+  （`generatedAt` 按 UTC 解析、按设备本地时区格式化）+ R2 D pin 启动器入口（`activity_main.xml` +
+  `build.gradle` shortcut 声明）。验证（PC 侧全绿）：watchdog 单测 49/49 ＋ `test-watchdog-r4` 13/13
+  （tasks[] 投影/完成冻结/并行变更防抖）＋ 宿主冒烟 SMOKE-OK ＋ REAL E2E 43/43（run=wd-mti1g0f5）；
+  Internet 只读通道公网 HTTPS 实测 `GET https://<cloudflared-url>/watchdog/status` HTTP 200（bearer
+  脱敏，watchdog.health=healthy）；APK `dsh-watchdog-widget.apk` 构建于最终 widget 源码之后
+  （10:13:42 > 10:12:30，含 R4 多任务+timezone），与 APK-RELEASE-CHECKSUM.txt 一致签名可覆盖升级；
+  `keep-watchdog-tunnel.ps1`/`deploy-miui.ps1` 复用入库。**PC 侧全 PASS → WAITING USER:
+  CONNECT_PHONE_FINAL_SYNC（AC1 真机半环［新 APK 侧装+FCM 实收+多任务 widget 刷新］与 AC3 待 PHONE）**；
+  Windows 服务/防火墙未动（仍 127.0.0.1 回环，公网出口走 trycloudflare 动态 URL，手机经同 URL 直连）。

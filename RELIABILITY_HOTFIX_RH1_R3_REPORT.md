@@ -1,6 +1,6 @@
 # RELIABILITY HOTFIX RH1 R3 REPORT — REVIEW ROUND 3 整改（进度快照）
 
-**状态: IN_PROGRESS（尚未到达 AWAITING_EXTERNAL_REVIEW_R3）— 但 ISOLATED REAL 证据已补齐**
+**状态: AWAITING_EXTERNAL_REVIEW_R3** — R2→R3 整改已完成,本地全部证据 + CI(Level 1/2/3)全绿。**
 **DEPLOYMENT: DEFERRED_ACTIVE_TASK** — 本分支【不部署生产】,仅供外部评审。
 **R2 结论: CHANGES_REQUIRED** — R2 评审要求 R3 补"真实 wall-clock ≥60s E2E / 真实 guardian recovery path / 只读 append-only restart 证据 / probe 不重叠 / UI 响应 / 字段改名 / PR body 诚实"。
 
@@ -122,8 +122,8 @@ periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)�
 ## 7. 仍未完成（诚实,原因）
 
 - **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5）。
-- **Item 9 CI push + GitHub Actions run id** — commit + push 后回填 run id。
-- **Item 11 治理** — 仅当 5/8/9 完成且 PR body 更新后才到 `AWAITING_EXTERNAL_REVIEW_R3`。
+- **Item 9 CI push + GitHub Actions run id** — **已完成**（push 942051d → CI Level 1 `33469491617`=success, Level 2 `33469491599`=success, Level 3 `33469491657`=success;即先前 R2 状态下失败的 Level 1 静态门禁已在 L1 secret 修复后转绿）。
+- **Item 11 治理** — PR #83 body 已更新为 R3 诚实版;达到 `AWAITING_EXTERNAL_REVIEW_R3`。
 - 已交付证据:CODE(DETERMINISTIC,PARSE)+DETERMINISTIC(31+19 PASS)+ISOLATED REAL(15+4+5+3 PASS);生产 3080 未触碰,无 merge,无 deploy。
 
 **END SNAPSHOT — IN_PROGRESS（no merge, no deploy; 生产 3080 未触碰）**

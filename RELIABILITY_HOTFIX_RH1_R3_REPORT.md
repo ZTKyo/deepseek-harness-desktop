@@ -155,6 +155,19 @@ periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)�
 套件（临时 DSH_* 状态路径 + 记录桩,不触真实 ~/.dsh,不触生产 3080）,故可安全进 CI;其自身已 fail-closed
 （断言失败→exit 1;致命异常→catch 计数+1→exit 1）,本地实测 **PASS=19 FAIL=0,退出码 0**。
 
+## 6d. Item 9 配套 — 分支 tip（R3.1 整改 push）真实 CI 全绿复核（GATED, REAL RUN）
+
+R3.1 整改 push（head `c64db0b`，即本报告证据范围限定 + 状态 `AWAITING_EXTERNAL_REVIEW_R3_1` 落地的那次提交）
+触发真实 GitHub Actions，复核确认如下（head SHA + run id 实证）:
+
+| Check | run id | conclusion |
+|---|---|---|
+| CI Level 1 - Static Gate (every PR) | `33476164970` | **success** |
+| CI Level 2 - Windows Reliability State Machines | `33476164877` | **success**（job `Reliability state machine tests` 内**`RH1 R3 guardian health guard path (shared state machine)` 步 conclusion=success**，已执行并通过） |
+| CI Level 3 - Harness Smoke | `33476164906` | **success** |
+
+全部 PR check = success（无 merge、无 deploy、生产 3080 未触碰）。
+
 ## 7. 仍未完成（诚实,原因）
 
 - **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5;两者为**支持性行为证据**,生产保障主要由源码结构+确定性状态机保证,**未声称跑过完整 Desktop Client**）。

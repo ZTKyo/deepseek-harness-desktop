@@ -247,6 +247,21 @@ foreach ($f in @('dsh-safe-mode.ps1','dsh-transaction.ps1','restart-dsh-server-d
 }
 Assert 'G21 production PS paths converge on single authority' ($conv) ($(if ($conv) { 'converged' } else { $convDetail + ' lacks route to authority' }))
 
+# ============ HOTFIX: client reconnect dict name collision ============
+# The reconnect background probe publishes into a thread-safe dict. Its name MUST NOT
+# collide with the local probe-path variable `$probe` (tests\fixtures probe name) nor
+# with the `[switch]$Probe` parameter. Canonical name: $script:probeState.
+# Regression: if someone renames the dict back to `$script:probe`, the probe self-test
+# (-Probe) and the reconnect background probe would share a name with the local
+# `$probe = Join-Path $base '.wprobe'` write-path variable, breaking -Probe isolation.
+$hp = Get-Raw (Join-Path $root 'DSH-Harness-PS.ps1')
+$noProbeDict = $true; $probeDictDetail = ''
+if ($hp -match '\$script:probe\s*=\s*\[System\.Collections\.Concurrent\.ConcurrentDictionary') { $noProbeDict = $false; $probeDictDetail = 'reconnect dict named $script:probe' }
+if ($hp -notmatch '\$script:probeState\s*=\s*\[System\.Collections\.Concurrent\.ConcurrentDictionary') { $noProbeDict = $false; if (-not $probeDictDetail) { $probeDictDetail = 'reconnect dict missing $script:probeState' } }
+# The local write-path variable must still exist (untouched by the rename).
+$localProbe = $hp -match '\$probe\s*=\s*Join-Path\s+\$base\s+''\.wprobe'''
+Assert 'G22 client reconnect dict uses $script:probeState (no collision with local $probe / [switch]$Probe)' ($noProbeDict -and $localProbe) ($(if ($noProbeDict -and $localProbe) { 'probeState dict + local .wprobe var present' } else { $probeDictDetail + '; localProbe=' + $localProbe }))
+
 # ---- summary ----
 Write-Host ""
 Write-Host ("==== RH1 harness result: PASS={0} FAIL={1} ====" -f $script:pass, $script:fail) -ForegroundColor Cyan

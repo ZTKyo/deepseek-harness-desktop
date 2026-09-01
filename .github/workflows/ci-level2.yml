@@ -78,6 +78,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "RH1 R3 GUARDIAN PATH FAIL"; exit 1 }
           Write-Host 'PASS RH1 R3 guardian health guard path'
 
+      - name: RH1 client reconnect dict naming (G22 probe/probeState collision)
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\rh1-tests.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "RH1 CLIENT PROBE-NAME COLLISION FAIL"; exit 1 }
+          Write-Host 'PASS RH1 client reconnect dict uses probeState (no collision)'
+
       - name: Diagnostics redaction
         shell: pwsh
         run: |

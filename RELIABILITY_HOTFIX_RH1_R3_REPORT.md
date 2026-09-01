@@ -1,6 +1,6 @@
 # RELIABILITY HOTFIX RH1 R3 REPORT — REVIEW ROUND 3 整改（进度快照）
 
-**状态: AWAITING_EXTERNAL_REVIEW_R3** — R2→R3 整改已完成,本地全部证据 + CI(Level 1/2/3)全绿。**
+**状态: AWAITING_EXTERNAL_REVIEW_R3_1** — R3.1 门禁闭合:①5 个 RH1 real 测试全部 fail-closed（断言/致命异常→非零退出码）;②guardian-path 已入 CI Level 2 成为独立门禁;③真实 CI 重跑 L1/L2/L3 全绿（含新门禁步）;④证据范围已如实限定（未声称跑过完整 Desktop Client）。**
 **DEPLOYMENT: DEFERRED_ACTIVE_TASK** — 本分支【不部署生产】,仅供外部评审。
 **R2 结论: CHANGES_REQUIRED** — R2 评审要求 R3 补"真实 wall-clock ≥60s E2E / 真实 guardian recovery path / 只读 append-only restart 证据 / probe 不重叠 / UI 响应 / 字段改名 / PR body 诚实"。
 
@@ -70,6 +70,11 @@ dsh-reconnect.ps1 / dsh-health.ps1 / DSH-Harness-PS.ps1 / dsh-guardian.ps1 中 `
 
 ## 6. Item 2/4 真实 wall-clock ≥60s soak + 只读 append-only 证据（ISOLATED REAL VERIFIED）
 
+> **证据范围先声明（R3.1 part 3）**:生产 reconnect probe 的**非阻塞/不重叠**,主要由**生产源码结构 + 确定性状态机**
+> （probe 在后台 runspace 串行执行、不触碰 UI dispatcher;非重叠由单飞/预算门控与状态机保证）来保证。
+> 下文 `rh1-real-e2e.ps1` / `rh1-real-probe-overlap.ps1` / `rh1-real-ui-dispatcher.ps1` 是**支持性行为证据**,
+> **不代表**完整 Desktop Client 集成测试通过,也不被视为对生产保障的独立充分证明。
+
 新增 **`tests/rh1-real-e2e.ps1`**——真实墙钟（Get-Date / 真实 elapsed）、严格隔离（DSH_HOME / USERPROFILE
 / LOCALAPPDATA / APPDATA 全指向注入的 temp isolate,不读真实 ~/.dsh）、直接驱动生产同款
 `Invoke-DshHealthGuard`,只用可注入的 restart/alert/recover/log/confirm 桩（sanctioned test seam）。
@@ -120,12 +125,16 @@ canonical `start-dsh-server.ps1` 在一次性端口 33651 上两次真实启动,
 | 真测:后台 probe 阻塞时心跳仍响应（realMaxMs=**~23ms** < 800ms） | **PASS** |
 | 真测:后台阻塞不拖停 dispatcher（realMaxMs=23ms < negMaxMs=2064ms） | **PASS** |
 
-> 结论:同步网络 probe 阻塞时,UI/dispatcher 心跳仍保持 ~毫秒级响应(基线 124ms,负对照 2064ms,
-> 实测 23ms)——**并非**"代码看起来像 runspace",而是**行为**上后台 probe 未跑回 UI 线程。
+> 结论（**如实限定范围**）:`rh1-real-ui-dispatcher.ps1` 是**支持性的 WPF 行为证据,而非完整 Desktop Client
+> 集成测试**。它表明在最小 STA dispatcher 上,后台 probe 阻塞时心跳仍 ~毫秒级响应（基线 124ms,负对照
+> 2064ms,实测 23ms）,**即探针未跑回该 dispatcher**。生产上 probe 非阻塞/不重叠主要由**生产源码结构 + 确定性
+> 状态机**保证（见 §6 顶部声明）;本测试仅为佐证,未声称覆盖完整 Desktop Client 或全部边界场景。
 
-**probe 不重叠(独立真实打包)** —— **`tests/rh1-real-probe-overlap.ps1`**(隔离 dsh 服务,端口 33654,
+**probe 不重叠(独立真实打包,支持性证据)** —— **`tests/rh1-real-probe-overlap.ps1`**(隔离 dsh 服务,端口 33654,
 真实墙钟,probe 注入 ~3.6s 慢确认)。结果(PASS=5 FAIL=0):maxConcurrentProbe 实测=**1**;3 次慢 probe
 periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)。
+> 范围限定:此为 **guardian/probe 串行化行为的支持性证据**,在隔离服务上实测并发 probe=1;
+> 生产保障仍主要来自**生产源码结构 + 确定性状态机**（见 §6 顶部声明）,本测试未覆盖全部生产边界。
 
 ## 6c. Item 9 配套 — CI Level 2 新增 guardian path 门禁（GATED, YAML VERIFIED）
 
@@ -148,9 +157,9 @@ periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)�
 
 ## 7. 仍未完成（诚实,原因）
 
-- **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5）。
-- **Item 9 CI push + GitHub Actions run id** — **R3 复核后重新跑真实 CI（push `4a12d10`）:CI Level 1 `33473620619`=success，Level 2 `33473620620`=success，Level 3 `33473620664`=success**（全部 PR check 通过；Level 2 本轮已含新增 `RH1 R3 guardian health guard path` 步，该步 ✓ 通过）。先前 R2 状态下失败的 Level 1 静态门禁已在 L1 secret 修复后转绿，直至本轮仍绿。
-- **Item 11 治理** — PR #83 body 已更新为 R3 诚实版;达到 `AWAITING_EXTERNAL_REVIEW_R3`。
+- **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5;两者为**支持性行为证据**,生产保障主要由源码结构+确定性状态机保证,**未声称跑过完整 Desktop Client**）。
+- **Item 9 CI push + GitHub Actions run id** — **真实 CI 重跑并复核（含新门禁步）**:①push `4a12d10`（测试+门禁落地）:CI Level 1 `33473620619`=success, Level 2 `33473620620`=success（含新 `RH1 R3 guardian health guard path` 步 ✓）, Level 3 `33473620664`=success;②分支 tip 整改后亦复核全绿,其 head SHA + L1/L2/L3 run id 记录于 §6d。先前 R2 状态下失败的 L1 静态门禁已在 L1 secret 修复后转绿,至今仍绿。
+- **Item 11 治理** — PR #83 body 已更新为 R3.1 诚实版;达到 `AWAITING_EXTERNAL_REVIEW_R3_1`。
 - 已交付证据:CODE(DETERMINISTIC,PARSE)+DETERMINISTIC(31 + guardian-path 19 PASS)+ISOLATED REAL(**本轮 fail-closed 重跑:e2e=17, append-only=4, probe-overlap=5, ui-dispatcher=3, 全部 FAIL=0、退出码 0**)+CI Level 2 新增 guardian path 门禁;生产 3080 未触碰,无 merge,无 deploy。
 
-**END SNAPSHOT — IN_PROGRESS（no merge, no deploy; 生产 3080 未触碰;5 个测试已改 fail-closed,CI Level 2 已加 guardian-path 门禁）**
+**END SNAPSHOT — IN_PROGRESS（no merge, no deploy; 生产 3080 未触碰;5 个测试已改 fail-closed;CI Level 2 已加 guardian-path 门禁;状态 AWAITING_EXTERNAL_REVIEW_R3_1）**

@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.widget.RemoteViews;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -161,16 +162,21 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 			WatchdogWidgetProvider.markDiag(ctx, "last_fetch_updated_at",
 					String.valueOf(System.currentTimeMillis()));
 			int color = colorFor(s.state);
+			// R4：多任务投影。tasks[] 为权威列表；tvTask 显示主任务名，meta 汇总任务状态矩阵。
 			String task = s.taskName == null ? "" : trunc(s.taskName, 72);
 			StringBuilder meta = new StringBuilder();
-			if (!s.genShort.isEmpty()) meta.append("gen ").append(s.genShort);
+			if (!s.taskStates.isEmpty()) meta.append(s.taskStates);
+			if (!s.genShort.isEmpty()) {
+				if (meta.length() > 0) meta.append("  ·  ");
+				meta.append("gen ").append(s.genShort);
+			}
 			if (s.rev > 0) {
 				if (meta.length() > 0) meta.append("  ·  ");
 				meta.append("rev ").append(s.rev);
 			}
-			if (s.otherGoals > 0) {
+			if (s.taskCount > 0) {
 				if (meta.length() > 0) meta.append("  ·  ");
-				meta.append('+').append(s.otherGoals).append(" other");
+				meta.append(s.taskCount).append(" 任务");
 			}
 			render(ctx, mgr, appWidgetId, s.state,
 					task.isEmpty() ? "(无活跃任务)" : task,
@@ -218,18 +224,30 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 			if (model != null) {
 				s.modelLine = model.optString("provider", "?") + "/" + model.optString("model", "?");
 			}
-			s.otherGoals = o.optJSONArray("otherGoals") == null ? 0 : o.optJSONArray("otherGoals").length();
+			// R4：多任务投影。tasks[] 为权威来源；主任务仍走 task shim（兼容 v1 消费方）。
+			JSONArray tasks = o.optJSONArray("tasks");
+			if (tasks != null) {
+				s.taskCount = tasks.length();
+				s.taskStates = summarizeTasks(tasks);
+			} else {
+				// 兼容旧快照（无 tasks[]）：退回 otherGoals 计数。
+				JSONArray og = o.optJSONArray("otherGoals");
+				s.taskCount = og == null ? 0 : og.length();
+				if (s.taskCount > 0) s.taskStates = "+" + s.taskCount + " other";
+			}
 			String gen = o.optString("generatedAt", null);
 			if (gen != null) {
 				try {
+					// timezone 修复：generatedAt 为 UTC ISO（带 Z 或 +00:00）。
+					// 显式按 UTC 解析（否则 SimpleDateFormat 会按 JVM 本地时区误读），
+					// 再转设备本地时区显示，避免「错误时刻标 UTC」的偏移问题。
 					SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US);
-					// generatedAt 为 UTC ISO（带 Z 或 +00:00），解析后转本地 HH:mm
+					iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
 					String z = gen.replace("Z", "").replace("+00:00", "");
 					Date d = iso.parse(z.length() > 19 ? z.substring(0, 19) : z);
 					if (d != null) {
-						SimpleDateFormat hhmm = new SimpleDateFormat("HH:mm", Locale.getDefault());
-						hhmm.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-						s.updatedAt = "更新 " + hhmm.format(d) + " UTC";
+						SimpleDateFormat local = new SimpleDateFormat("HH:mm", Locale.getDefault());
+						s.updatedAt = "更新 " + local.format(d);
 					}
 				} catch (Exception ignore) { s.updatedAt = ""; }
 			}
@@ -260,6 +278,29 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 				android.app.PendingIntent.getBroadcast(ctx, appWidgetId, it,
 						android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE));
 		mgr.updateAppWidget(appWidgetId, rv);
+	}
+
+	private static String summarizeTasks(JSONArray tasks) {
+		int running = 0, waiting = 0, stalled = 0, terminal = 0;
+		for (int i = 0; i < tasks.length(); i++) {
+			JSONObject t = tasks.optJSONObject(i);
+			if (t == null) continue;
+			String st = t.optString("state", "");
+			if (st == null) st = "";
+			switch (st) {
+				case "RUNNING": running++; break;
+				case "AWAITING_REVIEW": case "WAITING_USER": case "BLOCKED": waiting++; break;
+				case "STALLED": stalled++; break;
+				case "VERIFIED": case "CANCELLED": terminal++; break;
+				default: break;
+			}
+		}
+		StringBuilder sb = new StringBuilder();
+		if (running > 0) sb.append("R x").append(running);
+		if (waiting > 0) { if (sb.length() > 0) sb.append(' '); sb.append("W x").append(waiting); }
+		if (stalled > 0) { if (sb.length() > 0) sb.append(' '); sb.append("S x").append(stalled); }
+		if (terminal > 0) { if (sb.length() > 0) sb.append(' '); sb.append("Done x").append(terminal); }
+		return sb.toString();
 	}
 
 	private static int colorFor(String st) {
@@ -294,7 +335,8 @@ public class WatchdogWidgetProvider extends AppWidgetProvider {
 		String genShort = "";
 		int rev = 0;
 		String modelLine = "";
-		int otherGoals = 0;
+		int taskCount = 0;      // R4：tasks[] 长度（权威多任务数）
+		String taskStates = ""; // R4：状态矩阵摘要，如 "R x2  W x1"
 		String updatedAt = "";
 		String error = null;
 	}

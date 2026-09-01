@@ -525,9 +525,13 @@ export function normalizeModelTruth(raw = {}) {
  * 计费字段：无法可靠获取时一律 'UNAVAILABLE'（T11，零猜测）。
  * push 块：SSE 事件通道元信息（只推 wake/revision/event-id，不推内容）。
  */
-export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget }) {
+export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget, tasks, terminalCachePatch }) {
 	const m = normalizeModelTruth(model);
 	const b = budget && typeof budget === 'object' ? budget : null;
+	// R4：多任务投影。host 传入 projectTasks 结果（主入口已计算排序+冻结）；缺省回退为旧
+	// single-task + otherGoals 兼容形态（v1 Widget / schemaVersion=2 消费方按字段名读取）。
+	const taskRows = Array.isArray(tasks) ? tasks : null;
+	const primaryTask = taskRows?.[0] ?? null;
 	return {
 		schemaVersion: SCHEMA_VERSION,
 		kind: 'dsh-watchdog-snapshot',
@@ -541,14 +545,18 @@ export function sanitizeSnapshot({ now, evaluated, model, pollMs, budget }) {
 		},
 		state: evaluated?.state ?? 'UNKNOWN',
 		stateReason: evaluated?.stateReason ?? null,
+		// R4：一等多任务投影（§4）。已按 §6 排序，完成时间已按 §7 冻结。
+		tasks: taskRows,
 		task: {
-			name: evaluated?.primary?.objective ?? null,
-			goalId: evaluated?.primary?.id ?? null,
-			sessionId: evaluated?.primary?.sessionId ?? null,
+			name: primaryTask?.title ?? evaluated?.primary?.objective ?? null,
+			goalId: primaryTask?.goalId ?? evaluated?.primary?.id ?? null,
+			sessionId: primaryTask?.sessionId ?? evaluated?.primary?.sessionId ?? null,
 			phase: evaluated?.primary?.goalPhase ?? null,
-			generation: evaluated?.primary?.generation ?? null,
-			revision: evaluated?.primary?.revision ?? null,
-			nextExpectedAction: evaluated?.primary?.nextExpectedAction ?? null,
+			generation: primaryTask?.generation ?? evaluated?.primary?.generation ?? null,
+			revision: primaryTask?.revision ?? evaluated?.primary?.revision ?? null,
+			nextExpectedAction: primaryTask?.currentStep ?? evaluated?.primary?.nextExpectedAction ?? null,
+			state: primaryTask?.state ?? null,
+			lastProgressAt: primaryTask?.lastProgressAt ? new Date(primaryTask.lastProgressAt).toISOString() : null,
 		},
 		progress: {
 			lastProgressAt: evaluated?.lastProgressAt ? new Date(evaluated.lastProgressAt).toISOString() : null,
@@ -613,4 +621,207 @@ export function buildFcmRequest({ projectId, payload }) {
 		url: `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
 		body: { message: { topic: 'watchdog', data, android: { priority: 'HIGH', ttl: '900s' } } },
 	};
+}
+
+// =================================================================================
+// R2.5 (R4): MULTI-TASK MONITOR PROJECTION  —— 真正的一等多任务投影 tasks[]
+// 定位（Notion 02.8 R4 §4-§9）：把 task + otherGoals 升级为一等 tasks[]。
+//   纯函数；从既有权威面（Official Session/Goal + Supervisor state + 现有 progress-signal）
+//   组合推导，绝不反向成为 Task Authority，绝不建第二 Task DB / Task Engine，不复制
+//   prompt / session history / evidence 内容。
+// UI 任务状态（§5）：RUNNING / STALLED / WAITING_USER / RECOVERING / AWAITING_REVIEW /
+//   BLOCKED / COMPLETED(VERIFIED) / FAILED / PAUSED / UNKNOWN。OFFLINE 是主机/数据源态，
+//   不是任务态。STALLED 必须复用现有 progress-signal，且 per-task（任务 A 无进展不影响 B）。
+// 排序（§6）：RUNNING > RECOVERING > WAITING_USER > STALLED > BLOCKED > AWAITING_REVIEW
+//   > 最近终态。真正 running Session 必须排在旧 AWAITING_REVIEW Goal 前面。
+// Widget 默认：3 当前 + 1 最近完成，超出显示「还有 N 个任务」。
+// 完成时间冻结（§7）：进入真实终态后冻结 completedAt/finalDuration，用 canonical 终态
+//   时间戳，否则 firstObservedTerminalAt 薄 telemetry cache（一旦冻结不得随刷新漂移，
+//   timeSource 标注，非 Task Authority，可安全重建，不存任务正文）。
+// 最近进展（§8）：优先可信 progress signal（session.updatedAt / 心跳），禁止用 HTTP fetch
+//   time / widget refresh time 冒充任务进展；currentStep 次级，无可靠来源则隐藏。
+// =================================================================================
+
+// task-state enum + UI 排序 rank（§5 + §6）
+export const TASK_UI_STATES = Object.freeze([
+	'RUNNING', 'STALLED', 'WAITING_USER', 'RECOVERING', 'AWAITING_REVIEW', 'BLOCKED',
+	'COMPLETED', 'VERIFIED', 'FAILED', 'PAUSED', 'UNKNOWN',
+]);
+const TASK_UI_RANK = Object.freeze({
+	RUNNING: 0, RECOVERING: 1, WAITING_USER: 2, STALLED: 3, BLOCKED: 4,
+	AWAITING_REVIEW: 5, COMPLETED: 6, VERIFIED: 6, FAILED: 6, PAUSED: 7, UNKNOWN: 8,
+});
+// 真实终态集合（§7：这些进入后必须冻结 completedAt/finalDuration）
+export const TASK_TERMINAL = Object.freeze(new Set(['VERIFIED', 'BLOCKED', 'COMPLETED', 'FAILED']));
+
+/**
+ * 读取一行 goal 的 startedAt（canonical = row.createdAt；缺失 → null，上层自行决定是否显示 duration）。
+ */
+function taskStartedAt(row) {
+	const at = Number(row?.createdAt);
+	return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * §8 最新进展信号：取权威信号最大值（goal.updatedAt / session.updatedAt / 宿主心跳），
+ * 明确禁止用 now（绝不拿 HTTP fetch / widget refresh time 冒充任务进展）。
+ */
+function lastProgressSignal(base, session, hb) {
+	const signals = [
+		Number.isFinite(base?.updatedAt) ? base.updatedAt : null,
+		Number.isFinite(session?.updatedAt) ? session.updatedAt : null,
+		Number.isFinite(hb) && hb > 0 ? hb : null,
+	].filter((n) => n != null);
+	return signals.length ? Math.max(...signals) : null;
+}
+
+/**
+ * per-task stall 分类（§5 铁律：复用现有 progress-signal，非纯时长；per-task 独立）。
+ *   base            : projectRow 输出（含 state / running / runningKnown / updatedAt / nextExpectedAction）
+ *   session         : sanitizeStateItem 或 null
+ *   hb              : 宿主 session/event 心跳最近时间（ms）；0/缺失 → 无
+ *   inFlightFailsafe: 该任务是否为「当前主任务」（沿用 evaluate 的 fail-safe 语义）
+ * 返回 { state, stalledForMs, lastProgressAt, progressSignal }
+ * 注意：本分类器是「只读投影（Widget 展示）」；真正的恢复决策/确认计数仍由 evaluate() 权威完成。
+ */
+export function classifyTaskState(base, { now, cfg, session, hb = 0, inFlightFailsafe = false }) {
+	const nowMs = Number(now) || Date.now();
+	const c = normalizeConfig(cfg);
+	const b = base && typeof base === 'object' ? base : {};
+	const state0 = typeof b.state === 'string' ? b.state : 'UNKNOWN';
+
+	// 非 active 态（VERIFIED / BLOCKED / AWAITING_REVIEW / RECOVERING / UNKNOWN）：
+	// 直接沿用投影态，永不算 stall，不动 progress 语义（与 evaluate §⑤ 同哲学）。
+	if (!['RUNNING', 'WAITING_USER'].includes(state0)) {
+		const lp = Number.isFinite(b.updatedAt) ? b.updatedAt : null;
+		return { state: state0, stalledForMs: null, lastProgressAt: lp, progressSignal: null };
+	}
+
+	// active 态：先看是否正常等待（等待 ≠ 卡住，§5）
+	if (isNormalWait(b)) {
+		const lp = Number.isFinite(b.updatedAt) ? b.updatedAt : null;
+		return { state: 'WAITING_USER', stalledForMs: Math.max(0, nowMs - (lp || nowMs)), lastProgressAt: lp, progressSignal: null };
+	}
+
+	// 进展信号（§8）：取权威信号最大值（updatedAt / session.updatedAt / 心跳），禁止用 now。
+	const lp = lastProgressSignal(b, session, hb);
+	const stalledForMs = Number.isFinite(lp) ? Math.max(0, nowMs - lp) : null;
+
+	// fail-safe：running 未知/在场 → 可能仍有 in-flight（长前台命令）→ RUNNING，绝不猜 STALLED。
+	const inFlight = b.running || !b.runningKnown;
+	const hbFresh = hb > 0 && (nowMs - hb) < c.stallAfterMs;
+	if (!inFlightFailsafe && (inFlight || hbFresh)) {
+		return { state: 'RUNNING', stalledForMs, lastProgressAt: lp, progressSignal: lp };
+	}
+	// 无进展 + 明确空闲 + 超出阈值 → STALLED；否则 RUNNING（含候选但未确认）。
+	const noProgress = Number.isFinite(stalledForMs) && stalledForMs >= c.stallAfterMs;
+	return {
+		state: noProgress ? 'STALLED' : 'RUNNING',
+		stalledForMs, lastProgressAt: lp, progressSignal: lp,
+	};
+}
+
+/**
+ * 单任务投影（§4 字段集）。
+ * taskId = goal 的 supervisorGoalId（goal 级任务身份，沿用 Authority）；sessionId/goalId 单列。
+ * terminal=true → 需冻结 completedAt/finalDuration。source 标注推导来源（不隐藏，§7 timeSource 需溯源）。
+ */
+function projectTask(row, session, opts) {
+	const b = projectRow(row, session, opts);
+	const nowMs = Number(opts.now) || Date.now();
+	const cf = classifyTaskState(b, opts);
+	const startedAt = taskStartedAt(row);
+	const controlState = b.controlState ?? null;
+	const terminal = TASK_TERMINAL.has(cf.state) || ['VERIFIED', 'BLOCKED', 'CANCELLED'].includes(controlState);
+	const completedAt = terminal
+		? (opts.terminalCache?.[b.id]?.completedAt ?? null)
+		: null;
+	const durationMs = Number.isFinite(startedAt)
+		? (completedAt != null ? Math.max(0, completedAt - startedAt) : Math.max(0, nowMs - startedAt))
+		: null;
+	return {
+		taskId: b.id,
+		sessionId: b.sessionId,
+		goalId: b.id,
+		title: b.objective,
+		state: cf.state,
+		// 完成冻结：completedAt/finalDuration 由 projectTasks 的 terminal cache 写入（一经冻结不漂移）；
+		// 此处仅占位，避免单任务路径出现「自己算自己」的漂移。
+		completedAt,
+		finalDurationMs: terminal ? durationMs : null,
+		startedAt,
+		lastProgressAt: cf.lastProgressAt,
+		currentStep: b.nextExpectedAction ?? null,
+		reviewState: controlState,
+		waitingReason: b.nextExpectedAction || null,
+		terminal,
+		source: 'supervisor_goal',
+		updatedAt: b.updatedAt,
+		generation: b.generation,
+		revision: b.revision,
+		internal: { running: b.running, runningKnown: b.runningKnown, stalls: cf.stalledForMs },
+	};
+}
+
+/**
+ * 多任务投影（§4/§6/§7 主入口。纯函数；terminal cache 由 host 持有并往返传入传出）。
+ *   input = { now, cfg, snapshot, heartbeats, terminalCache?, primaryId? }
+ *   snapshot  : supervisor get_snapshot（同上 evaluate 输入）
+ *   heartbeats: { sessionId: lastEventAt }
+ *   terminalCache: { [taskId]: { completedAt, timeSource } } —— 上一轮冻结结果（薄 telemetry）
+ * 返回 { tasks:[...ordered], primaryTaskId, terminalCachePatch:{...}, overflow }
+ *   tasks 已按 §6 排序；terminalCachePatch 需 host 持久化并在下一轮回传（一旦冻结不漂移）。
+ */
+export function projectTasks({ now, cfg, snapshot, heartbeats = {}, terminalCache = {}, primaryId = null }) {
+	const c = normalizeConfig(cfg);
+	const nowMs = Number(now) || Date.now();
+	const sessionsBySid = new Map((Array.isArray(snapshot?.sessions) ? snapshot.sessions : []).map((s) => [s.sessionId, s]));
+	const tc = { ...terminalCache };
+
+	const tasks = (snapshot?.supervisorGoals ?? [])
+		.map((row) => {
+			const session = sessionsBySid.get(row.harnessSessionId) ?? null;
+			const b = projectRow(row, session, { now: nowMs });
+			return { row, session, b };
+		})
+		.map(({ row, session, b }) => projectTask(row, session, {
+			now: nowMs, cfg: c, hb: heartbeats[b.sessionId] ?? 0,
+			terminalCache: tc,
+			inFlightFailsafe: b.id === primaryId,
+		}));
+
+	// §7 完成时间冻结：terminal 任务若无 canonical 终态时间戳 → firstObservedTerminalAt；一经冻结永不漂移。
+	for (const t of tasks) {
+		if (!t.terminal) continue;
+		if (Number.isFinite(t.completedAt)) continue; // 已冻结，保持
+		const frozen = tc[t.taskId];
+		if (frozen && Number.isFinite(frozen.completedAt)) {
+			t.completedAt = frozen.completedAt;
+		} else {
+			t.completedAt = nowMs;
+			tc[t.taskId] = { completedAt: nowMs, timeSource: 'firstObservedTerminalAt' };
+		}
+		t.finalDurationMs = Number.isFinite(t.startedAt) ? Math.max(0, t.completedAt - t.startedAt) : null;
+	}
+	// 非终态任务：清除其 terminal cache 条目（防止旧冻结残留导致误展示）
+	for (const t of tasks) {
+		if (!t.terminal && tc[t.taskId]) delete tc[t.taskId];
+	}
+
+	// §6 排序：rank 优先；同 rank 内 running 优先；再按 lastProgressAt 新→旧。
+	const rank = (t) => TASK_UI_RANK[t.state] ?? TASK_UI_RANK.UNKNOWN;
+	const ordered = tasks.slice().sort((a, z) => {
+		const ra = rank(a), rz = rank(z);
+		if (ra !== rz) return ra - rz;
+		if ((a.internal.running ? 1 : 0) !== (z.internal.running ? 1 : 0)) {
+			return (a.internal.running ? 1 : 0) - (z.internal.running ? 1 : 0);
+		}
+		const ta = Number.isFinite(a.lastProgressAt) ? a.lastProgressAt : 0;
+		const tz = Number.isFinite(z.lastProgressAt) ? z.lastProgressAt : 0;
+		return tz - ta;
+	});
+
+	const primaryTaskId = primaryId ?? ordered[0]?.taskId ?? null;
+	const overflow = Math.max(0, ordered.length - 4); // 3 当前 + 1 最近完成
+	return { tasks: ordered, primaryTaskId, terminalCachePatch: tc, overflow };
 }

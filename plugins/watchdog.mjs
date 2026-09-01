@@ -121,6 +121,10 @@ export function apply(ctx, config = {}) {
 	let lastEvaluated = null;
 	let lastPushAt = 0;
 	let lastBudget = null;
+	// R4（§7）：完成时间冻结薄 cache（内存态；只存 { taskId: { completedAt, timeSource } }，不存正文、
+	// 非 Task Authority、可安全重建——进程重启后丢失仅导致重新 firstObservedTerminalAt，不漂移不误报）。
+	// 一经冻结持续到进程生命周期内的下一次 refresh，完成时间不再随刷新前进（§7 核心）。
+	let terminalCache = {};
 
 	ctx.on('session/event', (session, event) => {
 		try {
@@ -208,6 +212,11 @@ export function apply(ctx, config = {}) {
 	let lastFcmAt = 0;
 	let lastFcmRev = null;
 	let lastFcmState = null;
+	// R4：多任务变更指纹（§5/§6 per-task trigger）。shape = "taskId:state:revision" 排序拼接，
+	// 任一任务 state/revision 变化 → 唤醒手机（Widget 视图有任务级状态迁移，不再只看主任务）。
+	// 首轮只登记基线不推送；冷启动仍由 Widget 兜底轮询覆盖。
+	let lastFcmTasksSig = null;
+	let lastFcmTasksCount = null;
 
 	function b64url(input) {
 		return Buffer.from(input).toString('base64url');
@@ -317,15 +326,36 @@ export function apply(ctx, config = {}) {
 	function fcmPushState(sanitized) {
 		const state = sanitized?.state ?? null;
 		const rev = sanitized?.task?.revision ?? null;
-		if (lastFcmState === null && lastFcmRev === null) {
+		// R4：多任务指纹（含任务级状态迁移）。仅当 tasks[] 存在时启用；空数组用旧基线。
+		const taskRows = Array.isArray(sanitized?.tasks) ? sanitized.tasks : null;
+		let tasksSig = null;
+		let tasksCount = null;
+		if (taskRows && taskRows.length > 0) {
+			// 稳定排序（taskId 字典序）拼 "taskId:state:revision"；空数组/全 null 视为无信号。
+			const sigParts = taskRows
+				.slice()
+				.sort((a, z) => String(a?.taskId ?? '').localeCompare(String(z?.taskId ?? '')))
+				.map((t) => `${t?.taskId ?? '?'}:${t?.state ?? '?'}:${t?.revision ?? '?'}`);
+			if (sigParts.length) {
+				tasksSig = sigParts.join('|');
+				tasksCount = taskRows.length;
+			}
+		}
+		if (lastFcmState === null && lastFcmRev === null && lastFcmTasksSig === null) {
 			// 首轮观测只登记基线，不推送（冷启动由 Widget 兜底轮询覆盖）。
 			lastFcmState = state;
 			lastFcmRev = rev;
+			lastFcmTasksSig = tasksSig;
+			lastFcmTasksCount = tasksCount;
 			return;
 		}
-		if (state !== lastFcmState || (rev !== null && rev !== lastFcmRev)) {
+		const multiChanged = tasksSig !== null
+			&& (tasksSig !== lastFcmTasksSig || tasksCount !== lastFcmTasksCount);
+		if (state !== lastFcmState || (rev !== null && rev !== lastFcmRev) || multiChanged) {
 			lastFcmState = state;
 			lastFcmRev = rev;
+			lastFcmTasksSig = tasksSig;
+			lastFcmTasksCount = tasksCount;
 			lastFcmAt = Date.now();
 			void fcmSendStateChange(sanitized);
 		}
@@ -429,7 +459,16 @@ export function apply(ctx, config = {}) {
 			});
 			episode = { ...core.blankEpisode(), ...evaluated.episodePatch };
 			lastEvaluated = evaluated;
-			const sanitized = core.sanitizeSnapshot({ now, evaluated, model: readModelTruth(), pollMs: cfg.pollMs, budget });
+			// R4：多任务投影（§4/§6/§7）。从同一权威 snapshot 派生 tasks[]（排序 + 完成冻结），
+			// terminalCache 往返传入传出以在 refresh 间保持完成时间不漂移。
+			const proj = core.projectTasks({
+				now, cfg, snapshot: snapshotForEval,
+				heartbeats: Object.fromEntries(heartbeats),
+				terminalCache,
+				primaryId: evaluated?.primary?.id ?? null,
+			});
+			terminalCache = proj.terminalCachePatch;
+			const sanitized = core.sanitizeSnapshot({ now, evaluated, model: readModelTruth(), pollMs: cfg.pollMs, budget, tasks: proj.tasks, terminalCachePatch: proj.terminalCachePatch });
 			prev = sanitized;
 			writeSnapshotAtomic(sanitized);
 			writeBudgetAtomic(budget);

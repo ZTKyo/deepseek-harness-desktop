@@ -17,8 +17,8 @@ android {
 		applicationId 'com.dsh.watchdog.widget'
 		minSdk 26
 		targetSdk 34
-		versionCode 3
-		versionName '0.3.0'
+		versionCode 4
+		versionName '0.3.1'
 	}
 
 	// 沿用既有源码布局（app/java、app/res、app/AndroidManifest.xml），不迁移文件

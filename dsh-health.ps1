@@ -50,6 +50,7 @@ function Get-DshHealthStatePath([int]$Port = 3080) {
     return (Join-Path $env:LOCALAPPDATA ("DSHHarness\state\dsh-health-{0}.json" -f $Port))
 }
 function Get-DshIncidentDir {
+    if ($env:DSH_INCIDENT_DIR) { return $env:DSH_INCIDENT_DIR }
     return (Join-Path $env:LOCALAPPDATA 'DSHHarness\incidents')
 }
 
@@ -231,7 +232,7 @@ function Set-DshHealthState([object]$State, [int]$Port = 3080) {
 function Invoke-DshHealthTriage(
     [object]$Snapshot,
     [object]$CurrentState,
-    [datetime]$Now = $null,
+    [Nullable[datetime]]$Now = $null,
     [int]$FailThreshold = $script:DshHealthFailThreshold,
     [int]$CandidateWindowSec = $script:DshHealthCandidateWindowSec,
     [int]$RecoveryWindowSec = $script:DshHealthRecoveryWindowSec
@@ -499,20 +500,23 @@ function New-DshIncidentBundle(
 
     # best-effort: presence-only task telemetry (goal + session activity). We read
     # ONLY file existence / timestamps / counts — NEVER session bodies or prompts.
+    # R3: these are RECENCY HEURISTICS, not authoritative "is a task running" signals
+    # (a user task can be idle >10 min yet still active; a stale goal file can be a
+    # leftover). Marked HEURISTIC_ONLY so consumers never treat them as a hard gate.
     try {
         $dshHome = Join-Path $env:USERPROFILE '.dsh'
-        $task = [pscustomobject]@{ activeGoalExists = $false; goalFileCount = 0; runningSessionCount = 0; newestSessionWriteAt = $null }
+        $task = [pscustomobject]@{ recentGoalFileExists = $false; recentGoalFileCount = 0; recentSessionFileCount = 0; newestSessionWriteAt = $null; heuristic = 'HEURISTIC_ONLY' }
         $goalDir = Join-Path $dshHome 'goals'
         if (Test-Path -LiteralPath $goalDir) {
             $gf = @(Get-ChildItem -LiteralPath $goalDir -File -Filter *.json -ErrorAction SilentlyContinue)
-            $task.goalFileCount = $gf.Count
-            # active-goal proxy: a goal state file touched in the last 15 min (presence only)
-            $task.activeGoalExists = [bool]($gf | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) })
+            $task.recentGoalFileCount = $gf.Count
+            # recency heuristic: a goal state file touched in the last 15 min (presence only)
+            $task.recentGoalFileExists = [bool]($gf | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) })
         }
         $sessDir = Join-Path $dshHome 'sessions'
         if (Test-Path -LiteralPath $sessDir) {
             $sess = @(Get-ChildItem -LiteralPath $sessDir -File -Filter *.json -Recurse -ErrorAction SilentlyContinue)
-            $task.runningSessionCount = @($sess | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-10) }).Count
+            $task.recentSessionFileCount = @($sess | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-10) }).Count
             if ($sess.Count -gt 0) { $task.newestSessionWriteAt = ($sess | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime }
         }
         $incident | Add-Member -NotePropertyName taskPresence -NotePropertyValue $task -Force
@@ -556,6 +560,127 @@ function New-DshIncidentBundle(
     } catch {
         return $null
     }
+}
+
+# ---------- RH1 R3: single HEALTH-AUTHORITY decision/execution helper ----------
+# R3 review blocker 1 (real-E2E only called Invoke-DshHealthTriage): the guardian's
+# real liveness/readiness recovery path runs through THIS function, and the isolated
+# real-e2e harness (tests/rh1-real-e2e.ps1) calls the SAME function with recording
+# executors, so the test genuinely exercises the production pipeline: maintenance
+# lock -> triage -> owner-safety -> degrade -> candidate confirm ->
+# incident-before-restart -> budget/circuit gate -> restart.
+#   * MaintenanceLocked is supplied by the CALLER (production passes the result of
+#     Test-MaintenanceLock; the isolated test passes its own value) so this file
+#     stays dot-source-safe and free of guardian-only name dependencies.
+#   * The RESTART/ALERT/RECOVER/LOG/CONFIRM executors are injectable. Their
+#     defaults reference guardian-scope functions by name (lazily resolved at
+#     invocation), so inside dsh-guardian.ps1 they resolve to the real primitives;
+#     an isolated test overrides them with recording stubs.
+#   * $State is a caller-owned hashtable (failStreak/recovering/
+#     lastRecoverAlertAt/stuckHits) that this function mutates in place.
+function Invoke-DshHealthGuard {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)][int]$Port,
+        [Parameter(Mandatory=$true)][object]$Probe,
+        [Parameter(Mandatory=$true)][object]$CurrentState,
+        [Parameter(Mandatory=$true)][hashtable]$State,
+        [object]$BudgetState = $null,
+        [bool]$MaintenanceLocked = $false,
+        [scriptblock]$RestartExecutor = { param($r) Invoke-BudgetedRestart $r },
+        [scriptblock]$AlertSender       = { param($m) Send-TelegramAlert $m },
+        [scriptblock]$GoalRecover       = { Invoke-GoalRecovery },
+        [scriptblock]$Log               = { param($s) TraceG $s },
+        [scriptblock]$ConfirmProbe      = { param($p) Get-DshHealthProbe -Port $p -IncludeWebSockets }
+    )
+    if (-not $State.ContainsKey('failStreak'))  { $State['failStreak']  = 0 }
+    if (-not $State.ContainsKey('recovering')) { $State['recovering'] = $false }
+    if (-not $State.ContainsKey('lastRecoverAlertAt')) { $State['lastRecoverAlertAt'] = $null }
+    if (-not $State.ContainsKey('stuckHits'))   { $State['stuckHits']   = 0 }
+
+    $tr = Invoke-DshHealthTriage -Snapshot $Probe -CurrentState $CurrentState
+    Set-DshHealthState $tr.NextState -Port $Port
+    $action     = $tr.Action
+    $ownerState = [string]$Probe.ownerState
+    $incFile    = $null
+
+    if ($MaintenanceLocked) {
+        # a restart worker owns the restart; stay out of the way
+        if ($State['recovering']) { $State['recovering'] = $false }
+        if ($action -ne 'noop') { & $Log ("maintenance window held; health action suppressed (owner=$ownerState action=$action)") }
+        $State['stuckHits'] = 0
+        return [pscustomobject]@{ HealthAction = 'noop'; OwnerState = $ownerState; Suppressed = $true; IncFile = $null; State = $State }
+    }
+
+    if ($action -eq 'noop') {
+        $State['failStreak'] = 0
+        if ($State['recovering']) { $State['recovering'] = $false }
+    }
+    elseif ($action -eq 'owner_unsafe') {
+        & $Log ("owner identity unsafe: state=$ownerState pid=$($Probe.ownerPid) nonLoopback=$($Probe.nonLoopbackCount); no kill/start")
+        & $AlertSender ("dsh 服务端口 owner 无法安全核验（$ownerState），已停止自动杀进程/拉起。")
+    }
+    elseif ($action -eq 'server_absent') {
+        if ($Probe.nonLoopbackCount -gt 0) {
+            & $Log ("port has non-loopback listener (count=$($Probe.nonLoopbackCount)); skipping restore to avoid EADDRINUSE")
+            & $AlertSender ("dsh 端口 $Port 存在非本机回环监听者（$($Probe.nonLoopbackCount)），已停止自动拉起，避免端口冲突。")
+        } else {
+            & $Log ("server absent (owner=none) - budgeted controlled restart")
+            $State['failStreak']++; $State['recovering'] = $true
+            if (& $RestartExecutor ("server absent owner=none")) {
+                $State['failStreak'] = 0
+                & $GoalRecover
+                if (-not $State['lastRecoverAlertAt'] -or ((Get-Date) - $State['lastRecoverAlertAt']).TotalMinutes -ge 10) {
+                    & $AlertSender 'dsh 服务已恢复（此前服务缺席，重启成功）。'
+                    $State['lastRecoverAlertAt'] = Get-Date
+                }
+                $State['recovering'] = $false
+            } else {
+                & $Log 'budgeted controlled restart did not complete'
+            }
+        }
+    }
+    elseif ($action -eq 'degrade') {
+        & $Log ("health DEGRADED (owner=ok, failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s, errorClass=$($Probe.errorClass)) - no restart (RH1)")
+    }
+    elseif ($action -eq 'hard_candidate') {
+        & $Log ("health HARD_UNHEALTHY_CANDIDATE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - independent confirm")
+        $confirm = & $ConfirmProbe $Port
+        if ($confirm.ready) {
+            $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
+            Set-DshHealthState $tr2.NextState -Port $Port
+            & $Log "independent confirm READY; health reset (no restart)"
+        } else {
+            & $Log ("independent confirm still unready (errorClass=$($confirm.errorClass)); staying candidate")
+        }
+    }
+    elseif ($action -eq 'restart_eligible') {
+        & $Log ("health RECOVERY_ELIGIBLE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - incident + confirm before restart")
+        if (-not $BudgetState) { $BudgetState = Read-DshRestartBudget }
+        $incFile = New-DshIncidentBundle -Port $Port -Snapshot $Probe -HealthState $tr.NextState -BudgetState $BudgetState -Reason ("health recovery_eligible owner=ok: " + $tr.Reason)
+        if ($incFile) { & $Log ("incident bundle written: " + $incFile) } else { & $Log 'incident bundle write failed (telemetry only)' }
+        $confirm = & $ConfirmProbe $Port
+        if ($confirm.ready) {
+            $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
+            Set-DshHealthState $tr2.NextState -Port $Port
+            & $Log "recovery_eligible but confirm READY; health reset (no restart)"
+        } else {
+            $State['failStreak']++; $State['recovering'] = $true
+            if (& $RestartExecutor ("health recovery_eligible owner=ok: " + $tr.Reason)) {
+                $State['failStreak'] = 0
+                & $GoalRecover
+                if (-not $State['lastRecoverAlertAt'] -or ((Get-Date) - $State['lastRecoverAlertAt']).TotalMinutes -ge 10) {
+                    & $AlertSender 'dsh 服务已恢复（此前进程存活但未通过 readiness，重启成功）。'
+                    $State['lastRecoverAlertAt'] = Get-Date
+                }
+                $State['recovering'] = $false
+            } else {
+                & $Log 'budgeted health restart did not complete'
+            }
+        }
+    }
+
+    return [pscustomobject]@{ HealthAction = $action; OwnerState = $ownerState; Suppressed = $false; IncFile = $incFile; State = $State }
 }
 
 function Reset-DshHealthState([int]$Port = 3080) {

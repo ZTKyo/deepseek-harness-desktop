@@ -2237,7 +2237,7 @@ if (-not $Probe) {
             # returned next-state, and performs at most the single auto-reload the
             # state machine authorizes. Grace + cooldown + no-reload-on-degraded are
             # enforced inside the pure function, so they are CI-deterministic.
-            $d = Invoke-DshReconnectTransition -State $script:reconn -Mode $mode -PageSelfRecovered ([bool]$script:lastNavSucceeded) -Now $now
+            $d = Invoke-DshReconnectTransition -State $script:reconn -Mode $mode -LastNavigationSucceeded ([bool]$script:lastNavSucceeded) -Now $now
             $script:reconn = $d.State
             switch ($d.Mode) {
                 'online' {

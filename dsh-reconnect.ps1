@@ -62,12 +62,14 @@ function _cloneDshReconnectState([object]$s) {
     }
 }
 
-# ---- PURE transition. Deterministic given (State, Mode, PageSelfRecovered, Now).
+# ---- PURE transition. Deterministic given (State, Mode, LastNavigationSucceeded, Now).
+# LastNavigationSucceeded = the client's latest navigation to the server succeeded
+# (page self-recovered); used to decide reload vs. no-reload after a stable grace window.
 # Returns @{ Operation; Mode; Reload; Reason; State; Diagnostic }.
 function Invoke-DshReconnectTransition(
     [object]$State = $null,
     [string]$Mode = 'unknown',
-    [bool]$PageSelfRecovered = $false,
+    [bool]$LastNavigationSucceeded = $false,
     [datetime]$Now = $null,
     [int]$GraceSec = $script:DshReconnectGraceSec,
     [int]$CooldownSec = $script:DshReconnectCooldownSec,
@@ -141,7 +143,7 @@ function Invoke-DshReconnectTransition(
                 return $base
             }
             # grace elapsed -> decide. Prefer observing page self-recovery.
-            if ($PageSelfRecovered) {
+            if ($LastNavigationSucceeded) {
                 $st.mode = 'online'
                 $st.offlineSince = $null
                 $st.recoveryStartAt = $null

@@ -429,7 +429,14 @@ function Invoke-BudgetedRestart([string]$reason) {
     return $false
 }
 
-# ---------- config safety: guardian-lastgood is a RESTORE MIRROR ONLY ----------
+# ---------- RH1 R3: single HEALTH-AUTHORITY decision/execution ----------
+# The guardian's liveness/readiness recovery decision path lives in the shared,
+# dot-source-safe helper Invoke-DshHealthGuard (dsh-health.ps1). The production
+# loop below calls it, and the isolated real-e2e harness (tests/rh1-real-e2e.ps1)
+# calls the SAME function with recording executors, so the test genuinely
+# exercises the pipeline (maintenance lock -> triage -> owner-safety -> degrade ->
+# candidate confirm -> incident-before-restart -> budget/circuit gate -> restart)
+# that production uses. This comment is the guardian's single reference.
 # Anti-self-kill: if settings.yaml or cordis.patch.yml is edited into an invalid
 # state (syntax error), the server would fail to boot on the next restart. The
 # guardian restores the mirror snapshot before any start/restart, so a bad edit
@@ -577,6 +584,11 @@ $pauseUntil = $null
 $lockTick = 0
 $recovering = $false
 $lastRecoverAlertAt = $null
+# RH1 R3: the guardian's health-pacing state lives in a hashtable that the shared
+# health-authority helper (Invoke-DshHealthGuard) mutates in place; the loop reads
+# the iterators back after each call so all pacing (backoff sleep, stale-session)
+# continues to use the same values.
+$healthState = @{ failStreak=$failStreak; recovering=$recovering; lastRecoverAlertAt=$lastRecoverAlertAt; stuckHits=$stuckHits }
 try {
 do {
     Write-GuardianHeartbeat 'checking'
@@ -589,89 +601,20 @@ do {
     # lock + restart budget + circuit breaker + the canonical start authority.
     $snap = Get-DshHealthProbe -Port $Port -IncludeWebSockets
     $cur  = Get-DshHealthState -Port $Port
-    $tr   = Invoke-DshHealthTriage -Snapshot $snap -CurrentState $cur
-    Set-DshHealthState $tr.NextState -Port $Port
-    $healthAction = $tr.Action
-    $ownerState   = [string]$snap.ownerState
+    # RH1 R3: the real recovery pipeline runs through the SAME shared helper the
+    # isolated real-e2e harness calls, so the decision path is provably identical.
+    $gh = Invoke-DshHealthGuard -Port $Port -Probe $snap -CurrentState $cur -State $healthState -BudgetState $null -MaintenanceLocked (Test-MaintenanceLock)
+    $healthAction    = $gh.HealthAction
+    $ownerState      = $gh.OwnerState
+    $maintenanceHeld = $gh.Suppressed
+    $failStreak      = $healthState['failStreak']
+    $recovering      = $healthState['recovering']
+    $lastRecoverAlertAt = $healthState['lastRecoverAlertAt']
+    $stuckHits       = $healthState['stuckHits']
 
-    if (Test-MaintenanceLock) {
-        # a restart worker owns the restart; stay out of the way
-        if ($recovering) { $recovering = $false }
-        if ($healthAction -ne 'noop') {
-            TraceG ("maintenance window held; health action suppressed (owner=$ownerState action=$healthAction)")
-        }
-        $stuckHits = 0
-    } else {
-        if ($healthAction -eq 'noop') {
-            $failStreak = 0
-            if ($recovering) { $recovering = $false }
-        }
-        elseif ($healthAction -eq 'owner_unsafe') {
-            TraceG ("owner identity unsafe: state=$ownerState pid=$($snap.ownerPid) nonLoopback=$($snap.nonLoopbackCount); no kill/start")
-            Send-TelegramAlert ("dsh 服务端口 owner 无法安全核验（$ownerState），已停止自动杀进程/拉起。")
-        }
-        elseif ($healthAction -eq 'server_absent') {
-            if ($snap.nonLoopbackCount -gt 0) {
-                TraceG ("port has non-loopback listener (count=$($snap.nonLoopbackCount)); skipping restore to avoid EADDRINUSE")
-                Send-TelegramAlert ("dsh 端口 3080 存在非本机回环监听者（$($snap.nonLoopbackCount)），已停止自动拉起，避免端口冲突。")
-            } else {
-                TraceG ("server absent (owner=none) - budgeted controlled restart")
-                $failStreak++; $recovering = $true
-                if (Invoke-BudgetedRestart ("server absent owner=none")) {
-                    $failStreak = 0
-                    Invoke-GoalRecovery
-                    if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
-                        Send-TelegramAlert 'dsh 服务已恢复（此前服务缺席，重启成功）。'
-                        $lastRecoverAlertAt = Get-Date
-                    }
-                    $recovering = $false
-                } else {
-                    TraceG 'budgeted controlled restart did not complete'
-                }
-            }
-        }
-        elseif ($healthAction -eq 'degrade') {
-            TraceG ("health DEGRADED (owner=ok, failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s, errorClass=$($snap.errorClass)) - no restart (RH1)")
-        }
-        elseif ($healthAction -eq 'hard_candidate') {
-            TraceG ("health HARD_UNHEALTHY_CANDIDATE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - independent confirm")
-            $confirm = Get-DshHealthProbe -Port $Port -IncludeWebSockets
-            if ($confirm.ready) {
-                $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
-                Set-DshHealthState $tr2.NextState -Port $Port
-                TraceG "independent confirm READY; health reset (no restart)"
-            } else {
-                TraceG ("independent confirm still unready (errorClass=$($confirm.errorClass)); staying candidate")
-            }
-        }
-        elseif ($healthAction -eq 'restart_eligible') {
-            TraceG ("health RECOVERY_ELIGIBLE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - incident + confirm before restart")
-            $budgetState = Read-DshRestartBudget
-            $incFile = New-DshIncidentBundle -Port $Port -Snapshot $snap -HealthState $tr.NextState -BudgetState $budgetState -Reason ("health recovery_eligible owner=ok: " + $tr.Reason)
-            if ($incFile) { TraceG ("incident bundle written: " + $incFile) } else { TraceG 'incident bundle write failed (telemetry only)' }
-            $confirm = Get-DshHealthProbe -Port $Port -IncludeWebSockets
-            if ($confirm.ready) {
-                $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
-                Set-DshHealthState $tr2.NextState -Port $Port
-                TraceG "recovery_eligible but confirm READY; health reset (no restart)"
-            } else {
-                $failStreak++; $recovering = $true
-                if (Invoke-BudgetedRestart ("health recovery_eligible owner=ok: " + $tr.Reason)) {
-                    $failStreak = 0
-                    Invoke-GoalRecovery
-                    if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
-                        Send-TelegramAlert 'dsh 服务已恢复（此前进程存活但未通过 readiness，重启成功）。'
-                        $lastRecoverAlertAt = Get-Date
-                    }
-                    $recovering = $false
-                } else {
-                    TraceG 'budgeted health restart did not complete'
-                }
-            }
-        }
-
-        # stale-session detection only when the server is healthy (noop action)
-        if ($healthAction -eq 'noop' -and $StuckRestartMinutes -gt 0) {
+        # stale-session detection only when the server is healthy AND no maintenance
+        # window is being held (noop action, not suppressed)
+        if (-not $maintenanceHeld -and $healthAction -eq 'noop' -and $StuckRestartMinutes -gt 0) {
             $last = Get-NewestSessionWrite
             if ($last) {
                 $ageMin = [int]((Get-Date) - $last).TotalMinutes
@@ -704,7 +647,6 @@ do {
                 } else { $stuckHits = 0 }
             }
         }
-    }
 
     # re-assert keep-awake periodically
     if ($awake) {

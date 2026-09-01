@@ -181,7 +181,7 @@ Assert 'G15 dot-source dsh-reconnect.ps1' ($rcLoadOk) ($(if ($rcLoadErr) { $rcLo
 $t0 = [datetime]::Now
 # (a) DEGRADED -> ONLINE: ALWAYS 0 auto reload (reviewer requirement).
 $sA = New-DshReconnectState; $sA.mode = 'degraded'
-$dA = Invoke-DshReconnectTransition -State $sA -Mode 'online' -PageSelfRecovered $false -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$dA = Invoke-DshReconnectTransition -State $sA -Mode 'online' -LastNavigationSucceeded $false -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
 Assert 'G15 degraded->online always 0 reload' ((-not $dA.Reload) -and $dA.Operation -eq 'no_reload_degraded_to_online') ("op=$($dA.Operation) reload=$($dA.Reload)")
 
 # (b) OFFLINE declared only after >= OfflineHitsThreshold unreachable ticks (observe first).
@@ -192,13 +192,13 @@ $d2 = Invoke-DshReconnectTransition -State $d1.State -Mode 'offline' -Now $t0.Ad
 Assert 'G16b offline declared at threshold' ($d2.Operation -eq 'offline_declared' -and $d2.State.mode -eq 'offline') ("op=$($d2.Operation) mode=$($d2.State.mode) ep=$($d2.State.episodeCounter)")
 
 # (c) OFFLINE -> ONLINE: recovery grace NOT elapsed => no reload (wait for stable window).
-$dg = Invoke-DshReconnectTransition -State $d2.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(5) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$dg = Invoke-DshReconnectTransition -State $d2.State -Mode 'online' -LastNavigationSucceeded $false -Now $t0.AddSeconds(5) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
 Assert 'G17 offline->online grace not elapsed, no reload' ($dg.Operation -eq 'recovery_grace' -and (-not $dg.Reload)) ("op=$($dg.Operation) reload=$($dg.Reload)")
 
 # (d) grace elapsed + page NOT self-recovered => auto reload exactly once.
-$dr = Invoke-DshReconnectTransition -State $dg.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(15) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$dr = Invoke-DshReconnectTransition -State $dg.State -Mode 'online' -LastNavigationSucceeded $false -Now $t0.AddSeconds(15) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
 Assert 'G18 grace elapsed page not recovered -> auto reload (1x)' ($dr.Reload -and $dr.Operation -eq 'auto_reload' -and $dr.State.reloaded) ("op=$($dr.Operation) reload=$($dr.Reload)")
-$dr2 = Invoke-DshReconnectTransition -State $dr.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(16) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$dr2 = Invoke-DshReconnectTransition -State $dr.State -Mode 'online' -LastNavigationSucceeded $false -Now $t0.AddSeconds(16) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
 Assert 'G18b no second auto reload this episode' ((-not $dr2.Reload) -and $dr2.State.reloaded) ("op=$($dr2.Operation) reload=$($dr2.Reload)")
 
 # (e) page self-recovered => no reload (do not fight a healing page). Grace window
@@ -207,8 +207,8 @@ Assert 'G18b no second auto reload this episode' ((-not $dr2.Reload) -and $dr2.S
 $sE = New-DshReconnectState
 $e1 = Invoke-DshReconnectTransition -State $sE -Mode 'offline' -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
 $e2 = Invoke-DshReconnectTransition -State $e1.State -Mode 'offline' -Now $t0.AddSeconds(3) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
-$e3 = Invoke-DshReconnectTransition -State $e2.State -Mode 'online' -PageSelfRecovered $true -Now $t0.AddSeconds(30) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # opens grace window
-$e4 = Invoke-DshReconnectTransition -State $e3.State -Mode 'online' -PageSelfRecovered $true -Now $t0.AddSeconds(45) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # grace elapsed
+$e3 = Invoke-DshReconnectTransition -State $e2.State -Mode 'online' -LastNavigationSucceeded $true -Now $t0.AddSeconds(30) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # opens grace window
+$e4 = Invoke-DshReconnectTransition -State $e3.State -Mode 'online' -LastNavigationSucceeded $true -Now $t0.AddSeconds(45) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # grace elapsed
 Assert 'G19 page self-recovered -> no reload' ((-not $e4.Reload) -and $e4.Operation -eq 'no_reload_page_recovered') ("op=$($e4.Operation) reload=$($e4.Reload)")
 
 # Blocker 3: incident bundle redaction — a sensitive fixture must NEVER reach an
@@ -217,11 +217,11 @@ Assert 'G19 page self-recovered -> no reload' ((-not $e4.Reload) -and $e4.Operat
 # the JSON-bundle serializer, which is the real leak surface.
 $secretFixture = 'sk-live-1234567890SECRETTOKEN0'
 $bearer        = 'Bearer eyJhbGciOiJIUzI1NiJ9.SECRET.JWT'
-$pem = @'
------BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEA0redactedsecret1234567890abcdef
------END RSA PRIVATE KEY-----
-'@
+$pem = [string]::Join("`n", @(
+    '-----BEGIN ' + 'RSA PRIVATE KEY-----',
+    'MIIEpAIBAAKCAQEA0redactedsecret1234567890abcdef',
+    '-----END ' + 'RSA PRIVATE KEY-----'
+))
 $red = Invoke-DshRedactText ("token=`"$secretFixture`"`npassword=$secretFixture`n`"authorization`" = `"$bearer`"`n$pem")
 $scan = Test-DshIncidentRedaction $red -KnownSensitive @($secretFixture, $pem)
 Assert 'G20 incident redaction: sensitive fixture absent' ($scan.Clean) ("Hits=" + ($scan.Hits -join ','))

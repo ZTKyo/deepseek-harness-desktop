@@ -13,7 +13,20 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# RH1 D1 (single health source): reuse the canonical layered probe when present,
+# so the client and the guardian/health module agree on liveness+readiness.
+try { . (Join-Path $PSScriptRoot 'dsh-health.ps1') } catch { }
+
 function Test-Server {
+    # RH1 D1: layered liveness + readiness; HTTP 200 == fully ready. A non-200
+    # (alive but unready) or a network error returns $false. Never kills/starts
+    # anything; the canonical start authority owns recovery.
+    if (Get-Command Test-DshBasicHttp -ErrorAction SilentlyContinue) {
+        try {
+            $basic = Test-DshBasicHttp -Port 3080 -TimeoutSec 2
+            return ($basic.State -eq 'matched' -and $basic.HttpStatus -eq 200)
+        } catch { return $false }
+    }
     try {
         $r = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 2
         return ($r.StatusCode -eq 200)
@@ -45,20 +58,25 @@ if (-not $serverUp) {
         Write-Host "DSH server not running on $Url, and -NoServer was given. Nothing to connect to." -ForegroundColor Yellow
         exit 1
     }
-    Write-Host 'DSH server is not running. Starting `dsh web` ...'
-    $dsh = Find-Dsh
-    $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
-    New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
-    $log = Join-Path $dataRoot 'logs\dsh-server-3080.log'
-    New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+    Write-Host 'DSH server is not running. Starting server via the single start authority (start-dsh-server.ps1)...'
+    # RH1 Part A (single authority): the ONLY production start path is
+    # start-dsh-server.ps1 -> dsh-launcher.js -> bundled Node v22 -> dsh web.
+    # It sanitizes env, owns the restart lock, and appends to the per-port log
+    # (it never truncates). Spawn it detached so it does not inherit this
+    # process's output pipes.
+    $starter = Join-Path $PSScriptRoot 'start-dsh-server.ps1'
+    if (-not (Test-Path $starter)) {
+        Write-Host "start-dsh-server.ps1 not found at $starter; cannot start server (single authority)." -ForegroundColor Yellow
+        exit 1
+    }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = 'cmd.exe'
-    $psi.Arguments = '/S /C ""' + $dsh + '" web > "' + $log + '" 2>&1"'
-    $psi.UseShellExecute = $false
+    $psi.FileName = 'powershell.exe'
+    $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $starter + '" -Port 3080'
+    $psi.UseShellExecute = $true
     $psi.CreateNoWindow = $true
     $psi.WorkingDirectory = $env:USERPROFILE
     [System.Diagnostics.Process]::Start($psi) | Out-Null
-    Write-Host "Waiting for $Url ... (server log: $log)"
+    Write-Host "Started (append-only per-port log under %LOCALAPPDATA%\DSHHarness\logs). Waiting for $Url ..."
     for ($i = 0; $i -lt 90; $i++) {
         if (Test-Server) { $serverUp = $true; break }
         Start-Sleep -Seconds 1

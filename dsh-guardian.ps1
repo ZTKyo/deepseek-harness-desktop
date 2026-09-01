@@ -54,6 +54,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $root 'dsh-process-identity.ps1')
 . (Join-Path $root 'dsh-readiness.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')
+. (Join-Path $root 'dsh-health.ps1')
 $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
 $logDir = Join-Path $dataRoot 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -428,7 +429,14 @@ function Invoke-BudgetedRestart([string]$reason) {
     return $false
 }
 
-# ---------- config safety: guardian-lastgood is a RESTORE MIRROR ONLY ----------
+# ---------- RH1 R3: single HEALTH-AUTHORITY decision/execution ----------
+# The guardian's liveness/readiness recovery decision path lives in the shared,
+# dot-source-safe helper Invoke-DshHealthGuard (dsh-health.ps1). The production
+# loop below calls it, and the isolated real-e2e harness (tests/rh1-real-e2e.ps1)
+# calls the SAME function with recording executors, so the test genuinely
+# exercises the pipeline (maintenance lock -> triage -> owner-safety -> degrade ->
+# candidate confirm -> incident-before-restart -> budget/circuit gate -> restart)
+# that production uses. This comment is the guardian's single reference.
 # Anti-self-kill: if settings.yaml or cordis.patch.yml is edited into an invalid
 # state (syntax error), the server would fail to boot on the next restart. The
 # guardian restores the mirror snapshot before any start/restart, so a bad edit
@@ -576,49 +584,37 @@ $pauseUntil = $null
 $lockTick = 0
 $recovering = $false
 $lastRecoverAlertAt = $null
+# RH1 R3: the guardian's health-pacing state lives in a hashtable that the shared
+# health-authority helper (Invoke-DshHealthGuard) mutates in place; the loop reads
+# the iterators back after each call so all pacing (backoff sleep, stale-session)
+# continues to use the same values.
+$healthState = @{ failStreak=$failStreak; recovering=$recovering; lastRecoverAlertAt=$lastRecoverAlertAt; stuckHits=$stuckHits }
 try {
 do {
     Write-GuardianHeartbeat 'checking'
-    $up = Test-Server
+    # ---- RH1 Part B: liveness/readiness state machine (single health source) ----
+    # LIVENESS (owner alive?) is separate from READINESS (host.describe/session.list/
+    # event streams answering). A single readiness miss MUST NOT trigger a restart:
+    # it is recorded as DEGRADED. Only >=3 consecutive misses over >=30s become a
+    # HARD_UNHEALTHY_CANDIDATE, and only after an independent confirm + >=60s total
+    # abnormal window becomes RECOVERY_ELIGIBLE, which still requires the maintenance
+    # lock + restart budget + circuit breaker + the canonical start authority.
+    $snap = Get-DshHealthProbe -Port $Port -IncludeWebSockets
+    $cur  = Get-DshHealthState -Port $Port
+    # RH1 R3: the real recovery pipeline runs through the SAME shared helper the
+    # isolated real-e2e harness calls, so the decision path is provably identical.
+    $gh = Invoke-DshHealthGuard -Port $Port -Probe $snap -CurrentState $cur -State $healthState -BudgetState $null -MaintenanceLocked (Test-MaintenanceLock)
+    $healthAction    = $gh.HealthAction
+    $ownerState      = $gh.OwnerState
+    $maintenanceHeld = $gh.Suppressed
+    $failStreak      = $healthState['failStreak']
+    $recovering      = $healthState['recovering']
+    $lastRecoverAlertAt = $healthState['lastRecoverAlertAt']
+    $stuckHits       = $healthState['stuckHits']
 
-    if (-not $up) {
-        if (Test-MaintenanceLock) {
-            # restart script is restarting the server itself - stay out of the way
-            if ($recovering) { $recovering = $false }
-        }
-        else {
-        $owner = Get-PortIdentity
-        if ($owner.State -in @('ok','none')) {
-            TraceG ("server not client-ready (ownerState=$($owner.State)) - budgeted controlled restart")
-            $failStreak++; $recovering = $true
-            if (Invoke-BudgetedRestart ("server not ready ownerState=$($owner.State)")) {
-                $failStreak = 0
-                Invoke-GoalRecovery
-                if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
-                    Send-TelegramAlert 'dsh 服务已恢复（此前未通过 readiness，重启成功）。'
-                    $lastRecoverAlertAt = Get-Date
-                }
-                $recovering = $false
-            } else {
-                TraceG 'budgeted controlled restart did not complete'
-            }
-        }
-        elseif ($owner.State -in @('identity_mismatch','ambiguous','error')) {
-            TraceG ("server down but owner identity is unsafe: state=$($owner.State) pid=$($owner.Pid) nonLoopbackListeners=$($owner.NonLoopbackCount); no kill/start")
-            Send-TelegramAlert ("dsh 服务端口 owner 无法安全核验（$($owner.State)），已停止自动杀进程/拉起。")
-        }
-        }
-        $stuckHits = 0
-    } else {
-        # Stale-mtime is a weak signal, so a restart is issued only when an
-        # ACTIVE goal exists (a task that should be progressing but has had
-        # no session write for >= threshold minutes) and only after 2
-        # consecutive hits plus a cooldown of one threshold period since the
-        # last stale restart (a restart does not update session mtime, so
-        # without the cooldown this branch would re-trigger every loop).
-        # Without an active goal the session is merely old/quiet: telemetry
-        # + alert only, no restart.
-        if ($StuckRestartMinutes -gt 0 -and -not (Test-MaintenanceLock)) {
+        # stale-session detection only when the server is healthy AND no maintenance
+        # window is being held (noop action, not suppressed)
+        if (-not $maintenanceHeld -and $healthAction -eq 'noop' -and $StuckRestartMinutes -gt 0) {
             $last = Get-NewestSessionWrite
             if ($last) {
                 $ageMin = [int]((Get-Date) - $last).TotalMinutes
@@ -651,7 +647,6 @@ do {
                 } else { $stuckHits = 0 }
             }
         }
-    }
 
     # re-assert keep-awake periodically
     if ($awake) {

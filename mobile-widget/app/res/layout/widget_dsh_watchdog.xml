@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- R5 CORRECTION：真正的一等多任务 Widget UI。
+     顶部仅小高（状态 + 更新时间 + 独立 ↻ 刷新）；剩余交给任务卡片。
+     主界面禁止 gen/rev/+N other；tasks[] 为唯一任务来源（Provider 运行时 addView 卡片）。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
@@ -7,6 +10,7 @@
     android:background="@drawable/widget_bg"
     android:padding="8dp">
 
+    <!-- 顶部小标题行：状态（左，权重撑开）+ 独立 ↻ 刷新（右上） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -15,52 +19,59 @@
 
         <TextView
             android:id="@+id/tvState"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:textColor="#8A9AA6"
-            android:text="@string/init_state" />
-
-        <TextView
-            android:id="@+id/tvMeta"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="end"
-            android:textSize="11sp"
+            android:textSize="15sp"
+            android:textStyle="bold"
             android:textColor="#8A9AA6"
             android:singleLine="true"
-            android:ellipsize="end" />
+            android:ellipsize="end"
+            android:text="@string/init_state" />
+
+        <TextView
+            android:id="@+id/btnRefresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="↻"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#8A9AA6"
+            android:paddingLeft="4dp"
+            android:paddingRight="4dp"
+            android:clickable="true"
+            android:focusable="true" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvTask"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="12sp"
-        android:textColor="#E6EDF3"
-        android:maxLines="2"
-        android:ellipsize="end" />
-
-    <TextView
-        android:id="@+id/tvModel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textSize="11sp"
-        android:textColor="#8A9AA6"
-        android:singleLine="true"
-        android:ellipsize="end" />
-
+    <!-- 状态副标题：更新时间 / 拉取中 / 错误信息 -->
     <TextView
         android:id="@+id/tvFoot"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="0dp"
         android:textSize="10sp"
         android:textColor="#6E7A85"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <!-- 多任务卡片容器（Provider 运行时 addView：最多 3 当前 + 1 最近完成） -->
+    <LinearLayout
+        android:id="@+id/llTasks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="vertical" />
+
+    <!-- 超出显示「还有 N 个任务」 -->
+    <TextView
+        android:id="@+id/tvOverflow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="10sp"
+        android:textColor="#6E7A85"
+        android:visibility="gone"
         android:singleLine="true"
         android:ellipsize="end" />
 </LinearLayout>

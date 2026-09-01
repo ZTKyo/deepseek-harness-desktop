@@ -276,6 +276,17 @@ async function instanceA() {
 		ok('E1 STALLED reason=stalled_awaiting_recovery_window', st1?.stateReason === 'stalled_awaiting_recovery_window', st1?.stateReason);
 		ok('E1 STALLED no earlier than stallAfterMs(60s)-5s after dispatch', tStalled - tDispatch >= WD_CFG_WAIT.stall - 5000, `dt=${Math.round((tStalled - tDispatch) / 1000)}s`);
 		ok('E1 primary=P1 (task.goalId)', st1?.task?.goalId === sgA, JSON.stringify(st1?.task ?? {}).slice(0, 160));
+		// R5 后端 gate：真实序列化 /watchdog/status 必须输出 R4 tasks[]（非仅单任务 task.*）。
+		// tasks[] 是正式 source；至少含主任务一行，state 由 classification 得出，排序字段齐全。
+		ok('E1 real-HTTP tasks[] serialized (array, >=1 row)', Array.isArray(st1?.tasks) && st1.tasks.length >= 1, `tasks=${JSON.stringify(st1?.tasks ?? null).slice(0, 240)}`);
+		{
+			const t0 = st1?.tasks?.find((t) => t?.goalId === sgA);
+			ok('E1 tasks[] contains primary P1 row (goalId)', t0?.goalId === sgA, `t0=${JSON.stringify(t0 ?? null).slice(0, 240)}`);
+			// 多任务投影行状态必须来自分类（RUNNING/STALLED/...），非 raw controlState 直读
+			ok('E1 tasks[].state is classified (STALLED here)', t0?.state === 'STALLED', `state=${t0?.state}`);
+			// R4 任务身份 = taskId(=supervisorGoalId) 与 goalId 单列；title 为空则主界面无标题可渲染
+			ok('E1 tasks[] row has taskId (=goalId) and non-empty title', typeof t0?.taskId === 'string' && t0.taskId === sgA && t0.taskId === t0.goalId && !!t0.title, `taskId=${t0?.taskId} title=${t0?.title}`);
+		}
 		ok('E1 daily budget untouched before recovery (left=max, acceptedToday=0)', st1?.recoveryBudget?.left === 10 && st1?.recoveryBudget?.acceptedToday === 0, JSON.stringify(st1?.recoveryBudget ?? {}).slice(0, 160));
 
 		// E2: recoverAfterMs(120s) 后自动 correction（幂等 commandId；账本预算）

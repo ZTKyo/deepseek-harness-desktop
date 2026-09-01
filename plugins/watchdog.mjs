@@ -36,7 +36,7 @@ export const name = 'watchdog';
 export const inject = ['webServer'];
 
 const PLUGIN_NAME = 'watchdog';
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 25_000; // bridge 2-7s typical, >10s under contention: 10s caused 60s OFFLINE latch (R5)
 const SETTINGS_POLL_MS = 30_000;
 const LEDGER_POLL_MS = 10_000;
 // ---------- R2 B：FCM 推送常量 ----------
@@ -185,22 +185,38 @@ export function apply(ctx, config = {}) {
 	async function fetchBridge(pathname) {
 		const bt = readTokenFile(bridgeTokenFile);
 		if (!bt) return { ok: false, status: 0, json: null, error: 'bridge_token_unreadable' };
-		const ac = new AbortController();
-		const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
-		try {
-			const res = await fetch(base + pathname, {
-				method: 'POST',
-				headers: { authorization: `Bearer ${bt}`, 'content-type': 'application/json' },
-				body: '{}',
-				signal: ac.signal,
-			});
-			const json = await res.json().catch(() => null);
-			return { ok: res.status === 200, status: res.status, json, error: null };
-		} catch (e) {
-			return { ok: false, status: 0, json: null, error: String(e?.message ?? e).slice(0, 120) };
-		} finally {
-			clearTimeout(t);
+		async function once(signal) {
+			try {
+				const res = await fetch(base + pathname, {
+					method: 'POST',
+					headers: { authorization: `Bearer ${bt}`, 'content-type': 'application/json' },
+					body: '{}',
+					signal,
+				});
+				const json = await res.json().catch(() => null);
+				// HTTP 200 with body.ok=false is a definitive (authoritative) negative -> do NOT retry
+				if (res.status === 200 && json?.ok === false) return { ok: false, status: 200, json, error: 'bridge_ok_false' };
+				return { ok: res.status === 200, status: res.status, json, error: null };
+			} catch (e) {
+				return { ok: false, status: 0, json: null, error: String(e?.message ?? e).slice(0, 120) };
+			}
 		}
+		// First attempt with FETCH_TIMEOUT_MS; on transient failure (network/timeout, NOT a
+		// definitive ok:false) retry once with a fresh AbortController so a brief bridge
+		// spike doesn't latch a full pollMs OFFLINE window. (R5 correction)
+		for (let attempt = 0; attempt < 2; attempt++) {
+			const ac = new AbortController();
+			const t = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+			try {
+				const r = await once(ac.signal);
+				if (attempt === 0 && !r.ok && r.status === 0) { clearTimeout(t); continue; } // transient -> retry once
+				return r;
+			} finally {
+				clearTimeout(t);
+			}
+		}
+		// unreachable
+		return { ok: false, status: 0, json: null, error: 'bridge_unreachable' };
 	}
 
 	// ---------- FCM 推送（R2 B，取代 R1 B1 SSE 事件通道） ----------

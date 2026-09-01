@@ -178,7 +178,9 @@ jobs:
         run: |
           node tests\watchdog\test-watchdog-core.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "P28 WATCHDOG CORE FAIL"; exit 1 }
-          Write-Host 'P2.8 watchdog-core suite: PASS'
+          node tests\watchdog\test-watchdog-r4.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P28 WATCHDOG R4 MULTI-TASK PROJECTION FAIL"; exit 1 }
+          Write-Host 'P2.8 watchdog-core + R4 multi-task projection suite: PASS'
 
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh

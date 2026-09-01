@@ -52,6 +52,13 @@
             </intent-filter>
         </activity>
 
+        <!-- R5：只读 Detail Activity。点击 widget 主体打开；严格 READ ONLY（无写/恢复调用）。
+             需已配置 baseUrl/token（从 SharedPreferences 读取），才能实时拉取展示。 -->
+        <activity
+            android:name=".WatchdogDetailActivity"
+            android:exported="true"
+            android:label="DSH Watchdog 详情" />
+
         <receiver
             android:name=".WatchdogWidgetProvider"
             android:exported="true"

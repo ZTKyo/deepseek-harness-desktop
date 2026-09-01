@@ -19,7 +19,9 @@
 | **ISOLATED REAL VERIFIED** | 真实 wall-clock / 真实隔离 dsh 服务 / 只读追加日志 | **是（已补齐 — 见 §6/§7）** |
 | **PRODUCTION NOT DEPLOYED** | 未部署、未放行、不重启生产 | 是（未触碰） |
 
-> 读者注意：本次快照已补齐 **ISOLATED REAL**（≥60s 真实 soak = PASS=15;真实追加日志 sentinel + 真实 boot banner-after-sentinel = PASS=4;probe 不重叠实测 = PASS=5;真实 UI/Dispatcher 心跳实测 = PASS=3）;这些证据在 §6/§7 如实记录,未声称超范围。
+> 读者注意：本次快照已补齐 **ISOLATED REAL** 且**全部改为 fail-closed（断言/致命异常→非零退出码）后重跑**——
+> 真实 soak（≥60s,elapsed=88.1s）= **PASS=17**;真实追加日志 sentinel + 真实 boot banner-after-sentinel = **PASS=4**;
+> probe 不重叠实测 = **PASS=5**;真实 UI/Dispatcher 心跳实测 = **PASS=3**（全部 FAIL=0、退出码 0）。这些证据在 §6/§7 如实记录,未声称超范围。
 
 ---
 
@@ -74,7 +76,7 @@ dsh-reconnect.ps1 / dsh-health.ps1 / DSH-Harness-PS.ps1 / dsh-guardian.ps1 中 `
 仅两处例外:probe 注入 100ms 睡眠以拉宽并发窗口（用于实测 probe 是否重叠）,以及守卫 120s→90s 缩短
 （墙钟真实,但总时长压到 ~90s 而非 ~120s,已在断言中明示 elapsed≈87–90s）。
 **R3 复核后按外部评审要求重跑真实 e2e（全部测试加 fail-closed 退出码之后）:PASS=17 FAIL=0,退出码 0,
-真实墙钟 elapsed=87.1s（≥60s 达标）。本轮同时修好一处一次性读竞态:boot#1 的 dsh banner 单次读取可能
+真实墙钟 elapsed=88.1s（≥60s 达标）。本轮同时修好一处一次性读竞态:boot#1 的 dsh banner 单次读取可能
 瞬时为 0（首轮曾见 marker=0→FAIL=1）,改为有界等待（与 boot#2 一致）后稳定 marker=1。** 结果（本轮重跑）:
 
 | 断言 | 结果 |

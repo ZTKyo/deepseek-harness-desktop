@@ -54,6 +54,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $root 'dsh-process-identity.ps1')
 . (Join-Path $root 'dsh-readiness.ps1')
 . (Join-Path $root 'dsh-restart-budget.ps1')
+. (Join-Path $root 'dsh-health.ps1')
 $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
 $logDir = Join-Path $dataRoot 'logs'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -579,46 +580,98 @@ $lastRecoverAlertAt = $null
 try {
 do {
     Write-GuardianHeartbeat 'checking'
-    $up = Test-Server
+    # ---- RH1 Part B: liveness/readiness state machine (single health source) ----
+    # LIVENESS (owner alive?) is separate from READINESS (host.describe/session.list/
+    # event streams answering). A single readiness miss MUST NOT trigger a restart:
+    # it is recorded as DEGRADED. Only >=3 consecutive misses over >=30s become a
+    # HARD_UNHEALTHY_CANDIDATE, and only after an independent confirm + >=60s total
+    # abnormal window becomes RECOVERY_ELIGIBLE, which still requires the maintenance
+    # lock + restart budget + circuit breaker + the canonical start authority.
+    $snap = Get-DshHealthProbe -Port $Port -IncludeWebSockets
+    $cur  = Get-DshHealthState -Port $Port
+    $tr   = Invoke-DshHealthTriage -Snapshot $snap -CurrentState $cur
+    Set-DshHealthState $tr.NextState -Port $Port
+    $healthAction = $tr.Action
+    $ownerState   = [string]$snap.ownerState
 
-    if (-not $up) {
-        if (Test-MaintenanceLock) {
-            # restart script is restarting the server itself - stay out of the way
-            if ($recovering) { $recovering = $false }
-        }
-        else {
-        $owner = Get-PortIdentity
-        if ($owner.State -in @('ok','none')) {
-            TraceG ("server not client-ready (ownerState=$($owner.State)) - budgeted controlled restart")
-            $failStreak++; $recovering = $true
-            if (Invoke-BudgetedRestart ("server not ready ownerState=$($owner.State)")) {
-                $failStreak = 0
-                Invoke-GoalRecovery
-                if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
-                    Send-TelegramAlert 'dsh 服务已恢复（此前未通过 readiness，重启成功）。'
-                    $lastRecoverAlertAt = Get-Date
-                }
-                $recovering = $false
-            } else {
-                TraceG 'budgeted controlled restart did not complete'
-            }
-        }
-        elseif ($owner.State -in @('identity_mismatch','ambiguous','error')) {
-            TraceG ("server down but owner identity is unsafe: state=$($owner.State) pid=$($owner.Pid) nonLoopbackListeners=$($owner.NonLoopbackCount); no kill/start")
-            Send-TelegramAlert ("dsh 服务端口 owner 无法安全核验（$($owner.State)），已停止自动杀进程/拉起。")
-        }
+    if (Test-MaintenanceLock) {
+        # a restart worker owns the restart; stay out of the way
+        if ($recovering) { $recovering = $false }
+        if ($healthAction -ne 'noop') {
+            TraceG ("maintenance window held; health action suppressed (owner=$ownerState action=$healthAction)")
         }
         $stuckHits = 0
     } else {
-        # Stale-mtime is a weak signal, so a restart is issued only when an
-        # ACTIVE goal exists (a task that should be progressing but has had
-        # no session write for >= threshold minutes) and only after 2
-        # consecutive hits plus a cooldown of one threshold period since the
-        # last stale restart (a restart does not update session mtime, so
-        # without the cooldown this branch would re-trigger every loop).
-        # Without an active goal the session is merely old/quiet: telemetry
-        # + alert only, no restart.
-        if ($StuckRestartMinutes -gt 0 -and -not (Test-MaintenanceLock)) {
+        if ($healthAction -eq 'noop') {
+            $failStreak = 0
+            if ($recovering) { $recovering = $false }
+        }
+        elseif ($healthAction -eq 'owner_unsafe') {
+            TraceG ("owner identity unsafe: state=$ownerState pid=$($snap.ownerPid) nonLoopback=$($snap.nonLoopbackCount); no kill/start")
+            Send-TelegramAlert ("dsh 服务端口 owner 无法安全核验（$ownerState），已停止自动杀进程/拉起。")
+        }
+        elseif ($healthAction -eq 'server_absent') {
+            if ($snap.nonLoopbackCount -gt 0) {
+                TraceG ("port has non-loopback listener (count=$($snap.nonLoopbackCount)); skipping restore to avoid EADDRINUSE")
+                Send-TelegramAlert ("dsh 端口 3080 存在非本机回环监听者（$($snap.nonLoopbackCount)），已停止自动拉起，避免端口冲突。")
+            } else {
+                TraceG ("server absent (owner=none) - budgeted controlled restart")
+                $failStreak++; $recovering = $true
+                if (Invoke-BudgetedRestart ("server absent owner=none")) {
+                    $failStreak = 0
+                    Invoke-GoalRecovery
+                    if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
+                        Send-TelegramAlert 'dsh 服务已恢复（此前服务缺席，重启成功）。'
+                        $lastRecoverAlertAt = Get-Date
+                    }
+                    $recovering = $false
+                } else {
+                    TraceG 'budgeted controlled restart did not complete'
+                }
+            }
+        }
+        elseif ($healthAction -eq 'degrade') {
+            TraceG ("health DEGRADED (owner=ok, failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s, errorClass=$($snap.errorClass)) - no restart (RH1)")
+        }
+        elseif ($healthAction -eq 'hard_candidate') {
+            TraceG ("health HARD_UNHEALTHY_CANDIDATE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - independent confirm")
+            $confirm = Get-DshHealthProbe -Port $Port -IncludeWebSockets
+            if ($confirm.ready) {
+                $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
+                Set-DshHealthState $tr2.NextState -Port $Port
+                TraceG "independent confirm READY; health reset (no restart)"
+            } else {
+                TraceG ("independent confirm still unready (errorClass=$($confirm.errorClass)); staying candidate")
+            }
+        }
+        elseif ($healthAction -eq 'restart_eligible') {
+            TraceG ("health RECOVERY_ELIGIBLE (failures=$($tr.NextState.consecutiveFailures), window=$($tr.Diagnostic.windowSec)s) - incident + confirm before restart")
+            $budgetState = Read-DshRestartBudget
+            $incFile = New-DshIncidentBundle -Port $Port -Snapshot $snap -HealthState $tr.NextState -BudgetState $budgetState -Reason ("health recovery_eligible owner=ok: " + $tr.Reason)
+            if ($incFile) { TraceG ("incident bundle written: " + $incFile) } else { TraceG 'incident bundle write failed (telemetry only)' }
+            $confirm = Get-DshHealthProbe -Port $Port -IncludeWebSockets
+            if ($confirm.ready) {
+                $tr2 = Invoke-DshHealthTriage -Snapshot $confirm -CurrentState $tr.NextState
+                Set-DshHealthState $tr2.NextState -Port $Port
+                TraceG "recovery_eligible but confirm READY; health reset (no restart)"
+            } else {
+                $failStreak++; $recovering = $true
+                if (Invoke-BudgetedRestart ("health recovery_eligible owner=ok: " + $tr.Reason)) {
+                    $failStreak = 0
+                    Invoke-GoalRecovery
+                    if (-not $lastRecoverAlertAt -or ((Get-Date) - $lastRecoverAlertAt).TotalMinutes -ge 10) {
+                        Send-TelegramAlert 'dsh 服务已恢复（此前进程存活但未通过 readiness，重启成功）。'
+                        $lastRecoverAlertAt = Get-Date
+                    }
+                    $recovering = $false
+                } else {
+                    TraceG 'budgeted health restart did not complete'
+                }
+            }
+        }
+
+        # stale-session detection only when the server is healthy (noop action)
+        if ($healthAction -eq 'noop' -and $StuckRestartMinutes -gt 0) {
             $last = Get-NewestSessionWrite
             if ($last) {
                 $ageMin = [int]((Get-Date) - $last).TotalMinutes

@@ -59,6 +59,8 @@ $title  = 'DeepSeek Harness'
 # P2 (2026-08-18): Windows Credential Manager storage (system vault) with
 # automatic migration from the legacy DP1 fields.
 . (Join-Path $root 'dsh-credential-manager.ps1')
+# RH1 Part D: single health source (layered liveness + readiness + state machine).
+. (Join-Path $root 'dsh-health.ps1')
 
 # ---------- persisted config (window layout + tray + quota) ----------
 $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
@@ -284,7 +286,17 @@ $script:st = @{
     envTask        = $null       # background CoreWebView2Environment creation task
 }
 $script:wv = $null
-$script:reconn = @{ offline = $false; fails = 0 }
+# RH1 Part D: reconnect state machine (ONLINE/DEGRADED/OFFLINE). A readiness
+# miss never triggers a reload; only a real OFFLINE (unreachable) recovery does,
+# at most once per episode, after a short cooldown. Probe runs off the UI thread
+# (background runspace) and publishes into $script:probe (thread-safe dict).
+$script:reconn = @{ mode = 'online'; offlineSince = $null; offlineHits = 0; reloaded = $false; lastReloadAt = $null }
+$script:probe = [System.Collections.Concurrent.ConcurrentDictionary[string,object]]::new()
+$script:probe['mode'] = 'unknown'   # online | degraded | offline | unknown
+$script:probe['httpStatus'] = $null
+$script:probe['latencyMs'] = 0
+$script:probe['checkedAt'] = 0
+$script:probePs = $null             # keep the background runspace alive
 
 function StepLog([string]$msg) {
     if (-not $Probe) { return }
@@ -292,9 +304,14 @@ function StepLog([string]$msg) {
 }
 
 function Test-Server {
+    # RH1 D1: layered liveness + readiness with a short timeout. Returns $true only
+    # when the server answers a real HTTP 200 (fully ready). A non-200 response
+    # (alive but unready) or a network error returns $false. This probe never
+    # kills/starts anything; recovery decisions are owned by the guardian and the
+    # canonical start authority. Kept fast so the startup/timer path stays ~sub-1s.
     try {
-        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-        return ($r.StatusCode -eq 200)
+        $basic = Test-DshBasicHttp -Port $Port -TimeoutSec 2
+        return ($basic.State -eq 'matched' -and $basic.HttpStatus -eq 200)
     } catch { return $false }
 }
 
@@ -335,19 +352,24 @@ function Start-DshServer {
                 TraceLog ('clean-reclaim: forced ' + $reclaim2.Action + ' (' + $reclaim2.Reason + ')')
             }
         } catch { TraceLog ('clean-reclaim error: ' + $_.Exception.Message) }
-        $dsh = Find-Dsh
-        New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
-        $log = Join-Path $dataRoot ("logs\dsh-server-" + $Port + ".log")
-        New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+        # ---- RH1 Part A: single start authority ----
+        # The ONLY production start path is start-dsh-server.ps1 ->
+        # dsh-launcher.js -> bundled Node v22 -> dsh web. It sanitizes env,
+        # selects the known-good runtime, owns the restart lock, and appends to
+        # the per-port log (it never truncates). Spawn it detached so it does not
+        # inherit this client's output pipes.
+        $starter = Join-Path $root 'start-dsh-server.ps1'
+        if (-not (Test-Path $starter)) {
+            TraceLog ('start-dsh-server.ps1 missing; cannot start server (single authority)')
+            return $false
+        }
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'cmd.exe'
-        # 2026-08-21 FIX: 加 --no-open 不再自动打开默认浏览器（用户反馈
-        # "打开 Harness 时网页端也同步打开"；网页版仍可手动访问 127.0.0.1:3080）。
-        $psi.Arguments = '/S /C ""' + $dsh + '" web --port ' + $Port + ' --no-open --trusted-host 100.120.3.29:3080 --trusted-host ai-office-windows.tailab0bb5.ts.net:3080 > "' + $log + '" 2>&1"'
-        $psi.UseShellExecute = $false
+        $psi.FileName = 'powershell.exe'
+        $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $starter + '" -Port ' + $Port
+        $psi.UseShellExecute = $true
         $psi.CreateNoWindow = $true
-        $psi.WorkingDirectory = $env:USERPROFILE
         [System.Diagnostics.Process]::Start($psi) | Out-Null
+        TraceLog ('start-dsh-server.ps1 launched detached (port ' + $Port + ')')
         return $true
     } catch { return $false }
 }
@@ -1579,8 +1601,9 @@ $btnRetry.Add_Click({
     $script:st.serverDeadline = $null
     $script:st.initDeadline = $null
     $script:st.envTask = $null
-    $script:reconn.offline = $false
-    $script:reconn.fails = 0
+    $script:reconn.mode = 'online'
+    $script:reconn.offlineHits = 0
+    $script:reconn.reloaded = $false
 })
 
 # ---------- Ctrl+R (works when the window itself has focus) ----------
@@ -2041,8 +2064,9 @@ $timer.Add_Tick({
                     if ($a.IsSuccess) {
                         $status.Visibility = [System.Windows.Visibility]::Collapsed
                         $win.Title = $title + ' — 服务在线'
-                        $script:reconn.fails = 0
-                        $script:reconn.offline = $false
+                        $script:reconn.mode = 'online'
+                        $script:reconn.offlineHits = 0
+                        $script:reconn.reloaded = $false
                         Inject-QuotaWidget
                     } else {
                         $status.Text = '页面加载失败，可点击重试或按 Ctrl+R'
@@ -2143,31 +2167,105 @@ $timer.Add_Tick({
 $timer.Start()
 TraceLog 'timer started'
 
-# ---------- auto-reconnect: if the server drops, reload when it returns ----------
+# ---------- auto-reconnect (RH1 Part D): non-blocking layered state machine ----------
+# The probe runs on a dedicated background runspace (never blocks the UI thread)
+# and publishes online/degraded/offline into $script:probe (thread-safe dict).
+# This DispatcherTimer only READS the shared state and drives the window title/
+# status. A readiness miss (degraded) NEVER reloads; only a real OFFLINE
+# (unreachable) recovery reloads, at most once per episode, after a short cooldown.
 if (-not $Probe) {
+    # D2: start the background layered probe (pure loop runspace)
+    try {
+        $prs = [runspacefactory]::CreateRunspace()
+        $prs.Open()
+        $ps = [powershell]::Create()
+        $ps.Runspace = $prs
+        $prs.SessionStateProxy.SetVariable('DSH_PROBE_STATE', $script:probe)
+        $prs.SessionStateProxy.SetVariable('DSH_PROBE_PORT', $Port)
+        $loop = '
+            $ErrorActionPreference = "Stop"
+            . "REPLACE_ROOT\dsh-health.ps1"
+            $state = $DSH_PROBE_STATE
+            $port = $DSH_PROBE_PORT
+            while ($true) {
+                $mode = "offline"
+                try {
+                    $basic = Test-DshBasicHttp -Port $port -TimeoutSec 1
+                    if ($basic.State -eq "matched" -and $basic.HttpStatus -eq 200) { $mode = "online" }
+                    elseif ($basic.State -eq "matched") { $mode = "degraded" }
+                    $state["httpStatus"] = $basic.HttpStatus
+                    $state["latencyMs"] = $basic.Ms
+                } catch { $mode = "offline" }
+                $state["mode"] = $mode
+                $state["checkedAt"] = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                Start-Sleep -Milliseconds 3000
+            }
+        '
+        $loop = $loop.Replace('REPLACE_ROOT', $root)
+        $ps.AddScript($loop) | Out-Null
+        $null = $ps.BeginInvoke()
+        $script:probePs = $ps
+        TraceLog 'reconnect background probe started (RH1 D2)'
+    } catch {
+        TraceLog ('reconnect background probe failed: ' + $_.Exception.Message)
+        $script:probe['mode'] = 'unknown'
+    }
+
     $reconnTimer = New-Object System.Windows.Threading.DispatcherTimer
     $reconnTimer.Interval = [TimeSpan]::FromSeconds(3)
     $reconnTimer.Add_Tick({
         if ($script:st.phase -ne 'done' -or -not $script:st.wvReady -or -not $script:wv) { return }
         try {
-            if (Test-Server) {
-                if ($script:reconn.offline) {
-                    $script:reconn.offline = $false
-                    $script:reconn.fails = 0
-                    $status.Text = '服务已恢复，正在重新加载…'
-                    $status.Visibility = [System.Windows.Visibility]::Visible
-                    try { $script:wv.CoreWebView2.Reload() } catch { try { $script:wv.CoreWebView2.Navigate($url) } catch {} }
-                    $win.Title = $title + ' — 服务在线'
+            $mode = [string]$script:probe['mode']
+            $now = Get-Date
+            if ($mode -eq 'online') {
+                if ($script:reconn.mode -eq 'offline') {
+                    # just recovered from a real offline episode
+                    $script:reconn.mode = 'online'
+                    $script:reconn.offlineSince = $null
+                    $script:reconn.offlineHits = 0
+                    $cooldownOk = ($null -eq $script:reconn.lastReloadAt) -or (($now - $script:reconn.lastReloadAt).TotalSeconds -ge 15)
+                    if (-not $script:reconn.reloaded -and $cooldownOk) {
+                        # at most ONE auto-reload per offline episode, after cooldown
+                        $script:reconn.reloaded = $true
+                        $script:reconn.lastReloadAt = $now
+                        $status.Text = '服务已恢复，正在重新加载…'
+                        $status.Visibility = [System.Windows.Visibility]::Visible
+                        try { $script:wv.CoreWebView2.Reload() } catch { try { $script:wv.CoreWebView2.Navigate($url) } catch {} }
+                        $win.Title = $title + ' — 服务在线'
+                        TraceLog 'reconnect: offline -> online; auto-reload (1x)'
+                    } else {
+                        $status.Text = '服务已恢复'
+                        $status.Visibility = [System.Windows.Visibility]::Visible
+                        $win.Title = $title + ' — 服务在线'
+                        TraceLog 'reconnect: offline -> online; no reload (already reloaded or in cooldown)'
+                    }
                 } else {
-                    $script:reconn.fails = 0
+                    $script:reconn.mode = 'online'
+                    $script:reconn.offlineHits = 0
+                    $win.Title = $title + ' — 服务在线'
+                    $status.Visibility = [System.Windows.Visibility]::Collapsed
                 }
-            } else {
-                $script:reconn.fails++
-                if (-not $script:reconn.offline -and $script:reconn.fails -ge 2) {
-                    $script:reconn.offline = $true
+            } elseif ($mode -eq 'degraded') {
+                $script:reconn.offlineHits = 0
+                if ($script:reconn.mode -ne 'degraded') {
+                    TraceLog 'reconnect: -> DEGRADED (server alive but not 200); no reload'
+                }
+                $script:reconn.mode = 'degraded'
+                $status.Text = '服务降级（未通过就绪检查）'
+                $status.Visibility = [System.Windows.Visibility]::Visible
+                $win.Title = $title + ' — 服务降级'
+            } else {  # offline / unknown
+                $script:reconn.offlineHits++
+                if ($script:reconn.mode -ne 'offline' -and $script:reconn.offlineHits -ge 2) {
+                    # grace: only declare OFFLINE after 2 consecutive unreachable ticks
+                    $script:reconn.mode = 'offline'
+                    $script:reconn.offlineSince = $now
+                    $script:reconn.reloaded = $false
                     $status.Text = '服务离线，等待重连…'
                     $status.Visibility = [System.Windows.Visibility]::Visible
                     $win.Title = $title + ' — 服务离线'
+                    TraceLog 'reconnect: -> OFFLINE (unreachable)'
                 }
             }
         } catch {}

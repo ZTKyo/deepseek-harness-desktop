@@ -333,13 +333,13 @@ if (Test-Path $starter) {
     # exit 75 = restart lock held by another transaction (concurrent restart).
     if ($starterCode -eq 75) { throw "start-dsh-server.ps1: another restart transaction owns the lock" }
 } else {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = 'cmd.exe'
-    $psi.Arguments = '/S /C ""dsh" web --port ' + $Port + ' > "' + (Join-Path $env:LOCALAPPDATA ("DSHHarness\logs\dsh-server-" + $Port + ".log")) + '" 2>&1"'
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.WorkingDirectory = $env:USERPROFILE
-    [System.Diagnostics.Process]::Start($psi) | Out-Null
+    # RH1 Part A2: do NOT fall back to `cmd.exe /C dsh web > log` — that truncates
+    # the per-port server log and spawns a second start path. start-dsh-server.ps1
+    # is the single start authority (env sanitize + restart lock + append-only log
+    # via dsh-launcher.js). If it is missing, fail the restart; the guardian's
+    # orphan takeover remains the backstop.
+    Write-Log "start-dsh-server.ps1 missing at $starter; refusing truncating/second start path (single authority)"
+    throw "start-dsh-server.ps1 missing at $starter (single authority)"
 }
 
 # verify actual DSH readiness, not only a root-page HTTP 200.

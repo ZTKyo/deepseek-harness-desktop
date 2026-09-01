@@ -161,7 +161,7 @@ Assert 'G13 guardian restart gated by Test-DshRestartAllowed' ($gd -match 'Test-
 # BOM + parse on all modified PS1 files.
 function HasBom([string]$p) { $b = [System.IO.File]::ReadAllBytes($p); return ($b.Length -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191) }
 function ParseOk([string]$p) { $t = $null; $e = $null; $null = [System.Management.Automation.Language.Parser]::ParseFile($p, [ref]$t, [ref]$e); $e = @($e); return ($e.Count -eq 0) }
-$psFiles = @('dsh-health.ps1','dsh-guardian.ps1','DSH-Harness-PS.ps1','DSH-Client.ps1','restart-dsh-server-delayed.ps1','start-dsh-server.ps1', (Join-Path 'tests' 'dsh-disposable-server.ps1'), (Join-Path 'tests' 'rh1-tests.ps1'))
+$psFiles = @('dsh-health.ps1','dsh-reconnect.ps1','dsh-guardian.ps1','DSH-Harness-PS.ps1','DSH-Client.ps1','restart-dsh-server-delayed.ps1','start-dsh-server.ps1', (Join-Path 'tests' 'dsh-disposable-server.ps1'), (Join-Path 'tests' 'rh1-tests.ps1'))
 $allBom = $true; $bomBad = ''
 $allParse = $true; $parseBad = ''
 foreach ($f in $psFiles) {
@@ -171,6 +171,81 @@ foreach ($f in $psFiles) {
 }
 Assert 'G14a UTF-8 BOM preserved on all PS1' ($allBom) ($(if ($allBom) { 'all BOM' } else { $bomBad }))
 Assert 'G14b PS1 parse-valid (no syntax error)' ($allParse) ($(if ($allParse) { 'all parse' } else { $parseBad }))
+
+# ============ R2 (external review, round 2) additions ============
+# Blocker 1: client reconnect PURE state machine. No I/O / no server; controlled clock.
+$rcLoadErr = $null
+try { . (Join-Path $root 'dsh-reconnect.ps1'); $rcLoadOk = $true } catch { $rcLoadErr = $_.Exception.Message; $rcLoadOk = $false }
+Assert 'G15 dot-source dsh-reconnect.ps1' ($rcLoadOk) ($(if ($rcLoadErr) { $rcLoadErr } else { 'loaded ok' }))
+
+$t0 = [datetime]::Now
+# (a) DEGRADED -> ONLINE: ALWAYS 0 auto reload (reviewer requirement).
+$sA = New-DshReconnectState; $sA.mode = 'degraded'
+$dA = Invoke-DshReconnectTransition -State $sA -Mode 'online' -PageSelfRecovered $false -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G15 degraded->online always 0 reload' ((-not $dA.Reload) -and $dA.Operation -eq 'no_reload_degraded_to_online') ("op=$($dA.Operation) reload=$($dA.Reload)")
+
+# (b) OFFLINE declared only after >= OfflineHitsThreshold unreachable ticks (observe first).
+$sB = New-DshReconnectState
+$d1 = Invoke-DshReconnectTransition -State $sB -Mode 'offline' -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G16 offline observe (< threshold) no declare' ($d1.Operation -eq 'offline_observe' -and $d1.State.mode -eq 'online') ("op=$($d1.Operation) mode=$($d1.State.mode) hits=$($d1.State.offlineHits)")
+$d2 = Invoke-DshReconnectTransition -State $d1.State -Mode 'offline' -Now $t0.AddSeconds(3) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G16b offline declared at threshold' ($d2.Operation -eq 'offline_declared' -and $d2.State.mode -eq 'offline') ("op=$($d2.Operation) mode=$($d2.State.mode) ep=$($d2.State.episodeCounter)")
+
+# (c) OFFLINE -> ONLINE: recovery grace NOT elapsed => no reload (wait for stable window).
+$dg = Invoke-DshReconnectTransition -State $d2.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(5) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G17 offline->online grace not elapsed, no reload' ($dg.Operation -eq 'recovery_grace' -and (-not $dg.Reload)) ("op=$($dg.Operation) reload=$($dg.Reload)")
+
+# (d) grace elapsed + page NOT self-recovered => auto reload exactly once.
+$dr = Invoke-DshReconnectTransition -State $dg.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(15) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G18 grace elapsed page not recovered -> auto reload (1x)' ($dr.Reload -and $dr.Operation -eq 'auto_reload' -and $dr.State.reloaded) ("op=$($dr.Operation) reload=$($dr.Reload)")
+$dr2 = Invoke-DshReconnectTransition -State $dr.State -Mode 'online' -PageSelfRecovered $false -Now $t0.AddSeconds(16) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+Assert 'G18b no second auto reload this episode' ((-not $dr2.Reload) -and $dr2.State.reloaded) ("op=$($dr2.Operation) reload=$($dr2.Reload)")
+
+# (e) page self-recovered => no reload (do not fight a healing page). Grace window
+# starts on the FIRST online tick (recoveryStartAt), so we need one online tick to
+# open the window, then a second past grace.
+$sE = New-DshReconnectState
+$e1 = Invoke-DshReconnectTransition -State $sE -Mode 'offline' -Now $t0 -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$e2 = Invoke-DshReconnectTransition -State $e1.State -Mode 'offline' -Now $t0.AddSeconds(3) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2
+$e3 = Invoke-DshReconnectTransition -State $e2.State -Mode 'online' -PageSelfRecovered $true -Now $t0.AddSeconds(30) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # opens grace window
+$e4 = Invoke-DshReconnectTransition -State $e3.State -Mode 'online' -PageSelfRecovered $true -Now $t0.AddSeconds(45) -GraceSec 10 -CooldownSec 120 -OfflineHitsThreshold 2   # grace elapsed
+Assert 'G19 page self-recovered -> no reload' ((-not $e4.Reload) -and $e4.Operation -eq 'no_reload_page_recovered') ("op=$($e4.Operation) reload=$($e4.Reload)")
+
+# Blocker 3: incident bundle redaction — a sensitive fixture must NEVER reach an
+# incident file (no leak outside the bundle). Use the formats the bundle actually
+# produces (JSON values, env-style assignment, Authorization Bearer, PEM block) plus
+# the JSON-bundle serializer, which is the real leak surface.
+$secretFixture = 'sk-live-1234567890SECRETTOKEN0'
+$bearer        = 'Bearer eyJhbGciOiJIUzI1NiJ9.SECRET.JWT'
+$pem = @'
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA0redactedsecret1234567890abcdef
+-----END RSA PRIVATE KEY-----
+'@
+$red = Invoke-DshRedactText ("token=`"$secretFixture`"`npassword=$secretFixture`n`"authorization`" = `"$bearer`"`n$pem")
+$scan = Test-DshIncidentRedaction $red -KnownSensitive @($secretFixture, $pem)
+Assert 'G20 incident redaction: sensitive fixture absent' ($scan.Clean) ("Hits=" + ($scan.Hits -join ','))
+$bundleObj = [pscustomobject]@{ port = 33183; probe = [pscustomobject]@{ token = $secretFixture; api_key = $secretFixture; note = 'ok' } }
+$bundleJson = ConvertTo-DshRedactedJson $bundleObj
+$scan2 = Test-DshIncidentRedaction $bundleJson -KnownSensitive @($secretFixture)
+Assert 'G20b incident bundle JSON redacted' ($scan2.Clean) ("leak=" + ($scan2.Hits -join ','))
+
+# Blocker 2 / G9: production PS/CMD start paths converge on the single authority
+# (start-dsh-server.ps1). src/DSHHarness.cs is the ONE documented OFF_AUTHORITY
+# production start (non-default native client, not built by default) — recorded in
+# the R2 report §7 so the exception is explicit, not silent.
+$conv = $true; $convDetail = ''
+# Start-path scripts must route straight to the single authority; restart-path scripts
+# must route to restart-dsh-server-delayed.ps1 (which itself converges to authority).
+foreach ($f in @('DSH-Harness-PS.ps1','DSH-Client.ps1','dsh-guardian.ps1')) {
+    $raw = Get-Raw (Join-Path $root $f)
+    if ($raw -notmatch 'start-dsh-server\.ps1') { $conv = $false; if (-not $convDetail) { $convDetail = $f } }
+}
+foreach ($f in @('dsh-safe-mode.ps1','dsh-transaction.ps1','restart-dsh-server-delayed.ps1')) {
+    $raw = Get-Raw (Join-Path $root $f)
+    if ($raw -notmatch 'restart-dsh-server-delayed\.ps1') { $conv = $false; if (-not $convDetail) { $convDetail = $f } }
+}
+Assert 'G21 production PS paths converge on single authority' ($conv) ($(if ($conv) { 'converged' } else { $convDetail + ' lacks route to authority' }))
 
 # ---- summary ----
 Write-Host ""

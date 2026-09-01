@@ -107,4 +107,44 @@ PASS  G14b PS1 parse-valid (no syntax error)  all parse
 - 建议评审重点:guardian 状态机阈值(≥3 次 & ≥30s 候选 & ≥60s 确认)是否满足运维预期;客户端 auto-reload 的 grace+cooldown 参数。
 - 回归说明:本次未触碰生产 main;dsh 现有 health/smoke/check 以隔离方式独立验证,未在真实服务上执行(避免中断运行中服务)。
 
+---
+
+## 7. R2(外部评审第二轮)修复与补强
+
+### R2 Blocker 1 — 客户端 reconnect 决策抽成纯函数(可测)
+- 新增 `dsh-reconnect.ps1`(**只读、无 I/O**):`Invoke-DshReconnectTransition -State -Mode -PageSelfRecovered -Now` + 显式注入 `GraceSec/CooldownSec/OfflineHitsThreshold`,返回 `{ Operation; Mode; Reload; Reason; State; Diagnostic }`。时钟注入使整个决策 CI 确定性。
+- `DSH-Harness-PS.ps1` 的 DispatcherTimer tick 改为:读 probe mode + 页面自恢复标志 → 调纯函数 → 应用返回状态 → 至多执行函数授权的那一次 auto reload。判定逻辑(grace/cooldown/仅 degraded 到 online 一定 0 reload、最多 1 次/事件、页面已自恢复则 0 reload)全部在纯函数内,不再散落在 UI 代码。
+- 语义(R2 修正):`DEGRADED -> ONLINE` 恒 0 reload;`OFFLINE -> ONLINE` 需稳定恢复 GRACE 窗口(≥GraceSec 连续在线)才考虑 reload;仅当页面**未**自恢复且距上次 auto reload 已过 COOLDOWN,且本事件**已 reload 0 次**时才触发那唯一的 1 次 reload;页面已自恢复 → 0 reload(不与自愈页面打架)。
+
+### R2 Blocker 2 — FULL_READY 语义(dsh-health.ps1)
+- `Get-DshHealthProbe` 将 LIVENESS(进程/HTTP 存活)与 READINESS(必需组件集合)分离。
+- `apiReady/wsReady/partialReady/readiness` 字段化;`ready` 仅当**全部必需组件**通过(FULL_READY)。
+- 混合结果(API 过 + WS 挂,或反之)= `partial_ready` → 不 reset HEALTHY,**不**升级到重启,仅诊断值。只有持续的全必需组件失败才能到 `RECOVERY_ELIGIBLE`。
+
+### R2 Blocker 3 — 事故 bundle 脱敏(no leak outside bundle)
+- 所有进入 `New-DshIncidentBundle` 的值统一经 `Invoke-DshRedactText`;`ConvertTo-DshRedactedJson` 序列化后再扫描。测试用 `Test-DshIncidentRedaction` 证明注入的敏感 fixture(token / Authorization Bearer / PEM 私钥)在序列化 bundle 中**缺失**,而非仅"看起来像被处理"。
+
+### R2 G9 — 启动权威显式异常
+- 生产 PS/CMD 启动路径全部收敛到 `start-dsh-server.ps1`(或经 `restart-dsh-server-delayed.ps1` 收敛)。**唯一 off-authority 生产启动**是 `src/DSHHarness.cs`(非默认 native client,默认不构建)——显式记录为异常,不让它静默存在。CI 静态断言(G21)覆盖所有生产 .ps1。
+
+### R2 测试结果(隔离套件扩展至 G0..G21)
+- `tests/rh1-tests.ps1` 新增重连纯状态机(G15-G19)、事故脱敏(G20/G20b)、启动权威(G21)断言;并纳入 `dsh-reconnect.ps1` 的 BOM/parse 检查。
+- **结果: PASS = 31, FAIL = 0(exit 0)**
+
+```
+PASS  G15 degraded->online always 0 reload
+PASS  G16/G16b offline observe/declared at threshold
+PASS  G17 offline->online grace not elapsed, no reload
+PASS  G18/G18b grace elapsed page not recovered -> auto reload (1x), no 2nd
+PASS  G19 page self-recovered -> no reload
+PASS  G20/G20b incident redaction: sensitive fixture absent
+PASS  G21 production PS paths converge on single authority
+```
+
+- 已接入 `.github/workflows/ci-level3.yml`(deployment gate):新增 "RH1 R2 harness" 步骤,失败即 gate 失败;触发路径含 `tests/rh1-tests.ps1` / `tests/dsh-disposable-server.ps1`。
+
+### 变更文件(累计,相对 R1)
+- 新增:`dsh-reconnect.ps1`
+- 修改:`DSH-Harness-PS.ps1`(reconnect tick → 纯函数)、`dsh-health.ps1`(FULL_READY + redaction)、`tests/rh1-tests.ps1`(G15-G21)、`.github/workflows/ci-level3.yml`(接入 R2)
+
 **END REPORT — AWAITING_EXTERNAL_REVIEW_AND_DEPLOY_WINDOW**

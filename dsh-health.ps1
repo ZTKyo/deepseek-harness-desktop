@@ -109,19 +109,41 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
     $ws = $null
     if ($IncludeWebSockets) { $ws = Test-DshReadiness -Port $Port -RequireWebSockets }
 
-    $ready = $false
     $apiState = ''
     $wsState = ''
+    $apiComponentReady = $false
     if ($api) {
-        if ($api.State -eq 'api_ready') { $ready = $true; $apiState = 'api_ready' }
-        elseif ($api.State -eq 'client_ready') { $ready = $true; $apiState = 'client_ready' }
+        if ($api.State -eq 'api_ready') { $apiState = 'api_ready'; $apiComponentReady = $true }
+        elseif ($api.State -eq 'client_ready') { $apiState = 'client_ready'; $apiComponentReady = $true }
         else { $apiState = [string]$api.State }
     }
-    if ($ws) { $wsState = [string]$ws.State; if ($ws.State -eq 'client_ready') { $ready = $true } }
+    $wsRequired = [bool]$IncludeWebSockets
+    $wsComponentReady = $false
+    if ($ws) { $wsState = [string]$ws.State; if ($ws.State -eq 'client_ready') { $wsComponentReady = $true } }
+
+    # R2 Blocker 2 (FULL_READY semantics): LIVENESS is process/HTTP alive only;
+    # READINESS is the set of required components. When IncludeWebSockets=false the
+    # ONLY required component is API readiness. When IncludeWebSockets=true every
+    # required component must succeed for FULL_READY. A mix (API PASS + WS FAIL, or
+    # API FAIL + WS PASS) is PARTIAL/DEGRADED and NEVER resets HEALTHY and NEVER
+    # escalates to a restart. ONLY sustained all-required-component failure can
+    # reach RECOVERY_ELIGIBLE.
+    $requiredCount = 1 + $(if ($wsRequired) { 1 } else { 0 })
+    $okCount = 0
+    if ($apiComponentReady) { $okCount++ }
+    if ($wsRequired -and $wsComponentReady) { $okCount++ }
+    $ready = ($requiredCount -gt 0 -and $okCount -eq $requiredCount)   # FULL success
+    $partialReady = (-not $ready -and $okCount -ge 1)                  # some but not all
+    $readiness = if ($ready) { 'full' } elseif ($partialReady) { 'partial' } else { 'unready' }
 
     $errorClass = ''
     $failureSignal = ''
-    if (-not $ready) {
+    if ($partialReady) {
+        # some components ok, not all -> PARTIAL. Diagnostic value, not a request-level
+        # total failure. Never resets HEALTHY, never escalates to restart.
+        $errorClass = 'partial_ready'
+        $failureSignal = 'partial'
+    } elseif (-not $ready) {
         if ($owner.State -in @('ambiguous', 'identity_mismatch', 'error')) {
             $errorClass = 'owner_unsafe'; $failureSignal = 'owner'
         } elseif ($owner.State -eq 'none') {
@@ -152,7 +174,11 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
         basicHttpStatus  = $basic.HttpStatus
         apiState         = $apiState
         wsState          = $wsState
+        apiReady         = [bool]$apiComponentReady
+        wsReady          = [bool]$wsComponentReady
         ready            = [bool]$ready
+        partialReady     = [bool]$partialReady
+        readiness        = [string]$readiness
         failureSignal    = $failureSignal
         errorClass       = $errorClass
         probeDurationMs  = [int]$sw.ElapsedMilliseconds
@@ -222,6 +248,8 @@ function Invoke-DshHealthTriage(
     }
 
     $ready      = [bool]$Snapshot.ready
+    $partial    = if ($null -ne $Snapshot.partialReady) { [bool]$Snapshot.partialReady } else { $false }
+    $readiness  = if ($Snapshot.readiness) { [string]$Snapshot.readiness } else { if ($ready) { 'full' } elseif ($partial) { 'partial' } else { 'unready' } }
     $ownerState = [string]$Snapshot.ownerState
     $failures   = 0
     $firstMs    = $null
@@ -293,6 +321,24 @@ function Invoke-DshHealthTriage(
         return $out
     }
 
+    # R2 Blocker 2: PARTIAL success (some required readiness component ok, not all).
+    # A single component's success must NOT mask another component's long-term failure,
+    # but PARTIAL == server IS responding, so it is NEVER a restart-eligible condition.
+    # Record state as DEGRADED and do NOT advance the failure streak (a partial is not
+    # a total request-level failure). This keeps the health state honest (visible in
+    # dsh-health state + incident) without ever escalating a partial to recovery_eligible.
+    if ($partial) {
+        $next = _carry $base $failures $nowMs
+        $next.state = 'degraded'
+        $next.lastTransitionReason = "partial readiness ($readiness; api=$($Snapshot.apiState) ws=$($Snapshot.wsState)); degraded, no restart"
+        $out.Action = 'degrade'
+        $out.State = 'degraded'
+        $out.Reason = "partial readiness ($readiness); no restart"
+        $out.NextState = $next
+        $out.Diagnostic = [pscustomobject]@{ windowSec = 0; failures = $failures; partial = $true; readiness = $readiness }
+        return $out
+    }
+
     # owner=ok but not ready -> progressive health candidate
     $newFailures = $failures + 1
     $windowSec = 0.0
@@ -329,6 +375,48 @@ function Invoke-DshHealthTriage(
 # ---- Part C: bounded, redacted incident bundle written before a controlled
 # restart of an owner='ok' (alive but unready) server. Best-effort; never
 # blocks recovery. Field names are stable and shared with dsh-health state. ----
+#
+# R2 Blocker 3 (no leak outside the bundle): every value that enters the bundle is
+# passed through Invoke-DshRedactText so a sensitive-looking value (token, bearer,
+# api key, password, secret, credential, PEM private key) can NEVER be written to an
+# incident file. The scan helper Test-DshIncidentRedaction is used by the E2E to
+# prove a supplied sensitive fixture is absent from the serialized bundle.
+function Invoke-DshRedactText([string]$Text) {
+    if ([string]::IsNullOrEmpty($Text)) { return [string]$Text }
+    $t = [string]$Text
+    # 1. JSON key:value for known secret keys: "token":"<val>" -> "token":"***"
+    $t = $t -replace '(?i)"(token|access_token|refresh_token|api[_-]?key|apikey|password|passwd|pwd|secret|client_secret|credential[s]?)"\s*:\s*"[^"]*"', '"$1":"***"'
+    # 2. Authorization scheme header + Bearer token
+    $t = $t -replace '(?i)("authorization"\s*:\s*")(bearer\s+)?[A-Za-z0-9._~+/=-]+', '$1$2***'
+    $t = $t -replace '(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+', '$1***'
+    # 3. env/assignment style VALUE=<token>
+    $t = $t -replace '(?i)((?:token|api[_-]?key|apikey|password|passwd|pwd|secret|credential)\s*=\s*)[^\s;]+', '$1***'
+    # 4. PEM private-key blocks
+    $t = $t -replace '(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', '***PRIVATE KEY REDACTED***'
+    return $t
+}
+
+function ConvertTo-DshRedactedJson([object]$Obj, [int]$Depth = 12) {
+    $raw = ($Obj | ConvertTo-Json -Depth $Depth -Compress)
+    return (Invoke-DshRedactText $raw)
+}
+
+# Scan a serialized bundle (or arbitrary text) for leak of any known-sensitive value.
+# Deterministic redaction guard used by the E2E / CI. Returns @{ Clean; Hits }.
+function Test-DshIncidentRedaction([string]$Json, [string[]]$KnownSensitive = @()) {
+    $hits = @()
+    foreach ($s in $KnownSensitive) {
+        if ($s -and $Json -match [regex]::Escape($s)) { $hits += $s }
+    }
+    # also scan for un-redacted secret-looking JSON pairs / PEM headers
+    foreach ($re in @('(?i)"(?:authorization|bearer|token|api[_-]?key|password|secret)"\s*:\s*"[^"*][^"]*"',
+                      '(?i)-----BEGIN [A-Z ]*PRIVATE KEY-----[A-Za-z0-9+/=\s]+')) {
+        foreach ($m in [regex]::Matches($Json, $re)) { if ($m.Value -notmatch '\*\*\*') { $hits += $m.Value } }
+    }
+    return [pscustomobject]@{ Clean = ($hits.Count -eq 0); Hits = $hits }
+}
+
+
 function New-DshIncidentBundle(
     [int]$Port = 3080,
     [object]$Snapshot = $null,
@@ -350,8 +438,14 @@ function New-DshIncidentBundle(
         nonLoopbackCount = [int]$Snapshot.nonLoopbackCount
         probe            = [pscustomobject]@{
             basicState      = [string]$Snapshot.basicState
+            basicHttpStatus = $Snapshot.basicHttpStatus
             apiState        = [string]$Snapshot.apiState
             wsState         = [string]$Snapshot.wsState
+            apiReady        = if ($null -ne $Snapshot.apiReady) { [bool]$Snapshot.apiReady } else { $false }
+            wsReady         = if ($null -ne $Snapshot.wsReady) { [bool]$Snapshot.wsReady } else { $false }
+            ready           = if ($null -ne $Snapshot.ready) { [bool]$Snapshot.ready } else { $false }
+            partialReady    = if ($null -ne $Snapshot.partialReady) { [bool]$Snapshot.partialReady } else { $false }
+            readiness       = [string]$Snapshot.readiness
             failureSignal   = [string]$Snapshot.failureSignal
             errorClass      = [string]$Snapshot.errorClass
             probeDurationMs = [int]$Snapshot.probeDurationMs
@@ -359,9 +453,12 @@ function New-DshIncidentBundle(
         healthState = [pscustomobject]@{
             state               = [string]$HealthState.state
             consecutiveFailures = if ($null -ne $HealthState.consecutiveFailures) { [int]$HealthState.consecutiveFailures } else { 0 }
+            maxFailures         = if ($null -ne $HealthState.maxFailures) { [int]$HealthState.maxFailures } else { 0 }
             firstFailureAtMs    = $HealthState.firstFailureAtMs
             lastFailureAtMs     = $HealthState.lastFailureAtMs
+            lastHealthyAtMs     = $HealthState.lastHealthyAtMs
             errorClass          = [string]$Snapshot.errorClass
+            readiness           = [string]$Snapshot.readiness
             lastProbeSummary    = $HealthState.lastProbeSummary
         }
     }
@@ -377,6 +474,60 @@ function New-DshIncidentBundle(
                 childPid    = $rt.childPid
                 launcherPid = $rt.launcherPid
                 entryHash   = $rt.entryHash
+                startedAt   = $rt.startedAt
+                updatedAt   = $rt.updatedAt
+                exitCode    = $rt.exitCode
+            }) -Force
+        }
+    } catch {}
+
+    # best-effort: live process telemetry for the owning pid (never the launcher);
+    # no sensitive values are read into the bundle (path is fine, no cmdline args).
+    try {
+        if ($Snapshot.ownerPid -and $Snapshot.ownerPid -gt 0) {
+            $op = Get-Process -Id ([int]$Snapshot.ownerPid) -ErrorAction Stop
+            $incident | Add-Member -NotePropertyName process -NotePropertyValue ([pscustomobject]@{
+                pid          = [int]$op.Id
+                startTime    = $op.StartTime
+                cpuSeconds   = [math]::Round($op.TotalProcessorTime.TotalSeconds, 1)
+                rssBytes     = [int64]$op.WorkingSet64
+                handleCount  = [int]$op.HandleCount
+                path         = if ($op.Path) { [string]$op.Path } else { $null }
+            }) -Force
+        }
+    } catch {}
+
+    # best-effort: presence-only task telemetry (goal + session activity). We read
+    # ONLY file existence / timestamps / counts — NEVER session bodies or prompts.
+    try {
+        $dshHome = Join-Path $env:USERPROFILE '.dsh'
+        $task = [pscustomobject]@{ activeGoalExists = $false; goalFileCount = 0; runningSessionCount = 0; newestSessionWriteAt = $null }
+        $goalDir = Join-Path $dshHome 'goals'
+        if (Test-Path -LiteralPath $goalDir) {
+            $gf = @(Get-ChildItem -LiteralPath $goalDir -File -Filter *.json -ErrorAction SilentlyContinue)
+            $task.goalFileCount = $gf.Count
+            # active-goal proxy: a goal state file touched in the last 15 min (presence only)
+            $task.activeGoalExists = [bool]($gf | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) })
+        }
+        $sessDir = Join-Path $dshHome 'sessions'
+        if (Test-Path -LiteralPath $sessDir) {
+            $sess = @(Get-ChildItem -LiteralPath $sessDir -File -Filter *.json -Recurse -ErrorAction SilentlyContinue)
+            $task.runningSessionCount = @($sess | Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-10) }).Count
+            if ($sess.Count -gt 0) { $task.newestSessionWriteAt = ($sess | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime }
+        }
+        $incident | Add-Member -NotePropertyName taskPresence -NotePropertyValue $task -Force
+    } catch {}
+
+    # best-effort: bounded redacted tail of the per-port server log (append-kept
+    # boot diagnostics; never blocks recovery on a read failure).
+    try {
+        $logPath = Join-Path $env:LOCALAPPDATA ("DSHHarness\logs\dsh-server-{0}.log" -f $Port)
+        if (Test-Path -LiteralPath $logPath) {
+            $tail = (Get-Content -LiteralPath $logPath -Tail 200 -ErrorAction Stop) -join "`n"
+            $incident | Add-Member -NotePropertyName serverLog -NotePropertyValue ([pscustomobject]@{
+                path      = $logPath
+                tailLines = 200
+                tail      = (Invoke-DshRedactText $tail)
             }) -Force
         }
     } catch {}
@@ -392,9 +543,9 @@ function New-DshIncidentBundle(
         }
     } catch {}
 
-    # redaction guard: never allow a sensitive-looking value into the bundle
-    $raw = ($incident | ConvertTo-Json -Depth 10 -Compress)
-    $raw = $raw -replace '(?i)(token|secret|password|api[_-]?key|authorization|bearer|credential)["\s]*:[^,}]*', '$1":"***"'
+    # redaction guard: never allow a sensitive-looking value into the bundle.
+    # Single choke point: every value passes Invoke-DshRedactText.
+    $raw = ConvertTo-DshRedactedJson -Obj $incident -Depth 12
 
     $dir = Get-DshIncidentDir
     try {

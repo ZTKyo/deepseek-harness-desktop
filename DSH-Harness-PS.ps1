@@ -61,6 +61,10 @@ $title  = 'DeepSeek Harness'
 . (Join-Path $root 'dsh-credential-manager.ps1')
 # RH1 Part D: single health source (layered liveness + readiness + state machine).
 . (Join-Path $root 'dsh-health.ps1')
+# RH1-R2 Part D (Blocker 1): PURE, clock-injected client reconnect state machine.
+# The WPF DispatcherTimer no longer owns the decision; it calls the deterministic
+# Invoke-DshReconnectTransition on every probe tick. See dsh-reconnect.ps1.
+. (Join-Path $root 'dsh-reconnect.ps1')
 
 # ---------- persisted config (window layout + tray + quota) ----------
 $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
@@ -290,7 +294,14 @@ $script:wv = $null
 # miss never triggers a reload; only a real OFFLINE (unreachable) recovery does,
 # at most once per episode, after a short cooldown. Probe runs off the UI thread
 # (background runspace) and publishes into $script:probe (thread-safe dict).
-$script:reconn = @{ mode = 'online'; offlineSince = $null; offlineHits = 0; reloaded = $false; lastReloadAt = $null }
+# RH1-R2 Part D (Blocker 1): reconnect state is a PURE state-machine object whose
+# transitions are computed by Invoke-DshReconnectTransition (dsh-reconnect.ps1).
+# Only this in-process object is mutated; nothing here touches the network/UI.
+$script:reconn = New-DshReconnectState
+# Page-self-recovery tracking: a successful WebView2 NavigationCompleted means the
+# page healed on its own (no client reload needed). Set $false right before a client
+# reload so a success AFTER a reload is not mistaken for self-recovery.
+$script:lastNavSucceeded = $false
 $script:probe = [System.Collections.Concurrent.ConcurrentDictionary[string,object]]::new()
 $script:probe['mode'] = 'unknown'   # online | degraded | offline | unknown
 $script:probe['httpStatus'] = $null
@@ -2064,15 +2075,17 @@ $timer.Add_Tick({
                     if ($a.IsSuccess) {
                         $status.Visibility = [System.Windows.Visibility]::Collapsed
                         $win.Title = $title + ' — 服务在线'
-                        $script:reconn.mode = 'online'
-                        $script:reconn.offlineHits = 0
-                        $script:reconn.reloaded = $false
+                        # RH1-R2: page self-recovered. All reconnect TRANSITION state
+                        # is owned by the pure Invoke-DshReconnectTransition; here we
+                        # only record the navigation outcome and refresh the widget.
+                        $script:lastNavSucceeded = $true
                         Inject-QuotaWidget
                     } else {
                         $status.Text = '页面加载失败，可点击重试或按 Ctrl+R'
                         $status.Visibility = [System.Windows.Visibility]::Visible
                         $btnRetry.Visibility = 'Visible'
                         $win.Title = $title + ' — 连接失败'
+                        $script:lastNavSucceeded = $false
                     }
                     if ($script:st.phase -ne 'done') {
                         $script:st.phase = 'done'
@@ -2218,54 +2231,46 @@ if (-not $Probe) {
         try {
             $mode = [string]$script:probe['mode']
             $now = Get-Date
-            if ($mode -eq 'online') {
-                if ($script:reconn.mode -eq 'offline') {
-                    # just recovered from a real offline episode
-                    $script:reconn.mode = 'online'
-                    $script:reconn.offlineSince = $null
-                    $script:reconn.offlineHits = 0
-                    $cooldownOk = ($null -eq $script:reconn.lastReloadAt) -or (($now - $script:reconn.lastReloadAt).TotalSeconds -ge 15)
-                    if (-not $script:reconn.reloaded -and $cooldownOk) {
-                        # at most ONE auto-reload per offline episode, after cooldown
-                        $script:reconn.reloaded = $true
-                        $script:reconn.lastReloadAt = $now
+            # RH1-R2 (Blocker 1): the whole reconnect decision is computed by the PURE
+            # Invoke-DshReconnectTransition (dsh-reconnect.ps1) with a clock injection.
+            # This timer only READS the probe mode + page-recovery flag, applies the
+            # returned next-state, and performs at most the single auto-reload the
+            # state machine authorizes. Grace + cooldown + no-reload-on-degraded are
+            # enforced inside the pure function, so they are CI-deterministic.
+            $d = Invoke-DshReconnectTransition -State $script:reconn -Mode $mode -PageSelfRecovered ([bool]$script:lastNavSucceeded) -Now $now
+            $script:reconn = $d.State
+            switch ($d.Mode) {
+                'online' {
+                    if ($d.Reload) {
+                        $script:lastNavSucceeded = $false  # a reload is not "self-recovery"
                         $status.Text = '服务已恢复，正在重新加载…'
                         $status.Visibility = [System.Windows.Visibility]::Visible
                         try { $script:wv.CoreWebView2.Reload() } catch { try { $script:wv.CoreWebView2.Navigate($url) } catch {} }
                         $win.Title = $title + ' — 服务在线'
-                        TraceLog 'reconnect: offline -> online; auto-reload (1x)'
+                        TraceLog ("reconnect: {0} (auto-reload 1x)" -f $d.Reason)
                     } else {
-                        $status.Text = '服务已恢复'
-                        $status.Visibility = [System.Windows.Visibility]::Visible
+                        $status.Text = '服务在线'
+                        $status.Visibility = [System.Windows.Visibility]::Collapsed
                         $win.Title = $title + ' — 服务在线'
-                        TraceLog 'reconnect: offline -> online; no reload (already reloaded or in cooldown)'
+                        TraceLog ("reconnect: {0}" -f $d.Reason)
                     }
-                } else {
-                    $script:reconn.mode = 'online'
-                    $script:reconn.offlineHits = 0
-                    $win.Title = $title + ' — 服务在线'
-                    $status.Visibility = [System.Windows.Visibility]::Collapsed
                 }
-            } elseif ($mode -eq 'degraded') {
-                $script:reconn.offlineHits = 0
-                if ($script:reconn.mode -ne 'degraded') {
-                    TraceLog 'reconnect: -> DEGRADED (server alive but not 200); no reload'
+                'degraded' {
+                    $status.Text = '服务降级（未通过就绪检查）'
+                    $status.Visibility = [System.Windows.Visibility]::Visible
+                    $win.Title = $title + ' — 服务降级'
+                    TraceLog ("reconnect: {0}" -f $d.Reason)
                 }
-                $script:reconn.mode = 'degraded'
-                $status.Text = '服务降级（未通过就绪检查）'
-                $status.Visibility = [System.Windows.Visibility]::Visible
-                $win.Title = $title + ' — 服务降级'
-            } else {  # offline / unknown
-                $script:reconn.offlineHits++
-                if ($script:reconn.mode -ne 'offline' -and $script:reconn.offlineHits -ge 2) {
-                    # grace: only declare OFFLINE after 2 consecutive unreachable ticks
-                    $script:reconn.mode = 'offline'
-                    $script:reconn.offlineSince = $now
-                    $script:reconn.reloaded = $false
+                'offline' {
                     $status.Text = '服务离线，等待重连…'
                     $status.Visibility = [System.Windows.Visibility]::Visible
                     $win.Title = $title + ' — 服务离线'
-                    TraceLog 'reconnect: -> OFFLINE (unreachable)'
+                    if ($d.Operation -eq 'offline_declared') {
+                        # a fresh OFFLINE episode: any future nav success is a genuine
+                        # self-recovery; clear any stale pre-episode success flag.
+                        $script:lastNavSucceeded = $false
+                        TraceLog ("reconnect: {0}" -f $d.Reason)
+                    }
                 }
             }
         } catch {}

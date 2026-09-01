@@ -19,6 +19,7 @@ function Assert([bool]$c, [string]$msg) {
     else    { $script:failures++; Write-Host ("  **FAIL**: " + $msg) }
 }
 
+try {
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase -ErrorAction Stop
 $__loaded = [AppDomain]::CurrentDomain.GetAssemblies()
 $__wb = ($__loaded | Where-Object { $_.GetName().Name -eq 'WindowsBase' } | Select-Object -First 1).Location
@@ -98,6 +99,11 @@ Assert ($negMaxMs -ge 1500)  ("negative control shows dispatcher stalling under 
 Assert ($realMaxMs -lt 800) ("REAL-E9 maxDispatcherDelayMs < 800ms while background probe blocks (realMaxMs={0}ms)" -f $realMaxMs)
 Assert ($realMaxMs -lt $negMaxMs) ("REAL-E9 background block does NOT stall dispatcher (realMaxMs={0} < negMaxMs={1})" -f $realMaxMs, $negMaxMs)
 Write-Host ("REAL-E9 maxDispatcherDelayMs={0}ms (baseline {1}ms, negative control {2}ms)" -f $realMaxMs, $baselineMaxMs, $negMaxMs)
+} catch {
+    if (-not $script:failures) { $script:failures = 0 }
+    $script:failures++
+    Write-Host ("  **FAIL**: fatal exception raised (see FATAL above)")
+}
 
 Write-Host ""
 Write-Host ("RESULT: PASS={0} FAIL={1}" -f $script:passes, $script:failures)

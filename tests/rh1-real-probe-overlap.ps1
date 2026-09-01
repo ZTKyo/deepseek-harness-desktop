@@ -123,6 +123,9 @@ try {
         Assert ($totalProbeMs -ge ($expected * 0.8)) ("REAL-E8 total serial probe ~= n*duration (measured {0}ms vs expected ~{1}ms => serial, no doubling)" -f $totalProbeMs, $expected)
     }
     Write-Host ("REAL-E8 spans: count={0} maxConcurrent={1} totalProbeMs={2} expected~={3}" -f $confirmSpans.Count, $script:maxConcurrent, $totalProbeMs, $expected)
+} catch {
+    $script:failures++
+    Write-Host ("  **FAIL**: fatal exception raised (see FATAL above)")
 } finally {
     if ($p -and -not $p.HasExited) { [void]$p.Kill() }
     Start-Sleep -Milliseconds 500

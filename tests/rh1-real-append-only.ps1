@@ -74,6 +74,8 @@ try {
     Stop-CanonicalServer
 } catch {
     Write-Host ("FATAL: "+$_.Exception.Message)
+    $script:failures++
+    Write-Host ("  **FAIL**: fatal exception raised (see FATAL above)")
 } finally {
     Stop-CanonicalServer
     @((Join-Path $env:TEMP ("rh1-ao-{0}-b1.out" -f $epoch)),(Join-Path $env:TEMP ("rh1-ao-{0}-b1.err" -f $epoch)),(Join-Path $env:TEMP ("rh1-ao-{0}-b2.out" -f $epoch)),(Join-Path $env:TEMP ("rh1-ao-{0}-b2.err" -f $epoch))) | ForEach-Object { Remove-Item -LiteralPath $_ -Force -ErrorAction SilentlyContinue }
@@ -81,3 +83,5 @@ try {
     else { Write-Host ("EVIDENCE_LOG (kept for inspection): {0}" -f $logReal) }
 }
 Write-Host ("RESULT: PASS={0} FAIL={1}" -f $passes,$failures)
+# FAIL-CLOSED: exit non-zero if any assertion or fatal recorded a failure.
+if ($failures -gt 0) { exit 1 } else { exit 0 }

@@ -174,8 +174,16 @@ try {
     try {
         # boot #1 via canonical authority -> real dsh log with boot marker #1
         Run-CanonicalRestart 'b1'
-        $c1 = if (Test-Path $logReal) { Get-Content $logReal -Raw } else { '' }
-        $marker1 = ([regex]::Matches($c1, 'dsh web: http://127\.0\.0\.1:' + $port)).Count
+        # Bounded wait: the dsh boot banner can flush a moment AFTER the port is
+        # listening; a single immediate read races (marker=0). Loop up to 30s,
+        # mirroring the boot#2 wait below. FAIL-CLOSED: times out -> marker1 stays 0.
+        $marker1 = 0
+        for ($i=0; $i -lt 30; $i++) {
+            $c1 = if (Test-Path $logReal) { Get-Content $logReal -Raw } else { '' }
+            $marker1 = ([regex]::Matches($c1, 'dsh web: http://127\.0\.0\.1:' + $port)).Count
+            if ($marker1 -ge 1) { break }
+            Start-Sleep -Milliseconds 1000
+        }
         Assert ($marker1 -ge 1) ('APPEND_ONLY boot#1 produced real dsh log with boot marker (marker={0})' -f $marker1)
         Stop-CanonicalServer
         # write sentinel into the SAME file the canonical restart appends to
@@ -215,8 +223,14 @@ try {
 
 } catch {
     Write-Host ("FATAL: " + $_.Exception.Message)
+    $script:failures++
+    Write-Host ("  **FAIL**: fatal exception raised (see FATAL above)")
 } finally {
     if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
     Write-Host ("RESULT: PASS={0} FAIL={1}" -f $passes, $failures)
     Write-Host ("ISO_ROOT={0}" -f $isoRoot)
 }
+
+# FAIL-CLOSED: finally above only cleans up; the process exit code is decided here,
+# AFTER cleanup, so a failure (assert or fatal) is never masked back to 0.
+if ($failures -gt 0) { exit 1 } else { exit 0 }

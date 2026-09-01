@@ -104,6 +104,7 @@ function New-BackdatedState([int]$port) {
     return $st
 }
 
+try {
 Write-Host "=== RH1 R3 — guardian recovery path (shared Invoke-DshHealthGuard) ==="
 Write-Host ("workdir: " + $WorkDir)
 
@@ -176,6 +177,10 @@ $b6.windowStart = [DateTimeOffset]::Now.ToString('o')
 Write-DshRestartBudget $b6
 $allow = Test-DshRestartAllowed
 Assert ($allow.Allowed -eq $false -and $allow.Reason -eq 'budget_exhausted') ("E6 gate denies when exhausted (reason={0})" -f $allow.Reason)
+} catch {
+    $script:fail++
+    Write-Host ("  **FAIL**: fatal exception raised (see FATAL above)")
+}
 
 Write-Host ""
 Write-Host ("RESULT: PASS={0} FAIL={1}" -f $script:pass, $script:fail)

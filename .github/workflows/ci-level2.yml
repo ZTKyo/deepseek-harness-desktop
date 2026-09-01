@@ -71,6 +71,13 @@ jobs:
           if ($src -notmatch 'restored mirror snapshot') { throw 'guardian mirror-restore branch missing' }
           Write-Host 'PASS guardian no syntax-only promote'
 
+      - name: RH1 R3 guardian health guard path (shared state machine)
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\rh1-r3-guardian-path.ps1
+          if ($LASTEXITCODE -ne 0) { Write-Host "RH1 R3 GUARDIAN PATH FAIL"; exit 1 }
+          Write-Host 'PASS RH1 R3 guardian health guard path'
+
       - name: Diagnostics redaction
         shell: pwsh
         run: |

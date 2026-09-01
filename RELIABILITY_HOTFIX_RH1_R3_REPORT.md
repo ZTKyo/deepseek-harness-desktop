@@ -72,7 +72,10 @@ dsh-reconnect.ps1 / dsh-health.ps1 / DSH-Harness-PS.ps1 / dsh-guardian.ps1 中 `
 / LOCALAPPDATA / APPDATA 全指向注入的 temp isolate,不读真实 ~/.dsh）、直接驱动生产同款
 `Invoke-DshHealthGuard`,只用可注入的 restart/alert/recover/log/confirm 桩（sanctioned test seam）。
 仅两处例外:probe 注入 100ms 睡眠以拉宽并发窗口（用于实测 probe 是否重叠）,以及守卫 120s→90s 缩短
-（墙钟真实,但总时长压到 ~90s 而非 ~120s,已在断言中明示 elapsed=90.5s）。结果（PASS=15 FAIL=0）:
+（墙钟真实,但总时长压到 ~90s 而非 ~120s,已在断言中明示 elapsed≈87–90s）。
+**R3 复核后按外部评审要求重跑真实 e2e（全部测试加 fail-closed 退出码之后）:PASS=17 FAIL=0,退出码 0,
+真实墙钟 elapsed=87.1s（≥60s 达标）。本轮同时修好一处一次性读竞态:boot#1 的 dsh banner 单次读取可能
+瞬时为 0（首轮曾见 marker=0→FAIL=1）,改为有界等待（与 boot#2 一致）后稳定 marker=1。** 结果（本轮重跑）:
 
 | 断言 | 结果 |
 |---|---|
@@ -95,6 +98,9 @@ canonical `start-dsh-server.ps1` 在一次性端口 33651 上两次真实启动,
 - 重启后 **sentinel 仍在**（sentinelIdx=250,即未 truncate） **PASS**
 - boot#2 **在 sentinel 之后**追加了全新 dsh boot banner（"dsh web: http://127.0.0.1:33651",bannerIdx=377） **PASS**
 - 日志长度越过 sentinel（284→409） **PASS**
+
+**R3 复核后重跑验证（fail-closed 退出码修正后）:PASS=4 FAIL=0,退出码 0**——该类断言失败会以
+非零退出码暴露,不再被"脚本自然收尾"掩盖。
 
 > 结论:canonical 重启对 dsh-server-<port>.log 是**追加**而非覆盖（与 §记忆一致,现以真实启动 + sentinel 实证）。
 
@@ -119,11 +125,30 @@ canonical `start-dsh-server.ps1` 在一次性端口 33651 上两次真实启动,
 真实墙钟,probe 注入 ~3.6s 慢确认)。结果(PASS=5 FAIL=0):maxConcurrentProbe 实测=**1**;3 次慢 probe
 periods **两两不相交**;总耗时 16457ms ≈ n×duration(串行,非倍增)。
 
+## 6c. Item 9 配套 — CI Level 2 新增 guardian path 门禁（GATED, YAML VERIFIED）
+
+按外部评审要求,在 **`.github/workflows/ci-level2.yml`**（"CI Level 2 - Windows Reliability State Machines"）
+新增独立 step **`RH1 R3 guardian health guard path (shared state machine)`**:
+
+```yaml
+- name: RH1 R3 guardian health guard path (shared state machine)
+  shell: pwsh
+  run: |
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\rh1-r3-guardian-path.ps1
+    if ($LASTEXITCODE -ne 0) { Write-Host "RH1 R3 GUARDIAN PATH FAIL"; exit 1 }
+    Write-Host 'PASS RH1 R3 guardian health guard path'
+```
+
+该步与既有 `Safe Mode state machine` / `Last Good authority` 同档,跑在 `windows-latest`;校验
+`ci-level2.yml` 经 js-yaml 解析合法（20 个 step,含新 guard 步）。guardian-path 本身是**确定性/隔离**
+套件（临时 DSH_* 状态路径 + 记录桩,不触真实 ~/.dsh,不触生产 3080）,故可安全进 CI;其自身已 fail-closed
+（断言失败→exit 1;致命异常→catch 计数+1→exit 1）,本地实测 **PASS=19 FAIL=0,退出码 0**。
+
 ## 7. 仍未完成（诚实,原因）
 
 - **Item 5/8 UI Dispatcher 延迟实测量 + 测试分类** — **已完成**（真实 UI/Dispatcher 心跳实测 PASS=3,见 §6b;probe 不重叠独立实测 PASS=5）。
 - **Item 9 CI push + GitHub Actions run id** — **已完成**（push 942051d → CI Level 1 `33469491617`=success, Level 2 `33469491599`=success, Level 3 `33469491657`=success;即先前 R2 状态下失败的 Level 1 静态门禁已在 L1 secret 修复后转绿）。
 - **Item 11 治理** — PR #83 body 已更新为 R3 诚实版;达到 `AWAITING_EXTERNAL_REVIEW_R3`。
-- 已交付证据:CODE(DETERMINISTIC,PARSE)+DETERMINISTIC(31+19 PASS)+ISOLATED REAL(15+4+5+3 PASS);生产 3080 未触碰,无 merge,无 deploy。
+- 已交付证据:CODE(DETERMINISTIC,PARSE)+DETERMINISTIC(31 + guardian-path 19 PASS)+ISOLATED REAL(**本轮 fail-closed 重跑:e2e=17, append-only=4, probe-overlap=5, ui-dispatcher=3, 全部 FAIL=0、退出码 0**)+CI Level 2 新增 guardian path 门禁;生产 3080 未触碰,无 merge,无 deploy。
 
-**END SNAPSHOT — IN_PROGRESS（no merge, no deploy; 生产 3080 未触碰）**
+**END SNAPSHOT — IN_PROGRESS（no merge, no deploy; 生产 3080 未触碰;5 个测试已改 fail-closed,CI Level 2 已加 guardian-path 门禁）**

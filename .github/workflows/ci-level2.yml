@@ -187,6 +187,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR MUTATION FAIL"; exit 1 }
           Write-Host 'P2.75 R1.1 supervisor mutation suite: PASS'
 
+      - name: P2.8 Watchdog state machine (stall/recovery budget/projection/redaction)
+        shell: pwsh
+        run: |
+          node tests\watchdog\test-watchdog-core.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P28 WATCHDOG CORE FAIL"; exit 1 }
+          node tests\watchdog\test-watchdog-r4.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P28 WATCHDOG R4 MULTI-TASK PROJECTION FAIL"; exit 1 }
+          Write-Host 'P2.8 watchdog-core + R4 multi-task projection suite: PASS'
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

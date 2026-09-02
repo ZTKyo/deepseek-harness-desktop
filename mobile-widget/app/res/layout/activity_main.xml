@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 占位主页：仅用于让 MIUI 将本应用索引为“有图标的普通应用”，
+     从而在小部件选择器中可见可添加。功能全部由小部件提供。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="24dp"
+    android:background="#0D1117">
+
+    <TextView
+        android:id="@+id/tvMainTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#E6EDF3"
+        android:text="@string/main_title" />
+
+    <TextView
+        android:id="@+id/tvMainHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:textSize="14sp"
+        android:lineSpacingExtra="6dp"
+        android:textColor="#8A9AA6"
+        android:text="@string/main_hint" />
+
+    <!-- R2 D：一键把 DSH 看板 widget 钉到桌面（绕开 MIUI 小部件收录/筛选劫持） -->
+    <Button
+        android:id="@+id/btnPinWidget"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        android:textSize="16sp"
+        android:textColor="#0D1117"
+        android:backgroundTint="#4C8BF5"
+        android:text="@string/btn_pin_widget" />
+</LinearLayout>

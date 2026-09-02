@@ -15,6 +15,7 @@
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `VERIFIED`（**外部评审 Round 3 = APPROVED（2026-08-29 Reviewer 裁决）→ VERIFIED AUTHORIZED；Round 4 = NONE；production code 封板**。历史（保留不改写）：R1 实施收口＝零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26，PR #63 merged=f2d94f9。R1.1＝Round 1 verdict（CHANGES_REQUIRED）合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 2 verdict（CHANGES_REQUIRED）唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | NONE（Round 3 APPROVED；Round 4 = NONE；**Next = ChatGPT Client Binding → P3 bootstrap**） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
 | 02.75-HF1 | SUPERVISOR CORRECTION INJECTION HOTFIX R1 | `VERIFIED`（**External Review = APPROVED**，2026-08-31；Supervisor review_goal PASS 已记录 → sg-15fc877d… = VERIFIED / gen 4 / pendingMutation=null；PR #77 merged=dd7c12d，CI 三 gate 绿 run 33315517720/33315517734/33315517743；真实 E2E 链 pre 15/15 → post CI 16/16 → post full 18/18 → canonical 三阶段 81/81；部署 SHA 三方一致 bridge 057bbc0f… / core 59e3b5df…；3 条 NON-BLOCKING OBSERVATION 在档 REPORT_R1.md §7） | —（APPROVED；Waiting For = NONE；Next = Phase 02.8 仅记录未启动） | docs/roadmap/reports/SUPERVISOR_CORRECTION_HOTFIX/REPORT_R1.md |
 | 02.75-HF2 | SUPERVISOR CORRECTING PERSISTENCE HOTFIX R1 | `FIXED / RUNTIME-VERIFIED`（Hotfix 闭环 2026-09-01；External Review 待下一轮 Supervisor 面审核一并裁决）。缺陷：`deriveControlState` 读时推导把宿主 goal 已 complete 的 CORRECTING（review FAIL 显式监督裁定）压回 AWAITING_REVIEW，重启/新读持续丢失显式监督裁定；修复：读路径持有（CORRECTING+complete 原样返回，显式命令出口不变，+10 行零 schema/路由/账本改动，commit b32852d）。PR #80 merged=2bf4194 CI 三 gate 绿；验证：repro exit 42（squeeze 复现）→ sticky 32/32（含 Leg C 重启零漂移）＋ mutation 19/19 ＋ 三阶段 E2E ALL PASS；事务化部署（备份 .bak-hf2-20260901）＋受控重启三环一致（identity bridge 057bbc0f…/core 5d012c56… == deployed == repo，ledger OK）＋重启后回归 sticky 32/0＋mutation 19/0＋P3 冻结态完好（sg-b734914c… gen=2 AWAITING_REVIEW 未 reconcile）＋HF1 VERIFIED 态完好。治理事件（同日如实记录）：收口文档初版 PR #81 曾误携 02.8 实现面入 main，已 revert 恢复边界；02.8 内容仍由 PR #79 承载（OPEN）待 External Review | —（Hotfix 闭环；02.8 External Review 进行中不受影响） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_HF2.md |
+| 02.8 | WATCHDOG / Supervisor Runtime Watchdog + Mobile Monitor | `PHONE_R4_EXTERNAL_REVIEW=FAILED / PHONE_R5_CORRECTION=IN_PROGRESS`（R1 实现收口 2026-08-31：watchdog-core 纯函数核（7 态投影+进展信号 stall+有界恢复+脱敏）+ watchdog 宿主插件（60s 只读回环+落盘+Telegram 状态推送）+ adapter 只读代理路由（独立 watchdog token）+ 自建零依赖 Android 只读 Widget V1 APK + CI L2 接线；单测 27/27（重启后复跑同绿）；T1–T12 真实验证矩阵全 PASS（鉴权 401/200、8091 代理、badging exit 0、live 投影 AWAITING_REVIEW/cost UNAVAILABLE 实测）；受控重启 source==deployed==loaded 三环一致；诚实发现 F1 恢复 live-fire 未执行/F2 推送待首次真实迁移/F3 手机安装为用户动作，见 REPORT_R1.md §5；R2B/R3B 无常驻连接改造（同分支）：SSE 退役（宿主+adapter 410 watchdog_sse_removed 退役探针）+ 服务端 FCM data-message 设计 + Android 改 JobScheduler 15min 只读轮询（零 mutation 不变量不变）；单测 49/49 + 宿主冒烟 SMOKE-OK + REAL E2E 43/43（§6，run=wd-mtgvboh7）；**真实状态校正（2026-09-01）：FCM sender=IMPLEMENTED/NOT ACTIVATED（Firebase 项目/凭据未配置）、Android FCM receiver=NOT IMPLEMENTED（零第三方依赖红线，无接收路径）、当前有效通道=JobScheduler 15min+widget 30min 兜底+手动点击刷新、AC1/AC3=UNVERIFIED（真实 Firebase 链未建立+真机未验证，推送发射仅 spy 级 E5）**；**R2 C FCM 激活（2026-09-01 晚，commit ccb3d55）：FCM_SERVICE_ACCOUNT_JSON 已入 Secret Store；fcm-send-test.mjs 真实链路 PASS（SA→OAuth2→messages:send http=200 + message name 返回）；Android FCM receiver=IMPLEMENTED IN APK（WatchdogFcmReceiver=FirebaseMessagingService/MESSAGING_EVENT + WatchdogTopicSubscriber topic=watchdog 订阅；构建迁移 Gradle 8.10.2/JDK17，产物 dsh-watchdog-widget.apk 2.45MB，manifest receiver/service 注册 + dex 类验证 PASS；「零第三方依赖」红线如实变更：仅引入 firebase-messaging 官方 AAR + google-services 插件）；AC1 服务端半环=VERIFIED（真实 FCM 唤醒推送发送成功），AC1 真机半环/AC3=待真机安装验证**）；**PHONE R4 真机产物（2026-09-01）= PHONE_R4_FAILED_UI_EVIDENCE（External Review=FAILED/CHANGES_REQUIRED，false-positive；证据保留不退删）：deploy-miui.ps1 驱动真机(61ad2087)安装 versionCode=4 APK→appops 10017=allow→自动 pin 到桌面；dumpsys appwidget host=com.miui.home + 2×WatchdogWidgetProvider RemoteViews 实例实上 MIUI 桌面（tests/widget/miui-home-r4.png 视觉实证）；截图实为旧版单任务布局且主界面暴露 gen/rev（'+3 other' 非多任务 UI，违反 R5 设计）——定性为 PHONE_R4_FAILED_UI_EVIDENCE；FCM 真机实收=fcm-send-test.mjs 真实推送(topic=watchdog http=200 message=…/messages/1675784727294001262)→设备 diag last_push_received_at 推进、last_push_event_id=fcm-23984、last_fetch_trigger=fcm、last_fetch_updated_at 推进（完整 FCM 唤醒→只读拉取链）；Internet 只读通道=公网 trycloudflare URL GET /watchdog/status http=200 ok:true（脱敏）；真机侧 R4=FAILED（见 FAIL 清单）。**FAIL 清单（Reviewer 判定）：widget 仍为旧版单任务 UI（仅 tvState/tvMeta/tvTask/tvModel/tvFoot）、无独立多任务卡片（'+3 other' 非多任务 UI）、Detail 页仍为 placeholder、deploy 重复 pin 产生第 2 个 widget、公网通道为动态 trycloudflare（依赖 ADB 回写手机）、不满足外出监控、不满足 P6 runtime-location-agnostic。PHONE_R5_CORRECTION=IN_PROGRESS（本行真实状态）**） | External Review（R4 verdict=FAILED/CHANGES_REQUIRED 已裁决；R5 correction 电脑阶段进行中）；Waiting For = COMPUTER（SOURCE/BACKEND/STABLE_HTTPS/APK/CI_ALL_GREEN 全通过后→WAITING_USER: CONNECT_PHONE_R5_FINAL_REPAIR） | docs/roadmap/reports/PHASE_02_8_WATCHDOG_MOBILE_MONITOR/GAP_AUDIT.md ＋ REPORT_R1.md ＋ REPORT_R2R3.md |
 | 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）→ **R1 Correction 修复（同日）**：file_hash/system_api 两类 PASS 证据强制宿主确定性复核（真实文件 sha256 比对 / 127.0.0.1 回环 API 断言），伪造或不匹配 fail-closed 降级 UNVERIFIED（零里程碑/零 checkpoint），PASS 记录带 HOST-VERIFIED 前缀；core 86/0＋已部署面 52/0（新增 I10-I15 含真实回环 API 三态）＋真实 E2E 四腿 E1/E2/E2B/E3 32/0 全绿；REPORT_R1C.md；R1 部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据；R1C 部署 SHA256==仓库（回滚锚点 _pre-p3r1c-*），随下次受控重启生效；pre-existing 10 插件 profile 部署漂移已登记 KNOWN_ISSUES（专项待办，非本引入）） | External Review（R1 verdict 待裁决；F1 定级与 R2 范围由 Reviewer 判定） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ e2e/ |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
@@ -560,3 +561,57 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   (5) P3 冻结活体复核（只读）：sg-b734914c… AWAITING_REVIEW / gen 2 / corr 1 / latestReviewVerdict=FAIL /
   nextExpectedAction=reconcile / updatedAt 未变（12:36Z）/ pendingMutation=null；ledger OK receipts=4
   trusted=true；Phase 04 未启动。**Next = Phase 02.8 WATCHDOG / MOBILE MONITOR（仅记录，未启动）**。
+- **2026-08-31：Phase 02.8 WATCHDOG / MOBILE MONITOR R1 实现收口 → AWAITING_REVIEW**（分支 `phase-02-8-watchdog-mobile-monitor`，基线 fd26b08）：
+  Step1 只读 Fresh Audit（GAP_AUDIT.md，权威面/缺口/复用面/Authority Map/D1–D6 自动决策）；Step2–4 实现 =
+  `plugins/watchdog-core.mjs`（纯函数：7 态投影 IDLE/RUNNING/STALLED/RECOVERING/AWAITING_REVIEW/BLOCKED/VERIFIED +
+  UI 层 OFFLINE/UNKNOWN、进展信号 stall 判定（stallConfirmations=2，非纯时长）、有界恢复（幂等 commandId
+  `WD:g<gen>:CORRECTION:<seq>` + episode 1/日 3 预算 + P3 denylist + 仅 CORRECTION/steer）、脱敏 schema（objective 80 截断、
+  cost UNAVAILABLE 零猜测））＋ `plugins/watchdog.mjs`（60s 只读回环 get_snapshot/get_state + 落盘
+  `~/.dsh/watchdog/last-snapshot.json` + 状态变化 spawn telegram-alert.ps1 推送 + `/watchdog/health|status` Bearer 只读路由）＋
+  adapter 8091 只读代理（独立 watchdog token，与 MCP/bridge token 三分离，复用 p275 隧道零新端口）＋ 自建零依赖 Android 只读
+  Widget V1（aapt2+javac+d8+zipalign+apksigner，21 KB 签名验签，badging exit 0，仅 INTERNET 零 mutation）＋
+  CI L2 新步骤接 watchdog 套件。验证：单测 27/27（受控重启后复跑同绿）；T1–T12 矩阵全 PASS（鉴权 401/200、8091 代理
+  200/401、live 投影 AWAITING_REVIEW / bai+glm-5.3-flash / cost 全 UNAVAILABLE）；受控重启（已预告）后
+  source==deployed==loaded 三环一致（快照持续刷新为 loaded 活体证据）。诚实发现：F1 恢复 live-fire 未执行（自指风险，
+  PASS 后受控测试 goal 执行）；F2 Telegram 推送待首次真实状态迁移自然验证；F3 手机安装配置为用户动作。
+  **AWAITING_REVIEW — 停等 External Review，PASS 后回归 P3。**
+- **2026-09-01：02.8 真实状态校正 + 基线更新（纯文档，零代码改动）**：分支合并 canonical main
+  2bf4194（PR #80 HF2）→ merge=87c7a80，core/bridge 哈希与 main 一致（core 5d012c56…），
+  supervisor 回归单元 19/19 绿；REPORT_R2R3.md §5 追加真相校正（FCM sender=IMPLEMENTED/NOT
+  ACTIVATED、Android FCM receiver=NOT IMPLEMENTED、有效通道=JobScheduler 15min+widget 30min
+  兜底+手动点击刷新、AC1/AC3=UNVERIFIED、Waiting=FIREBASE+PHONE）；总览 02.8 行同步扩展；
+  PR #79 保持 OPEN 停等 External Review，随分支 push 触发 CI 复跑。
+- **2026-09-01 晚：02.8 R2 C FCM 激活 + R3 C Android FCM 客户端真实实现（commit ccb3d55）**：
+  用户侧 FIREBASE 前置完成（项目 dsh-watchdog + SA 凭据入 Secret Store，不入仓）；
+  fcm-send-test.mjs（tests/watchdog/）真实链路 **SERVER-SIDE ACTIVATION PASS**（SA→OAuth2
+  JWT→messages:send http=200，message=projects/dsh-watchdog/messages/1204…，与插件
+  fcmAccessToken/buildFcmRequest 同线格式，输出全程脱敏）；Android 侧新增
+  WatchdogFcmReceiver（FirebaseMessagingService，MESSAGING_EVENT）+ WatchdogTopicSubscriber
+  （topic=watchdog 首启订阅），构建迁移 Gradle 8.10.2/JDK17（build.ps1 保留同入口；copyFinalApk
+  以 doLast 拷贝绕开 dest 目录与 .gradle 重叠的 MD5 快照锁死），产物 dsh-watchdog-widget.apk
+  2.45MB 签名不变可覆盖升级；aapt2 manifest + dex 双验证 PASS（MESSAGING_EVENT service、
+  FirebaseInstanceIdReceiver 注入、c2dm/POST_NOTIFICATIONS 权限、5 自有类在 dex）；
+  google-services.json/keystore/build 产物全部入 .gitignore；总览 02.8 行同步（AC1 服务端
+  半环 VERIFIED，真机半环与 AC3 待 PHONE）。
+- **2026-09-01 晚（续）：02.8 分支推送 + CI 三 gate 全绿收口（commit c1c540b）**：未推送的
+  ccb3d55/c1c540b 推送至 origin/phase-02-8-watchdog-mobile-monitor（PR #79 head 更新，
+  未 merge、未开新 PR）；c1c540b 上 CI L1 Static Gate（run 33408755113）+ L2 Reliability
+  State Machines（run 33408755215）+ L3 Harness Smoke（run 33408755279）全部 success；
+  adb devices gate：无设备 → WAITING PHONE（PHONE-1..5 未执行，AC1 真机半环与 AC3 待用户
+  侧装新 APK + FCM 实收验证）；Notion 02.8 追踪页同步（R2 C/R3 C 现状 + CI 十二 run 全绿）。
+- **2026-09-01 深夜：02.8 R4 多任务运行时监控 + Internet 只读通道（PC 侧全 PASS，commit dac69f4）**：
+  服务端 `watchdog-core.mjs` 新增多任务投影 `projectTasks`（从权威 snapshot 派生 `tasks[]`：
+  project/task/session/generation/state/stateReason/heartbeats，+`terminalCache` 完成冻结转承防漂移，
+  +`summaryVersion` 并行任务间变更序号）；`watchdog.mjs` 接线 `projectTasks`（`/watchdog/status` 暴露
+  `tasks[]`/`taskCount`/`summary`）+ FCM 多任务指纹（`taskSig+count` 任一变化 → `fcmSendStateChange`
+  真实推送）+ `sanitizeSnapshot` 携 `tasks[]`；Android Widget `WatchdogWidgetProvider` 改 R4 多任务矩阵
+  （`taskCount`/`taskStates` 替代单一 `otherGoals`，`summarizeTasks` → “R x2 W x1…”）+ timezone 修复
+  （`generatedAt` 按 UTC 解析、按设备本地时区格式化）+ R2 D pin 启动器入口（`activity_main.xml` +
+  `build.gradle` shortcut 声明）。验证（PC 侧全绿）：watchdog 单测 49/49 ＋ `test-watchdog-r4` 13/13
+  （tasks[] 投影/完成冻结/并行变更防抖）＋ 宿主冒烟 SMOKE-OK ＋ REAL E2E 43/43（run=wd-mti1g0f5）；
+  Internet 只读通道公网 HTTPS 实测 `GET https://<cloudflared-url>/watchdog/status` HTTP 200（bearer
+  脱敏，watchdog.health=healthy）；APK `dsh-watchdog-widget.apk` 构建于最终 widget 源码之后
+  （10:13:42 > 10:12:30，含 R4 多任务+timezone），与 APK-RELEASE-CHECKSUM.txt 一致签名可覆盖升级；
+  `keep-watchdog-tunnel.ps1`/`deploy-miui.ps1` 复用入库。**PC 侧全 PASS → WAITING USER:
+  CONNECT_PHONE_FINAL_SYNC（AC1 真机半环［新 APK 侧装+FCM 实收+多任务 widget 刷新］与 AC3 待 PHONE）**；
+  Windows 服务/防火墙未动（仍 127.0.0.1 回环，公网出口走 trycloudflare 动态 URL，手机经同 URL 直连）。

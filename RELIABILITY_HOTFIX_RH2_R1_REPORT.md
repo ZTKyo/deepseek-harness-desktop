@@ -145,8 +145,9 @@ Relevant existing regressions passed in the isolated worktree:
 - Restart budget PASS; isolated Stage B LastGood PASS; Stage C transaction
   PASS; Stage D boot mode PASS; Stage E Safe Mode PASS; reliability lab
   **9/9**; launcher arguments **33/33**.
-- Context-memory **72/72**, exact-model preservation **33/33**, native
-  multimodal **25/25**, credential-preflight negative/contract suite **36/36**.
+- Context-memory **72/72**, P3 autonomy state core **104/104**, exact-model
+  preservation **9/9**, native multimodal **25/25**, credential-preflight
+  negative/contract suite **36/36**.
 - Node syntax parse PASS for all repository JavaScript modules; PowerShell
   syntax parse PASS for all repository PowerShell modules; YAML gate **5/5**;
   PowerShell secret-pattern gate PASS; node secret scan PASS; secret fixtures

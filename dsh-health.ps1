@@ -102,13 +102,19 @@ function Test-DshBasicHttp([int]$Port = 3080, [int]$TimeoutSec = 1) {
 }
 
 # ---- build a full probe snapshot (LEVEL1 owner + LEVEL2 http + LEVEL3 rpc) ----
-function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
+function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets, [int]$SlowThresholdMs = 3000) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $owner = Get-DshLoopbackOwner -Port $Port
     $basic = Test-DshBasicHttp -Port $Port
+    $apiSw = [System.Diagnostics.Stopwatch]::StartNew()
+    # RH2 P1-D: exactly one API readiness evaluation per full probe. The
+    # WebSocket layer receives this snapshot and must not repeat session.list.
     $api = Test-DshApiReady -Port $Port
+    $apiSw.Stop()
     $ws = $null
-    if ($IncludeWebSockets) { $ws = Test-DshReadiness -Port $Port -RequireWebSockets }
+    if ($IncludeWebSockets) {
+        $ws = Test-DshReadiness -Port $Port -RequireWebSockets -ApiSnapshot $api
+    }
 
     $apiState = ''
     $wsState = ''
@@ -163,6 +169,13 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
     }
 
     $sw.Stop()
+    $apiDurationMs = [int]$apiSw.ElapsedMilliseconds
+    $probeDurationMs = [int]$sw.ElapsedMilliseconds
+    $slowThreshold = [Math]::Max(1, $SlowThresholdMs)
+    $latencyDegraded = ($apiDurationMs -ge $slowThreshold) -or ($probeDurationMs -ge $slowThreshold)
+    $effectiveState = if ($IncludeWebSockets -and $wsState) { $wsState } else { $apiState }
+    $healthState = if ($ready) { 'healthy' } elseif ($partialReady) { 'degraded' } else { 'unready' }
+    $diagnosticSignal = if ($ready -and $latencyDegraded) { 'healthy_slow' } elseif ($partialReady) { 'partial' } else { $failureSignal }
     return [pscustomobject]@{
         ts               = (Get-Date).ToString('o')
         port             = $Port
@@ -182,7 +195,24 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
         readiness        = [string]$readiness
         failureSignal    = $failureSignal
         errorClass       = $errorClass
-        probeDurationMs  = [int]$sw.ElapsedMilliseconds
+        probeDurationMs  = $probeDurationMs
+        # RH2 observability/compatibility fields. These are diagnostic only;
+        # restart eligibility remains owned by the persisted RH1 triage state
+        # machine and cannot be granted by one slow or partial probe.
+        State                 = [string]$effectiveState
+        HealthState           = $healthState
+        Basic                 = $basic
+        Api                   = $api
+        ReadinessDetail       = if ($ws) { $ws } else { $api }
+        ApiReadinessEvaluations = 1
+        SessionListEvaluations = if ($apiState -in @('api_ready', 'client_ready')) { 1 } else { 0 }
+        ApiDurationMs         = $apiDurationMs
+        SlowThresholdMs       = $slowThreshold
+        LatencyDegraded       = [bool]$latencyDegraded
+        DiagnosticSignal       = $diagnosticSignal
+        RestartEligible        = $false
+        RestartEligibility     = 'sustained-unready-only; single probe never restarts'
+        Error                  = if ($ready) { $null } elseif ($ws -and $ws.Error) { $ws.Error } elseif ($api -and $api.Error) { $api.Error } else { $errorClass }
     }
 }
 

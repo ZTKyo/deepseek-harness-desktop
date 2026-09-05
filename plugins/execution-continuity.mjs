@@ -118,6 +118,102 @@ export const NON_RECOVERABLE_STATES = Object.freeze([
   "FAILED_FATAL",
 ]);
 
+// RH2 (P1-A/B/C/G): recovery failures are classified separately from model
+// request failures.  The recovery tail has one durable, count-based budget so
+// a changing error string cannot create a fresh retry loop.
+export const RESUME_FAILURE_RETRY_CAP = 8;
+export const API_RPC_TIMEOUT_MS = 10000;
+
+/**
+ * Turn a recovery/API error into a stable class and disposition.  This is
+ * intentionally small and deterministic: no provider/model routing is done
+ * here, and unknown failures remain bounded rather than becoming an endless
+ * WAITING_PROVIDER loop.
+ */
+export function classifyResumeFailure(error) {
+  const code = String(error?.code || error?.status || "").toUpperCase();
+  const message = String(error?.message || error || "").slice(0, 300);
+  const text = `${code} ${message}`.toLowerCase();
+  if (/owned\s+by\s+(?:a\s+)?subagent\s+routing|session\s+ownership|already\s+owned|ownership_conflict|session_owned/.test(text)) {
+    return {
+      failureClass: "OWNERSHIP_CONFLICT",
+      category: "permanent",
+      disposition: "manual-review",
+      retryable: false,
+      state: "FAILED_FATAL",
+      code,
+      message,
+    };
+  }
+  if (/invalid\s+session|session\s+(?:not\s+found|does\s+not\s+exist|unknown)|unknown\s+session|invalid_session/.test(text)) {
+    return {
+      failureClass: "INVALID_SESSION",
+      category: "permanent",
+      disposition: "manual-review",
+      retryable: false,
+      state: "FAILED_FATAL",
+      code,
+      message,
+    };
+  }
+  if (/invalid\s+(?:request|payload)|bad\s+request|http\s+400|\b400\b|invalid_request/.test(text)) {
+    return {
+      failureClass: "INVALID_REQUEST",
+      category: "permanent",
+      disposition: "manual-review",
+      retryable: false,
+      state: "FAILED_FATAL",
+      code,
+      message,
+    };
+  }
+  if (error?.failureClass === "TIMEOUT" || error?.name === "AbortError" || error?.name === "TimeoutError" ||
+      /timeout|timed\s*out|etimedout|econnaborted|aborted/.test(text)) {
+    return {
+      failureClass: "TIMEOUT",
+      category: "transient",
+      disposition: "bounded-retry",
+      retryable: true,
+      state: "WAITING_NETWORK",
+      code,
+      message,
+    };
+  }
+  if (error?.failureClass === "NETWORK" || /econn|enotfound|network|socket|fetch\s+failed|connection\s+(?:reset|refused|closed)/.test(text)) {
+    return {
+      failureClass: "NETWORK",
+      category: "transient",
+      disposition: "bounded-retry",
+      retryable: true,
+      state: "WAITING_NETWORK",
+      code,
+      message,
+    };
+  }
+  // Provider-side 5xx/temporary errors are retryable, but still consume the
+  // same persisted recovery budget as transport failures.
+  if (/http\s+5\d\d|\b5\d\d\b|temporar(?:y|ily)|unavailable|overloaded|try\s+again/.test(text)) {
+    return {
+      failureClass: "PROVIDER_TRANSIENT",
+      category: "transient",
+      disposition: "bounded-retry",
+      retryable: true,
+      state: "WAITING_PROVIDER",
+      code,
+      message,
+    };
+  }
+  return {
+    failureClass: "UNKNOWN",
+    category: "unknown",
+    disposition: "bounded-retry",
+    retryable: true,
+    state: "WAITING_PROVIDER",
+    code,
+    message,
+  };
+}
+
 const STATE = {
   RUNNING: "RUNNING",
   RETRYING: "RETRYING",
@@ -234,6 +330,8 @@ export class IntentStore {
         retryCount: 0,
         fallbackCount: 0,
         contextRecoveryCount: 0,
+        // RH2: one durable budget for failures in the resume tail itself.
+        resumeRetryCount: 0,
         autoResumeCycles: 0,
         // Phase 02 R10 (R10-1): once-per-boot budget epoch. When a REAL new
         // boot is detected, autoResumeCycles resets AND this marker is set to
@@ -242,6 +340,7 @@ export class IntentStore {
         autoResumeBudgetGeneration: null,
         lastFailure: null,
         lastFailureAt: null,
+        failureClass: null,
         lastActivity: Date.now(),
         createdAt: Date.now(),
         resumedAt: null,
@@ -457,6 +556,9 @@ export function apply(ctx, config = {}) {
   };
   const maxConcurrentResume = envNum("EC_MAX_CONCURRENT_RESUME", config.maxConcurrentResume ?? 2);
   const apiPort = envNum("EC_API_PORT", config.apiPort ?? 3080);
+  // RH2 (P1-C): every EC loopback RPC has a finite, locally testable timeout.
+  // Keep this as one small knob; it is not a global timeout framework.
+  const rpcTimeoutMs = Math.min(60000, Math.max(1, envNum("EC_API_RPC_TIMEOUT_MS", config.rpcTimeoutMs ?? API_RPC_TIMEOUT_MS)));
   // ─── Safe Mode（P0 fix 2026-08-23）───────────────────────────────────────
   // 第一轮 Runtime 注册默认只启用被动能力：错误分类 + 有界 retry/fallback 决策
   // + 诊断日志。自动 resume / 恢复扫描（主动回踢会话）默认关闭，由
@@ -525,20 +627,78 @@ export function apply(ctx, config = {}) {
 
   // loopback API（与 goal-recovery.mjs 同协议；经 ensureSession 正确组合 agent）
   let rpcSeq = 0;
-  async function apiRpc(method, payload) {
+  function makeApiTimeoutError(method, timeoutMs, cause = null) {
+    const error = new Error(`${method} timed out after ${timeoutMs}ms`);
+    error.name = "TimeoutError";
+    error.code = "EC_API_TIMEOUT";
+    error.failureClass = "TIMEOUT";
+    error.category = "transient";
+    error.method = method;
+    error.timeoutMs = timeoutMs;
+    if (cause) error.cause = cause;
+    return error;
+  }
+
+  async function apiRpc(method, payload, options = {}) {
     const rpcId = `ec-${Date.now()}-${++rpcSeq}`;
-    const res = await fetch(`http://127.0.0.1:${apiPort}/api/${method}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
+    const requestedTimeout = Number(options && options.timeoutMs);
+    const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+      ? Math.min(60000, requestedTimeout)
+      : rpcTimeoutMs;
+    const controller = new AbortController();
+    let timer = null;
+    const timeoutError = makeApiTimeoutError(method, timeoutMs);
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        // Abort the actual fetch before releasing the caller.  The race below
+        // also guarantees a misbehaving test/mock fetch cannot hold recovery
+        // pending forever after the controller is signalled.
+        try { controller.abort(timeoutError); } catch { controller.abort(); }
+        reject(timeoutError);
+      }, timeoutMs);
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${method}`);
-    const body = await res.json();
-    const result = body && body.result;
-    if (!result || result.ok !== true) {
-      throw new Error(result && result.error ? `${method}: ${result.error.message}` : `${method} failed`);
+    try {
+      // Keep response parsing inside the same race as fetch. A server can
+      // deliver headers and still leave res.json() pending; that must not
+      // bypass the hard RPC deadline.
+      const request = (async () => {
+        const res = await fetch(`http://127.0.0.1:${apiPort}/api/${method}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ type: "client-request", rpcId, method, payload }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const error = new Error(`HTTP ${res.status} for ${method}`);
+          error.status = res.status;
+          error.code = `HTTP_${res.status}`;
+          throw error;
+        }
+        const body = await res.json();
+        const result = body && body.result;
+        if (!result || result.ok !== true) {
+          const detail = result && result.error ? result.error : null;
+          const error = new Error(detail ? `${method}: ${detail.message || String(detail)}` : `${method} failed`);
+          if (detail && detail.code) error.code = detail.code;
+          if (detail && detail.status) error.status = detail.status;
+          throw error;
+        }
+        return result.value;
+      })();
+      // If a custom fetch implementation ignores AbortSignal and settles later,
+      // attach a rejection handler so the abandoned request cannot become an
+      // unhandled rejection after the bounded race has returned.
+      if (request && typeof request.catch === "function") request.catch(() => {});
+      return await Promise.race([request, timeout]);
+    } catch (error) {
+      if (error === timeoutError || error?.name === "AbortError" || error?.code === "EC_API_TIMEOUT") {
+        if (error === timeoutError) throw error;
+        throw makeApiTimeoutError(method, timeoutMs, error);
+      }
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return result.value;
   }
 
   async function waitForApi(tries = 20, delayMs = 1000) {
@@ -754,6 +914,96 @@ export function apply(ctx, config = {}) {
     return true;
   }
 
+  // RH2 (P1-A/B/G): every failure after the CT/user gates enters this one
+  // durable recovery exit. In particular, session.prompt failures must not
+  // have a private WAITING_PROVIDER path that bypasses the counter.
+  function recordResumeFailure(sessionId, it, error, phase) {
+    const cls = classifyResumeFailure(error);
+    const now = Date.now();
+    const message = String(cls.message || error?.message || error || "resume failure").slice(0, 300);
+    const failure = {
+      category: cls.category,
+      failureClass: cls.failureClass,
+      phase,
+      code: String(cls.code || error?.code || "").slice(0, 80),
+      message,
+    };
+    // Persist the latest observed recovery failure before choosing the next
+    // state. A changed error string therefore cannot evade the same counter.
+    it.lastFailure = failure;
+    it.lastFailureAt = now;
+    it.failureClass = cls.failureClass;
+    diag(`RESUME-FAILED sid=${sessionId} phase=${phase} failureClass=${cls.failureClass} category=${cls.category} message=${message}`);
+
+    if (!cls.retryable) {
+      store.setState(sessionId, STATE.FAILED_FATAL, {
+        autoResume: false,
+        nextRetryAt: null,
+        lastFailure: failure,
+        lastFailureAt: now,
+        failureClass: cls.failureClass,
+        reason: `resume ${cls.failureClass}: ${message}; manual review required`,
+        fatalReason: `resume ${cls.failureClass}: ${message}; manual review required`,
+      });
+      diag(`RESUME-TERMINAL sid=${sessionId} phase=${phase} failureClass=${cls.failureClass} category=${cls.category} -> FAILED_FATAL (manual review)`);
+      return STATE.FAILED_FATAL;
+    }
+
+    const previous = Number(it.resumeRetryCount);
+    const retryCount = (Number.isFinite(previous) && previous >= 0 ? previous : 0) + 1;
+    it.resumeRetryCount = retryCount;
+    if (retryCount > RESUME_FAILURE_RETRY_CAP) {
+      store.setState(sessionId, STATE.FAILED_FATAL, {
+        autoResume: false,
+        nextRetryAt: null,
+        resumeRetryCount: retryCount,
+        lastFailure: failure,
+        lastFailureAt: now,
+        failureClass: cls.failureClass,
+        reason: `resume ${cls.failureClass} retry cap exhausted (${RESUME_FAILURE_RETRY_CAP}); manual review required`,
+        fatalReason: `resume ${cls.failureClass} retry cap exhausted (${RESUME_FAILURE_RETRY_CAP}); manual review required`,
+      });
+      diag(`RESUME-TERMINAL sid=${sessionId} phase=${phase} failureClass=${cls.failureClass} retry=${retryCount}/${RESUME_FAILURE_RETRY_CAP} -> FAILED_FATAL (manual review)`);
+      return STATE.FAILED_FATAL;
+    }
+
+    const retryAt = now + Math.max(5000, backoffDelay(retryCount, budgets, 0));
+    const state = cls.state === "WAITING_NETWORK" ? STATE.WAITING_NETWORK : STATE.WAITING_PROVIDER;
+    store.setState(sessionId, state, {
+      nextRetryAt: retryAt,
+      resumeRetryCount: retryCount,
+      lastFailure: failure,
+      lastFailureAt: now,
+      failureClass: cls.failureClass,
+      reason: `resume ${cls.failureClass} (${retryCount}/${RESUME_FAILURE_RETRY_CAP}); retry is bounded`,
+    });
+    diag(`RESUME-DEFER sid=${sessionId} phase=${phase} failureClass=${cls.failureClass} category=${cls.category} retry=${retryCount}/${RESUME_FAILURE_RETRY_CAP} nextRetryAt=${retryAt}`);
+    return state;
+  }
+
+  function markResumeSuccess(sessionId, it, reason, goalActive = false) {
+    const now = Date.now();
+    it.lastResumeAt = now;
+    it.autoResumeCycles = (it.autoResumeCycles || 0) + 1;
+    it.resumedAt = now;
+    // Only accepted RESUME-OK resets the transient resume budget. Preserve the
+    // latest failure record as historical truth until a later failure replaces it.
+    it.resumeRetryCount = 0;
+    it.goalObservedAt = now;
+    it.livenessUnknownCount = 0;
+    store.setState(sessionId, STATE.RUNNING, {
+      note: `resume (${reason}): kick accepted`,
+      goalObservedAt: now,
+      livenessUnknownCount: 0,
+      resumeRetryCount: 0,
+      nextRetryAt: null,
+      reason: null,
+      recoveryOutcome: "RESUME-OK",
+    });
+    diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
+    return STATE.RUNNING;
+  }
+
   // Phase 02 R8 (R8-2): SINGLE shared "resume after CT clean" helper used by BOTH
   // the normal resume path and the liveness (zombie/no-progress) recovery path.
   // Contract (Reviewer): only a REAL goal.resume OR queue-kick SUCCESS evidence
@@ -782,6 +1032,8 @@ export function apply(ctx, config = {}) {
         goalActive = true;
         diag(`RESUME-CT-CLEAN sid=${sessionId} goal re-armed (${reason})`);
       } catch (e) {
+        const cls = classifyResumeFailure(e);
+        if (!cls.retryable) return recordResumeFailure(sessionId, it, e, "goal.resume:after-ct-clean");
         diag(`RESUME-CT-CLEAN sid=${sessionId} goal.resume failed: ${String(e.message).slice(0, 120)} (prompt fallback)`);
       }
     } else {
@@ -790,35 +1042,9 @@ export function apply(ctx, config = {}) {
     const message = "[execution-continuity] The local DSH server restarted / the task was interrupted. Inspect the current session state and workspace, verify the last operation's outcome before repeating any write/delete/send/payment action, then continue the task. Do not re-run the whole task from scratch.";
     try {
       await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
-      it.lastResumeAt = Date.now();
-      it.autoResumeCycles = (it.autoResumeCycles || 0) + 1;
-      it.resumedAt = Date.now();
-      if (it.resumeRetryCount) { it.resumeRetryCount = 0; }
-      // R8-2: RUNNING ONLY after the kick was ACCEPTED (goal.resume OK or queue
-      // accepted). Reset the liveness baseline so the resumed goal gets a fresh
-      // grace window and the bounded counter does not accumulate.
-      it.goalObservedAt = Date.now();
-      it.livenessUnknownCount = 0;
-      // R9-1: confirmed resume success -> RUNNING MUST atomically clear the
-      // stale due-state (nextRetryAt + prior defer/grace reason) — otherwise a
-      // healthy resumed intent stays "due" and the timer keeps re-driving it.
-      store.setState(sessionId, STATE.RUNNING, {
-        note: `resume-after-ct-clean (${reason}): kick accepted`,
-        goalObservedAt: it.goalObservedAt,
-        livenessUnknownCount: 0,
-        nextRetryAt: null,
-        reason: null,
-      });
-      diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
-      return STATE.RUNNING;
+      return markResumeSuccess(sessionId, it, `after-ct-clean:${reason}`, goalActive);
     } catch (e) {
-      // DURABLE due-state: the timer re-drives via listDue (WAITING_PROVIDER is
-      // a due-state). Never return RUNNING on failure.
-      diag(`RESUME-FAILED sid=${sessionId} kick failed: ${String(e.message).slice(0, 160)}`);
-      const retryAt = Date.now() + 30000;
-      store.setState(sessionId, STATE.WAITING_PROVIDER, { nextRetryAt: retryAt, reason: `kick failed: ${String(e.message).slice(0, 120)}` });
-      diag(`RESUME-DUE sid=${sessionId} durable WAITING_PROVIDER nextRetryAt=${retryAt}`);
-      return STATE.WAITING_PROVIDER;
+      return recordResumeFailure(sessionId, it, e, "session.prompt:after-ct-clean");
     }
   }
 
@@ -835,6 +1061,14 @@ export function apply(ctx, config = {}) {
   async function resumeViaApi(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
+    // Terminal/manual-review and explicit user states are not eligible for a
+    // direct retry either. This complements listRecoverable/listDue and closes
+    // a stale queued-callback race.
+    if (it.autoResume === false || NON_RECOVERABLE_STATES.includes(it.state) || it.state === STATE.NEEDS_VERIFICATION) {
+      diag(`RESUME-SKIP sid=${sessionId} state=${it.state} autoResume=${it.autoResume} (not recoverable)`);
+      return it.state;
+    }
+
     // P3 R1 (F2c): capture BEFORE the budget-epoch reset below — a mismatch at
     // entry means THIS call is the first recovery of a NEW BOOT. Post-restart
     // the old turn is dead even if its events are still recent, so boot
@@ -1139,34 +1373,7 @@ export function apply(ctx, config = {}) {
         return;
       }
     } catch (e) {
-      // Phase 02 R1 (BLOCKING-5): RESUME-DEFER must be DURABLE. We persist a
-      // WAITING_NETWORK state with reason + nextRetryAt + budget count so the
-      // timer only resumes when nextRetryAt <= now AND budget allows.
-      // Phase 02 R2 (BLOCKING-4): resumeRetryCount is a REAL bounded budget —
-      // it increments per defer and, at the cap, fail-closes to FAILED_FATAL
-      // (no infinite 15s/backoff defer loop). Reset happens on a successful
-      // RESUME-OK (see below).
-      const deferCap = 8; // conservative: 8 consecutive session.list failures
-      it.resumeRetryCount = (it.resumeRetryCount || 0) + 1;
-      if (it.resumeRetryCount > deferCap) {
-        store.setState(sessionId, STATE.FAILED_FATAL, {
-          fatalReason: `RESUME-DEFER budget exhausted (${deferCap} retries); manual review required`,
-          resumeRetryCount: it.resumeRetryCount,
-        });
-        store.persist();
-        diag(`RESUME-DEFER sid=${sessionId} budget exhausted (${it.resumeRetryCount} > ${deferCap}) -> FAILED_FATAL (fail-closed)`);
-        return;
-      }
-      const retryAt = Date.now() + Math.max(5000, backoffDelay(it.resumeRetryCount, budgets, 0));
-      store.setState(sessionId, STATE.WAITING_NETWORK, {
-        reason: `RESUME-DEFER: session.list unavailable (${String(e.message).slice(0, 80)})`,
-        nextRetryAt: retryAt,
-        lastFailure: String(e.message).slice(0, 200),
-        resumeRetryCount: it.resumeRetryCount,
-      });
-      store.persist();
-      diag(`RESUME-DEFER sid=${sessionId} durable state=WAITING_NETWORK nextRetryAt=${retryAt} retry=${it.resumeRetryCount}`);
-      return;
+      return recordResumeFailure(sessionId, it, e, "session.list");
     }
 
     let goalActive = false;
@@ -1193,6 +1400,8 @@ export function apply(ctx, config = {}) {
           diag(`RESUME sid=${sessionId} goal re-armed (${reason})`);
         } catch (e) {
           // 非 active / 未知 goal → 仍可用 prompt 兜底
+          const cls = classifyResumeFailure(e);
+          if (!cls.retryable) return recordResumeFailure(sessionId, it, e, "goal.resume");
           diag(`RESUME sid=${sessionId} goal.resume skipped: ${String(e.message).slice(0, 120)}`);
         }
       }
@@ -1202,20 +1411,9 @@ export function apply(ctx, config = {}) {
 
     try {
       await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
-      it.lastResumeAt = Date.now();
-      it.autoResumeCycles = (it.autoResumeCycles || 0) + 1;
-      it.resumedAt = Date.now();
-      // Phase 02 R2 (BLOCKING-4): successful resume resets the durable defer
-      // budget so the next network outage starts from a clean slate.
-      if (it.resumeRetryCount) { it.resumeRetryCount = 0; }
-      // R9-1: confirmed resume success -> RUNNING must clear stale due-state
-      // (WAITING_*/QUEUED recovery leaves a nextRetryAt that must not keep the
-      // healthy intent due).
-      store.setState(sessionId, goalActive ? STATE.RUNNING : STATE.RUNNING, { nextRetryAt: null, reason: null });
-      diag(`RESUME-OK sid=${sessionId} goalActive=${goalActive} cycles=${it.autoResumeCycles} (${reason})`);
+      markResumeSuccess(sessionId, it, reason, goalActive);
     } catch (e) {
-      diag(`RESUME-FAILED sid=${sessionId} ${String(e.message).slice(0, 160)}`);
-      store.setState(sessionId, STATE.WAITING_PROVIDER, { nextRetryAt: Date.now() + 30000 });
+      return recordResumeFailure(sessionId, it, e, "session.prompt");
     }
   }
 
@@ -2007,10 +2205,11 @@ export function apply(ctx, config = {}) {
       budgets,
       capability,
       safeMode: !enableAutoResume,
+      rpcTimeoutMs,
       compactionAvailable: compactionAvailable(ctx),
-      intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure }])),
+      intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, resumeRetryCount: v.resumeRetryCount || 0, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure, lastFailureAt: v.lastFailureAt, failureClass: v.failureClass }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
+    _test: { store, apiRpc, classifyFailure, classifyResumeFailure, recordResumeFailure, markResumeSuccess, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, rpcTimeoutMs, RESUME_FAILURE_RETRY_CAP, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
   };
 }

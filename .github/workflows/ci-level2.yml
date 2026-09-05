@@ -186,6 +186,20 @@ jobs:
           node tests\supervisor\test-supervisor-mutation-state.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR MUTATION FAIL"; exit 1 }
           Write-Host 'P2.75 R1.1 supervisor mutation suite: PASS'
+      # RH2 source-only P1 closure: deterministic recovery, readiness, latency,
+      # watchdog identity, and synthetic large-session call-count regressions.
+      # These tests use isolated fixtures only; no live profile or lifecycle
+      # operation is permitted by the hotfix scope.
+      - name: RH2 P1 closure deterministic suites (source-only)
+        shell: pwsh
+        run: |
+          node tests\reliability\test-rh2-ec.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'RH2 EC suite failed' }
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-RH2Health.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'RH2 health suite failed' }
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-RH2Watchdog.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'RH2 watchdog suite failed' }
+          Write-Host 'PASS RH2 P1 closure deterministic suites'
 
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh

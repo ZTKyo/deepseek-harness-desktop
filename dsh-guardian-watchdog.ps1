@@ -10,15 +10,18 @@ param(
     [int]$StaleSeconds = 90,
     [switch]$NoKeepAwake,
     [switch]$NoLidGuard,
-    [switch]$Loop
+    [switch]$Loop,
+    [switch]$Library
 )
 
 $ErrorActionPreference = 'Continue'
 $dataRoot = Join-Path $env:LOCALAPPDATA 'DSHHarness'
 $logDir = Join-Path $dataRoot 'logs'
 $stateDir = Join-Path $dataRoot 'state'
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+if (-not $Library) {
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+}
 $logPath = Join-Path $logDir 'guardian-supervisor.log'
 $heartbeatPath = Join-Path $stateDir 'guardian-heartbeat.json'
 
@@ -35,21 +38,11 @@ function TraceW([string]$Message) {
 }
 
 function Get-GuardianProcess {
-    $expected = [IO.Path]::GetFullPath($GuardianPath)
-    try {
-        $rows = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop)
-        return @($rows | Where-Object {
-            $cmd = [string]$_.CommandLine
-            if (-not $cmd) { return $false }
-            $isGuardian = $cmd -match '(?i)dsh-guardian\.ps1'
-            $isWatchdog = $cmd -match '(?i)dsh-guardian-watchdog\.ps1'
-            $pathMatch = $cmd.IndexOf($expected, [StringComparison]::OrdinalIgnoreCase) -ge 0
-            return ($isGuardian -and -not $isWatchdog -and $pathMatch)
-        })
-    } catch {
-        TraceW ('process probe error: ' + $_.Exception.Message)
-        return @()
-    }
+    $heartbeat = Get-Heartbeat
+    $rows = @(Get-DshGuardianIdentityProcesses -Heartbeat $heartbeat)
+    $presence = Resolve-DshGuardianPresence -Heartbeat $heartbeat -Processes $rows -MaxAgeSeconds $StaleSeconds
+    if (-not $presence.Proven) { return @() }
+    return @($rows | Where-Object { $_.ProcessId -eq $presence.Pid })
 }
 
 function Get-Heartbeat {
@@ -77,20 +70,182 @@ function Get-Heartbeat {
     }
 }
 
+function Convert-DshGuardianUtcDate([object]$Value) {
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return $null }
+    try {
+        if ($Value -is [DateTimeOffset]) { return $Value.UtcDateTime }
+        if ($Value -is [DateTime]) { return $Value.ToUniversalTime() }
+        if ([string]$Value -match '^\d{14}(?:\.\d+)?[+-]\d{3}$') {
+            return [System.Management.ManagementDateTimeConverter]::ToDateTime([string]$Value).ToUniversalTime()
+        }
+        return [DateTimeOffset]::Parse([string]$Value).UtcDateTime
+    } catch { return $null }
+}
+
+function Get-DshGuardianProcessStartUtc([object]$Process) {
+    foreach ($name in @('StartTime', 'CreationTime', 'CreationDate', 'startedAt')) {
+        try {
+            $property = $Process.PSObject.Properties[$name]
+            if ($null -eq $property) { continue }
+            $parsed = Convert-DshGuardianUtcDate $property.Value
+            if ($null -ne $parsed) { return $parsed }
+        } catch {}
+    }
+    return $null
+}
+
+function Resolve-DshGuardianPresence {
+    param(
+        [object]$Heartbeat,
+        [object[]]$Processes = @(),
+        [DateTime]$Now = (Get-Date).ToUniversalTime(),
+        [int]$MaxAgeSeconds = 90
+    )
+
+    $heartbeatPid = 0
+    try { $heartbeatPid = [int]$Heartbeat.pid } catch { $heartbeatPid = 0 }
+    $heartbeatUpdated = Convert-DshGuardianUtcDate $Heartbeat.updatedAt
+    $age = $null
+    try {
+        if ($null -ne $Heartbeat.AgeSeconds) { $age = [double]$Heartbeat.AgeSeconds }
+    } catch {}
+    if ($null -eq $age -and $null -ne $heartbeatUpdated) {
+        $age = (($Now.ToUniversalTime()) - $heartbeatUpdated).TotalSeconds
+    }
+    $hasHeartbeat = $null -ne $Heartbeat -and $heartbeatPid -gt 0
+    $fresh = $hasHeartbeat -and $null -ne $age -and $age -ge 0 -and $age -le $MaxAgeSeconds
+    $matching = @($Processes | Where-Object {
+        try { [int]($_.ProcessId) -eq $heartbeatPid } catch { $false }
+    })
+
+    if ($matching.Count -gt 0) {
+        $process = $matching[0]
+        $identityProven = $true
+        $heartbeatStarted = Convert-DshGuardianUtcDate $Heartbeat.startedAt
+        $processStarted = Get-DshGuardianProcessStartUtc $process
+        if ($null -ne $heartbeatStarted -and $null -ne $processStarted) {
+            $identityProven = [Math]::Abs((($processStarted - $heartbeatStarted).TotalSeconds)) -le 30
+        }
+        if (-not $identityProven) {
+            return [pscustomobject]@{
+                State = 'ambiguous'; Present = $false; Proven = $false; ShouldStart = $false
+                Pid = $heartbeatPid; Source = 'heartbeat-pid-start-mismatch'; Fresh = $fresh
+                AgeSeconds = $age; Reason = 'heartbeat PID exists but start time does not match'
+            }
+        }
+        return [pscustomobject]@{
+            State = if ($fresh) { 'present' } else { 'stale_live' }
+            Present = $true; Proven = $true; ShouldStart = $false
+            Pid = $heartbeatPid; Source = if ($fresh) { 'heartbeat-pid' } else { 'stale-heartbeat-live-pid' }
+            Fresh = $fresh; AgeSeconds = $age
+            Reason = if ($fresh) { 'fresh heartbeat with matching live PID' } else { 'stale heartbeat but matching live PID' }
+        }
+    }
+
+    # A fresh heartbeat without a live matching PID is ambiguous, not a start
+    # signal. An absent/stale heartbeat with no proven guardian is the only
+    # start-eligible case.
+    if ($fresh) {
+        return [pscustomobject]@{
+            State = 'ambiguous'; Present = $false; Proven = $false; ShouldStart = $false
+            Pid = $heartbeatPid; Source = 'fresh-heartbeat-no-live-pid'; Fresh = $true
+            AgeSeconds = $age; Reason = 'fresh heartbeat has no matching live PID'
+        }
+    }
+
+    $commandLineGuardian = @($Processes | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $isGuardian = $cmd -match '(?i)dsh-guardian\.ps1'
+        $isWatchdog = $cmd -match '(?i)dsh-guardian-watchdog\.ps1'
+        return ($isGuardian -and -not $isWatchdog)
+    })
+    if ($commandLineGuardian.Count -gt 0) {
+        $p = $commandLineGuardian[0]
+        $commandPid = 0
+        try { $commandPid = [int]$p.ProcessId } catch {}
+        return [pscustomobject]@{
+            State = 'present'; Present = $true; Proven = $true; ShouldStart = $false
+            Pid = $commandPid; Source = 'commandline-identity'; Fresh = $false
+            AgeSeconds = $age; Reason = 'strong Guardian command-line identity'
+        }
+    }
+
+    return [pscustomobject]@{
+        State = 'absent'; Present = $false; Proven = $false; ShouldStart = $true
+        Pid = $null; Source = if ($hasHeartbeat) { 'stale-or-unmatched-heartbeat' } else { 'no-heartbeat' }
+        Fresh = $false; AgeSeconds = $age; Reason = 'no proven live Guardian'
+    }
+}
+
+function Get-DshGuardianIdentityProcesses([object]$Heartbeat = $null) {
+    $result = @()
+    try {
+        $rows = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop)
+        $result += @($rows | ForEach-Object {
+            [pscustomobject]@{
+                ProcessId = [int]$_.ProcessId
+                ProcessName = [string]$_.Name
+                CommandLine = [string]$_.CommandLine
+                CreationDate = $_.CreationDate
+            }
+        })
+    } catch {
+        TraceW ('process probe error: ' + $_.Exception.Message)
+    }
+    $heartbeatPid = 0
+    try { $heartbeatPid = [int]$Heartbeat.pid } catch {}
+    if ($heartbeatPid -gt 0 -and -not @($result | Where-Object { $_.ProcessId -eq $heartbeatPid })) {
+        try {
+            $p = Get-Process -Id $heartbeatPid -ErrorAction Stop
+            if ([string]$p.ProcessName -match '(?i)^powershell') {
+                $result += [pscustomobject]@{
+                    ProcessId = [int]$p.Id
+                    ProcessName = [string]$p.ProcessName
+                    CommandLine = ''
+                    StartTime = $p.StartTime
+                }
+            }
+        } catch {}
+    }
+    return @($result)
+}
+
+function Confirm-DshGuardianSpawn {
+    param(
+        [int]$ExpectedPid,
+        [object]$Heartbeat,
+        [object[]]$Processes = @(),
+        [DateTime]$Now = (Get-Date).ToUniversalTime(),
+        [int]$MaxAgeSeconds = 90
+    )
+    $presence = Resolve-DshGuardianPresence -Heartbeat $Heartbeat -Processes $Processes -Now $Now -MaxAgeSeconds $MaxAgeSeconds
+    # Spawn verification is stricter than steady-state presence: a command
+    # line alone (or a stale heartbeat) cannot turn Process.Start success into
+    # a healthy claim. Require the fresh authoritative heartbeat/PID pair.
+    $verified = $presence.Proven -and $presence.Fresh -and $presence.Source -eq 'heartbeat-pid' -and
+        $presence.Pid -gt 0 -and ($ExpectedPid -le 0 -or $presence.Pid -eq $ExpectedPid)
+    return [pscustomobject]@{
+        State = if ($verified) { 'verified' } else { 'unverified' }
+        Verified = $verified
+        Pid = $presence.Pid
+        Presence = $presence
+    }
+}
+
 function Invoke-WatchdogCheck {
-    # Force an array so the single-process case behaves identically on
-    # Windows PowerShell 5.1 and PowerShell 7 (`.Count` is not guaranteed on a
-    # scalar CIM object in the former).
-    $guardian = @(Get-GuardianProcess)
     $heartbeat = Get-Heartbeat
-    $fresh = ($null -ne $heartbeat -and [double]$heartbeat.AgeSeconds -le $StaleSeconds)
-    if ($guardian.Count -gt 0 -and $fresh) {
-        TraceW ("guardian healthy pid=$($guardian[0].ProcessId) heartbeatAge=$([int]$heartbeat.AgeSeconds)s port=$Port")
+    $processes = @(Get-DshGuardianIdentityProcesses -Heartbeat $heartbeat)
+    $presence = Resolve-DshGuardianPresence -Heartbeat $heartbeat -Processes $processes -MaxAgeSeconds $StaleSeconds
+    if ($presence.State -eq 'present') {
+        TraceW ("guardian healthy pid=$($presence.Pid) heartbeatAge=$([int]$presence.AgeSeconds)s source=$($presence.Source) port=$Port")
         return
     }
-    if ($guardian.Count -gt 0) {
-        $pids = ($guardian | ForEach-Object ProcessId) -join ','
-        TraceW ("guardian heartbeat stale or unreadable; live guardian pid(s)=$pids; no kill/start")
+    if ($presence.State -eq 'stale_live') {
+        TraceW ("guardian heartbeat stale; live Guardian pid=$($presence.Pid); no kill/start")
+        return
+    }
+    if (-not $presence.ShouldStart) {
+        TraceW ("guardian identity ambiguous; no kill/start reason=$($presence.Reason)")
         return
     }
 
@@ -107,11 +262,22 @@ function Invoke-WatchdogCheck {
     }) -join ' ')
     try {
         $proc = [System.Diagnostics.Process]::Start($psi)
-        TraceW ("guardian started pid=$($proc.Id) port=$Port noKeepAwake=$NoKeepAwake noLidGuard=$NoLidGuard")
+        # Process.Start only proves a child was requested. Do not call that a
+        # healthy Guardian until a heartbeat/PID identity is observed.
+        $postHeartbeat = Get-Heartbeat
+        $postProcesses = @(Get-DshGuardianIdentityProcesses -Heartbeat $postHeartbeat)
+        $verification = Confirm-DshGuardianSpawn -ExpectedPid ([int]$proc.Id) -Heartbeat $postHeartbeat -Processes $postProcesses -MaxAgeSeconds $StaleSeconds
+        if ($verification.Verified) {
+            TraceW ("guardian spawn verified pid=$($verification.Pid) port=$Port noKeepAwake=$NoKeepAwake noLidGuard=$NoLidGuard")
+        } else {
+            TraceW ("guardian spawn unverified pid=$($proc.Id); heartbeat/identity not confirmed; no healthy claim")
+        }
     } catch {
         TraceW ('guardian start error: ' + $_.Exception.Message)
     }
 }
+
+if ($Library) { return }
 
 if ($Loop) {
     # Resident supervisor mode (Startup-launched): check every 60s forever.

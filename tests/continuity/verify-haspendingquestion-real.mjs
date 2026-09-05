@@ -1,4 +1,4 @@
-import { hasPendingQuestion } from "file:///C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs";
+import { hasPendingQuestion } from "../../plugins/execution-continuity.mjs";
 
 // 用真实 DSH 结构（assembler.js + repair.js 确认）
 const pendingQ = { events: [

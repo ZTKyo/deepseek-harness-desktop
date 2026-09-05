@@ -117,4 +117,3 @@ Assert-Rh2Health 'H5 source uses ApiSnapshot WS reuse' ($healthSource -match 'Ap
 Write-Host "RH2 HEALTH: $pass passed, $fail failed"
 if ($fail -gt 0) { exit 1 }
 Write-Host 'RH2 HEALTH TEST PASSED'
-

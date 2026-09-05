@@ -199,4 +199,3 @@ was not changed. No merge, deploy, restart, or P3/P4 restoration is included.
 
 Final state at report generation: `RH2_SOURCE = AWAITING_EXTERNAL_REVIEW`,
 `PRODUCTION = UNCHANGED`.
-

@@ -216,10 +216,10 @@ Run links: [L1](https://github.com/ZTKyo/deepseek-harness-desktop/actions/runs/3
 
 ## Final boundary
 
-`SERVER_RESTARTED=NO`  
-`GUARDIAN_RESTARTED=NO`  
-`DESKTOP_RESTARTED=NO`  
-`PR85_MERGED=NO`  
+`SERVER_RESTARTED=NO`
+`GUARDIAN_RESTARTED=NO`
+`DESKTOP_RESTARTED=NO`
+`PR85_MERGED=NO`
 `DEPLOYED=NO`
 
 This is a source candidate ready for external review, not a production-fix

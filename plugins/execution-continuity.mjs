@@ -583,6 +583,9 @@ export function apply(ctx, config = {}) {
   );
   const logPath = path.join(store.dir, "execution-continuity.log");
   const resumeCooldownMs = 60000; // anti-double-kick with goal-recovery.mjs
+  // RH2 R1.1 adversarial fix: all recovery entries, including delayed
+  // session/event callbacks, must share one per-session in-flight guard.
+  let resuming = new Set();
 
   // ─── Retry Policy Guard（P0 fix 2026-08-23；P2.6 R3 2026-08-28 扩展）────
   // 官方 dsh-llm-retry 的 mode:'always' 语义 = 永久重试（invariant 强制省略
@@ -1004,6 +1007,60 @@ export function apply(ctx, config = {}) {
     return STATE.RUNNING;
   }
 
+  // RH2 R1.1: goal.resume is best-effort goal re-arming, not the authority for
+  // session recoverability. Only errors that explicitly prove the Session is
+  // gone or owned by another routing actor may suppress the prompt fallback.
+  // Generic goal errors (including HTTP 400 / INVALID_REQUEST, stale goal
+  // revision/ref, inactive or unknown goal state, and transient failures) still
+  // get one strict session.prompt(mode=queue) attempt. The prompt itself keeps
+  // using recordResumeFailure(), so its terminal/transient policy is unchanged.
+  function classifyGoalResumeDisposition(error) {
+    const cls = classifyResumeFailure(error);
+    const terminal = cls.failureClass === "INVALID_SESSION" || cls.failureClass === "OWNERSHIP_CONFLICT";
+    return {
+      ...cls,
+      phase: "goal.resume",
+      disposition: terminal ? "terminal" : "prompt-fallback",
+      terminal,
+      promptFallback: !terminal,
+    };
+  }
+
+  // One shared recovery tail for both the normal and Completion-Truth-clean
+  // entries. Keeping goal classification here prevents the two callers from
+  // drifting back to different terminal/fallback semantics.
+  async function resumeGoalThenPrompt(sessionId, it, options = {}) {
+    const {
+      goalRef = null,
+      successReason = "resume",
+      message,
+      phase = "resume",
+    } = options;
+    let goalActive = false;
+    if (goalRef && goalRef.id) {
+      try {
+        await apiRpc("goal.resume", { sessionId, ref: goalRef });
+        goalActive = true;
+        diag(`RESUME sid=${sessionId} goal re-armed (${successReason})`);
+      } catch (e) {
+        const disposition = classifyGoalResumeDisposition(e);
+        if (disposition.terminal) {
+          return recordResumeFailure(sessionId, it, e, `goal.resume:${phase}`);
+        }
+        diag(`RESUME sid=${sessionId} goal.resume ${disposition.failureClass} -> session.prompt fallback (${successReason})`);
+      }
+    } else {
+      diag(`RESUME sid=${sessionId} no goalRef -> prompt-only fallback (${successReason})`);
+    }
+
+    try {
+      await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
+      return markResumeSuccess(sessionId, it, successReason, goalActive);
+    } catch (e) {
+      return recordResumeFailure(sessionId, it, e, `session.prompt:${phase}`);
+    }
+  }
+
   // Phase 02 R8 (R8-2): SINGLE shared "resume after CT clean" helper used by BOTH
   // the normal resume path and the liveness (zombie/no-progress) recovery path.
   // Contract (Reviewer): only a REAL goal.resume OR queue-kick SUCCESS evidence
@@ -1013,7 +1070,6 @@ export function apply(ctx, config = {}) {
   // path that silently returns RUNNING on failure.
   async function resumeAfterCtClean(sessionId, it, reason) {
     // goal.resume with current revision (same source as goal-recovery.mjs)
-    let goalActive = false;
     let goalRef = it.goalId ? { id: it.goalId } : null;
     try {
       const goalList = await apiRpc("session.list", {});
@@ -1026,26 +1082,13 @@ export function apply(ctx, config = {}) {
         if (it.goalId !== g.id) { it.goalId = g.id; }
       }
     } catch { /* projection unavailable -> fall back to intent goalId */ }
-    if (goalRef && goalRef.id) {
-      try {
-        await apiRpc("goal.resume", { sessionId, ref: goalRef });
-        goalActive = true;
-        diag(`RESUME-CT-CLEAN sid=${sessionId} goal re-armed (${reason})`);
-      } catch (e) {
-        const cls = classifyResumeFailure(e);
-        if (!cls.retryable) return recordResumeFailure(sessionId, it, e, "goal.resume:after-ct-clean");
-        diag(`RESUME-CT-CLEAN sid=${sessionId} goal.resume failed: ${String(e.message).slice(0, 120)} (prompt fallback)`);
-      }
-    } else {
-      diag(`RESUME-CT-CLEAN sid=${sessionId} no goalRef -> prompt-only fallback`);
-    }
     const message = "[execution-continuity] The local DSH server restarted / the task was interrupted. Inspect the current session state and workspace, verify the last operation's outcome before repeating any write/delete/send/payment action, then continue the task. Do not re-run the whole task from scratch.";
-    try {
-      await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
-      return markResumeSuccess(sessionId, it, `after-ct-clean:${reason}`, goalActive);
-    } catch (e) {
-      return recordResumeFailure(sessionId, it, e, "session.prompt:after-ct-clean");
-    }
+    return resumeGoalThenPrompt(sessionId, it, {
+      goalRef,
+      successReason: `after-ct-clean:${reason}`,
+      message,
+      phase: "after-ct-clean",
+    });
   }
 
   // Phase 02 R7 (R6-2) + R8 (R8-2): CT-gated recovery for LIVENESS_UNKNOWN —
@@ -1058,7 +1101,7 @@ export function apply(ctx, config = {}) {
     return await resumeAfterCtClean(sessionId, it, why);
   }
 
-  async function resumeViaApi(sessionId, reason) {
+  async function resumeViaApiCore(sessionId, reason) {
     const it = store.get(sessionId);
     if (!it) return;
     // Terminal/manual-review and explicit user states are not eligible for a
@@ -1376,12 +1419,11 @@ export function apply(ctx, config = {}) {
       return recordResumeFailure(sessionId, it, e, "session.list");
     }
 
-    let goalActive = false;
+    let goalRef = it.goalId ? { id: it.goalId } : null;
     try {
       // 重武装 goal：ref 必须携带当前 revision（goal.resume 校验 stale ref）。
       // 从 session.list 的 goal 投影读取最新 { id, revision }（与 goal-recovery.mjs 同源），
       // 避免 intent store 中的旧 goalId 无 revision 导致 invalid payload。
-      let goalRef = it.goalId ? { id: it.goalId } : null;
       try {
         const goalList = await apiRpc("session.list", {});
         const items2 = (goalList && goalList.items) || [];
@@ -1393,27 +1435,32 @@ export function apply(ctx, config = {}) {
           if (it.goalId !== g.id) { it.goalId = g.id; }
         }
       } catch { /* 投影不可用时回退到 intent store 的 goalId */ }
-      if (goalRef && goalRef.id) {
-        try {
-          await apiRpc("goal.resume", { sessionId, ref: goalRef });
-          goalActive = true;
-          diag(`RESUME sid=${sessionId} goal re-armed (${reason})`);
-        } catch (e) {
-          // 非 active / 未知 goal → 仍可用 prompt 兜底
-          const cls = classifyResumeFailure(e);
-          if (!cls.retryable) return recordResumeFailure(sessionId, it, e, "goal.resume");
-          diag(`RESUME sid=${sessionId} goal.resume skipped: ${String(e.message).slice(0, 120)}`);
-        }
-      }
     } catch { /* noop */ }
 
     const message = composeResumeMessage(reason, it.autonomy);
+    return resumeGoalThenPrompt(sessionId, it, {
+      goalRef,
+      successReason: reason,
+      message,
+      phase: "normal",
+    });
+  }
 
+  // Public recovery entry. Keeping the guard here covers direct callers as
+  // well as scan/timer/session-event callbacks; wrappers must not each invent
+  // a separate lock or a second recovery state machine.
+  async function resumeViaApi(sessionId, reason) {
+    const it = store.get(sessionId);
+    if (!it) return;
+    if (resuming.has(sessionId)) {
+      diag(`RESUME-SKIP sid=${sessionId} recovery already in flight (${reason})`);
+      return it.state;
+    }
+    resuming.add(sessionId);
     try {
-      await apiRpc("session.prompt", { sessionId, mode: "queue", content: [{ type: "text", text: message }] });
-      markResumeSuccess(sessionId, it, reason, goalActive);
-    } catch (e) {
-      return recordResumeFailure(sessionId, it, e, "session.prompt");
+      return await resumeViaApiCore(sessionId, reason);
+    } finally {
+      resuming.delete(sessionId);
     }
   }
 
@@ -1761,7 +1808,6 @@ export function apply(ctx, config = {}) {
   ];
 
   // ── 恢复扫描（boot + 定时） ──────────────────────────────────────────────
-  let resuming = new Set();
   // Phase 02 R5 Refinement (① legacy NEEDS_VERIFICATION reason-aware
   // migration): only EXACT legacy signatures (old schema + evidence-unavailable
   // reason + no persisted unresolved call identity) may be revalidated by a
@@ -1843,10 +1889,9 @@ export function apply(ctx, config = {}) {
     diag(`SCAN ${reason}: ${recoverable.length} recoverable intent(s): ${recoverable.map((i) => `${i.sessionId}[${i.state}]`).join(", ")}`);
     let active = 0;
     let queued = 0;
+    // resumeViaApi owns the per-session in-flight guard for every entry.
     for (const it of recoverable) {
       if (resuming.has(it.sessionId)) continue;
-      // P1-A：scan 队列预检 WAITING_USER（fail-closed）——避免把等待用户的
-      // session 设成 RECOVERY_QUEUED。resumeViaApi 内还有同一 Gate 兜底。
       if (await checkUserWaitGate(it.sessionId, it, reason)) continue;
       if (active >= maxConcurrentResume) {
         store.setState(it.sessionId, STATE.RECOVERY_QUEUED, { nextRetryAt: Date.now() + 30000 });
@@ -1854,9 +1899,8 @@ export function apply(ctx, config = {}) {
         diag(`SCAN QUEUED sid=${it.sessionId} (concurrency limit)`);
         continue;
       }
-      resuming.add(it.sessionId);
       active += 1;
-      resumeViaApi(it.sessionId, reason).catch((e) => diag(`SCAN-RESUME FAILED sid=${it.sessionId}: ${e.message}`)).finally(() => resuming.delete(it.sessionId));
+      resumeViaApi(it.sessionId, reason).catch((e) => diag(`SCAN-RESUME FAILED sid=${it.sessionId}: ${e.message}`));
     }
     if (queued > 0) setTimeout(() => recoverableScan(reason), 30000);
   }
@@ -1869,8 +1913,7 @@ export function apply(ctx, config = {}) {
         const due = store.listDue(now).filter((it) => hasBudget("auto-resume", it, budgets));
         for (const it of due) {
           if (resuming.has(it.sessionId)) continue;
-          resuming.add(it.sessionId);
-          resumeViaApi(it.sessionId, "timer").catch((e) => diag(`TIMER-RESUME FAILED sid=${it.sessionId}: ${e.message}`)).finally(() => resuming.delete(it.sessionId));
+          resumeViaApi(it.sessionId, "timer").catch((e) => diag(`TIMER-RESUME FAILED sid=${it.sessionId}: ${e.message}`));
         }
       } catch (e) {
         diag(`recovery loop error: ${e.message}`);
@@ -2210,6 +2253,6 @@ export function apply(ctx, config = {}) {
       intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, resumeRetryCount: v.resumeRetryCount || 0, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure, lastFailureAt: v.lastFailureAt, failureClass: v.failureClass }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, apiRpc, classifyFailure, classifyResumeFailure, recordResumeFailure, markResumeSuccess, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, rpcTimeoutMs, RESUME_FAILURE_RETRY_CAP, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
+    _test: { store, apiRpc, classifyFailure, classifyResumeFailure, classifyGoalResumeDisposition, resumeGoalThenPrompt, recordResumeFailure, markResumeSuccess, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, rpcTimeoutMs, RESUME_FAILURE_RETRY_CAP, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
   };
 }

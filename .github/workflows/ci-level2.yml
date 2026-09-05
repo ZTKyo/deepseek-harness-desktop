@@ -195,6 +195,8 @@ jobs:
         run: |
           node tests\reliability\test-rh2-ec.mjs
           if ($LASTEXITCODE -ne 0) { throw 'RH2 EC suite failed' }
+          node tests\reliability\test-rh2-r11-goal-resume.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'RH2 R1.1 goal.resume suite failed' }
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-RH2Health.ps1
           if ($LASTEXITCODE -ne 0) { throw 'RH2 health suite failed' }
           powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-RH2Watchdog.ps1

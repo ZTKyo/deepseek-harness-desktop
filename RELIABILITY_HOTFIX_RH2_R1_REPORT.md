@@ -3,9 +3,10 @@
 ## Scope and identity
 
 - Scope: `SOURCE-ONLY`, `TEST-ONLY`; canonical Git `main` baseline.
-- `MAIN_SHA`: `b6feb72229436d9684235a71420e84d830074d31`
+- `MAIN_SHA`: `563ce43d59c5a46a7e663cee804f6e4609d1f70d`
 - `BRANCH`: `hotfix/reliability-rh2-freeze-p1`
-- Source hotfix commit at report generation: `cadfbb42d5a79821fb0fa24bf985a1a607a30252`
+- Source hotfix commit at report generation: `09dd1ee20736ce334f088c250bc65a5abf326cc3`
+- `HEAD_SHA` at source/CI submission: `f9d69b552b3c19fa77912c7cd83f31e3b6b5179f`
 - PR: [#85](https://github.com/ZTKyo/deepseek-harness-desktop/pull/85)
 - `P2.75 = FROZEN`, `P2.8 = FROZEN`, `P3 = PAUSED`, `P4 = LOCKED`.
 
@@ -20,7 +21,7 @@ Production-source candidates:
 - `.github/workflows/ci-level2.yml` — RH2 deterministic suites are an actual Level 2 step.
 - `plugins/execution-continuity.mjs`
 - `dsh-readiness.ps1`
-- `dsh-health.ps1` — new canonical pure health library; the canonical main baseline did not contain this file.
+- `dsh-health.ps1` — preserves the canonical RH1 health state machine and adds RH2 single-snapshot/latency diagnostics.
 - `dsh-healthcheck.ps1` — wires the existing one-shot health command to the single-snapshot library.
 - `dsh-guardian-watchdog.ps1`
 
@@ -79,6 +80,9 @@ errors carry `failureClass=TIMEOUT`, `category=transient`, and an explicit
 `EC_API_TIMEOUT` code. The abandoned request receives the abort signal and its
 rejection is handled, so a late mock/transport settlement cannot create an
 unhandled rejection or hold the recovery caller pending.
+
+Boundedness proof for the ownership path: `BEFORE=unbounded periodic prompt`;
+`AFTER=exactly 1 prompt + FAILED_FATAL/manual-review`, with no due-state retry.
 
 ### P1-D / P1-E — health call deduplication and latency observability
 
@@ -148,10 +152,10 @@ Relevant existing regressions passed in the isolated worktree:
   PowerShell secret-pattern gate PASS; node secret scan PASS; secret fixtures
   **6/6**; `.gitignore` and roadmap integrity gates PASS.
 
-The live credential cold-start/restart acceptance and live DSH smoke are not
-run in this turn because they require reading or mutating active credential or
-process lifecycle state. Their CI workflow remains unchanged and is reserved
-for the external isolated CI environment/review gate.
+The local active-credential cold-start/restart acceptance and local live DSH
+smoke were not run because they require reading or mutating active credential
+or process lifecycle state. The external sanitized CI smoke is the permitted
+isolated live-equivalent gate and is recorded below.
 
 ## Deployment drift (record only; not canonicalized)
 
@@ -161,11 +165,11 @@ not a deployed claim:
 
 | File / location | Canonical source or RH2 source SHA256 | Current deployed SHA256 |
 | --- | --- | --- |
-| `plugins/execution-continuity.mjs` / active profile | `2B49A00F6D68E08CFF271F3D859EE7F0B10ACA34F07337C9013C8F0D0030C6E4` | `36A7A0A308021F31916A8FCBDFA45CDF5F3BF261F741373003FCA09B5A77285F` |
-| `dsh-readiness.ps1` | `CCE2BB7DC68D202C1194148FEC428EEE72408E2561A2D87BA7CA0D9087480734` | `B0B5B78C5897354EA94FF1FD99EA86057EDB909A08FC3DA881F648467A423238` |
-| `dsh-health.ps1` | `A14CA7F27140CA52E65A6C36170DF068149A775E33B258CB082C9957C2FEFBE0` | `26935C932F22A4D680CCF4E6C0363AFAD12F88FE6C1614D6EEB9856E66C7FBAD` |
-| `dsh-healthcheck.ps1` | `C1D55007A3A8FC7AF18F56D4D6B6943933DE1FDEA3FE68033CC23E17C1993D2F` | `E9E520BD2BB78C694AAB0370A8A23027734F9F9743A0A0A2F006BE56C76CF958` |
-| `dsh-guardian-watchdog.ps1` | `C11F08478A54DAB50EFC36DFA6DF6ADA22B1D27AA04902F0922DC9E07A79A133` | `CAFEF5F6768058637C1314737680DB19E3E708E318F8B75A6A09054C66098F84` |
+| `plugins/execution-continuity.mjs` / active profile | `7577793A5E82D28EC295F3B39B5C6A153C50C13854B0D689544E19DD6E943407` | `36A7A0A308021F31916A8FCBDFA45CDF5F3BF261F741373003FCA09B5A77285F` |
+| `dsh-readiness.ps1` | `A8698D93658523DEE45C6F39643E2ED925289442004CD81F0D9D1CE1DEF27D19` | `B0B5B78C5897354EA94FF1FD99EA86057EDB909A08FC3DA881F648467A423238` |
+| `dsh-health.ps1` | `5EECE4E20AF0C6C422136A5072FF9BE4DF2109A095CBA2108CE28C36E1654C6B` | `26935C932F22A4D680CCF4E6C0363AFAD12F88FE6C1614D6EEB9856E66C7FBAD` |
+| `dsh-healthcheck.ps1` | `7CAF3DEB23F170E382D668664977B558EFAC49711478151EDC00BD9D6D9A4D47` | `E9E520BD2BB78C694AAB0370A8A23027734F9F9743A0A0A2F006BE56C76CF958` |
+| `dsh-guardian-watchdog.ps1` | `50A2615FF4656DEFAAAA174066E7A81BCDF42535093EB184863A46D9236DD7B3` | `CAFEF5F6768058637C1314737680DB19E3E708E318F8B75A6A09054C66098F84` |
 | `dsh-launcher.js` | unchanged canonical source `17446AE801A8A1B8A95BC1ACE7FD8060D522247F6F2C789C7AA147ADFAD05FDE` | `100E70820112F5885416A88222FE29812EAA199C9B1E9DA7E506B97CFD4B5F14` |
 | `start-dsh-server.ps1` | unchanged canonical source `C6D11D1EFB8B6E85C480A7AF5B9D5B6160FB4E69F7CC323A96D955E2697E4D9B` | `C6D11D1EFB8B6E85C480A7AF5B9D5B6160FB4E69F7CC323A96D955E2697E4D9B` |
 
@@ -187,13 +191,13 @@ credential, and did not mix credential rotation into the reliability hotfix.
 
 - Local L1-equivalent static/security gates: PASS.
 - Local L2-equivalent state-machine and RH2 gates: PASS.
-- External PR L1/L2/L3 workflows: requested by PR #85; status is recorded in
-  the final handoff only after GitHub reports a run for this head.
-- L3 live smoke is not run locally because its server lifecycle is outside the
-  source-only boundary.
+- External PR L1: **SUCCESS** — run [33973889828](https://github.com/ZTKyo/deepseek-harness-desktop/actions/runs/33973889828), head `f9d69b552b3c19fa77912c7cd83f31e3b6b5179f`.
+- External PR L2: **SUCCESS** — run [33973889865](https://github.com/ZTKyo/deepseek-harness-desktop/actions/runs/33973889865), head `f9d69b552b3c19fa77912c7cd83f31e3b6b5179f`.
+- External PR L3: **SUCCESS** — run [33973889809](https://github.com/ZTKyo/deepseek-harness-desktop/actions/runs/33973889809), head `f9d69b552b3c19fa77912c7cd83f31e3b6b5179f`; sanitized ephemeral-port smoke passed externally.
+- Local live lifecycle gates remain skipped by the source-only boundary.
 
 Rollback for this source candidate is limited to the isolated branch: review
-can revert commit `cadfbb42d5a79821fb0fa24bf985a1a607a30252` or remove the
+can revert commit `09dd1ee20736ce334f088c250bc65a5abf326cc3` or remove the
 hotfix worktree/branch. No production rollback is needed because production
 was not changed. No merge, deploy, restart, or P3/P4 restoration is included.
 

@@ -18,19 +18,19 @@ try{$v=& dsh --version 2>$null; if($v){Report 'dsh CLI' 'PASS' "$v"}else{Report 
 # pnpm
 if(Get-Command pnpm -ErrorAction SilentlyContinue){Report 'pnpm' 'PASS' 'ok'}else{Report 'pnpm' 'WARN' 'missing'}
 # process identity + readiness (unified)
-. (Join-Path $root 'dsh-readiness.ps1') 2>$null
+. (Join-Path $root 'dsh-health.ps1') 2>$null
 . (Join-Path $root 'dsh-process-identity.ps1') 2>$null
 try{
     $owner=Get-DshLoopbackOwner -Port $Port
     if($owner.State -eq 'ok'){Report 'Process Identity' 'PASS' "PID $($owner.Pid)"}else{Report 'Process Identity' 'FAIL' $owner.State}
 } catch { Report 'Process Identity' 'FAIL' $_.Exception.Message }
 try{
-    $r=Test-DshReadiness -Port $Port
-    if($r.State -in @('api_ready','client_ready')){Report 'Readiness' 'PASS' $r.State} else { Report 'Readiness' 'FAIL' $r.State }
+    $health = Get-DshHealthProbe -Port $Port -IncludeWebSockets
+    if($health.Api.State -eq 'api_ready'){Report 'Readiness' 'PASS' $health.State}
+    else { Report 'Readiness' 'FAIL' $health.State }
 } catch { Report 'Readiness' 'FAIL' $_.Exception.Message }
 try{
-    $cr=Test-DshReadiness -Port $Port -RequireWebSockets
-    if($cr.State -eq 'client_ready'){Report 'Events (WS)' 'PASS' 'mux+host open'} else { Report 'Events (WS)' 'WARN' $cr.State }
+    if($health.State -eq 'client_ready'){Report 'Events (WS)' 'PASS' 'mux+host open'} else { Report 'Events (WS)' 'WARN' $health.State }
 } catch { Report 'Events (WS)' 'WARN' $_.Exception.Message }
 # YAML validity
 foreach($cf in @("$env:USERPROFILE\.dsh\settings.yaml","$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml")){

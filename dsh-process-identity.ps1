@@ -122,46 +122,117 @@ function Get-DshProcessSnapshot([int]$ProcessId) {
     return $snapshot
 }
 
+function Get-DshPortListenerClassification([object[]]$Connections) {
+    # This is the single address-classification source for the DSH port.  Keep
+    # address classification independent from process identity: a specific
+    # non-loopback listener can coexist with a 127.0.0.1/::1 bind, while a
+    # wildcard listener can claim that loopback bind and must fail closed.
+    $classified = @($Connections |
+        Where-Object { $null -ne $_ } |
+        ForEach-Object {
+            $address = ([string]$_.LocalAddress).Trim().ToLowerInvariant()
+            $classification = if ($address -in @('127.0.0.1', '::1')) {
+                'LOOPBACK'
+            } elseif ($address -in @('0.0.0.0', '::')) {
+                'WILDCARD'
+            } else {
+                'SPECIFIC_NON_LOOPBACK'
+            }
+            [pscustomobject]@{
+                LocalAddress  = $address
+                OwningProcess = if ($null -ne $_.OwningProcess) { [int]$_.OwningProcess } else { $null }
+                Classification = $classification
+            }
+        })
+
+    $loopback = @($classified | Where-Object Classification -eq 'LOOPBACK')
+    $wildcard = @($classified | Where-Object Classification -eq 'WILDCARD')
+    $specificNonLoopback = @($classified | Where-Object Classification -eq 'SPECIFIC_NON_LOOPBACK')
+    $nonLoopback = @($classified | Where-Object Classification -ne 'LOOPBACK')
+    $wildcardAddresses = @($wildcard | Select-Object -ExpandProperty LocalAddress -Unique)
+
+    return [pscustomobject]@{
+        Loopback                    = $loopback
+        NonLoopback                 = $nonLoopback
+        LoopbackAddresses           = @($loopback | Select-Object -ExpandProperty LocalAddress -Unique)
+        NonLoopbackAddresses        = @($nonLoopback | Select-Object -ExpandProperty LocalAddress -Unique)
+        SpecificNonLoopbackAddresses = @($specificNonLoopback | Select-Object -ExpandProperty LocalAddress -Unique)
+        SpecificNonLoopbackCount    = [int]$specificNonLoopback.Count
+        WildcardAddresses           = $wildcardAddresses
+        WildcardListenerCount       = [int]$wildcard.Count
+        NonLoopbackCount            = [int]$nonLoopback.Count
+        LoopbackBindConflict        = [bool]($wildcard.Count -gt 0)
+        LoopbackBindConflictReason  = if ($wildcard.Count -gt 0) { 'wildcard_listener' } else { $null }
+    }
+}
+
+function New-DshLoopbackOwnerResult([hashtable]$Fields) {
+    # Keep the safety/diagnostic fields present on every result branch,
+    # including listener-query errors, so callers cannot accidentally treat a
+    # missing classification as permission to restart.
+    $result = [ordered]@{
+        State                       = 'error'
+        Port                        = 3080
+        Pid                         = $null
+        LocalAddresses              = @()
+        NonLoopbackCount            = 0
+        NonLoopbackAddresses        = @()
+        SpecificNonLoopbackAddresses = @()
+        SpecificNonLoopbackCount    = 0
+        WildcardAddresses           = @()
+        WildcardListenerCount       = 0
+        LoopbackBindConflict        = $false
+        LoopbackBindConflictReason  = $null
+        Snapshot                    = $null
+    }
+    foreach ($key in $Fields.Keys) { $result[$key] = $Fields[$key] }
+    return [pscustomobject]$result
+}
+
 function Get-DshLoopbackOwner([int]$Port = 3080) {
     $script:DshIdentityPort = $Port
     try {
         $connections = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
     } catch {
-        return [pscustomobject]@{ State = 'error'; Port = $Port; Error = $_.Exception.Message; Pid = $null; LocalAddresses = @(); NonLoopbackCount = 0 }
+        return New-DshLoopbackOwnerResult @{ State = 'error'; Port = $Port; Error = $_.Exception.Message }
     }
 
-    $loopback = @($connections | Where-Object { $_.LocalAddress -in @('127.0.0.1', '::1') })
-    $nonLoopback = @($connections | Where-Object { $_.LocalAddress -notin @('127.0.0.1', '::1') })
+    $classification = Get-DshPortListenerClassification -Connections $connections
+    $loopback = @($classification.Loopback)
     $pids = @($loopback | Select-Object -ExpandProperty OwningProcess -Unique)
+    $common = @{
+        Port                         = $Port
+        LocalAddresses               = @($classification.LoopbackAddresses)
+        NonLoopbackCount             = [int]$classification.NonLoopbackCount
+        NonLoopbackAddresses         = @($classification.NonLoopbackAddresses)
+        SpecificNonLoopbackAddresses = @($classification.SpecificNonLoopbackAddresses)
+        SpecificNonLoopbackCount     = [int]$classification.SpecificNonLoopbackCount
+        WildcardAddresses            = @($classification.WildcardAddresses)
+        WildcardListenerCount        = [int]$classification.WildcardListenerCount
+        LoopbackBindConflict         = [bool]$classification.LoopbackBindConflict
+        LoopbackBindConflictReason   = $classification.LoopbackBindConflictReason
+    }
 
     if ($pids.Count -eq 0) {
-        return [pscustomobject]@{
-            State = 'none'; Port = $Port; Pid = $null; LocalAddresses = @(); NonLoopbackCount = $nonLoopback.Count; Snapshot = $null
-        }
+        $common.State = 'none'; $common.Pid = $null
+        return New-DshLoopbackOwnerResult $common
     }
 
     if ($pids.Count -ne 1) {
-        return [pscustomobject]@{
-            State = 'ambiguous'; Port = $Port; Pid = $null
-            LocalAddresses = @($loopback | Select-Object -ExpandProperty LocalAddress -Unique)
-            CandidatePids = @($pids); NonLoopbackCount = $nonLoopback.Count; Snapshot = $null
-        }
+        $common.State = 'ambiguous'; $common.Pid = $null
+        $common.CandidatePids = @($pids)
+        return New-DshLoopbackOwnerResult $common
     }
 
     $snapshot = Get-DshProcessSnapshot ([int]$pids[0])
+    $common.Pid = [int]$pids[0]; $common.CandidatePids = @($pids); $common.Snapshot = $snapshot
     if (-not $snapshot -or -not $snapshot.IsDsh) {
-        return [pscustomobject]@{
-            State = 'identity_mismatch'; Port = $Port; Pid = [int]$pids[0]
-            LocalAddresses = @($loopback | Select-Object -ExpandProperty LocalAddress -Unique)
-            CandidatePids = @($pids); NonLoopbackCount = $nonLoopback.Count; Snapshot = $snapshot
-        }
+        $common.State = 'identity_mismatch'
+        return New-DshLoopbackOwnerResult $common
     }
 
-    return [pscustomobject]@{
-        State = 'ok'; Port = $Port; Pid = $snapshot.Pid
-        LocalAddresses = @($loopback | Select-Object -ExpandProperty LocalAddress -Unique)
-        CandidatePids = @($pids); NonLoopbackCount = $nonLoopback.Count; Snapshot = $snapshot
-    }
+    $common.State = 'ok'; $common.Pid = $snapshot.Pid
+    return New-DshLoopbackOwnerResult $common
 }
 
 function Stop-DshLoopbackOwner([int]$Port = 3080, [int]$ExpectedPid = 0) {

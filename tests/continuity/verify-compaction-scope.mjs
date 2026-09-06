@@ -9,10 +9,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { pathToFileURL } from "node:url";
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "ec-ctxscope-"));
-const MOD = await import(pathToFileURL("C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs").href);
+const MOD = await import("../../plugins/execution-continuity.mjs");
 
 let pass = 0, fail = 0;
 function assert(c, n, d = "") { if (c) { pass++; console.log("  PASS  " + n); } else { fail++; console.log("  FAIL  " + n + " " + d); } }

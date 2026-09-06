@@ -62,8 +62,12 @@ function Test-DshWebSocketOpen([string]$Uri, [int]$TimeoutMs = 3000) {
     }
 }
 
-function Test-DshReadiness([int]$Port = 3080, [switch]$RequireWebSockets) {
-    $api = Test-DshApiReady -Port $Port
+function Test-DshReadiness([int]$Port = 3080, [switch]$RequireWebSockets, [object]$ApiSnapshot = $null) {
+    # RH2 (P1-D): a full health transaction may supply the already-computed
+    # API readiness snapshot.  WebSocket checks must not call
+    # Test-DshApiReady a second time (and therefore must not repeat
+    # host.describe/session.list).
+    $api = if ($null -ne $ApiSnapshot) { $ApiSnapshot } else { Test-DshApiReady -Port $Port }
     if ($api.State -ne 'api_ready') { return $api }
     if (-not $RequireWebSockets) { return $api }
 

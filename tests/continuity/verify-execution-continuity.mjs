@@ -1,9 +1,9 @@
 // verify-execution-continuity.mjs —— Execution Continuity Bootstrap 单元验证
 // 覆盖：错误分类器、预算、断路器、兼容回退、Intent store、WAITING_USER 保护。
-import { apply, RECOVERABLE_STATES, NON_RECOVERABLE_STATES } from "file:///C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs";
+import { apply, RECOVERABLE_STATES, NON_RECOVERABLE_STATES } from "../../plugins/execution-continuity.mjs";
 import {
   classifyFailure, hasBudget, backoffDelay, compatibleFallback, modelSupports, createCircuitBreaker, CATEGORY,
-} from "file:///C:/Users/Administrator/.dsh/profiles/web/execution-continuity-core.mjs";
+} from "../../plugins/execution-continuity-core.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -50,7 +50,9 @@ cb.recordSuccess("p", "m");
 check("breaker: success resets", cb.canUse("p", "m"));
 
 // ── 5. 兼容回退 ────────────────────────────────────────────────────────────
-check("modelSupports: deepseek flash ok", modelSupports("deepseek-v4-flash", { modalities: ["text"], tools: true }));
+// The canonical registry expresses non-text modalities only; text is the
+// baseline and must not be requested as a missing capability.
+check("modelSupports: deepseek flash tools ok", modelSupports("deepseek-v4-flash", { tools: true }));
 check("modelSupports: qwen rejects structuredJson", !modelSupports("qwen3.7-plus", { structuredJson: true }));
 check("compatibleFallback picks larger ctx", compatibleFallback("deepseek-v4-flash-free", { contextWindow: 1000000 }, ["deepseek-v4-flash-free", "deepseek/deepseek-v4-flash-0731", "qwen3.7-plus"]) === "deepseek/deepseek-v4-flash-0731");
 

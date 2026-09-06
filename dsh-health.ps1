@@ -102,13 +102,19 @@ function Test-DshBasicHttp([int]$Port = 3080, [int]$TimeoutSec = 1) {
 }
 
 # ---- build a full probe snapshot (LEVEL1 owner + LEVEL2 http + LEVEL3 rpc) ----
-function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
+function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets, [int]$SlowThresholdMs = 3000) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $owner = Get-DshLoopbackOwner -Port $Port
     $basic = Test-DshBasicHttp -Port $Port
+    $apiSw = [System.Diagnostics.Stopwatch]::StartNew()
+    # RH2 P1-D: exactly one API readiness evaluation per full probe. The
+    # WebSocket layer receives this snapshot and must not repeat session.list.
     $api = Test-DshApiReady -Port $Port
+    $apiSw.Stop()
     $ws = $null
-    if ($IncludeWebSockets) { $ws = Test-DshReadiness -Port $Port -RequireWebSockets }
+    if ($IncludeWebSockets) {
+        $ws = Test-DshReadiness -Port $Port -RequireWebSockets -ApiSnapshot $api
+    }
 
     $apiState = ''
     $wsState = ''
@@ -163,6 +169,29 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
     }
 
     $sw.Stop()
+    $apiDurationMs = [int]$apiSw.ElapsedMilliseconds
+    $probeDurationMs = [int]$sw.ElapsedMilliseconds
+    $slowThreshold = [Math]::Max(1, $SlowThresholdMs)
+    $latencyDegraded = ($apiDurationMs -ge $slowThreshold) -or ($probeDurationMs -ge $slowThreshold)
+    $effectiveState = if ($IncludeWebSockets -and $wsState) { $wsState } else { $apiState }
+    $healthState = if ($ready) { 'healthy' } elseif ($partialReady) { 'degraded' } else { 'unready' }
+    $diagnosticSignal = if ($ready -and $latencyDegraded) { 'healthy_slow' } elseif ($partialReady) { 'partial' } else { $failureSignal }
+    $ownerConflictField = $owner.PSObject.Properties['LoopbackBindConflict']
+    $ownerConflictKnown = $null -ne $ownerConflictField -and $null -ne $ownerConflictField.Value
+    $loopbackBindConflict = if ($ownerConflictKnown) {
+        [bool]$ownerConflictField.Value
+    } elseif ([int]$owner.NonLoopbackCount -gt 0) {
+        $null
+    } else {
+        $false
+    }
+    $loopbackBindConflictReason = if ($ownerConflictKnown) {
+        $owner.LoopbackBindConflictReason
+    } elseif ([int]$owner.NonLoopbackCount -gt 0) {
+        'listener_classification_missing'
+    } else {
+        $null
+    }
     return [pscustomobject]@{
         ts               = (Get-Date).ToString('o')
         port             = $Port
@@ -171,6 +200,13 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
         ownerCreation    = if ($owner.Snapshot) { $owner.Snapshot.CreationDate } else { $null }
         ownerCmdHash     = if ($owner.Snapshot) { $owner.Snapshot.CommandLineHash } else { $null }
         nonLoopbackCount = [int]$owner.NonLoopbackCount
+        nonLoopbackAddresses = @($owner.NonLoopbackAddresses)
+        specificNonLoopbackAddresses = @($owner.SpecificNonLoopbackAddresses)
+        specificNonLoopbackCount = [int]$owner.SpecificNonLoopbackCount
+        wildcardAddresses = @($owner.WildcardAddresses)
+        wildcardListenerCount = [int]$owner.WildcardListenerCount
+        loopbackBindConflict = $loopbackBindConflict
+        loopbackBindConflictReason = $loopbackBindConflictReason
         basicState       = [string]$basic.State
         basicHttpStatus  = $basic.HttpStatus
         apiState         = $apiState
@@ -182,7 +218,24 @@ function Get-DshHealthProbe([int]$Port = 3080, [switch]$IncludeWebSockets) {
         readiness        = [string]$readiness
         failureSignal    = $failureSignal
         errorClass       = $errorClass
-        probeDurationMs  = [int]$sw.ElapsedMilliseconds
+        probeDurationMs  = $probeDurationMs
+        # RH2 observability/compatibility fields. These are diagnostic only;
+        # restart eligibility remains owned by the persisted RH1 triage state
+        # machine and cannot be granted by one slow or partial probe.
+        State                 = [string]$effectiveState
+        HealthState           = $healthState
+        Basic                 = $basic
+        Api                   = $api
+        ReadinessDetail       = if ($ws) { $ws } else { $api }
+        ApiReadinessEvaluations = 1
+        SessionListEvaluations = if ($apiState -in @('api_ready', 'client_ready')) { 1 } else { 0 }
+        ApiDurationMs         = $apiDurationMs
+        SlowThresholdMs       = $slowThreshold
+        LatencyDegraded       = [bool]$latencyDegraded
+        DiagnosticSignal       = $diagnosticSignal
+        RestartEligible        = $false
+        RestartEligibility     = 'sustained-unready-only; single probe never restarts'
+        Error                  = if ($ready) { $null } elseif ($ws -and $ws.Error) { $ws.Error } elseif ($api -and $api.Error) { $api.Error } else { $errorClass }
     }
 }
 
@@ -437,6 +490,13 @@ function New-DshIncidentBundle(
         ownerCreation    = $Snapshot.ownerCreation
         ownerCmdHash     = $Snapshot.ownerCmdHash
         nonLoopbackCount = [int]$Snapshot.nonLoopbackCount
+        nonLoopbackAddresses = @($Snapshot.nonLoopbackAddresses)
+        specificNonLoopbackAddresses = @($Snapshot.specificNonLoopbackAddresses)
+        specificNonLoopbackCount = [int]$Snapshot.specificNonLoopbackCount
+        wildcardAddresses = @($Snapshot.wildcardAddresses)
+        wildcardListenerCount = [int]$Snapshot.wildcardListenerCount
+        loopbackBindConflict = [bool]$Snapshot.loopbackBindConflict
+        loopbackBindConflictReason = $Snapshot.loopbackBindConflictReason
         probe            = [pscustomobject]@{
             basicState      = [string]$Snapshot.basicState
             basicHttpStatus = $Snapshot.basicHttpStatus
@@ -621,11 +681,28 @@ function Invoke-DshHealthGuard {
         & $AlertSender ("dsh 服务端口 owner 无法安全核验（$ownerState），已停止自动杀进程/拉起。")
     }
     elseif ($action -eq 'server_absent') {
-        if ($Probe.nonLoopbackCount -gt 0) {
-            & $Log ("port has non-loopback listener (count=$($Probe.nonLoopbackCount)); skipping restore to avoid EADDRINUSE")
-            & $AlertSender ("dsh 端口 $Port 存在非本机回环监听者（$($Probe.nonLoopbackCount)），已停止自动拉起，避免端口冲突。")
+        # Only a wildcard listener claims the loopback bind.  Specific
+        # non-loopback listeners (for example Tailscale's per-address binds)
+        # are retained in diagnostics but do not block a loopback restart.
+        # A probe without the new classification is fail-closed when it has
+        # any non-loopback listener, preserving the old safety boundary for
+        # stale/malformed callers.
+        $conflictField = $Probe.PSObject.Properties['loopbackBindConflict']
+        $classificationKnown = $null -ne $conflictField -and $null -ne $conflictField.Value
+        $loopbackBindConflict = if ($classificationKnown) {
+            [bool]$conflictField.Value
         } else {
-            & $Log ("server absent (owner=none) - budgeted controlled restart")
+            [int]$Probe.nonLoopbackCount -gt 0
+        }
+        $conflictReason = [string]$Probe.loopbackBindConflictReason
+        if ($loopbackBindConflict) {
+            if ([string]::IsNullOrWhiteSpace($conflictReason)) {
+                $conflictReason = if ($classificationKnown) { 'wildcard_listener' } else { 'listener_classification_missing' }
+            }
+            & $Log ("port has loopback bind conflict (reason=$conflictReason; wildcardListeners=$($Probe.wildcardListenerCount); nonLoopback=$($Probe.nonLoopbackCount)); skipping restore to avoid EADDRINUSE")
+            & $AlertSender ("dsh 端口 $Port 存在回环绑定冲突（$conflictReason；通配符监听=$($Probe.wildcardListenerCount)），已停止自动拉起，避免端口冲突。")
+        } else {
+            & $Log ("server absent (owner=none; specificNonLoopback=$($Probe.specificNonLoopbackCount); nonLoopback=$($Probe.nonLoopbackCount)) - budgeted controlled restart")
             $State['failStreak']++; $State['recovering'] = $true
             if (& $RestartExecutor ("server absent owner=none")) {
                 $State['failStreak'] = 0

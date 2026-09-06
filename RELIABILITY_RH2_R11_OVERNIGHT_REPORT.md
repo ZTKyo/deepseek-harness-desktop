@@ -2,7 +2,7 @@
 
 Date: 2026-09-06 (Asia/Shanghai)
 
-Status: `RH2_SOURCE_READY_FOR_EXTERNAL_REVIEW`
+Status: `RH2_READY_FOR_FINAL_MERGE_REVIEW`
 
 Scope: `SOURCE / TEST / CI / READ-ONLY PRODUCTION FORENSICS ONLY`.
 No merge, deploy, restart, production intent/session mutation, Supervisor state
@@ -12,6 +12,12 @@ Closure fields:
 
 ```text
 RH2_R11=PASS
+RH2_R12=DOCUMENTATION_ONLY_PASS
+CODE_CHANGED=NO
+TRUE_RH2_DEPLOY_SET=5 exact production files
+FALSE_HOTFIX_CLASSIFICATIONS_REMOVED=6
+SOURCE_AUTHORITY=GIT_REVIEWED_TREE
+LAUNCHER_OVERRIDE=KEEP_TEMPORARILY_FOR_INITIAL_SOAK
 GOAL_RESUME_FALLBACK=PASS
 RH2_EC=PASS (21/21)
 RH2_HEALTH=PASS (13/13)
@@ -25,7 +31,7 @@ PRODUCTION_DRIFT=MAPPED
 DEPLOYMENT_MANIFEST=READY
 SECURITY_P1=DEFERRED
 PRODUCTION_MUTATED=NO
-FINAL_STATE=RH2_SOURCE_READY_FOR_EXTERNAL_REVIEW
+FINAL_STATE=RH2_READY_FOR_FINAL_MERGE_REVIEW
 ```
 
 ## Closure identity (FACT)
@@ -39,7 +45,8 @@ FINAL_STATE=RH2_SOURCE_READY_FOR_EXTERNAL_REVIEW
 | START_PR85_HEAD | `1277429b3f2a109d47baeabd2125cde880f7a61d` |
 | SOURCE_FIX_COMMIT | `18802858b4b58d61a25d98bf6cc273e30663e018` |
 | Final source-bearing head | `18802858b4b58d61a25d98bf6cc273e30663e018` |
-| FINAL_PR85_HEAD | documentation-only follow-up commit; exact hash is captured in the final closure output |
+| REVIEWED_PR_HEAD | `9c8a519b29058d8d7876d8bbaae15cfcf08f346b` |
+| FINAL_PR85_HEAD | documentation-only correction commit; exact hash is captured in the final closure output |
 | PR state after source push | OPEN, base `main`, MERGEABLE |
 | CI source-bearing head | `18802858b4b58d61a25d98bf6cc273e30663e018` |
 
@@ -47,6 +54,39 @@ The report and manifest are documentation-only additions after the source
 candidate CI. The exact final PR head after those documentation additions is
 reported in the closure output; source behavior is unchanged by the report
 commit.
+
+## R1.2 manifest truth correction (FACT)
+
+`CODE_CHANGED=NO` for R1.2. The canonical source authority is the reviewed Git
+tree, not checkout byte hashes, `_release-staging`, the active profile, or a
+dirty worktree. Re-deriving `git diff --name-status origin/main...HEAD` and
+base/head blob identity removed six false `REVIEWED_HOTFIX` classifications.
+
+```text
+SOURCE_AUTHORITY=GIT_REVIEWED_TREE
+STAGING_AUTHORITY=NO
+DIRTY_WORKTREE_AUTHORITY=NO
+TRUE_RH2_DEPLOY_SET=
+  plugins/execution-continuity.mjs
+  dsh-readiness.ps1
+  dsh-health.ps1
+  dsh-healthcheck.ps1
+  dsh-guardian-watchdog.ps1
+UNCHANGED_IN_PR=
+  plugins/execution-continuity-core.mjs
+  dsh-guardian.ps1
+  dsh-reconnect.ps1
+  DSH-Harness-PS.ps1
+  dsh-launcher.js
+  start-dsh-server.ps1
+LAUNCHER_OVERRIDE=KEEP_TEMPORARILY_FOR_INITIAL_SOAK
+PRODUCTION=UNCHANGED
+```
+
+The unchanged files remain excluded even where production or checkout bytes
+differ; those differences are `PRE_EXISTING_PRODUCTION_DRIFT` or the specific
+known launcher diagnostic override, not RH2 changes. The corrected two-table
+Git/prod matrix is in `RH2_DEPLOYMENT_PREFLIGHT_MANIFEST.md`.
 
 ## R1.1 closure (TEST RESULT)
 
@@ -172,27 +212,28 @@ Important facts:
 - `_release-staging` was not modified; it is a dirty main snapshot at
   `b6feb72229436d9684235a71420e84d830074d31` and is behind the reviewed
   `origin/main` line. It must not be treated as the RH2 source of truth.
-- Active `~/.dsh/profiles/web` contains the old EC hash
-  `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285`
-  (case-insensitive comparison); the new source candidate is not deployed or
-  loaded.
+- The exact reviewed Git-head EC hash is
+  `041aad8d4510c33dc3e3671a3ae2b407d18cf9a25db1f75bef7604255ab9c848`.
+  Active `~/.dsh/profiles/web` contains the old checkout hash
+  `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285`; the
+  source candidate is not deployed or loaded. This is `STALE_DEPLOYMENT`, not
+  Git change truth.
 - `loaded-release.json` SHA256 was
   `4bedf5a945ac533cde95a5cc54d566651a86246014d4bc88e048351e4ca63c71`.
   Its EC entry is the same old profile hash. The manifest records
   `serverGeneration=boot:2824_1788613920268`, `loadedAt=09/05/2026 20:22:32`,
   and a stale metadata PID `11968`; this is a preflight mismatch, not a reason
   to restart tonight.
-- Current read-only runtime observation identified node PID `2824` serving the
-  loopback Harness port from `DSH-Client\node-runtime\node.exe`. Its sanitized
-  metadata includes `--max-old-space-size=4096` and `--trace-gc`.
-- `LAUNCHER_OVERRIDE_DECISION_REQUIRED=YES`: DSH-Client `dsh-launcher.js`
-  lines 80-88 contain the 2026-09-02 GC diagnostic override, while the reviewed
-  canonical launcher line 78 has no V8 flags. Whether to retain or remove this
-  override is deliberately left to external review.
+- DSH-Client `dsh-launcher.js` lines 80-88 contain the 2026-09-02 GC
+  diagnostic override, while the reviewed canonical launcher line 78 has no
+  V8 flags. The latest read-only listener probe did not observe a 3080 listener;
+  no start or restart was attempted.
+- `LAUNCHER_OVERRIDE=KEEP_TEMPORARILY_FOR_INITIAL_SOAK`; the launcher is
+  `UNCHANGED_IN_PR` and excluded from `RH2_DEPLOY_SET`. After the first 30-60
+  minute production soak, decide separately whether to remove `--trace-gc`.
 
-`PRODUCTION_DRIFT=MAPPED`. `PRODUCTION_MUTATED=NO`; live logs/health metadata
-continued to be written by the already-running system, but this task performed
-no production file writes, service actions, or process lifecycle actions.
+`PRODUCTION_DRIFT=MAPPED`. `PRODUCTION_MUTATED=NO`; this task performed no
+production file writes, service actions, or process lifecycle actions.
 
 ## Security and frozen scopes
 

@@ -1,121 +1,173 @@
-# RH2 DEPLOYMENT PREFLIGHT MANIFEST
+# RH2 R1.2 DEPLOYMENT PREFLIGHT MANIFEST
 
-Status: `READY FOR EXTERNAL REVIEW`; `NOT A DEPLOYMENT AUTHORIZATION`.
+Status: `READY FOR FINAL MERGE REVIEW`; `NOT A DEPLOYMENT AUTHORIZATION`.
 
-This manifest is a read-only mapping produced from the RH2 isolated worktree,
-`origin/main`, the dirty `_release-staging` snapshot, the DSH-Client deployed
-root, the active `web` profile, the loaded-release manifest, and sanitized
-current process metadata. No target was modified.
+This is a documentation-only correction. It separates canonical PR change
+truth from production drift. No `.mjs`, `.ps1`, test, workflow, profile,
+deployment, process, credential, merge, P3, or P4 change is included.
 
-## Candidate and environment identity
+## Required truth fields
 
-- Repository: `ZTKyo/deepseek-harness-desktop`
-- PR: `#85`, branch `hotfix/reliability-rh2-freeze-p1`
-- Reviewed source candidate commit:
-  `18802858b4b58d61a25d98bf6cc273e30663e018`
-- `origin/main`:
-  `563ce43d59c5a46a7e663cee804f6e4609d1f70d`
-- `_release-staging` observed HEAD:
-  `b6feb72229436d9684235a71420e84d830074d31`; dirty and not modified.
-- Loaded manifest:
-  `C:\Users\Administrator\AppData\Local\DSHHarness\state\loaded-release.json`
-  SHA256 `4bedf5a945ac533cde95a5cc54d566651a86246014d4bc88e048351e4ca63c71`.
-- Loaded metadata: `serverGeneration=boot:2824_1788613920268`,
-  `loadedAt=09/05/2026 20:22:32`, metadata PID `11968`, capacity source
-  `hint`, wired `false`.
+```text
+REVIEWED_PR_HEAD=9c8a519b29058d8d7876d8bbaae15cfcf08f346b
+SOURCE_AUTHORITY=GIT_REVIEWED_TREE
+STAGING_AUTHORITY=NO
+DIRTY_WORKTREE_AUTHORITY=NO
+RH2_DEPLOY_SET=5 exact production files
+LAUNCHER=KEEP_TEMPORARILY_FOR_INITIAL_SOAK
+PRODUCTION=UNCHANGED
+```
 
-`active web profile` is plugin-scoped for this mapping. Root PowerShell and
-launcher files are deployed from `DSH-Client`, so their active-profile cells
-are `N/A` by design.
+Repository: `ZTKyo/deepseek-harness-desktop`
 
-## SHA256 drift matrix
+PR: `#85`
 
-`source` is the isolated RH2 worktree. `main` is the byte hash of the same path
-read from `origin/main`. `staging` is `_release-staging`. `deployed` is the
-DSH-Client root. `profile` is `~/.dsh/profiles/web`. `loaded` is the hash in the
-loaded-release plugin map; `N/A` means the manifest does not attest that root
-file.
+Branch: `hotfix/reliability-rh2-freeze-p1`
 
-| Path | source | main | staging | deployed | profile | loaded | Difference classification |
-|---|---|---|---|---|---|---|---|
-| `plugins/execution-continuity.mjs` | `9ad91db289aacacd7a0892c39ca9f6309256d1101f0dcda4aebdbbe12a7f12ba` | `86892f384b618875f3eb6a34092914cfaf23984bc2505d94f14f70e5ab5c8a49` | `f9df283da70ddb42c94865c12b9094f2e8c34bf86a338414895e9747903d7bc0` | `ABSENT (profile-scoped)` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285` | source→main `REVIEWED_HOTFIX`; source→profile/loaded `STALE_DEPLOYMENT`; root placement `EXPECTED_PROFILE_COPY` |
-| `plugins/execution-continuity-core.mjs` | `acbc4381c7e8be0436203dac05de7fda31b766b4bedd5ea7743ebe318f1c28f7` | `86d7e1ab9c265f86194afeb93b648df6d1e1928309e9366cfbdd2de9444aa07f` | `e595ab7b3aab4e3f5de2e065a8c5f235be4eb8077d964315d731e412e2b40b43` | `ABSENT (profile-scoped)` | `acbc4381c7e8be0436203dac05de7fda31b766b4bedd5ea7743ebe318f1c28f7` | `N/A (not listed)` | source→main `REVIEWED_HOTFIX`; profile copy `EXPECTED_PROFILE_COPY`; loaded attestation `UNKNOWN_DRIFT` |
-| `dsh-readiness.ps1` | `a8698d93658523dee45c6f39643e2ed925289442004cd81f0d9d1ce1def27d19` | `fc2b2beb973521b8d84600fd4d3f8fb833a76489badc6edd30a62176b79198ca` | `c0982a3866a0a33a694664d9d3eb97c1696bce2dacff841c405c631a4b7de404` | `b0b5b78c5897354ea94ff1fd99ea86057edb909a08fc3da881f648467a423238` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT` |
-| `dsh-health.ps1` | `5eece4e20af0c6c422136a5072ff9be4df2109a095cba2108ce28c36e1654c6b` | `05914ad85916d0a865256fef356ed0138868333f43118041d56bf99d2f084b05` | `ABSENT` | `26935c932f22a4d680ccf4e6c0363afad12f88fe6c1614d6eeb9856e66c7fbad` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT`; staging absence `UNKNOWN_DRIFT` |
-| `dsh-healthcheck.ps1` | `7caf3deb23f170e382d668664977b558efac49711478151edc00bd9d6d9a4d47` | `ecc62db36a5c7096086617163ae3452f07bce2ffae95764f407c80453fc341cc` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT` |
-| `dsh-guardian.ps1` | `1cf3a49ca593ad5749e76289b43c3910cae1735db1fb93e4983ce2928221da33` | `ba3dd337920208ec6a9ec8fb2c9c5322cc0e8e94b67bb92b7efa0fcd93e2a9c0` | `ae735e7f813d731f6b0272d6719e328dc279361d0d8c0eaba2b8d207e4c01dc` | `1cf3a49ca593ad5749e76289b43c3910cae1735db1fb93e4983ce2928221da33` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `EXPECTED_PROFILE_COPY` |
-| `dsh-guardian-watchdog.ps1` | `50a2615ff4656defaaaa174066e7a81bcdf42535093eb184863a46d9236dd7b3` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT` |
-| `dsh-reconnect.ps1` | `82b929a50c71c5e9948c0d49d786d6682eb98b57b7657b44b30c0619aef796b0` | `a37d23aef1817e3bf6b2a4a5bf76332c9ea8a117a4ab896f0103891ea6954ecf` | `ABSENT` | `f29f1971c2db20c52946d19a9768da1fbbbd8271d5cab02fc1f6be8a49be239a` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT`; staging absence `UNKNOWN_DRIFT` |
-| `DSH-Harness-PS.ps1` | `130a04ac5efe2b6c8fb1fbbfa03abf2676d15aa3abe1b99bd654559fbd943412` | `bf0c85a0c9aa83519f2cbb2ce2ba9a14e606dd57a35485bc0eef5e630cf3066a` | `8c88d00fd51ee8ac0abb4cc9412c65775821272b4181e8a145c6639f134d72d7` | `24bcacaa1b08c3c2fb8fd9eef2c96c976e45f77a31cc16c9290506a58658a371` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; source→deployed `STALE_DEPLOYMENT` |
-| `dsh-launcher.js` | `17446ae801a8a1b8a95bc1ace7fd8060d522247f6f2c789c7aa147adfad05fde` | `d00626a10f7eff66a7584c3395aa82ba40ffa3c10950385e772991c62ced05b9` | `17446ae801a8a1b8a95bc1ace7fd8060d522247f6f2c789c7aa147adfad05fde` | `100e70820112f5885416a88222fe29812eaa199c9b1e9da7e506b97cfd4b5f14` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; deployed override `KNOWN_RUNTIME_DIAGNOSTIC_OVERRIDE` |
-| `start-dsh-server.ps1` | `c6d11d1efb8b6e85c480a7af5b9d5b6160fb4e69f7cc323a96d955e2697e4d9b` | `d8fd854c57fd89307a45d5a3a643a59ae043b261f8e540770fea6013006ab7bc` | `c6d11d1efb8b6e85c480a7af5b9d5b6160fb4e69f7cc323a96d955e2697e4d9b` | `c6d11d1efb8b6e85c480a7af5b9d5b6160fb4e69f7cc323a96d955e2697e4d9b` | `N/A` | `N/A` | source→main `REVIEWED_HOTFIX`; root copy `EXPECTED_PROFILE_COPY` |
+Base: `main`
 
-For the `UNKNOWN_DRIFT` cells above, the label applies only to the absent or
-unattested edge; it is not permission to overwrite the target. All source-to-
-deployed mismatches remain `STALE_DEPLOYMENT` until an approved transaction.
+`origin/main=563ce43d59c5a46a7e663cee804f6e4609d1f70d`
 
-## Reviewed RH2 files to deploy (only after external approval)
+The reviewed head above is the exact PR head before this R1.2 document
+correction. The final document-only head is reported by the closure output.
 
-These are the candidate files that the reviewer should evaluate as one
-transaction from the PR source, with hashes taken from the `source` column:
+## Canonical Git change truth
 
-- `plugins/execution-continuity.mjs`
-- `plugins/execution-continuity-core.mjs`
-- `dsh-readiness.ps1`
-- `dsh-health.ps1`
-- `dsh-healthcheck.ps1`
-- `dsh-guardian.ps1`
-- `dsh-guardian-watchdog.ps1`
-- `dsh-reconnect.ps1`
-- `DSH-Harness-PS.ps1`
-- `start-dsh-server.ps1`
+`CHANGED_IN_PR` is derived only from `git diff --name-status origin/main...HEAD`
+and base/head Git blob identity. `BASE_BLOB` and `HEAD_BLOB` are Git object
+IDs. The canonical SHA256 values are calculated from the exact bytes returned
+by `git show <reviewed-head>:<path>`, not from a Windows checkout.
 
-The workflow and deterministic tests in the source commit are review/CI
-artifacts, not production deployment files.
+| Path | BASE_BLOB | HEAD_BLOB | CHANGED_IN_PR | HEAD_CANONICAL_SHA256 |
+|---|---|---|---|---|
+| `plugins/execution-continuity.mjs` | `c221323d9c0ec8b26f19aef539482fde663fe1c6` | `6d8a1746a4e5e9082d1139f79f1eeb8f1ae1c24f` | `YES` | `041aad8d4510c33dc3e3671a3ae2b407d18cf9a25db1f75bef7604255ab9c848` |
+| `plugins/execution-continuity-core.mjs` | `c125be63fb751f3eb7517d4752330b8478d4c1d4` | `c125be63fb751f3eb7517d4752330b8478d4c1d4` | `NO` | `86d7e1ab9c265f86194afeb93b648df6d1e1928309e9366cfbdd2de9444aa07f` |
+| `dsh-readiness.ps1` | `0ca188ff8a5531d4041452d6669e52694b2877e7` | `60880cd5bd3d93b4f711b24a09963d3c94d41e70` | `YES` | `f093593d820a08292bd49820204f4bba4d737526d349047d34b534d5a41cc59e` |
+| `dsh-health.ps1` | `9945981f2d9bb44244ae10320035a6b6e80d43c2` | `797c457b935a35621613d70ed75df40e7a8b5c80` | `YES` | `1d667e5be50a5b41173f3568a9937e7ca5efe55c8b73f1b1094b6c37d39a6794` |
+| `dsh-healthcheck.ps1` | `a775f7c02c28ea2bd11ada0c77ba5ec912c1c24e` | `8b824ba30109e029748670fcc9731df8d4fc9838` | `YES` | `1fb56a340577c6d48c94b87450a4b4675336eede67a2366afe4b25b06b594fe0` |
+| `dsh-guardian.ps1` | `4ad1fd6143015a6cb7d6cf5a8d9503433c56e304` | `4ad1fd6143015a6cb7d6cf5a8d9503433c56e304` | `NO` | `ba3dd337920208ec6a9ec8fb2c9c5322cc0e8e94b67bb92b7efa0fcd93e2a9c0` |
+| `dsh-guardian-watchdog.ps1` | `0a2f3d6c35d0f22c390b1ca35f9a47ffa086cda6` | `ca1deb884fd0fa80b721eaf5661ab8040c1dbba3` | `YES` | `c187286d60a1e9de0f966df88dfe206d366efaa06aacf99b7aedc3639ad7f2c5` |
+| `dsh-reconnect.ps1` | `01d25b0f06bf7658aadc70ab75c84f1ded86cd3f` | `01d25b0f06bf7658aadc70ab75c84f1ded86cd3f` | `NO` | `a37d23aef1817e3bf6b2a4a5bf76332c9ea8a117a4ab896f0103891ea6954ecf` |
+| `DSH-Harness-PS.ps1` | `6698f180146070d5164dbf538538d15bc0662f6e` | `6698f180146070d5164dbf538538d15bc0662f6e` | `NO` | `bf0c85a0c9aa83519f2cbb2ce2ba9a14e606dd57a35485bc0eef5e630cf3066a` |
+| `dsh-launcher.js` | `4d607d7e915f8c6930589f0f8a0c8622495112e3` | `4d607d7e915f8c6930589f0f8a0c8622495112e3` | `NO` | `d00626a10f7eff66a7584c3395aa82ba40ffa3c10950385e772991c62ced05b9` |
+| `start-dsh-server.ps1` | `bf48a0a8f77a3e673e77686d1a84f8e7aa9c7ca2` | `bf48a0a8f77a3e673e77686d1a84f8e7aa9c7ca2` | `NO` | `d8fd854c57fd89307a45d5a3a643a59ae043b261f8e540770fea6013006ab7bc` |
 
-## Files explicitly NOT to touch tonight
+The exact production change set is therefore:
 
-- `C:\Users\Administrator\.dsh\profiles\web\` and its production intent,
-  session, Supervisor, and loaded state.
-- `C:\Users\Administrator\Desktop\sdeepseek harness\DSH-Client\` files
-  outside the explicitly reviewed RH2 set.
-- `dsh-launcher.js`'s deployed V8 diagnostic override until external review
-  decides whether it is retained or removed.
-- `_release-staging`, `origin/main`, PR merge state, P2.75/P2.8, P3, and P4.
-- Any credential source, especially `.credentials.yaml` and `NOTION_TOKEN`.
+```text
+RH2_DEPLOY_SET =
+  plugins/execution-continuity.mjs
+  dsh-readiness.ps1
+  dsh-health.ps1
+  dsh-healthcheck.ps1
+  dsh-guardian-watchdog.ps1
+```
 
-## Current deployed runtime observation
+The other PR changes are tests, workflow wiring, or reports and are not
+production deployment files.
 
-Read-only port/process inspection found loopback Harness server PID `2824`
-using `DSH-Client\node-runtime\node.exe`, the DSH entrypoint, and port `3080`.
-Sanitized flags were `--max-old-space-size=4096` and `--trace-gc`.
+## Unchanged-in-PR related runtime files
 
-The deployed DSH-Client launcher has the 2026-09-02 GC diagnostic comment and
-`V8_FLAGS` at lines 80-88; the canonical reviewed launcher starts the child at
-line 78 without those V8 flags. Therefore:
+These paths have identical base/head Git blobs and are explicitly excluded
+from `RH2_DEPLOY_SET`:
 
-`LAUNCHER_OVERRIDE_DECISION_REQUIRED=YES`
+```text
+UNCHANGED_IN_PR =
+  plugins/execution-continuity-core.mjs
+  dsh-guardian.ps1
+  dsh-reconnect.ps1
+  DSH-Harness-PS.ps1
+  dsh-launcher.js
+  start-dsh-server.ps1
+```
 
-The origin and purpose are mapped as a known runtime diagnostic override. This
-manifest intentionally does not choose keep/delete.
+Any deployed/staging/profile byte difference for these files is
+`PRE_EXISTING_PRODUCTION_DRIFT`, not an RH2 change. Checkout line-ending/BOM
+differences do not change this Git conclusion.
 
-## Future deployment transaction requirements
+## Production drift matrix (separate dimension)
 
-1. Before any approved deployment, hash and back up the current DSH-Client
-   root and active profile set, including a manifest of paths and hashes.
-2. Copy only the externally approved RH2 files from the reviewed source commit;
-   do not promote `_release-staging` as a substitute source.
-3. The approved operator must perform the separately authorized load/restart
-   transaction. This step was **not** performed tonight.
-4. After load, verify owner identity, `host.describe`, `session.list`,
-   `events.mux`, `events.host`, renderer, source/deployed/loaded hashes, and a
-   stable window. A source candidate CI pass is not a loaded-runtime proof.
-5. If any check fails, restore the pre-deployment backup transactionally and
-   verify the restored hash set before retrying.
+`STAGING` is `_release-staging`; `DEPLOYED` is the DSH-Client root;
+`PROFILE` is `C:/Users/Administrator/.dsh/profiles/web`; `LOADED` is the
+hash recorded by `loaded-release.json`. Root plugin files are profile-scoped,
+so their DSH-Client root cell is `ABSENT`; root PowerShell/launcher files are
+DSH-Client-scoped, so their profile and loaded cells are `N/A`.
 
-Rollback source for this candidate is the Git commit
-`18802858b4b58d61a25d98bf6cc273e30663e018` (or its explicit review-approved
-revert). No production rollback exists or is needed because no deployment was
-performed.
+| Path | HEAD_CANONICAL_HASH | STAGING | DEPLOYED | PROFILE | LOADED | DRIFT_CLASS |
+|---|---|---|---|---|---|---|
+| `plugins/execution-continuity.mjs` | `041aad8d4510c33dc3e3671a3ae2b407d18cf9a25db1f75bef7604255ab9c848` | `f9df283da70ddb42c94865c12b9094f2e8c34bf86a338414895e9747903d7bc0` | `ABSENT (profile-scoped)` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285f` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285f` | `STALE_DEPLOYMENT` |
+| `plugins/execution-continuity-core.mjs` | `86d7e1ab9c265f86194afeb93b648df6d1e1928309e9366cfbdd2de9444aa07f` | `e595ab7b3aab4e3f5de2e065a8c5f235be4eb8077d964315d731e412e2b40b43` | `ABSENT (profile-scoped)` | `acbc4381c7e8be0436203dac05de7fda31b766b4bed5ea7743ebe318f1c28f7` | `N/A (not listed)` | `PRE_EXISTING_PRODUCTION_DRIFT` |
+| `dsh-readiness.ps1` | `f093593d820a08292bd49820204f4bba4d737526d349047d34b534d5a41cc59e` | `c0982a3866a0a33a694664d9d3eb97c1696bce2dacff841c405c631a4b7de404` | `b0b5b78c5897354ea94ff1fd99ea86057edb909a08fc3da881f648467a423238` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-health.ps1` | `1d667e5be50a5b41173f3568a9937e7ca5efe55c8b73f1b1094b6c37d39a6794` | `ABSENT` | `26935c932f22a4d680ccf4e6c0363afad12f88fe6c1614d6eeb9856e66c7fbad` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-healthcheck.ps1` | `1fb56a340577c6d48c94b87450a4b4675336eede67a2366afe4b25b06b594fe0` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-guardian.ps1` | `ba3dd337920208ec6a9ec8fb2c9c5322cc0e8e94b67bb92b7efa0fcd93e2a9c0` | `ae735e7f813d731f6b0272d6719e328dc279361d0d8c0eaba2b8d207e4c01dc` | `1cf3a49ca593ad5749e76289b43c3910cae1735db1fb93e4983ce2928221da33` | `N/A` | `N/A` | `PRE_EXISTING_PRODUCTION_DRIFT` |
+| `dsh-guardian-watchdog.ps1` | `c187286d60a1e9de0f966df88dfe206d366efaa06aacf99b7aedc3639ad7f2c5` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-reconnect.ps1` | `a37d23aef1817e3bf6b2a4a5bf76332c9ea8a117a4ab896f0103891ea6954ecf` | `ABSENT` | `f29f1971c2db20c52946d19a9768da1fbbbd8271d5cab02fc1f6be8a49be239a` | `N/A` | `N/A` | `PRE_EXISTING_PRODUCTION_DRIFT` |
+| `DSH-Harness-PS.ps1` | `bf0c85a0c9aa83519f2cbb2ce2ba9a14e606dd57a35485bc0eef5e630cf3066a` | `8c88d00fd51ee8ac0abb4cc9412c65775821272b4181e8a145c6639f134d72d7` | `24bcacaa1b08c3c2fb8fd9eef2c96c976e45f77a31cc16c9290506a58658a371` | `N/A` | `N/A` | `PRE_EXISTING_PRODUCTION_DRIFT` |
+| `dsh-launcher.js` | `d00626a10f7eff66a7584c3395aa82ba40ffa3c10950385e772991c62ced05b9` | `17446ae801a8a1b8a95bc1ace7fd8060d522247f6f2c789c7aa147adfad05fde` | `100e70820112f5885416a88222fe29812eaa199c9b1e9da7e506b97cfd4b5f14` | `N/A` | `N/A` | `KNOWN_RUNTIME_DIAGNOSTIC_OVERRIDE` |
+| `start-dsh-server.ps1` | `d8fd854c57fd89307a45d5a3a643a59ae043b261f8e540770fea6013006ab7bc` | `c6d11d1efb8b6e85c480a7af5b9d5b6160fb4e69f7cc323a96d955e2697e4d9b` | `c6d11d1efb8b6e85c480a7af5b9d5b6160fb4e69f7cc323a96d955e2697e4d9b` | `N/A` | `N/A` | `PRE_EXISTING_PRODUCTION_DRIFT` |
 
-`PRODUCTION_MUTATED=NO`
+The `PRE_EXISTING_PRODUCTION_DRIFT` label applies only to runtime differences
+for files whose base/head Git blobs are equal; it never makes an unchanged
+file part of the RH2 deployment set. `KNOWN_RUNTIME_DIAGNOSTIC_OVERRIDE` is
+the specific, separately decided launcher case.
+
+## Launcher decision
+
+The DSH-Client deployed launcher contains the pre-existing 2026-09-02
+diagnostic override at lines 80-88:
+
+```text
+--max-old-space-size=4096
+--trace-gc
+```
+
+The canonical launcher has no V8 flags. Per external review:
+
+```text
+LAUNCHER_OVERRIDE=KEEP_TEMPORARILY_FOR_INITIAL_SOAK
+```
+
+Do not touch `dsh-launcher.js` in the initial RH2 deployment. After the first
+30-60 minute production soak, decide separately whether to remove
+`--trace-gc` and restore the canonical launcher.
+
+## Profile copy rule
+
+For `plugins/execution-continuity.mjs`, the only approved future direction is:
+
+```text
+GIT_REVIEWED_TREE:plugins/execution-continuity.mjs
+  -> active profile destination: ~/.dsh/profiles/web/execution-continuity.mjs
+```
+
+Use the exact content from the reviewed Git head. Never source it from
+`_release-staging`, the current profile, or a dirty checkout. Do not copy
+`execution-continuity-core.mjs` merely because it is a dependency; it is
+`UNCHANGED_IN_PR`.
+
+## Explicitly not to touch
+
+- `~/.dsh/profiles/web`, production sessions/intents, Supervisor state, and
+  loaded-release state tonight.
+- `_release-staging` and the dirty main worktree.
+- Unchanged-in-PR files listed above, including `dsh-launcher.js`.
+- Credentials, `.credentials.yaml`, and `NOTION_TOKEN`.
+- P2.75, P2.8, P3, P4, and PR merge state.
+
+## Future deployment gate
+
+After external review and explicit deployment authorization only:
+
+1. Back up and hash the current DSH-Client/profile set.
+2. Copy exactly the five `RH2_DEPLOY_SET` files from the Git reviewed tree.
+3. Perform the separately authorized load/restart transaction.
+4. Verify owner, `host.describe`, `session.list`, `events.mux`, `events.host`,
+   renderer, source/deployed/loaded hashes, and a stable window.
+5. On failure, restore the backup transactionally and verify hashes.
+
+No deployment, load, restart, or rollback was performed in this task.
+
+```text
+PRODUCTION_MUTATED=NO
+```

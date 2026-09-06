@@ -1,19 +1,21 @@
-# RH2 R1.2 DEPLOYMENT PREFLIGHT MANIFEST
+# RH2 R1.3 DEPLOYMENT PREFLIGHT MANIFEST
 
-Status: `READY FOR FINAL MERGE REVIEW`; `NOT A DEPLOYMENT AUTHORIZATION`.
+Status: `RH2 R1.3 AWAITING EXTERNAL REVIEW`; `NOT A DEPLOYMENT AUTHORIZATION`.
 
-This is a documentation-only correction. It separates canonical PR change
-truth from production drift. No `.mjs`, `.ps1`, test, workflow, profile,
-deployment, process, credential, merge, P3, or P4 change is included.
+This manifest records the R1.3 Guardian loopback bind-conflict source
+correction and separates canonical PR change truth from production drift. No
+production profile, deployment, process, credential, merge, P3, or P4 change
+is included.
 
 ## Required truth fields
 
 ```text
-REVIEWED_PR_HEAD=9c8a519b29058d8d7876d8bbaae15cfcf08f346b
+REVIEWED_PR_HEAD=eed21b35c4211b0cdd62af8e4fdc80bafda51d80
+PREVIOUS_REVIEWED_PR_HEAD=eed21b35c4211b0cdd62af8e4fdc80bafda51d80
 SOURCE_AUTHORITY=GIT_REVIEWED_TREE
 STAGING_AUTHORITY=NO
 DIRTY_WORKTREE_AUTHORITY=NO
-RH2_DEPLOY_SET=5 exact production files
+RH2_DEPLOY_SET=6 exact production files
 LAUNCHER=KEEP_TEMPORARILY_FOR_INITIAL_SOAK
 PRODUCTION=UNCHANGED
 ```
@@ -28,8 +30,8 @@ Base: `main`
 
 `origin/main=563ce43d59c5a46a7e663cee804f6e4609d1f70d`
 
-The reviewed head above is the exact PR head before this R1.2 document
-correction. The final document-only head is reported by the closure output.
+The previous reviewed head above is the exact PR head before the R1.3 source
+correction. The final R1.3 source head is reported by the closure output.
 
 ## Canonical Git change truth
 
@@ -43,7 +45,8 @@ by `git show <reviewed-head>:<path>`, not from a Windows checkout.
 | `plugins/execution-continuity.mjs` | `c221323d9c0ec8b26f19aef539482fde663fe1c6` | `6d8a1746a4e5e9082d1139f79f1eeb8f1ae1c24f` | `YES` | `041aad8d4510c33dc3e3671a3ae2b407d18cf9a25db1f75bef7604255ab9c848` |
 | `plugins/execution-continuity-core.mjs` | `c125be63fb751f3eb7517d4752330b8478d4c1d4` | `c125be63fb751f3eb7517d4752330b8478d4c1d4` | `NO` | `86d7e1ab9c265f86194afeb93b648df6d1e1928309e9366cfbdd2de9444aa07f` |
 | `dsh-readiness.ps1` | `0ca188ff8a5531d4041452d6669e52694b2877e7` | `60880cd5bd3d93b4f711b24a09963d3c94d41e70` | `YES` | `f093593d820a08292bd49820204f4bba4d737526d349047d34b534d5a41cc59e` |
-| `dsh-health.ps1` | `9945981f2d9bb44244ae10320035a6b6e80d43c2` | `797c457b935a35621613d70ed75df40e7a8b5c80` | `YES` | `1d667e5be50a5b41173f3568a9937e7ca5efe55c8b73f1b1094b6c37d39a6794` |
+| `dsh-process-identity.ps1` | `524373a5c277158a53d9e10913df8331cac7b094` | `c3cf43c5caac647e1e5a70517cb47eb10d279177` | `YES` | `f8c3f0dc5bad833866ae1d2569fedaf25c0ada9d31abddeb049aeb7de8c089ca` |
+| `dsh-health.ps1` | `9945981f2d9bb44244ae10320035a6b6e80d43c2` | `64cbe4a08c202db983e8f5732fb728c960648001` | `YES` | `4115f42e69bff2d783022b6055bc79c18a0d83926e7832b31f6a6474886a47bb` |
 | `dsh-healthcheck.ps1` | `a775f7c02c28ea2bd11ada0c77ba5ec912c1c24e` | `8b824ba30109e029748670fcc9731df8d4fc9838` | `YES` | `1fb56a340577c6d48c94b87450a4b4675336eede67a2366afe4b25b06b594fe0` |
 | `dsh-guardian.ps1` | `4ad1fd6143015a6cb7d6cf5a8d9503433c56e304` | `4ad1fd6143015a6cb7d6cf5a8d9503433c56e304` | `NO` | `ba3dd337920208ec6a9ec8fb2c9c5322cc0e8e94b67bb92b7efa0fcd93e2a9c0` |
 | `dsh-guardian-watchdog.ps1` | `0a2f3d6c35d0f22c390b1ca35f9a47ffa086cda6` | `ca1deb884fd0fa80b721eaf5661ab8040c1dbba3` | `YES` | `c187286d60a1e9de0f966df88dfe206d366efaa06aacf99b7aedc3639ad7f2c5` |
@@ -57,6 +60,7 @@ The exact production change set is therefore:
 ```text
 RH2_DEPLOY_SET =
   plugins/execution-continuity.mjs
+  dsh-process-identity.ps1
   dsh-readiness.ps1
   dsh-health.ps1
   dsh-healthcheck.ps1
@@ -98,7 +102,8 @@ DSH-Client-scoped, so their profile and loaded cells are `N/A`.
 | `plugins/execution-continuity.mjs` | `041aad8d4510c33dc3e3671a3ae2b407d18cf9a25db1f75bef7604255ab9c848` | `f9df283da70ddb42c94865c12b9094f2e8c34bf86a338414895e9747903d7bc0` | `ABSENT (profile-scoped)` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285f` | `36a7a0a308021f31916a8fcbdfa45cdf5f3bf261f741373003fca09b5a77285f` | `STALE_DEPLOYMENT` |
 | `plugins/execution-continuity-core.mjs` | `86d7e1ab9c265f86194afeb93b648df6d1e1928309e9366cfbdd2de9444aa07f` | `e595ab7b3aab4e3f5de2e065a8c5f235be4eb8077d964315d731e412e2b40b43` | `ABSENT (profile-scoped)` | `acbc4381c7e8be0436203dac05de7fda31b766b4bed5ea7743ebe318f1c28f7` | `N/A (not listed)` | `PRE_EXISTING_PRODUCTION_DRIFT` |
 | `dsh-readiness.ps1` | `f093593d820a08292bd49820204f4bba4d737526d349047d34b534d5a41cc59e` | `c0982a3866a0a33a694664d9d3eb97c1696bce2dacff841c405c631a4b7de404` | `b0b5b78c5897354ea94ff1fd99ea86057edb909a08fc3da881f648467a423238` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
-| `dsh-health.ps1` | `1d667e5be50a5b41173f3568a9937e7ca5efe55c8b73f1b1094b6c37d39a6794` | `ABSENT` | `26935c932f22a4d680ccf4e6c0363afad12f88fe6c1614d6eeb9856e66c7fbad` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-process-identity.ps1` | `f8c3f0dc5bad833866ae1d2569fedaf25c0ada9d31abddeb049aeb7de8c089ca` | `ae48cf86681262751453b67300dee2b8bb815ce5f9f74cdd2dfa97e858795c2f` | `ae48cf86681262751453b67300dee2b8bb815ce5f9f74cdd2dfa97e858795c2f` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
+| `dsh-health.ps1` | `4115f42e69bff2d783022b6055bc79c18a0d83926e7832b31f6a6474886a47bb` | `ABSENT` | `26935c932f22a4d680ccf4e6c0363afad12f88fe6c1614d6eeb9856e66c7fbad` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
 | `dsh-healthcheck.ps1` | `1fb56a340577c6d48c94b87450a4b4675336eede67a2366afe4b25b06b594fe0` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `e9e520bd2bb78c694aab0370a8a23027734f9f9743a0a0a2f006be56c76cf958` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
 | `dsh-guardian.ps1` | `ba3dd337920208ec6a9ec8fb2c9c5322cc0e8e94b67bb92b7efa0fcd93e2a9c0` | `ae735e7f813d731f6b0272d6719e328dc279361d0d8c0eaba2b8d207e4c01dc` | `1cf3a49ca593ad5749e76289b43c3910cae1735db1fb93e4983ce2928221da33` | `N/A` | `N/A` | `PRE_EXISTING_PRODUCTION_DRIFT` |
 | `dsh-guardian-watchdog.ps1` | `c187286d60a1e9de0f966df88dfe206d366efaa06aacf99b7aedc3639ad7f2c5` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `cafef5f6768058637c1314737680db19e3e708e318f8b75a6a09054c66098f84` | `N/A` | `N/A` | `STALE_DEPLOYMENT` |
@@ -160,7 +165,7 @@ Use the exact content from the reviewed Git head. Never source it from
 After external review and explicit deployment authorization only:
 
 1. Back up and hash the current DSH-Client/profile set.
-2. Copy exactly the five `RH2_DEPLOY_SET` files from the Git reviewed tree.
+2. Copy exactly the six `RH2_DEPLOY_SET` files from the Git reviewed tree.
 3. Perform the separately authorized load/restart transaction.
 4. Verify owner, `host.describe`, `session.list`, `events.mux`, `events.host`,
    renderer, source/deployed/loaded hashes, and a stable window.

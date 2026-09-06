@@ -18,7 +18,8 @@
 #       incidentCreatedAt <= restartRequestedAt
 #   E6  budget/circuit exhausted -> restart denied (gate)
 #   E7  maintenance lock + restart_eligible -> restart=0
-# plus owner_unsafe / server_absent (with & without non-loopback) branches.
+# plus owner_unsafe / server_absent (none, specific non-loopback, and wildcard)
+# branches.
 #
 # ISOLATION: never touches 3080/331xx production, never reads real ~/.dsh, never
 # touches production guardian/session/goal/restart-budget. All state/budget/incident
@@ -58,6 +59,8 @@ function New-TestProbe {
         [bool]$Ready = $false,
         [bool]$Partial = $false,
         [int]$NonLoopback = 0,
+        [bool]$LoopbackBindConflict = $false,
+        [string]$LoopbackBindConflictReason = $null,
         [int]$Port = 33177,
         [string]$ErrorClass = 'timeout'
     )
@@ -68,6 +71,13 @@ function New-TestProbe {
         ownerCreation    = $null
         ownerCmdHash     = $null
         nonLoopbackCount = $NonLoopback
+        nonLoopbackAddresses = @()
+        specificNonLoopbackAddresses = @()
+        specificNonLoopbackCount = if ($LoopbackBindConflict) { 0 } else { $NonLoopback }
+        wildcardAddresses = @()
+        wildcardListenerCount = if ($LoopbackBindConflict) { 1 } else { 0 }
+        loopbackBindConflict = $LoopbackBindConflict
+        loopbackBindConflictReason = $LoopbackBindConflictReason
         errorClass       = $ErrorClass
         basicState       = if ($Ready) { 'ok' } else { 'unreachable' }
         apiState         = if ($Ready) { 'ok' } else { 'timeout' }
@@ -160,12 +170,19 @@ $ghs = Invoke-DshHealthGuard -Port 33182 -Probe (New-TestProbe -Owner 'none' -No
 Assert ($ghs.HealthAction -eq 'server_absent') 'server_absent action'
 Assert ($script:restarts.Count -eq 1 -and $script:goalRecovers -eq 1) 'server_absent restart once + goal recover'
 
-# ---- server_absent + non-loopback -> skip restart, alert ----
-Write-Host "server_absent + non-loopback: skip restart, alert"
-$script:restarts.Clear()
-$ghn = Invoke-DshHealthGuard -Port 33183 -Probe (New-TestProbe -Owner 'none' -NonLoopback 2) -CurrentState (New-DshHealthStateObject -Port 33183) -State @{} -BudgetState $null -RestartExecutor $Exec_Restart -AlertSender $Exec_Alert -GoalRecover $Exec_Recover -Log $Exec_Log -ConfirmProbe $Exec_Confirm
-Assert ($script:restarts.Count -eq 0) 'non-loopback restart count = 0'
-Assert ($script:alerts.Count -ge 1) 'non-loopback alert sent'
+# ---- server_absent + specific non-loopback -> restart remains allowed ----
+Write-Host "server_absent + specific non-loopback: budgeted restart once, no conflict alert"
+$script:restarts.Clear(); $script:alerts.Clear(); $script:goalRecovers = 0
+$ghn = Invoke-DshHealthGuard -Port 33183 -Probe (New-TestProbe -Owner 'none' -NonLoopback 2 -LoopbackBindConflict $false) -CurrentState (New-DshHealthStateObject -Port 33183) -State @{ lastRecoverAlertAt = (Get-Date) } -BudgetState $null -RestartExecutor $Exec_Restart -AlertSender $Exec_Alert -GoalRecover $Exec_Recover -Log $Exec_Log -ConfirmProbe $Exec_Confirm
+Assert ($script:restarts.Count -eq 1 -and $script:goalRecovers -eq 1) 'specific non-loopback restart once + goal recover'
+Assert ($script:alerts.Count -eq 0) 'specific non-loopback sends no conflict alert'
+
+# ---- server_absent + wildcard -> fail closed, alert ----
+Write-Host "server_absent + wildcard: skip restart, conflict alert"
+$script:restarts.Clear(); $script:alerts.Clear()
+$ghw = Invoke-DshHealthGuard -Port 33184 -Probe (New-TestProbe -Owner 'none' -NonLoopback 1 -LoopbackBindConflict $true -LoopbackBindConflictReason 'wildcard_listener') -CurrentState (New-DshHealthStateObject -Port 33184) -State @{} -BudgetState $null -RestartExecutor $Exec_Restart -AlertSender $Exec_Alert -GoalRecover $Exec_Recover -Log $Exec_Log -ConfirmProbe $Exec_Confirm
+Assert ($script:restarts.Count -eq 0) 'wildcard restart count = 0'
+Assert ($script:alerts.Count -eq 1) 'wildcard conflict alert sent exactly once'
 
 # ---- E6: budget/circuit exhausted -> restart denied (the exact gate the real
 #      Invoke-BudgetedRestart consults before performing a restart) ----

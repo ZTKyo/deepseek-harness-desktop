@@ -41,6 +41,13 @@ function Get-DshLoopbackOwner([int]$Port = 3080) {
         State = 'ok'
         Pid = 4242
         NonLoopbackCount = 0
+        NonLoopbackAddresses = @()
+        SpecificNonLoopbackAddresses = @()
+        SpecificNonLoopbackCount = 0
+        WildcardAddresses = @()
+        WildcardListenerCount = 0
+        LoopbackBindConflict = $false
+        LoopbackBindConflictReason = $null
         Snapshot = [pscustomobject]@{ CreationDate = $null; CommandLineHash = 'fixture' }
     }
 }

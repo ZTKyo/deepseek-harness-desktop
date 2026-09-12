@@ -39,7 +39,52 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 
-const DEPLOYED = "C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs";
+// The default remains the real deployed profile path for local post-deploy checks.
+// CI may point this test-only harness at the checked-out production module so the
+// integration suite stays isolated from a runner's user profile.
+const DEPLOYED = process.env.DSH_AUTONOMY_EC_PATH?.trim()
+  || "C:/Users/Administrator/.dsh/profiles/web/execution-continuity.mjs";
+
+// The real host provides @deepseek-ai/dsh-tools above the deployed profile.
+// An isolated checkout intentionally has no host dependency tree, so the
+// production module's optional import would disable its tool surface before
+// this integration test can exercise the real handlers. For the explicit
+// test-only override, install a tiny temporary registry adapter only when the
+// package cannot be resolved, then remove exactly what this test created.
+let cleanupTestToolShim = () => {};
+if (process.env.DSH_AUTONOMY_EC_PATH?.trim()) {
+  let hostToolsResolved = false;
+  try {
+    if (typeof import.meta.resolve === "function") {
+      import.meta.resolve("@deepseek-ai/dsh-tools", pathToFileURL(DEPLOYED).href);
+      hostToolsResolved = true;
+    }
+  } catch { /* isolated checkout: shim below is expected */ }
+  if (!hostToolsResolved) {
+    const shimRoot = path.join(path.dirname(DEPLOYED), "node_modules");
+    const shimPackage = path.join(shimRoot, "@deepseek-ai", "dsh-tools");
+    if (!fs.existsSync(shimPackage)) {
+      fs.mkdirSync(shimPackage, { recursive: true });
+      fs.writeFileSync(path.join(shimPackage, "package.json"), JSON.stringify({
+        name: "@deepseek-ai/dsh-tools",
+        private: true,
+        type: "module",
+        exports: "./index.mjs",
+      }), "utf8");
+      fs.writeFileSync(path.join(shimPackage, "index.mjs"), "export function defineTool(spec) { return spec; }\n", "utf8");
+      let cleaned = false;
+      cleanupTestToolShim = () => {
+        if (cleaned) return;
+        cleaned = true;
+        try { fs.rmSync(shimPackage, { recursive: true, force: true }); } catch { /* best effort cleanup */ }
+        for (const parent of [path.dirname(shimPackage), shimRoot]) {
+          try { fs.rmdirSync(parent); } catch { /* preserve any pre-existing sibling */ }
+        }
+      };
+      process.once("exit", cleanupTestToolShim);
+    }
+  }
+}
 const MOD = await import(pathToFileURL(DEPLOYED).href);
 
 let pass = 0, fail = 0;
@@ -453,3 +498,4 @@ section("I19: R1C-2 binding write-once — re-binding a set index to a different
 console.log(`\n${"=".repeat(60)}`);
 console.log(`RESULT: ${pass} PASS / ${fail} FAIL`);
 if (fail > 0) process.exitCode = 1;
+cleanupTestToolShim();

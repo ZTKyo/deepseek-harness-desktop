@@ -221,6 +221,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'RH2 watchdog suite failed' }
           Write-Host 'PASS RH2 P1 closure deterministic suites'
 
+      - name: POST-P3 Guardian stale-live fencing (source-only)
+        shell: pwsh
+        run: |
+          # Production-function tests use the real watchdog in -Library mode
+          # with dependency-injected sacrificial process fixtures. They never
+          # touch port 3080, the live Guardian, Task Scheduler, or production state.
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-GuardianStaleLiveFencing.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Guardian stale-live fencing suite failed' }
+          Write-Host 'PASS POST-P3 Guardian stale-live fencing'
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

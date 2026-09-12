@@ -63,6 +63,10 @@ $stateDir = Join-Path $dataRoot 'state'
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 $heartbeatPath = Join-Path $stateDir 'guardian-heartbeat.json'
 $script:GuardianStartedAt = (Get-Date).ToUniversalTime().ToString('o')
+$script:GuardianGeneration = [guid]::NewGuid().ToString('N')
+$script:GuardianHeartbeatSequence = 0
+$script:GuardianPhase = $null
+$script:GuardianPhaseEnteredAt = $script:GuardianStartedAt
 $script:GuardianExitCode = 0
 $url = "http://127.0.0.1:$Port/"
 
@@ -78,12 +82,21 @@ function Write-GuardianHeartbeat([string]$Phase) {
     # watchdog uses it to distinguish a live guardian from a stale process;
     # it never contains prompts, credentials, or session content.
     try {
+        $now = (Get-Date).ToUniversalTime().ToString('o')
+        if ($script:GuardianPhase -ne $Phase) {
+            $script:GuardianPhase = $Phase
+            $script:GuardianPhaseEnteredAt = $now
+        }
+        $script:GuardianHeartbeatSequence = [int]$script:GuardianHeartbeatSequence + 1
         $payload = [ordered]@{
             pid = $PID
             port = $Port
             startedAt = $script:GuardianStartedAt
-            updatedAt = (Get-Date).ToUniversalTime().ToString('o')
+            generation = $script:GuardianGeneration
+            sequence = $script:GuardianHeartbeatSequence
+            updatedAt = $now
             phase = $Phase
+            phaseEnteredAt = $script:GuardianPhaseEnteredAt
             exitCode = $script:GuardianExitCode
         }
         $tmp = "$heartbeatPath.tmp-$PID"

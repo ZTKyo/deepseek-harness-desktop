@@ -1,0 +1,239 @@
+﻿# POST-P3 Guardian stale-live fencing tests.
+#
+# These tests dot-source the production watchdog in library mode.  All stop/start
+# operations are dependency-injected fake actions against in-memory process and
+# heartbeat fixtures; port 3080, the live Guardian, Task Scheduler, and the
+# production state directory are never touched.
+
+$ErrorActionPreference = 'Stop'
+$watchdog = Join-Path $PSScriptRoot '..\..\dsh-guardian-watchdog.ps1'
+. $watchdog -Library
+
+$pass = 0
+$fail = 0
+function Assert-GuardianFencing([string]$Name, [bool]$Condition, [string]$Detail = '') {
+    if ($Condition) {
+        $script:pass++
+        Write-Host "PASS $Name"
+    } else {
+        $script:fail++
+        Write-Host "FAIL $Name $Detail"
+    }
+}
+
+function New-TestHeartbeat {
+    param(
+        [int]$GuardianPid,
+        [DateTime]$StartedAt,
+        [DateTime]$UpdatedAt,
+        [string]$Generation = 'old-generation',
+        [int]$Sequence = 1,
+        [string]$Phase = 'checking'
+    )
+    [pscustomobject]@{
+        pid = $GuardianPid
+        port = 3080
+        startedAt = $StartedAt.ToUniversalTime().ToString('o')
+        updatedAt = $UpdatedAt.ToUniversalTime().ToString('o')
+        generation = $Generation
+        sequence = $Sequence
+        phase = $Phase
+        phaseEnteredAt = $UpdatedAt.ToUniversalTime().ToString('o')
+        exitCode = 0
+        AgeSeconds = (([DateTime]::UtcNow) - $UpdatedAt.ToUniversalTime()).TotalSeconds
+    }
+}
+
+function New-TestGuardianProcess {
+    param(
+        [int]$GuardianPid,
+        [DateTime]$StartTime,
+        [string]$CommandLine = ''
+    )
+    [pscustomobject]@{
+        ProcessId = $GuardianPid
+        ProcessName = 'powershell.exe'
+        CommandLine = $CommandLine
+        StartTime = $StartTime.ToUniversalTime()
+    }
+}
+
+function New-TestEligibleState {
+    $state = New-DshGuardianFenceState
+    $state.Phase = 'TAKEOVER_ELIGIBLE'
+    return $state
+}
+
+function Invoke-TestTakeover {
+    param(
+        [hashtable]$World,
+        [string]$BudgetPath,
+        [bool]$FreshAfterStart = $true,
+        [bool]$StopSurvives = $false
+    )
+    $World.FreshAfterStart = $FreshAfterStart
+    $World.StopSurvives = $StopSurvives
+    $getHeartbeat = {
+        return $World.Heartbeat
+    }
+    $getProcesses = {
+        param($heartbeat)
+        return [pscustomobject]@{ ProbeOk = [bool]$World.ProbeOk; Processes = @($World.Processes) }
+    }
+    $stop = {
+        param($targetPid)
+        $World.StopCalls = [int]$World.StopCalls + 1
+        if (-not $World.StopSurvives) { $World.Processes = @() }
+    }
+    $start = {
+        param($path, $port, $noAwake, $noLid)
+        $World.StartCalls = [int]$World.StartCalls + 1
+        $newPid = [int]$World.NewPid
+        $newStart = (Get-Date).ToUniversalTime()
+        $World.Processes = @(New-TestGuardianProcess -GuardianPid $newPid -StartTime $newStart)
+        if ($World.FreshAfterStart) {
+            $World.Heartbeat = New-TestHeartbeat -GuardianPid $newPid -StartedAt $newStart -UpdatedAt $newStart -Generation ('new-generation-' + $World.StartCalls) -Sequence 1
+        }
+        return [pscustomobject]@{ Id = $newPid }
+    }
+    $result = Invoke-DshGuardianTakeover -Observation $World.Observation -State $World.State `
+        -GuardianScript 'C:\isolated\dsh-guardian.ps1' -PortNumber 3080 -StaleSeconds 90 `
+        -TakeoverMaxAttempts 2 -TakeoverCooldownSeconds 600 -TakeoverWindowSeconds 900 `
+        -TakeoverGoneTimeoutSeconds 0 -TakeoverVerifyTimeoutSeconds 0 -TakeoverPollMilliseconds 0 `
+        -BudgetPath $BudgetPath -GetHeartbeat $getHeartbeat -GetProcesses $getProcesses `
+        -StopProcess $stop -StartProcess $start
+    return $result
+}
+
+$testRoot = Join-Path $env:TEMP ('dsh-guardian-stale-live-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+try {
+    $now = (Get-Date).ToUniversalTime()
+    $oldStart = $now.AddMinutes(-5)
+    $fresh = New-TestHeartbeat -GuardianPid 4321 -StartedAt $oldStart -UpdatedAt $now.AddSeconds(-5)
+    $staleJustOver = New-TestHeartbeat -GuardianPid 4321 -StartedAt $oldStart -UpdatedAt $now.AddSeconds(-120)
+    $staleConfirmed = New-TestHeartbeat -GuardianPid 4321 -StartedAt $oldStart -UpdatedAt $now.AddSeconds(-360)
+    $oldProcess = New-TestGuardianProcess -GuardianPid 4321 -StartTime $oldStart
+
+    # GSL1: fresh heartbeat + matching PID/start identity -> healthy/no takeover.
+    $o1 = Resolve-DshGuardianFenceObservation -Heartbeat $fresh -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+    $d1 = Update-DshGuardianFenceState -State (New-DshGuardianFenceState) -Observation $o1 -Now $now -StaleSeconds 90
+    Assert-GuardianFencing 'GSL1 fresh heartbeat + matching PID -> HEALTHY/no takeover' ($o1.IdentityState -eq 'PROVEN' -and $d1.Phase -eq 'HEALTHY' -and $d1.Action -eq 'NONE') ($d1 | Out-String)
+
+    # GSL2: the first and second observations just over stale remain suspect.
+    $o2 = Resolve-DshGuardianFenceObservation -Heartbeat $staleJustOver -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+    $s2 = New-DshGuardianFenceState
+    $d2a = Update-DshGuardianFenceState -State $s2 -Observation $o2 -Now $now -StaleSeconds 90
+    $d2b = Update-DshGuardianFenceState -State $d2a.State -Observation $o2 -Now $now -StaleSeconds 90
+    Assert-GuardianFencing 'GSL2 just-over-stale -> SUSPECT_STALE/no kill-start' ($d2b.Phase -eq 'SUSPECT_STALE' -and $d2b.Action -eq 'NONE') ($d2b | Out-String)
+
+    # GSL3: repeated stale observations cross the longer threshold, then one
+    # takeover is executed and a second execution is a no-op.
+    $o3 = Resolve-DshGuardianFenceObservation -Heartbeat $staleConfirmed -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+    $s3 = New-DshGuardianFenceState
+    $d3a = Update-DshGuardianFenceState -State $s3 -Observation $o3 -Now $now -StaleSeconds 90
+    $d3b = Update-DshGuardianFenceState -State $d3a.State -Observation $o3 -Now $now -StaleSeconds 90
+    $d3c = Update-DshGuardianFenceState -State $d3b.State -Observation $o3 -Now $now -StaleSeconds 90
+    $w3 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o3; State = $d3c.State; ProbeOk = $true; NewPid = 5321; StopCalls = 0; StartCalls = 0 }
+    $r3 = Invoke-TestTakeover -World $w3 -BudgetPath (Join-Path $testRoot 'gsl3.json')
+    $r3Again = Invoke-TestTakeover -World $w3 -BudgetPath (Join-Path $testRoot 'gsl3.json')
+    Assert-GuardianFencing 'GSL3 confirmed stale + same identity -> exactly one verified takeover' ($d3c.Phase -eq 'TAKEOVER_ELIGIBLE' -and $r3.Verified -and $w3.StopCalls -eq 1 -and $w3.StartCalls -eq 1 -and -not $r3Again.Verified -and $w3.StopCalls -eq 1 -and $w3.StartCalls -eq 1) ($r3 | Out-String)
+
+    # GSL4/GSL5: PID reuse and creation-time mismatch are ambiguous, never kill.
+    $reused = New-TestGuardianProcess -GuardianPid 4321 -StartTime $oldStart.AddHours(1)
+    $o4 = Resolve-DshGuardianFenceObservation -Heartbeat $staleConfirmed -Processes @($reused) -Now $now -MaxAgeSeconds 90
+    $mismatchHb = New-TestHeartbeat -GuardianPid 4321 -StartedAt $oldStart.AddMinutes(-2) -UpdatedAt $now.AddSeconds(-360)
+    $o5 = Resolve-DshGuardianFenceObservation -Heartbeat $mismatchHb -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+    Assert-GuardianFencing 'GSL4 PID reuse -> AMBIGUOUS_FAIL_CLOSED/no kill' ($o4.IdentityState -eq 'AMBIGUOUS' -and $o4.Reason -eq 'start_time_mismatch') ($o4 | Out-String)
+    Assert-GuardianFencing 'GSL5 start-time mismatch -> AMBIGUOUS_FAIL_CLOSED/no kill' ($o5.IdentityState -eq 'AMBIGUOUS' -and $o5.Reason -eq 'start_time_mismatch') ($o5 | Out-String)
+
+    # GSL6: multiple visible Guardian candidates fail closed.
+    $multi = @(
+        (New-TestGuardianProcess -GuardianPid 4321 -StartTime $oldStart -CommandLine 'powershell.exe -File "C:\isolated\dsh-guardian.ps1" -Port 3080'),
+        (New-TestGuardianProcess -GuardianPid 9876 -StartTime $oldStart.AddSeconds(1) -CommandLine 'powershell.exe -File "C:\isolated\dsh-guardian.ps1" -Port 3080')
+    )
+    $o6 = Resolve-DshGuardianFenceObservation -Heartbeat $staleConfirmed -Processes $multi -Now $now -MaxAgeSeconds 90
+    Assert-GuardianFencing 'GSL6 multiple Guardian candidates -> fail closed' ($o6.IdentityState -eq 'AMBIGUOUS' -and $o6.Reason -eq 'multiple_guardian_candidates') ($o6 | Out-String)
+
+    # GSL7: old Guardian disappears naturally before takeover; do not call stop,
+    # then allow one canonical start and verify its new heartbeat.
+    $w7 = @{ Heartbeat = $staleConfirmed; Processes = @(); Observation = [pscustomobject]@{ IdentityState = 'ABSENT'; Heartbeat = $staleConfirmed; HeartbeatPid = 4321; HeartbeatFresh = $false; AgeSeconds = 360; Process = $null; ProcessStart = $null; Reason = 'old_guardian_disappeared' }; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5327; StopCalls = 0; StartCalls = 0 }
+    $r7 = Invoke-TestTakeover -World $w7 -BudgetPath (Join-Path $testRoot 'gsl7.json')
+    Assert-GuardianFencing 'GSL7 old Guardian gone naturally -> one canonical start' ($r7.Verified -and $w7.StopCalls -eq 0 -and $w7.StartCalls -eq 1) ($r7 | Out-String)
+
+    # GSL8: old Guardian survives the stop request; no new Guardian is started.
+    $o8 = Resolve-DshGuardianFenceObservation -Heartbeat $staleConfirmed -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+    $w8 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5330; StopCalls = 0; StartCalls = 0 }
+    $r8 = Invoke-TestTakeover -World $w8 -BudgetPath (Join-Path $testRoot 'gsl8.json') -StopSurvives $true
+    Assert-GuardianFencing 'GSL8 old Guardian survives stop -> no second Guardian' (-not $r8.Verified -and $w8.StopCalls -eq 1 -and $w8.StartCalls -eq 0) ($r8 | Out-String)
+
+    # GSL9: Process.Start without a fresh heartbeat is never takeover-verified.
+    $w9 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5333; StopCalls = 0; StartCalls = 0 }
+    $r9 = Invoke-TestTakeover -World $w9 -BudgetPath (Join-Path $testRoot 'gsl9.json') -FreshAfterStart $false
+    Assert-GuardianFencing 'GSL9 new Process.Start without fresh heartbeat -> NOT verified' (-not $r9.Verified -and $w9.StartCalls -eq 1) ($r9 | Out-String)
+
+    # GSL10: a new heartbeat with generation/sequence/phase metadata and matching
+    # PID/start identity commits the takeover.
+    $w10 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5336; StopCalls = 0; StartCalls = 0 }
+    $r10 = Invoke-TestTakeover -World $w10 -BudgetPath (Join-Path $testRoot 'gsl10.json') -FreshAfterStart $true
+    Assert-GuardianFencing 'GSL10 fresh new heartbeat + PID/start -> TAKEOVER_VERIFIED' ($r10.Verified -and $r10.Phase -eq 'TAKEOVER_VERIFIED') ($r10 | Out-String)
+
+    # GSL11: 60 healthy cycles never become takeover-eligible.
+    $s11 = New-DshGuardianFenceState
+    $startCount11 = 0
+    for ($i = 0; $i -lt 60; $i++) {
+        $o11 = Resolve-DshGuardianFenceObservation -Heartbeat $fresh -Processes @($oldProcess) -Now $now -MaxAgeSeconds 90
+        $d11 = Update-DshGuardianFenceState -State $s11 -Observation $o11 -Now $now -StaleSeconds 90
+        $s11 = $d11.State
+        if ($d11.Action -eq 'TAKEOVER') { $startCount11++ }
+    }
+    Assert-GuardianFencing 'GSL11 60 healthy watchdog cycles -> zero takeover' ($startCount11 -eq 0 -and $s11.Phase -eq 'HEALTHY') "takeoverCount=$startCount11 phase=$($s11.Phase)"
+
+    # GSL12: takeover callbacks have no Server input and do not mutate the
+    # server PID/generation fixture.
+    $serverBefore = [pscustomobject]@{ Pid = 17012; Generation = 'boot:17012_1789236493764' }
+    $w12 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5339; StopCalls = 0; StartCalls = 0; Server = $serverBefore }
+    $r12 = Invoke-TestTakeover -World $w12 -BudgetPath (Join-Path $testRoot 'gsl12.json') -FreshAfterStart $true
+    $serverAfter = $w12.Server
+    Assert-GuardianFencing 'GSL12 Guardian takeover -> Server PID/generation unchanged' ($r12.Verified -and $serverAfter.Pid -eq $serverBefore.Pid -and $serverAfter.Generation -eq $serverBefore.Generation) ($serverAfter | Out-String)
+
+    # GSL13: repeated failed takeover attempts are bounded by a separate budget
+    # and cooldown; no restart storm is allowed.
+    $gsl13Budget = Join-Path $testRoot 'gsl13.json'
+    $w13 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5342; StopCalls = 0; StartCalls = 0 }
+    $r13 = @()
+    for ($i = 0; $i -lt 4; $i++) {
+        $w13.State = New-TestEligibleState
+        $r13 += Invoke-TestTakeover -World $w13 -BudgetPath $gsl13Budget -FreshAfterStart $false
+    }
+    $b13 = Read-DshGuardianTakeoverBudget -Path $gsl13Budget
+    Assert-GuardianFencing 'GSL13 failed takeovers bounded by budget/cooldown' ($w13.StartCalls -le 2 -and $b13.attempts -le 2 -and @($r13 | Where-Object { $_.Reason -match 'cooldown|unverified|failed' }).Count -ge 1) "starts=$($w13.StartCalls) attempts=$($b13.attempts)"
+
+    # A corrupt or incomplete takeover budget is a control-plane uncertainty;
+    # it must fail closed instead of silently resetting the storm guard.
+    $corruptBudget = Join-Path $testRoot 'corrupt-budget.json'
+    Set-Content -LiteralPath $corruptBudget -Value '{"attempts":0,"windowStart":"not-a-date"}' -Encoding UTF8
+    $w13b = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5343; StopCalls = 0; StartCalls = 0 }
+    $r13b = Invoke-TestTakeover -World $w13b -BudgetPath $corruptBudget
+    Assert-GuardianFencing 'GSL13 budget corruption -> fail closed/no kill-start' (-not $r13b.Verified -and $r13b.Reason -eq 'takeover_budget_corrupt' -and $w13b.StopCalls -eq 0 -and $w13b.StartCalls -eq 0) ($r13b | Out-String)
+
+    # GSL14: re-check immediately before the destructive edge; a recovered
+    # heartbeat cancels the takeover without issuing a stop request.
+    $w14 = @{ Heartbeat = $fresh; Processes = @($oldProcess); Observation = $o3; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5345; StopCalls = 0; StartCalls = 0 }
+    $r14 = Invoke-TestTakeover -World $w14 -BudgetPath (Join-Path $testRoot 'gsl14.json')
+    Assert-GuardianFencing 'GSL14 heartbeat recovers before stop -> no destructive action' (-not $r14.Verified -and $w14.StopCalls -eq 0 -and $w14.StartCalls -eq 0) ($r14 | Out-String)
+
+    # Heartbeat schema contract: one heartbeat authority gains progress metadata;
+    # no second Guardian state database is introduced.
+    $guardianSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\dsh-guardian.ps1') -Raw
+    $watchdogSource = Get-Content -LiteralPath $watchdog -Raw
+    Assert-GuardianFencing 'Heartbeat schema carries generation/sequence/phaseEnteredAt' ($guardianSource -match 'GuardianGeneration' -and $guardianSource -match 'GuardianHeartbeatSequence' -and $guardianSource -match 'GuardianPhaseEnteredAt')
+    Assert-GuardianFencing 'SingleInstance mutex remains the Guardian backstop' ($guardianSource -match 'DSHGuardian\.SingleInstance' -and $watchdogSource -match 'DSHGuardian\.Watchdog\.SingleInstance')
+    Assert-GuardianFencing 'Identity probe covers Windows PowerShell and pwsh' ($watchdogSource -match "Name='powershell\.exe' OR Name='pwsh\.exe'" -and $watchdogSource -match '\^\(\?:powershell\|pwsh\)')
+} finally {
+    Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host "GUARDIAN STALE-LIVE FENCING: $pass passed, $fail failed"
+if ($fail -gt 0) { exit 1 }
+Write-Host 'GUARDIAN STALE-LIVE FENCING TEST PASSED'

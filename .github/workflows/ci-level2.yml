@@ -115,6 +115,22 @@ jobs:
           node tests\reliability\test-completion-truth.mjs
           node tests\reliability\test-resume-defer.mjs
 
+      # P3 AUTONOMY R1 final CI closure: host-side deterministic evidence
+      # verification is already implemented in autonomy-state-core.mjs and
+      # exercised through execution-continuity.mjs. Keep this as a required
+      # step: either suite failing makes Level 2 fail, and the integration
+      # suite uses a repo-local production module rather than a runner profile.
+      - name: P3 AUTONOMY host-verifier fail-closed gate
+        shell: pwsh
+        env:
+          DSH_AUTONOMY_EC_PATH: ${{ github.workspace }}/plugins/execution-continuity.mjs
+        run: |
+          node tests\autonomy\test-autonomy-state-core.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'P3 AUTONOMY core verifier suite failed' }
+          node tests\autonomy\test-ec-autonomy-deployed.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'P3 AUTONOMY production-path integration suite failed' }
+          Write-Host 'PASS P3 AUTONOMY host-verifier fail-closed gate'
+
       # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
       # Per External Review Blocker B: quota-defer / network-error /
       # rollback-switch + commandcode + full-path integration live in the

@@ -283,6 +283,65 @@ try {
     $b19 = Read-DshGuardianTakeoverBudget -Path $gsl19Budget
     Assert-GuardianFencing 'GSL19 expired window -> budget eligible again' ($allowed19.Allowed -and $allowed19.Budget.attempts -eq 0 -and $registered19.Registered -and $b19.attempts -eq 1) "allowed=$($allowed19.Allowed) registered=$($registered19.Registered) attempts=$($b19.attempts)"
 
+    # GSL20: spawned identity uses an exact UTC millisecond value.  Sub-ms
+    # observation noise is accepted after normalization, including the DMTF
+    # CreationDate representation used by CIM, while a 2-5 second PID reuse
+    # is rejected and never stopped.
+    $gsl20Start = [DateTimeOffset]::Parse('2026-09-19T00:00:00.1234567Z').UtcDateTime
+    $spawn20 = ConvertTo-DshGuardianSpawnIdentity -Process (New-TestGuardianProcess -GuardianPid 5370 -StartTime $gsl20Start) -TakeoverAttemptId 'gsl20'
+    $sameMillisecond20 = [pscustomobject]@{
+        ProcessId = 5370
+        ProcessName = 'powershell.exe'
+        CommandLine = ''
+        CreationDate = [System.Management.ManagementDateTimeConverter]::ToDmtfDateTime($gsl20Start.AddTicks(1000))
+    }
+    $reuse20 = New-TestGuardianProcess -GuardianPid 5370 -StartTime $gsl20Start.AddSeconds(3)
+    $sameIdentity20 = Test-DshGuardianSpawnedProcessIdentity -SpawnIdentity $spawn20 -Process $sameMillisecond20
+    $reuseIdentity20 = Test-DshGuardianSpawnedProcessIdentity -SpawnIdentity $spawn20 -Process $reuse20
+    $stop20Calls = 0
+    $cleanup20 = Invoke-DshGuardianSpawnCleanup -SpawnIdentity $spawn20 -PreviousHeartbeat $staleConfirmed `
+        -StaleSeconds 90 -GetHeartbeat { $staleConfirmed } `
+        -GetProcesses { param($hb) [pscustomobject]@{ ProbeOk = $true; Processes = @($reuse20) } } `
+        -StopProcess { param($targetPid) $script:stop20Calls++ } -GoneTimeoutSeconds 0 -PollMilliseconds 0
+    Assert-GuardianFencing 'GSL20 exact normalized identity accepted; 3s PID reuse rejected/not stopped' `
+        ($spawn20.ProcessStart.Ticks -eq $gsl20Start.Ticks -and $spawn20.ProcessStartIdentity -eq '2026-09-19T00:00:00.123Z' -and $sameIdentity20.Proven -and -not $reuseIdentity20.Proven -and $cleanup20.CleanupState -eq 'NOT_SAFE_TO_CLEAN' -and $cleanup20.Reason -eq 'spawned_pid_present_identity_changed' -and $script:stop20Calls -eq 0) `
+        "same=$($sameIdentity20.Reason) reuse=$($reuseIdentity20.Reason) cleanup=$($cleanup20.Reason) stops=$script:stop20Calls"
+
+    # GSL21: a failed takeover may prove its spawned child gone, but its active
+    # cooldown immediately blocks a normal absent-path start.
+    $gsl21Budget = Join-Path $testRoot 'gsl21.json'
+    $w21 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5373; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $r21 = Invoke-TestTakeover -World $w21 -BudgetPath $gsl21Budget -FreshAfterStart $false
+    $gate21 = Test-DshGuardianStartAllowed -Path $gsl21Budget -MaxAttempts 2 -WindowSeconds 900 -Now ([DateTimeOffset]::Now)
+    Assert-GuardianFencing 'GSL21 proven failed cleanup -> active cooldown blocks start gate' `
+        (-not $r21.Verified -and $r21.Cleanup.CleanupState -eq 'PROVEN' -and $r21.UnverifiedChildCleanup -eq 'PROVEN' -and -not $gate21.Allowed -and $gate21.Reason -eq 'takeover_cooldown') `
+        "takeover=$($r21.Reason) cleanup=$($r21.Cleanup.CleanupState) gate=$($gate21.Reason)"
+
+    # GSL22: the current-window maximum blocks normal absent-path start.
+    $gsl22Budget = Join-Path $testRoot 'gsl22.json'
+    $seed22 = Get-DshGuardianTakeoverBudgetDefault
+    $seed22.windowStart = ([DateTimeOffset]::Now).AddSeconds(-10).ToString('o')
+    $seed22.attempts = 2
+    Write-DshGuardianTakeoverBudget -Value $seed22 -Path $gsl22Budget | Out-Null
+    $gate22 = Test-DshGuardianStartAllowed -Path $gsl22Budget -MaxAttempts 2 -WindowSeconds 900 -Now ([DateTimeOffset]::Now)
+    Assert-GuardianFencing 'GSL22 current-window max attempts blocks start gate' (-not $gate22.Allowed -and $gate22.Reason -eq 'takeover_budget_exhausted') "gate=$($gate22.Reason)"
+
+    # GSL23: a missing/default budget permits cold boot and does not create a
+    # second state database or materialize a budget file.
+    $gsl23Budget = Join-Path $testRoot 'gsl23-missing.json'
+    $gate23 = Test-DshGuardianStartAllowed -Path $gsl23Budget -MaxAttempts 2 -WindowSeconds 900 -Now ([DateTimeOffset]::Now)
+    Assert-GuardianFencing 'GSL23 missing budget allows cold boot without creating budget' ($gate23.Allowed -and $gate23.Reason -eq 'takeover_allowed' -and -not (Test-Path -LiteralPath $gsl23Budget)) "gate=$($gate23.Reason) exists=$(Test-Path -LiteralPath $gsl23Budget)"
+
+    # GSL24: an expired window is reset in the shared gate's in-memory view and
+    # becomes eligible again without introducing another budget store.
+    $gsl24Budget = Join-Path $testRoot 'gsl24.json'
+    $seed24 = Get-DshGuardianTakeoverBudgetDefault
+    $seed24.windowStart = ([DateTimeOffset]::Now).AddSeconds(-901).ToString('o')
+    $seed24.attempts = 2
+    Write-DshGuardianTakeoverBudget -Value $seed24 -Path $gsl24Budget | Out-Null
+    $gate24 = Test-DshGuardianStartAllowed -Path $gsl24Budget -MaxAttempts 2 -WindowSeconds 900 -Now ([DateTimeOffset]::Now)
+    Assert-GuardianFencing 'GSL24 expired window allows start again' ($gate24.Allowed -and $gate24.Budget.attempts -eq 0 -and $gate24.Reason -eq 'takeover_allowed') "gate=$($gate24.Reason) attempts=$($gate24.Budget.attempts)"
+
     # Heartbeat schema contract: one heartbeat authority gains progress metadata;
     # no second Guardian state database is introduced.
     $guardianSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\dsh-guardian.ps1') -Raw

@@ -107,6 +107,18 @@ function Get-DshGuardianProcessStartUtc([object]$Process) {
     return $null
 }
 
+function ConvertTo-DshGuardianSpawnProcessStartIdentity([object]$Value) {
+    $utc = Convert-DshGuardianUtcDate $Value
+    if ($null -eq $utc) { return $null }
+    try {
+        # CIM and Get-Process can expose different sub-millisecond precision.
+        # Use one UTC millisecond representation for spawned-child identity only.
+        $ticks = $utc.Ticks - ($utc.Ticks % [TimeSpan]::TicksPerMillisecond)
+        $normalized = [DateTime]::new($ticks, [DateTimeKind]::Utc)
+        return $normalized.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+    } catch { return $null }
+}
+
 function Get-DshGuardianTakeoverThresholdSec {
     param(
         [int]$StaleSeconds = 90,
@@ -454,6 +466,24 @@ function Test-DshGuardianTakeoverAllowed {
     return [pscustomobject]@{ Allowed = $true; Reason = 'takeover_allowed'; PauseUntil = $null; Budget = $budget }
 }
 
+function Test-DshGuardianStartAllowed {
+    param(
+        [string]$Path = $script:DshGuardianTakeoverBudgetPath,
+        [int]$MaxAttempts = 2,
+        [int]$WindowSeconds = 900,
+        [DateTimeOffset]$Now = [DateTimeOffset]::Now
+    )
+    # The absent-path start gate shares the takeover budget authority and is
+    # deliberately read-only: a missing/default budget permits cold boot.
+    $gate = Test-DshGuardianTakeoverAllowed -Path $Path -MaxAttempts $MaxAttempts -WindowSeconds $WindowSeconds -Now $Now
+    return [pscustomobject]@{
+        Allowed    = [bool]$gate.Allowed
+        Reason     = $gate.Reason
+        PauseUntil = $gate.PauseUntil
+        Budget     = $gate.Budget
+    }
+}
+
 function Register-DshGuardianTakeoverAttempt {
     param(
         [string]$Path = $script:DshGuardianTakeoverBudgetPath,
@@ -551,16 +581,18 @@ function ConvertTo-DshGuardianSpawnIdentity {
     $processName = [string]$Process.ProcessName
     $commandLine = [string]$Process.CommandLine
     $base = [ordered]@{
-        Proven          = $false
-        Pid             = $processPid
-        ProcessStart    = $processStart
-        ProcessName     = $processName
-        CommandLine     = $commandLine
+        Proven             = $false
+        Pid                = $processPid
+        ProcessStart       = $processStart
+        ProcessStartIdentity = ConvertTo-DshGuardianSpawnProcessStartIdentity $processStart
+        ProcessName        = $processName
+        CommandLine        = $commandLine
         TakeoverAttemptId = $TakeoverAttemptId
-        Reason          = $null
+        Reason             = $null
     }
     if ($processPid -le 0) { $base.Reason = 'spawned_process_pid_missing'; return [pscustomobject]$base }
     if ($null -eq $processStart) { $base.Reason = 'spawned_process_start_time_missing'; return [pscustomobject]$base }
+    if ($null -eq $base.ProcessStartIdentity) { $base.Reason = 'spawned_process_start_identity_missing'; return [pscustomobject]$base }
     if ($processName -notmatch '(?i)^(?:powershell|pwsh)(?:\.exe)?$') {
         $base.Reason = 'spawned_process_not_powershell'
         return [pscustomobject]$base
@@ -579,20 +611,21 @@ function ConvertTo-DshGuardianSpawnIdentity {
 function Test-DshGuardianSpawnedProcessIdentity {
     param(
         [object]$SpawnIdentity,
-        [object]$Process,
-        [int]$MaxStartSkewSeconds = 30
+        [object]$Process
     )
     $processPid = 0
     try { $processPid = [int]$Process.ProcessId } catch {}
     if ($processPid -le 0) { try { $processPid = [int]$Process.Id } catch {} }
     $processStart = Get-DshGuardianProcessStartUtc $Process
+    $processStartIdentity = ConvertTo-DshGuardianSpawnProcessStartIdentity $processStart
     $processName = [string]$Process.ProcessName
     $commandLine = [string]$Process.CommandLine
     $base = [ordered]@{
         Proven       = $false
         Pid          = $processPid
-        ProcessStart = $processStart
-        Reason       = $null
+        ProcessStart         = $processStart
+        ProcessStartIdentity = $processStartIdentity
+        Reason               = $null
     }
     if ($null -eq $SpawnIdentity -or -not $SpawnIdentity.Proven) {
         $base.Reason = 'spawn_identity_not_proven'
@@ -602,11 +635,12 @@ function Test-DshGuardianSpawnedProcessIdentity {
         $base.Reason = 'spawned_pid_mismatch'
         return [pscustomobject]$base
     }
-    if ($null -eq $processStart -or $null -eq $SpawnIdentity.ProcessStart) {
+    if ($null -eq $processStart -or $null -eq $processStartIdentity -or
+        $null -eq $SpawnIdentity.ProcessStart -or [string]::IsNullOrWhiteSpace([string]$SpawnIdentity.ProcessStartIdentity)) {
         $base.Reason = 'spawned_start_time_incomplete'
         return [pscustomobject]$base
     }
-    if ([Math]::Abs((($processStart - $SpawnIdentity.ProcessStart).TotalSeconds)) -gt $MaxStartSkewSeconds) {
+    if ($processStartIdentity -cne [string]$SpawnIdentity.ProcessStartIdentity) {
         $base.Reason = 'spawned_start_time_mismatch'
         return [pscustomobject]$base
     }
@@ -1146,8 +1180,8 @@ function Invoke-WatchdogCheck {
         return
     }
 
-    # Gate: Resolve-DshGuardianPresence must complete before
-    # [System.Diagnostics.Process]::Start can occur in the canonical start helper.
+    # Gate: Resolve-DshGuardianPresence must complete before the shared budget
+    # gate and the normal absent-path Process.Start edge.
     $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $GuardianPath, '-Port', [string]$Port)
     if ($NoKeepAwake) { $args += '-NoKeepAwake' }
     if ($NoLidGuard) { $args += '-NoLidGuard' }
@@ -1159,6 +1193,12 @@ function Invoke-WatchdogCheck {
         $s = [string]$_
         if ($s -match '[\s"]') { '"' + ($s -replace '"', '\"') + '"' } else { $s }
     }) -join ' ')
+    $startGate = Test-DshGuardianStartAllowed -Path $script:DshGuardianTakeoverBudgetPath `
+        -MaxAttempts $TakeoverMaxAttempts -WindowSeconds $TakeoverWindowSeconds -Now ([DateTimeOffset]::Now)
+    if (-not $startGate.Allowed) {
+        TraceW ("guardian start blocked by takeover budget reason=$($startGate.Reason) pauseUntil=$($startGate.PauseUntil)")
+        return
+    }
     try {
         $proc = [System.Diagnostics.Process]::Start($psi)
         # Process.Start only proves a child was requested. Do not call that a

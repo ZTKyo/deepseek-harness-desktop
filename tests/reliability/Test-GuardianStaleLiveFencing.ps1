@@ -69,11 +69,25 @@ function Invoke-TestTakeover {
         [hashtable]$World,
         [string]$BudgetPath,
         [bool]$FreshAfterStart = $true,
-        [bool]$StopSurvives = $false
+        [bool]$StopSurvives = $false,
+        [bool]$FreshAtCleanup = $false,
+        [bool]$ChangeSpawnIdentity = $false
     )
     $World.FreshAfterStart = $FreshAfterStart
     $World.StopSurvives = $StopSurvives
+    $World.FreshAtCleanup = $FreshAtCleanup
+    $World.ChangeSpawnIdentity = $ChangeSpawnIdentity
+    $World.HeartbeatReads = 0
+    $World.SpawnIdentityChanged = $false
     $getHeartbeat = {
+        $World.HeartbeatReads = [int]$World.HeartbeatReads + 1
+        if ($World.ChangeSpawnIdentity -and $World.StartCalls -gt 0 -and -not $World.SpawnIdentityChanged) {
+            $World.Processes = @(New-TestGuardianProcess -GuardianPid $World.NewPid -StartTime $World.SpawnStart.AddSeconds(60))
+            $World.SpawnIdentityChanged = $true
+        }
+        if ($World.FreshAtCleanup -and $World.StartCalls -gt 0 -and $World.HeartbeatReads -ge 4) {
+            $World.Heartbeat = New-TestHeartbeat -GuardianPid $World.NewPid -StartedAt $World.SpawnStart -UpdatedAt $World.SpawnStart -Generation ('new-generation-cleanup-' + $World.StartCalls) -Sequence 1
+        }
         return $World.Heartbeat
     }
     $getProcesses = {
@@ -83,6 +97,8 @@ function Invoke-TestTakeover {
     $stop = {
         param($targetPid)
         $World.StopCalls = [int]$World.StopCalls + 1
+        if ($null -eq $World.StoppedPids) { $World.StoppedPids = @() }
+        $World.StoppedPids = @($World.StoppedPids) + $targetPid
         if (-not $World.StopSurvives) { $World.Processes = @() }
     }
     $start = {
@@ -90,11 +106,12 @@ function Invoke-TestTakeover {
         $World.StartCalls = [int]$World.StartCalls + 1
         $newPid = [int]$World.NewPid
         $newStart = (Get-Date).ToUniversalTime()
+        $World.SpawnStart = $newStart
         $World.Processes = @(New-TestGuardianProcess -GuardianPid $newPid -StartTime $newStart)
         if ($World.FreshAfterStart) {
             $World.Heartbeat = New-TestHeartbeat -GuardianPid $newPid -StartedAt $newStart -UpdatedAt $newStart -Generation ('new-generation-' + $World.StartCalls) -Sequence 1
         }
-        return [pscustomobject]@{ Id = $newPid }
+        return [pscustomobject]@{ Id = $newPid; ProcessId = $newPid; ProcessName = 'powershell.exe'; CommandLine = ''; StartTime = $newStart }
     }
     $result = Invoke-DshGuardianTakeover -Observation $World.Observation -State $World.State `
         -GuardianScript 'C:\isolated\dsh-guardian.ps1' -PortNumber 3080 -StaleSeconds 90 `
@@ -170,7 +187,7 @@ try {
     # GSL9: Process.Start without a fresh heartbeat is never takeover-verified.
     $w9 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5333; StopCalls = 0; StartCalls = 0 }
     $r9 = Invoke-TestTakeover -World $w9 -BudgetPath (Join-Path $testRoot 'gsl9.json') -FreshAfterStart $false
-    Assert-GuardianFencing 'GSL9 new Process.Start without fresh heartbeat -> NOT verified' (-not $r9.Verified -and $w9.StartCalls -eq 1) ($r9 | Out-String)
+    Assert-GuardianFencing 'GSL9 unverified Process.Start -> exact child cleanup/gone proven' (-not $r9.Verified -and $w9.StartCalls -eq 1 -and $w9.StopCalls -eq 2 -and @($w9.StoppedPids | Where-Object { $_ -eq 5333 }).Count -eq 1 -and @($w9.Processes | Where-Object { $_.ProcessId -eq 5333 }).Count -eq 0 -and $r9.Cleanup.CleanupState -eq 'PROVEN' -and $r9.UnverifiedChildCleanup -eq 'PROVEN') ($r9 | Out-String)
 
     # GSL10: a new heartbeat with generation/sequence/phase metadata and matching
     # PID/start identity commits the takeover.
@@ -222,6 +239,49 @@ try {
     $w14 = @{ Heartbeat = $fresh; Processes = @($oldProcess); Observation = $o3; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5345; StopCalls = 0; StartCalls = 0 }
     $r14 = Invoke-TestTakeover -World $w14 -BudgetPath (Join-Path $testRoot 'gsl14.json')
     Assert-GuardianFencing 'GSL14 heartbeat recovers before stop -> no destructive action' (-not $r14.Verified -and $w14.StopCalls -eq 0 -and $w14.StartCalls -eq 0) ($r14 | Out-String)
+
+    # GSL15: a spawned child with no fresh heartbeat is cleaned only through
+    # the exact PID/start identity recorded from the Process.Start result.
+    $w15 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5350; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $r15 = Invoke-TestTakeover -World $w15 -BudgetPath (Join-Path $testRoot 'gsl15.json') -FreshAfterStart $false
+    Assert-GuardianFencing 'GSL15 unverified child -> exact cleanup and gone proof' (-not $r15.Verified -and $r15.UnverifiedChildCleanup -eq 'PROVEN' -and $r15.Cleanup.CleanupState -eq 'PROVEN' -and @($w15.StoppedPids | Where-Object { $_ -eq 5350 }).Count -eq 1 -and @($w15.Processes | Where-Object { $_.ProcessId -eq 5350 }).Count -eq 0) ($r15 | Out-String)
+
+    # GSL16: the final cleanup-boundary probe sees a valid new heartbeat; the
+    # child is preserved and the takeover is committed.
+    $w16 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5355; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $r16 = Invoke-TestTakeover -World $w16 -BudgetPath (Join-Path $testRoot 'gsl16.json') -FreshAfterStart $false -FreshAtCleanup $true
+    Assert-GuardianFencing 'GSL16 valid heartbeat at cleanup boundary -> cleanup cancelled' ($r16.Verified -and $r16.Cleanup.CleanupState -eq 'CANCELLED_VALID_GUARDIAN' -and $w16.StopCalls -eq 1 -and $w16.StartCalls -eq 1 -and @($w16.StoppedPids | Where-Object { $_ -eq 5355 }).Count -eq 0 -and @($w16.Processes | Where-Object { $_.ProcessId -eq 5355 }).Count -eq 1) ($r16 | Out-String)
+
+    # GSL17: the PID survives but its creation identity changes; do not kill
+    # that unknown process and report cleanup as not safe.
+    $w17 = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5358; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $r17 = Invoke-TestTakeover -World $w17 -BudgetPath (Join-Path $testRoot 'gsl17.json') -FreshAfterStart $false -ChangeSpawnIdentity $true
+    Assert-GuardianFencing 'GSL17 changed child identity -> no unknown-process kill/fail closed' (-not $r17.Verified -and $r17.UnverifiedChildCleanup -eq 'NOT_SAFE_TO_CLEAN' -and $r17.Cleanup.Reason -eq 'spawned_pid_present_identity_changed' -and $w17.StopCalls -eq 1 -and $w17.StartCalls -eq 1 -and @($w17.StoppedPids | Where-Object { $_ -eq 5358 }).Count -eq 0 -and @($w17.Processes | Where-Object { $_.ProcessId -eq 5358 }).Count -eq 1) ($r17 | Out-String)
+
+    # GSL18: verified takeovers consume the same window budget; success does
+    # not reset attempts, so the third eligible takeover is blocked.
+    $gsl18Budget = Join-Path $testRoot 'gsl18.json'
+    $w18a = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5361; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $w18b = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5362; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $w18c = @{ Heartbeat = $staleConfirmed; Processes = @($oldProcess); Observation = $o8; State = (New-TestEligibleState); ProbeOk = $true; NewPid = 5363; StopCalls = 0; StartCalls = 0; StoppedPids = @() }
+    $r18a = Invoke-TestTakeover -World $w18a -BudgetPath $gsl18Budget
+    $r18b = Invoke-TestTakeover -World $w18b -BudgetPath $gsl18Budget
+    $r18c = Invoke-TestTakeover -World $w18c -BudgetPath $gsl18Budget
+    $b18 = Read-DshGuardianTakeoverBudget -Path $gsl18Budget
+    Assert-GuardianFencing 'GSL18 two verified takeovers consume window; third blocked' ($r18a.Verified -and $r18b.Verified -and -not $r18c.Verified -and $r18c.Reason -eq 'takeover_budget_exhausted' -and $w18c.StopCalls -eq 0 -and $w18c.StartCalls -eq 0 -and $b18.attempts -eq 2) "r18c=$($r18c.Reason) attempts=$($b18.attempts)"
+
+    # GSL19: once the same window expires, the budget becomes eligible again.
+    $gsl19Budget = Join-Path $testRoot 'gsl19.json'
+    $now19 = [DateTimeOffset]::Now
+    $seed19 = Get-DshGuardianTakeoverBudgetDefault
+    $seed19.windowStart = $now19.AddSeconds(-901).ToString('o')
+    $seed19.attempts = 2
+    $seed19.lastResult = 'verified'
+    Write-DshGuardianTakeoverBudget -Value $seed19 -Path $gsl19Budget | Out-Null
+    $allowed19 = Test-DshGuardianTakeoverAllowed -Path $gsl19Budget -MaxAttempts 2 -WindowSeconds 900 -Now $now19
+    $registered19 = Register-DshGuardianTakeoverAttempt -Path $gsl19Budget -MaxAttempts 2 -WindowSeconds 900 -OldPid 4321 -Now $now19
+    $b19 = Read-DshGuardianTakeoverBudget -Path $gsl19Budget
+    Assert-GuardianFencing 'GSL19 expired window -> budget eligible again' ($allowed19.Allowed -and $allowed19.Budget.attempts -eq 0 -and $registered19.Registered -and $b19.attempts -eq 1) "allowed=$($allowed19.Allowed) registered=$($registered19.Registered) attempts=$($b19.attempts)"
 
     # Heartbeat schema contract: one heartbeat authority gains progress metadata;
     # no second Guardian state database is introduced.

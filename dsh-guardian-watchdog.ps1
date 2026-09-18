@@ -478,10 +478,18 @@ function Register-DshGuardianTakeoverAttempt {
 }
 
 function Complete-DshGuardianTakeoverBudget {
-    param([string]$Path = $script:DshGuardianTakeoverBudgetPath, [DateTimeOffset]$Now = [DateTimeOffset]::Now)
+    param(
+        [string]$Path = $script:DshGuardianTakeoverBudgetPath,
+        [int]$WindowSeconds = 900,
+        [DateTimeOffset]$Now = [DateTimeOffset]::Now
+    )
     $budget = Read-DshGuardianTakeoverBudget -Path $Path
     if (-not $budget.Valid) { return $false }
-    $budget.attempts = 0
+    $window = Convert-DshGuardianBudgetDate $budget.windowStart
+    if ($null -eq $window -or (($Now - $window).TotalSeconds -ge $WindowSeconds)) {
+        $budget.windowStart = $Now.ToString('o')
+        $budget.attempts = 0
+    }
     $budget.cooldownUntil = $null
     $budget.lastResult = 'verified'
     return Write-DshGuardianTakeoverBudget -Value $budget -Path $Path
@@ -529,6 +537,200 @@ function Start-DshGuardianCanonicalProcess {
         if ($s -match '[\s"]') { '"' + ($s -replace '"', '\"') + '"' } else { $s }
     }) -join ' ')
     return [System.Diagnostics.Process]::Start($psi)
+}
+
+function ConvertTo-DshGuardianSpawnIdentity {
+    param(
+        [object]$Process,
+        [string]$TakeoverAttemptId
+    )
+    $processPid = 0
+    try { $processPid = [int]$Process.Id } catch {}
+    if ($processPid -le 0) { try { $processPid = [int]$Process.ProcessId } catch {} }
+    $processStart = Get-DshGuardianProcessStartUtc $Process
+    $processName = [string]$Process.ProcessName
+    $commandLine = [string]$Process.CommandLine
+    $base = [ordered]@{
+        Proven          = $false
+        Pid             = $processPid
+        ProcessStart    = $processStart
+        ProcessName     = $processName
+        CommandLine     = $commandLine
+        TakeoverAttemptId = $TakeoverAttemptId
+        Reason          = $null
+    }
+    if ($processPid -le 0) { $base.Reason = 'spawned_process_pid_missing'; return [pscustomobject]$base }
+    if ($null -eq $processStart) { $base.Reason = 'spawned_process_start_time_missing'; return [pscustomobject]$base }
+    if ($processName -notmatch '(?i)^(?:powershell|pwsh)(?:\.exe)?$') {
+        $base.Reason = 'spawned_process_not_powershell'
+        return [pscustomobject]$base
+    }
+    if (-not [string]::IsNullOrWhiteSpace($commandLine) -and
+        (($commandLine -notmatch '(?i)dsh-guardian\.ps1(?:["\s]|$)') -or
+         ($commandLine -match '(?i)dsh-guardian-watchdog\.ps1(?:["\s]|$)'))) {
+        $base.Reason = 'spawned_process_command_line_not_guardian'
+        return [pscustomobject]$base
+    }
+    $base.Proven = $true
+    $base.Reason = 'spawned_pid_start_identity_recorded'
+    return [pscustomobject]$base
+}
+
+function Test-DshGuardianSpawnedProcessIdentity {
+    param(
+        [object]$SpawnIdentity,
+        [object]$Process,
+        [int]$MaxStartSkewSeconds = 30
+    )
+    $processPid = 0
+    try { $processPid = [int]$Process.ProcessId } catch {}
+    if ($processPid -le 0) { try { $processPid = [int]$Process.Id } catch {} }
+    $processStart = Get-DshGuardianProcessStartUtc $Process
+    $processName = [string]$Process.ProcessName
+    $commandLine = [string]$Process.CommandLine
+    $base = [ordered]@{
+        Proven       = $false
+        Pid          = $processPid
+        ProcessStart = $processStart
+        Reason       = $null
+    }
+    if ($null -eq $SpawnIdentity -or -not $SpawnIdentity.Proven) {
+        $base.Reason = 'spawn_identity_not_proven'
+        return [pscustomobject]$base
+    }
+    if ($processPid -ne [int]$SpawnIdentity.Pid) {
+        $base.Reason = 'spawned_pid_mismatch'
+        return [pscustomobject]$base
+    }
+    if ($null -eq $processStart -or $null -eq $SpawnIdentity.ProcessStart) {
+        $base.Reason = 'spawned_start_time_incomplete'
+        return [pscustomobject]$base
+    }
+    if ([Math]::Abs((($processStart - $SpawnIdentity.ProcessStart).TotalSeconds)) -gt $MaxStartSkewSeconds) {
+        $base.Reason = 'spawned_start_time_mismatch'
+        return [pscustomobject]$base
+    }
+    if ($processName -notmatch '(?i)^(?:powershell|pwsh)(?:\.exe)?$') {
+        $base.Reason = 'spawned_process_not_powershell'
+        return [pscustomobject]$base
+    }
+    if (-not [string]::IsNullOrWhiteSpace($commandLine) -and
+        (($commandLine -notmatch '(?i)dsh-guardian\.ps1(?:["\s]|$)') -or
+         ($commandLine -match '(?i)dsh-guardian-watchdog\.ps1(?:["\s]|$)'))) {
+        $base.Reason = 'spawned_process_command_line_not_guardian'
+        return [pscustomobject]$base
+    }
+    $base.Proven = $true
+    $base.Reason = 'spawned_pid_start_identity_matches'
+    return [pscustomobject]$base
+}
+
+function Wait-DshGuardianSpawnGone {
+    param(
+        [object]$SpawnIdentity,
+        [scriptblock]$GetProcesses,
+        [int]$TimeoutSeconds = 20,
+        [int]$PollMilliseconds = 500
+    )
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        try { $probe = ConvertTo-DshGuardianProcessProbeResult (& $GetProcesses $null) } catch {
+            return [pscustomobject]@{ Gone = $false; Reason = 'spawn_identity_probe_failed_while_waiting_gone' }
+        }
+        if (-not $probe.ProbeOk) {
+            return [pscustomobject]@{ Gone = $false; Reason = 'spawn_identity_probe_failed_while_waiting_gone' }
+        }
+        $same = @($probe.Processes | Where-Object {
+            (Test-DshGuardianSpawnedProcessIdentity -SpawnIdentity $SpawnIdentity -Process $_).Proven
+        })
+        if ($same.Count -eq 0) { return [pscustomobject]@{ Gone = $true; Reason = 'spawned_identity_gone' } }
+        if ([DateTime]::UtcNow -ge $deadline) { break }
+        if ($PollMilliseconds -gt 0) { Start-Sleep -Milliseconds $PollMilliseconds }
+    } while ($true)
+    return [pscustomobject]@{ Gone = $false; Reason = 'spawned_identity_survived_cleanup_timeout' }
+}
+
+function Invoke-DshGuardianSpawnCleanup {
+    param(
+        [object]$SpawnIdentity,
+        [object]$PreviousHeartbeat,
+        [int]$StaleSeconds = 90,
+        [scriptblock]$GetHeartbeat,
+        [scriptblock]$GetProcesses,
+        [scriptblock]$StopProcess,
+        [int]$GoneTimeoutSeconds = 20,
+        [int]$PollMilliseconds = 500
+    )
+    $result = [ordered]@{
+        Preserved       = $false
+        CleanupState    = 'NOT_SAFE_TO_CLEAN'
+        Reason          = $null
+        Pid             = if ($null -ne $SpawnIdentity) { $SpawnIdentity.Pid } else { 0 }
+        TakeoverAttemptId = if ($null -ne $SpawnIdentity) { $SpawnIdentity.TakeoverAttemptId } else { $null }
+        Verification    = $null
+        Actions         = @()
+    }
+    if ($null -eq $SpawnIdentity -or -not $SpawnIdentity.Proven) {
+        $result.Reason = 'spawn_identity_not_proven'
+        return [pscustomobject]$result
+    }
+    try { $latestHeartbeat = & $GetHeartbeat } catch {
+        $result.Reason = 'cleanup_heartbeat_probe_failed'
+        return [pscustomobject]$result
+    }
+    try { $probe = ConvertTo-DshGuardianProcessProbeResult (& $GetProcesses $latestHeartbeat) } catch {
+        $result.Reason = 'cleanup_identity_probe_failed'
+        return [pscustomobject]$result
+    }
+    if (-not $probe.ProbeOk) {
+        $result.Reason = 'cleanup_identity_probe_failed'
+        return [pscustomobject]$result
+    }
+    $verification = Confirm-DshGuardianTakeover -ExpectedPid ([int]$SpawnIdentity.Pid) -Heartbeat $latestHeartbeat `
+        -Processes $probe.Processes -PreviousHeartbeat $PreviousHeartbeat -MaxAgeSeconds $StaleSeconds
+    if ($verification.Verified) {
+        $result.Preserved = $true
+        $result.CleanupState = 'CANCELLED_VALID_GUARDIAN'
+        $result.Reason = 'fresh_new_guardian_verified_at_cleanup_boundary'
+        $result.Verification = $verification
+        return [pscustomobject]$result
+    }
+    $exact = @($probe.Processes | Where-Object {
+        (Test-DshGuardianSpawnedProcessIdentity -SpawnIdentity $SpawnIdentity -Process $_).Proven
+    })
+    if ($exact.Count -eq 0) {
+        $samePid = @($probe.Processes | Where-Object {
+            try { [int]$_.ProcessId -eq [int]$SpawnIdentity.Pid } catch { $false }
+        })
+        if ($samePid.Count -eq 0) {
+            $result.CleanupState = 'PROVEN'
+            $result.Reason = 'spawned_identity_already_gone'
+        } else {
+            $result.Reason = 'spawned_pid_present_identity_changed'
+        }
+        return [pscustomobject]$result
+    }
+    if ($exact.Count -ne 1) {
+        $result.Reason = 'spawned_identity_ambiguous'
+        return [pscustomobject]$result
+    }
+    try {
+        & $StopProcess ([int]$SpawnIdentity.Pid)
+        $result.Actions = @('stop-unverified-spawned-guardian:{0}' -f $SpawnIdentity.Pid)
+    } catch {
+        $result.Reason = 'unverified_spawned_guardian_stop_failed'
+        return [pscustomobject]$result
+    }
+    $gone = Wait-DshGuardianSpawnGone -SpawnIdentity $SpawnIdentity -GetProcesses $GetProcesses `
+        -TimeoutSeconds $GoneTimeoutSeconds -PollMilliseconds $PollMilliseconds
+    if ($gone.Gone) {
+        $result.CleanupState = 'PROVEN'
+        $result.Reason = 'unverified_spawned_guardian_stopped_and_gone'
+        $result.Actions += 'unverified-spawned-guardian-identity-gone'
+    } else {
+        $result.Reason = $gone.Reason
+    }
+    return [pscustomobject]$result
 }
 
 function Wait-DshGuardianProcessGone {
@@ -597,12 +799,24 @@ function New-DshGuardianTakeoverFailure {
         [string]$BudgetPath,
         [int]$CooldownSeconds,
         [string]$Reason,
-        [DateTimeOffset]$Now
+        [DateTimeOffset]$Now,
+        [object]$Cleanup = $null,
+        [object[]]$Actions = @(),
+        [object]$SpawnIdentity = $null
     )
     $null = Fail-DshGuardianTakeoverBudget -Path $BudgetPath -CooldownSeconds $CooldownSeconds -Reason $Reason -Now $Now
     $State.Phase = 'AMBIGUOUS_FAIL_CLOSED'
     $State.LastReason = $Reason
-    return [pscustomobject]@{ Verified = $false; State = $State; Phase = $State.Phase; Reason = $Reason; Actions = @() }
+    return [pscustomobject]@{
+        Verified = $false
+        State = $State
+        Phase = $State.Phase
+        Reason = $Reason
+        Actions = @($Actions)
+        Cleanup = $Cleanup
+        SpawnIdentity = $SpawnIdentity
+        UnverifiedChildCleanup = if ($null -eq $Cleanup) { 'NOT_APPLICABLE' } elseif ($Cleanup.CleanupState -eq 'PROVEN') { 'PROVEN' } elseif ($Cleanup.CleanupState -eq 'CANCELLED_VALID_GUARDIAN') { 'CANCELLED_VALID_GUARDIAN' } else { 'NOT_SAFE_TO_CLEAN' }
+    }
 }
 
 function Invoke-DshGuardianTakeover {
@@ -686,13 +900,20 @@ function Invoke-DshGuardianTakeover {
     }
 
     $spawn = $null
+    $spawnIdentity = $null
     try {
         $spawn = & $StartProcess $GuardianScript $PortNumber $NoKeepAwakeFlag $NoLidGuardFlag
-        $expectedPid = [int]$spawn.Id
+        $spawnIdentity = ConvertTo-DshGuardianSpawnIdentity -Process $spawn -TakeoverAttemptId $State.TakeoverAttemptId
+        $expectedPid = [int]$spawnIdentity.Pid
         if ($expectedPid -le 0) { throw 'canonical Guardian start returned no PID' }
         $actions.Add(('start-canonical-guardian:{0}' -f $expectedPid))
+        if ($spawnIdentity.Proven) {
+            $actions.Add(('spawn-identity-recorded:{0}' -f $spawnIdentity.ProcessStart.ToString('o')))
+        } else {
+            $actions.Add(('spawn-identity-unproven:{0}' -f $spawnIdentity.Reason))
+        }
     } catch {
-        return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'canonical_guardian_start_failed' -Now $now)
+        return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'canonical_guardian_start_failed' -Now $now -SpawnIdentity $spawnIdentity -Actions @($actions))
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TakeoverVerifyTimeoutSeconds)
@@ -702,19 +923,32 @@ function Invoke-DshGuardianTakeover {
         if ($verifyProbe.ProbeOk) {
             $verification = Confirm-DshGuardianTakeover -ExpectedPid $expectedPid -Heartbeat $verifyHeartbeat -Processes $verifyProbe.Processes -PreviousHeartbeat $oldHeartbeat -MaxAgeSeconds $StaleSeconds
             if ($verification.Verified) {
-                if (-not (Complete-DshGuardianTakeoverBudget -Path $BudgetPath -Now ([DateTimeOffset]::Now))) {
-                    return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'takeover_budget_commit_failed' -Now ([DateTimeOffset]::Now))
+                if (-not (Complete-DshGuardianTakeoverBudget -Path $BudgetPath -WindowSeconds $TakeoverWindowSeconds -Now ([DateTimeOffset]::Now))) {
+                    return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'takeover_budget_commit_failed' -Now ([DateTimeOffset]::Now) -SpawnIdentity $spawnIdentity -Actions @($actions))
                 }
                 $State.Phase = 'TAKEOVER_VERIFIED'
                 $State.LastReason = $verification.Reason
                 $actions.Add('new-guardian-heartbeat-verified')
-                return [pscustomobject]@{ Verified = $true; State = $State; Phase = $State.Phase; Reason = $verification.Reason; Actions = @($actions); Verification = $verification }
+                return [pscustomobject]@{ Verified = $true; State = $State; Phase = $State.Phase; Reason = $verification.Reason; Actions = @($actions); Verification = $verification; SpawnIdentity = $spawnIdentity; Cleanup = $null; UnverifiedChildCleanup = 'NOT_APPLICABLE' }
             }
         }
         if ([DateTime]::UtcNow -ge $deadline) { break }
         if ($TakeoverPollMilliseconds -gt 0) { Start-Sleep -Milliseconds $TakeoverPollMilliseconds }
     } while ($true)
-    return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'new_guardian_takeover_unverified' -Now ([DateTimeOffset]::Now))
+    $cleanup = Invoke-DshGuardianSpawnCleanup -SpawnIdentity $spawnIdentity -PreviousHeartbeat $oldHeartbeat `
+        -StaleSeconds $StaleSeconds -GetHeartbeat $GetHeartbeat -GetProcesses $GetProcesses `
+        -StopProcess $StopProcess -GoneTimeoutSeconds $TakeoverGoneTimeoutSeconds -PollMilliseconds $TakeoverPollMilliseconds
+    if ($cleanup.Preserved) {
+        if (-not (Complete-DshGuardianTakeoverBudget -Path $BudgetPath -WindowSeconds $TakeoverWindowSeconds -Now ([DateTimeOffset]::Now))) {
+            return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'takeover_budget_commit_failed' -Now ([DateTimeOffset]::Now) -Cleanup $cleanup -SpawnIdentity $spawnIdentity -Actions @($actions))
+        }
+        $State.Phase = 'TAKEOVER_VERIFIED'
+        $State.LastReason = $cleanup.Reason
+        $actions.Add('new-guardian-heartbeat-verified-at-cleanup-boundary')
+        return [pscustomobject]@{ Verified = $true; State = $State; Phase = $State.Phase; Reason = $cleanup.Reason; Actions = @($actions); Verification = $cleanup.Verification; SpawnIdentity = $spawnIdentity; Cleanup = $cleanup; UnverifiedChildCleanup = 'NOT_APPLICABLE' }
+    }
+    $actions.Add(('unverified-child-cleanup:{0}' -f $cleanup.CleanupState))
+    return (New-DshGuardianTakeoverFailure -State $State -BudgetPath $BudgetPath -CooldownSeconds $TakeoverCooldownSeconds -Reason 'new_guardian_takeover_unverified' -Now ([DateTimeOffset]::Now) -Cleanup $cleanup -SpawnIdentity $spawnIdentity -Actions @($actions))
 }
 
 function Resolve-DshGuardianPresence {
@@ -899,7 +1133,8 @@ function Invoke-WatchdogCheck {
             if ($takeover.Verified) {
                 TraceW ("guardian takeover verified pid=$($takeover.Verification.Pid) generation=$($takeover.Verification.Generation)")
             } else {
-                TraceW ("guardian takeover not verified phase=$($takeover.Phase) reason=$($takeover.Reason)")
+                $cleanupState = if ($null -ne $takeover.Cleanup) { $takeover.Cleanup.CleanupState } else { 'NOT_APPLICABLE' }
+                TraceW ("guardian takeover not verified phase=$($takeover.Phase) reason=$($takeover.Reason) unverifiedChildCleanup=$($takeover.UnverifiedChildCleanup) cleanupState=$cleanupState")
             }
         } else {
             TraceW ("guardian heartbeat stale; live Guardian pid=$($presence.Pid); fence=$($decision.Phase); no kill/start")

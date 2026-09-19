@@ -196,14 +196,54 @@ function Read-DshPowerPolicyState {
     }
 }
 
+function Invoke-DshPowerPolicyAtomicCommit {
+    param(
+        [Parameter(Mandatory = $true)][string]$TempPath,
+        [Parameter(Mandatory = $true)][string]$TargetPath,
+        [scriptblock]$CommitFailureInjector
+    )
+    # Test-only hook runs after temp flush/close and at the final replacement
+    # edge. Production callers leave it unset.
+    if ($CommitFailureInjector) { $null = & $CommitFailureInjector $TempPath $TargetPath }
+    if (Test-Path -LiteralPath $TargetPath -PathType Leaf) {
+        # File.Replace with a same-directory backup keeps the existing target
+        # recoverable even if the filesystem reports a mid-replace failure.
+        $parent = Split-Path -Parent $TargetPath
+        if ([string]::IsNullOrWhiteSpace($parent)) { $parent = (Get-Location).Path }
+        $backupPath = Join-Path $parent ('.' + [System.IO.Path]::GetFileName($TargetPath) + '.' + [guid]::NewGuid().ToString('N') + '.bak')
+        $replaced = $false
+        try {
+            [System.IO.File]::Replace($TempPath, $TargetPath, $backupPath, $true)
+            $replaced = $true
+        } catch {
+            # Some failure points can leave the old file at backupPath. Restore
+            # it only when the target disappeared; otherwise leave the intact
+            # target untouched. If restoration fails, keep the backup evidence.
+            if (-not (Test-Path -LiteralPath $TargetPath -PathType Leaf) -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+                try { [System.IO.File]::Move($backupPath, $TargetPath) } catch { }
+            }
+            throw
+        } finally {
+            if ($replaced -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) {
+                Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } else {
+        # Same-directory Move is an atomic rename for a first durable state.
+        [System.IO.File]::Move($TempPath, $TargetPath)
+    }
+}
+
 function Write-DshPowerPolicyState {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][object]$State
+        [Parameter(Mandatory = $true)][object]$State,
+        [scriptblock]$CommitFailureInjector
     )
     $parent = Split-Path -Parent $Path
+    if ([string]::IsNullOrWhiteSpace($parent)) { $parent = (Get-Location).Path }
     if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
-    [ordered]@{
+    $json = [ordered]@{
         schema = 2
         state = ([string]$State.State).ToUpperInvariant()
         activeSchemeGuid = ([string]$State.ActiveSchemeGuid).ToLowerInvariant()
@@ -214,7 +254,35 @@ function Write-DshPowerPolicyState {
         restoredAtUtc = if ($null -eq $State.RestoredAtUtc) { $null } else { [string]$State.RestoredAtUtc }
         failedAtUtc = if ($null -eq $State.FailedAtUtc) { $null } else { [string]$State.FailedAtUtc }
         failure = if ($null -eq $State.Failure) { $null } else { [string]$State.Failure }
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Path -Encoding UTF8
+    } | ConvertTo-Json -Depth 5
+
+    $tempPath = Join-Path $parent ('.' + [System.IO.Path]::GetFileName($Path) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        $encoding = New-Object System.Text.UTF8Encoding($true)
+        $bytes = $encoding.GetBytes($json + [Environment]::NewLine)
+        $stream = [System.IO.File]::Open($tempPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        try {
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+        } finally {
+            $stream.Dispose()
+        }
+
+        Invoke-DshPowerPolicyAtomicCommit -TempPath $tempPath -TargetPath $Path -CommitFailureInjector $CommitFailureInjector
+
+        $committed = Read-DshPowerPolicyState -Path $Path
+        if ($null -eq $committed -or
+            $committed.State -ne ([string]$State.State).ToUpperInvariant() -or
+            $committed.ActiveSchemeGuid -ne ([string]$State.ActiveSchemeGuid).ToLowerInvariant() -or
+            $committed.PreviousAc -ne [uint32]$State.PreviousAc -or
+            $committed.PreviousDc -ne [uint32]$State.PreviousDc) {
+            throw 'power policy atomic commit read-back verification failed'
+        }
+    } finally {
+        if (Test-Path -LiteralPath $tempPath -PathType Leaf) {
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function New-DshPowerPolicyCapturedState {
@@ -253,18 +321,20 @@ function Write-DshPowerPolicyFailure {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][object]$State,
-        [Parameter(Mandatory = $true)][string]$Message
+        [Parameter(Mandatory = $true)][string]$Message,
+        [scriptblock]$CommitFailureInjector
     )
     $State.State = 'FAILED'
     $State.FailedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
     $State.Failure = $Message
-    Write-DshPowerPolicyState -Path $Path -State $State
+    Write-DshPowerPolicyState -Path $Path -State $State -CommitFailureInjector $CommitFailureInjector
 }
 
 function Invoke-DshAlwaysOnPowerPolicyApply {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [scriptblock]$CommandRunner
+        [scriptblock]$CommandRunner,
+        [scriptblock]$CommitFailureInjector
     )
     $current = Get-DshPowerPolicySnapshot -CommandRunner $CommandRunner
     $existing = Read-DshPowerPolicyState -Path $Path
@@ -279,7 +349,7 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
         $state.AppliedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
         $state.Failure = $null
         $state.FailedAtUtc = $null
-        Write-DshPowerPolicyState -Path $Path -State $state
+        Write-DshPowerPolicyState -Path $Path -State $state -CommitFailureInjector $CommitFailureInjector
         $null = Read-DshPowerPolicyState -Path $Path
         return [pscustomobject]@{ Mode = 'Apply'; Verified = $true; IdempotentNoWrite = $true; StatePath = $Path; Snapshot = $verified }
     }
@@ -291,7 +361,7 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
     $state.RestoredAtUtc = $null
     $state.FailedAtUtc = $null
     $state.Failure = $null
-    Write-DshPowerPolicyState -Path $Path -State $state
+    Write-DshPowerPolicyState -Path $Path -State $state -CommitFailureInjector $CommitFailureInjector
     $null = Assert-DshPowerPolicyCheckpoint -Path $Path -Expected $state
 
     try {
@@ -302,7 +372,7 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
         if ($verified.AcValue -ne 0 -or $verified.DcValue -ne 0) { throw 'LIDACTION=0 verification failed' }
     } catch {
         $failureMessage = $_.Exception.Message
-        try { Write-DshPowerPolicyFailure -Path $Path -State $state -Message $failureMessage } catch { }
+        try { Write-DshPowerPolicyFailure -Path $Path -State $state -Message $failureMessage -CommitFailureInjector $CommitFailureInjector } catch { }
         throw
     }
 
@@ -310,7 +380,7 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
     $state.AppliedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
     $state.FailedAtUtc = $null
     $state.Failure = $null
-    Write-DshPowerPolicyState -Path $Path -State $state
+    Write-DshPowerPolicyState -Path $Path -State $state -CommitFailureInjector $CommitFailureInjector
     $null = Read-DshPowerPolicyState -Path $Path
     [pscustomobject]@{ Mode = 'Apply'; Verified = $true; IdempotentNoWrite = $false; StatePath = $Path; Snapshot = $verified }
 }
@@ -318,7 +388,8 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
 function Invoke-DshAlwaysOnPowerPolicyRestore {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [scriptblock]$CommandRunner
+        [scriptblock]$CommandRunner,
+        [scriptblock]$CommitFailureInjector
     )
     $state = Read-DshPowerPolicyState -Path $Path
     if ($null -eq $state) { throw 'power policy restore state not found' }
@@ -336,7 +407,7 @@ function Invoke-DshAlwaysOnPowerPolicyRestore {
     $state.RestoredAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
     $state.Failure = $null
     $state.FailedAtUtc = $null
-    Write-DshPowerPolicyState -Path $Path -State $state
+    Write-DshPowerPolicyState -Path $Path -State $state -CommitFailureInjector $CommitFailureInjector
     $null = Read-DshPowerPolicyState -Path $Path
     [pscustomobject]@{ Mode = 'Restore'; Verified = $true; StatePath = $Path; Snapshot = $verified }
 }

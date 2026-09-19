@@ -231,6 +231,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Guardian stale-live fencing suite failed' }
           Write-Host 'PASS POST-P3 Guardian stale-live fencing'
 
+      - name: POST-P3 Guardian lifecycle authority convergence (source-only)
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-GuardianLifecycleAuthority.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Guardian lifecycle authority suite failed on PowerShell 5.1' }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests\reliability\Test-GuardianLifecycleAuthority.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Guardian lifecycle authority suite failed on PowerShell 7' }
+          Write-Host 'PASS POST-P3 Guardian lifecycle authority convergence'
+
       - name: Last Good required-set + atomic restore (isolated)
         shell: pwsh
         run: |

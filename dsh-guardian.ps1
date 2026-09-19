@@ -531,42 +531,15 @@ function Get-NewestSessionWrite {
     return $null
 }
 
-# ---------- install / uninstall: Startup-folder autostart (same pattern as DSH Server Autostart) ----------
+# ---------- install / uninstall: direct Guardian autostart retired ----------
 $lnkName = 'DSH Guardian Autostart'
 if ($Install) {
-    try {
-        $startup = [Environment]::GetFolderPath('Startup')
-        $ws = New-Object -ComObject WScript.Shell
-        $lnk = $ws.CreateShortcut((Join-Path $startup ($lnkName + '.lnk')))
-        $cmdPath = Join-Path $root 'DSH Guardian Autostart.cmd'
-        if (-not (Test-Path $cmdPath)) {
-            Set-Content -Path $cmdPath -Value (@(
-                '@echo off',
-                'rem DSH Guardian Autostart - runs at sign-in (hidden).',
-                'rem Starts dsh-guardian.ps1 (keep-awake + server watchdog) detached.',
-                'setlocal',
-                'start "" powershell -NoProfile -WindowStyle Hidden -File "%~dp0dsh-guardian.ps1" %*',
-                'endlocal'
-            ) -join "`r`n") -Encoding ASCII
-        }
-        $lnk.TargetPath = $cmdPath
-        $lnk.WorkingDirectory = $root
-        $lnk.WindowStyle = 7
-        $lnk.Save()
-        TraceG 'guardian autostart installed (Startup folder)'
-        Write-Host 'Guardian autostart installed (Startup folder). Starting now...'
-        # detached start with own handles (no pipe inheritance)
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = 'powershell.exe'
-        $psi.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $MyInvocation.MyCommand.Path + '"'
-        $psi.UseShellExecute = $true
-        $psi.WindowStyle = 'Hidden'
-        [System.Diagnostics.Process]::Start($psi) | Out-Null
-        Write-Host 'Guardian started detached.'
-        exit 0
-    } catch { Write-Host ('Install failed: ' + $_.Exception.Message); exit 1 }
+    Write-Error 'Direct Guardian autostart retired. Use canonical Guardian Watchdog lifecycle.'
+    TraceG 'direct Guardian autostart install refused (retired; watchdog is sole lifecycle authority)'
+    exit 2
 }
 if ($Uninstall) {
+    # Legacy cleanup only; this branch never starts Guardian or creates a link.
     try {
         $startup = [Environment]::GetFolderPath('Startup')
         $lnk = Join-Path $startup ($lnkName + '.lnk')

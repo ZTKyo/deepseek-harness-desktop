@@ -1,7 +1,7 @@
 ﻿# dsh-guardian.ps1 - DSH server guardian: keep-awake + crash recovery + stuck detection.
 #
 # Protects the unattended DSH agent from:
-#   1. Machine sleep freezing an in-flight turn (keep-awake + optional lid-close guard).
+#   1. Machine sleep freezing an in-flight turn (keep-awake).
 #   2. The server dying for any reason (agent self-kill, crash, OOM) -> auto restart.
 #   3. A turn hanging forever with no progress (stale session-write detection -> restart).
 #
@@ -17,8 +17,7 @@
 #                           (0 = disable; default 240: recovery safety net only, so an idle
 #                           but alive session is never killed mid-thought)
 #   -NoKeepAwake           do not prevent idle sleep
-#   -NoLidGuard            do not change lid-close power behavior (default: set to "do nothing"
-#                           while guardian runs, restore on exit; only for the active power scheme)
+#   -NoLidGuard            legacy compatibility no-op; runtime lid mutation is retired
 #   -Install / -Uninstall  manage the logon scheduled task
 #   -OneShot               run a single check cycle and exit
 #
@@ -143,34 +142,11 @@ if ($awake) {
     } catch { TraceG ('keep-awake timer error: ' + $_.Exception.Message) }
 }
 
-# ---------- lid-close guard (active power scheme only; restored on exit) ----------
-$lidChanged = $false; $lidOld = $null
-if (-not $NoLidGuard) {
-    try {
-        # Best effort: parse the SUB_BUTTONS group output and take the first
-        # AC/DC index pair (LIDACTION is the first setting in the subgroup).
-        # Setting-GUID-anchored parsing proved unreliable across localizations.
-        $q = @(powercfg /q SCHEME_CURRENT SUB_BUTTONS 2>$null)
-        $ac = $null; $dc = $null
-        foreach ($line in $q) {
-            if ($null -eq $ac -and $line -match '交流|AC' -and $line -match '0x[0-9a-fA-F]+') { $ac = $matches[0] }
-            elseif ($null -eq $dc -and $line -match '直流|DC' -and $line -match '0x[0-9a-fA-F]+') { $dc = $matches[0] }
-        }
-        if ($null -ne $ac -and $null -ne $dc) {
-            if ($ac -ne '0x00000000' -or $dc -ne '0x00000000') {
-                powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0 | Out-Null
-                powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0 | Out-Null
-                powercfg /setactive SCHEME_CURRENT | Out-Null
-                $lidChanged = $true; $lidOld = @($ac, $dc)
-                TraceG ("lid-guard: lid close set to 'do nothing' (was AC=$ac DC=$dc); restored on exit")
-            } else {
-                TraceG 'lid-guard: lid close already "do nothing" - no change needed'
-            }
-        } else {
-            TraceG 'lid-guard: could not locate lid setting in powercfg output - skipped'
-        }
-    } catch { TraceG ('lid-guard error: ' + $_.Exception.Message) }
-}
+# ---------- lid-close policy authority ----------
+# Runtime Guardian mutation and restoration are permanently retired. The
+# bounded Set-DshAlwaysOnPowerPolicy.ps1 helper is the sole LIDACTION writer.
+# Keep -NoLidGuard only so existing launchers remain command-line compatible.
+TraceG 'lid-guard: runtime lid mutation retired; use Set-DshAlwaysOnPowerPolicy.ps1'
 
 # ---------- helpers ----------
 function Test-Server {
@@ -556,7 +532,7 @@ if (-not $guardMutex.WaitOne(0)) {
     exit 0
 }
 
-TraceG ("guardian start: port=$Port interval=${IntervalSeconds}s stuck=$StuckRestartMinutes keepAwake=$(-not $NoKeepAwake) lidGuard=$(-not $NoLidGuard)")
+TraceG ("guardian start: port=$Port interval=${IntervalSeconds}s stuck=$StuckRestartMinutes keepAwake=$(-not $NoKeepAwake) lidGuard=retired")
 Write-GuardianHeartbeat 'starting'
 Check-ConfigSafety   # establish/refresh last-good snapshots immediately
 
@@ -662,14 +638,6 @@ do {
 # ---------- cleanup ----------
 if ($script:awakeTimer) { try { $script:awakeTimer.Stop(); $script:awakeTimer.Dispose() } catch {} }
 if ($awake) { try { $null = [DSHGuard.Native]::SetThreadExecutionState($script:ES_CONTINUOUS) } catch {} }
-if ($lidChanged) {
-    try {
-        powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION $lidOld[0] | Out-Null
-        powercfg /setdcvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION $lidOld[1] | Out-Null
-        powercfg /setactive SCHEME_CURRENT | Out-Null
-        TraceG 'lid-guard restored'
-    } catch { TraceG ('lid restore error: ' + $_.Exception.Message) }
-}
 Write-GuardianHeartbeat 'exit'
 try { $guardMutex.ReleaseMutex() } catch {}
 TraceG 'guardian exit'

@@ -12,7 +12,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$script:DshSubButtonsSubgroupGuid = '4f971e89-eebd-4455-a8de-9e59040e7347'
 $script:DshLidActionSettingGuid = '5ca83367-6e45-459f-a27b-476b1d01c936'
+$script:DshPowerGuidPattern = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
 function ConvertTo-DshPowerCfgResult {
     param(
@@ -95,72 +97,111 @@ function ConvertTo-DshPowerHex {
     return ('0x{0:x8}' -f $Value)
 }
 
+function Get-DshActiveSchemeGuidFromOutput {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines)
+
+    $text = (@($Lines) -join [Environment]::NewLine)
+    $matches = @([regex]::Matches($text, ('(?i)(?<![0-9a-f]){0}(?![0-9a-f])' -f $script:DshPowerGuidPattern)))
+    if ($matches.Count -ne 1) {
+        throw ("active power scheme output must contain exactly one GUID; found {0}" -f $matches.Count)
+    }
+    return $matches[0].Value.ToLowerInvariant()
+}
+
 function Get-DshLidActionValuesFromQuery {
-    param([Parameter(Mandatory = $true)][string[]]$Lines)
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Lines)
 
     $targetGuid = $script:DshLidActionSettingGuid
-    $blocks = New-Object System.Collections.Generic.List[object]
-    $current = $null
+    $targetBlockCount = 0
+    $inTargetBlock = $false
+    $acValues = @()
+    $dcValues = @()
     foreach ($rawLine in @($Lines)) {
         $line = [string]$rawLine
-        $settingMatch = [regex]::Match($line, '(?i)^\s*Power\s+Setting\s+GUID\s*:\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')
-        if ($settingMatch.Success) {
-            if ($null -ne $current -and $current.IsTarget) {
-                $blocks.Add([pscustomobject]$current)
-            }
-            $guid = $settingMatch.Groups[1].Value.ToLowerInvariant()
-            $current = [ordered]@{
-                Guid = $guid
-                IsTarget = ($guid -eq $targetGuid)
-                AcValues = @()
-                DcValues = @()
+        $guidMatches = @([regex]::Matches($line, ('(?i)(?<![0-9a-f]){0}(?![0-9a-f])' -f $script:DshPowerGuidPattern)))
+        if ($guidMatches.Count -gt 0) {
+            $lineGuids = @($guidMatches | ForEach-Object { $_.Value.ToLowerInvariant() })
+            $targetOccurrences = @($lineGuids | Where-Object { $_ -eq $targetGuid }).Count
+            if ($targetOccurrences -gt 0) {
+                $targetBlockCount += $targetOccurrences
+                $inTargetBlock = $true
+            } elseif ($inTargetBlock) {
+                # A different GUID begins the next setting block. Labels are
+                # deliberately ignored so English and localized output behave
+                # identically.
+                $inTargetBlock = $false
             }
             continue
         }
-        if ($null -eq $current -or -not $current.IsTarget) { continue }
+        if (-not $inTargetBlock) { continue }
         $acMatch = [regex]::Match($line, '(?i)(?:Current\s+AC\s+Power\s+Setting\s+Index|当前交流电源设置索引|交流电源设置索引)\s*:\s*(0x[0-9a-f]+|\d+)')
-        if ($acMatch.Success) { $current.AcValues += ,(ConvertTo-DshPowerValue $acMatch.Groups[1].Value) }
+        if ($acMatch.Success) { $acValues += ,(ConvertTo-DshPowerValue $acMatch.Groups[1].Value) }
         $dcMatch = [regex]::Match($line, '(?i)(?:Current\s+DC\s+Power\s+Setting\s+Index|当前直流电源设置索引|直流电源设置索引)\s*:\s*(0x[0-9a-f]+|\d+)')
-        if ($dcMatch.Success) { $current.DcValues += ,(ConvertTo-DshPowerValue $dcMatch.Groups[1].Value) }
-    }
-    if ($null -ne $current -and $current.IsTarget) {
-        $blocks.Add([pscustomobject]$current)
+        if ($dcMatch.Success) { $dcValues += ,(ConvertTo-DshPowerValue $dcMatch.Groups[1].Value) }
     }
 
-    if ($blocks.Count -ne 1) {
-        throw ("LIDACTION setting GUID {0} must have exactly one query block; found {1}" -f $targetGuid, $blocks.Count)
+    if ($targetBlockCount -ne 1) {
+        throw ("LIDACTION setting GUID {0} must have exactly one query block; found {1}" -f $targetGuid, $targetBlockCount)
     }
-    $block = $blocks[0]
-    if (@($block.AcValues).Count -ne 1 -or @($block.DcValues).Count -ne 1) {
-        throw ("LIDACTION setting GUID {0} must have exactly one AC and one DC current index; AC={1} DC={2}" -f $targetGuid, @($block.AcValues).Count, @($block.DcValues).Count)
+    if (@($acValues).Count -ne 1 -or @($dcValues).Count -ne 1) {
+        throw ("LIDACTION setting GUID {0} must have exactly one AC and one DC current index; AC={1} DC={2}" -f $targetGuid, @($acValues).Count, @($dcValues).Count)
     }
     [pscustomobject]@{
-        AcValue = [uint32]$block.AcValues[0]
-        DcValue = [uint32]$block.DcValues[0]
-        AcHex = ConvertTo-DshPowerHex $block.AcValues[0]
-        DcHex = ConvertTo-DshPowerHex $block.DcValues[0]
+        AcValue = [uint32]$acValues[0]
+        DcValue = [uint32]$dcValues[0]
+        AcHex = ConvertTo-DshPowerHex $acValues[0]
+        DcHex = ConvertTo-DshPowerHex $dcValues[0]
     }
 }
 
 function Get-DshPowerPolicySnapshot {
     param(
-        [string]$Scheme = 'SCHEME_CURRENT',
+        [string]$Scheme,
         [scriptblock]$CommandRunner
     )
     $activeResult = Invoke-DshPowerCfgCommand -Arguments @('/getactivescheme') -CommandRunner $CommandRunner
-    $activeText = (@($activeResult.Stdout) -join [Environment]::NewLine)
-    $activeMatch = [regex]::Match($activeText, '(?i)Power\s+Scheme\s+GUID\s*:\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')
-    if (-not $activeMatch.Success) { throw 'active power scheme GUID not found' }
+    $activeSchemeGuid = Get-DshActiveSchemeGuidFromOutput -Lines @($activeResult.Stdout)
+    $querySchemeGuid = if ([string]::IsNullOrWhiteSpace($Scheme)) { $activeSchemeGuid } else { $Scheme.ToLowerInvariant() }
+    if ($querySchemeGuid -notmatch ('(?i)^{0}$' -f $script:DshPowerGuidPattern)) {
+        throw "power policy query scheme GUID is malformed: '$Scheme'"
+    }
 
-    $queryResult = Invoke-DshPowerCfgCommand -Arguments @('/q', $Scheme, 'SUB_BUTTONS') -CommandRunner $CommandRunner
+    $queryResult = Invoke-DshPowerCfgCommand -Arguments @('/qh', $querySchemeGuid, $script:DshSubButtonsSubgroupGuid) -CommandRunner $CommandRunner
     $values = Get-DshLidActionValuesFromQuery -Lines @($queryResult.Stdout)
     [pscustomobject]@{
-        ActiveSchemeGuid = $activeMatch.Groups[1].Value.ToLowerInvariant()
+        ActiveSchemeGuid = $activeSchemeGuid
+        QuerySchemeGuid = $querySchemeGuid
+        SubgroupGuid = $script:DshSubButtonsSubgroupGuid
+        SettingGuid = $script:DshLidActionSettingGuid
         AcValue = [uint32]$values.AcValue
         DcValue = [uint32]$values.DcValue
         AcHex = $values.AcHex
         DcHex = $values.DcHex
     }
+}
+
+function Assert-DshPowerPolicyMigrationBaseline {
+    param(
+        [Parameter(Mandatory = $true)][object]$PreMigrationSnapshot,
+        [Parameter(Mandatory = $true)][object]$PostStopSnapshot
+    )
+
+    $required = @('ActiveSchemeGuid', 'SubgroupGuid', 'SettingGuid', 'AcValue', 'DcValue')
+    foreach ($name in $required) {
+        if ($PreMigrationSnapshot.PSObject.Properties.Name -notcontains $name -or
+            $PostStopSnapshot.PSObject.Properties.Name -notcontains $name) {
+            throw "LID_STATE_CHANGED_DURING_MIGRATION: missing exact snapshot field $name"
+        }
+    }
+    $matches = ([string]$PreMigrationSnapshot.ActiveSchemeGuid).ToLowerInvariant() -eq ([string]$PostStopSnapshot.ActiveSchemeGuid).ToLowerInvariant() -and
+        ([string]$PreMigrationSnapshot.SubgroupGuid).ToLowerInvariant() -eq ([string]$PostStopSnapshot.SubgroupGuid).ToLowerInvariant() -and
+        ([string]$PreMigrationSnapshot.SettingGuid).ToLowerInvariant() -eq ([string]$PostStopSnapshot.SettingGuid).ToLowerInvariant() -and
+        [uint32]$PreMigrationSnapshot.AcValue -eq [uint32]$PostStopSnapshot.AcValue -and
+        [uint32]$PreMigrationSnapshot.DcValue -eq [uint32]$PostStopSnapshot.DcValue
+    if (-not $matches) {
+        throw 'LID_STATE_CHANGED_DURING_MIGRATION: post-stop exact LIDACTION differs from pre-migration baseline'
+    }
+    return $true
 }
 
 function ConvertTo-DshStateTimestamp {
@@ -365,8 +406,8 @@ function Invoke-DshAlwaysOnPowerPolicyApply {
     $null = Assert-DshPowerPolicyCheckpoint -Path $Path -Expected $state
 
     try {
-        $null = Invoke-DshPowerCfgCommand -Arguments @('/setacvalueindex', $current.ActiveSchemeGuid, 'SUB_BUTTONS', 'LIDACTION', '0') -CommandRunner $CommandRunner
-        $null = Invoke-DshPowerCfgCommand -Arguments @('/setdcvalueindex', $current.ActiveSchemeGuid, 'SUB_BUTTONS', 'LIDACTION', '0') -CommandRunner $CommandRunner
+        $null = Invoke-DshPowerCfgCommand -Arguments @('/setacvalueindex', $current.ActiveSchemeGuid, $script:DshSubButtonsSubgroupGuid, $script:DshLidActionSettingGuid, '0') -CommandRunner $CommandRunner
+        $null = Invoke-DshPowerCfgCommand -Arguments @('/setdcvalueindex', $current.ActiveSchemeGuid, $script:DshSubButtonsSubgroupGuid, $script:DshLidActionSettingGuid, '0') -CommandRunner $CommandRunner
         $null = Invoke-DshPowerCfgCommand -Arguments @('/setactive', $current.ActiveSchemeGuid) -CommandRunner $CommandRunner
         $verified = Get-DshPowerPolicySnapshot -Scheme $current.ActiveSchemeGuid -CommandRunner $CommandRunner
         if ($verified.AcValue -ne 0 -or $verified.DcValue -ne 0) { throw 'LIDACTION=0 verification failed' }
@@ -396,8 +437,8 @@ function Invoke-DshAlwaysOnPowerPolicyRestore {
     $scheme = $state.ActiveSchemeGuid
     # Restore arguments are decimal strings. Hex is reserved for query parsing
     # and diagnostics because powercfg accepts the setting index as a number.
-    $null = Invoke-DshPowerCfgCommand -Arguments @('/setacvalueindex', $scheme, 'SUB_BUTTONS', 'LIDACTION', ([string][uint32]$state.PreviousAc)) -CommandRunner $CommandRunner
-    $null = Invoke-DshPowerCfgCommand -Arguments @('/setdcvalueindex', $scheme, 'SUB_BUTTONS', 'LIDACTION', ([string][uint32]$state.PreviousDc)) -CommandRunner $CommandRunner
+    $null = Invoke-DshPowerCfgCommand -Arguments @('/setacvalueindex', $scheme, $script:DshSubButtonsSubgroupGuid, $script:DshLidActionSettingGuid, ([string][uint32]$state.PreviousAc)) -CommandRunner $CommandRunner
+    $null = Invoke-DshPowerCfgCommand -Arguments @('/setdcvalueindex', $scheme, $script:DshSubButtonsSubgroupGuid, $script:DshLidActionSettingGuid, ([string][uint32]$state.PreviousDc)) -CommandRunner $CommandRunner
     $null = Invoke-DshPowerCfgCommand -Arguments @('/setactive', $scheme) -CommandRunner $CommandRunner
     $verified = Get-DshPowerPolicySnapshot -Scheme $scheme -CommandRunner $CommandRunner
     if ($verified.AcValue -ne $state.PreviousAc -or $verified.DcValue -ne $state.PreviousDc -or $verified.ActiveSchemeGuid -ne $scheme) {

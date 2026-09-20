@@ -548,16 +548,27 @@ function ConvertTo-DshGuardianProcessProbeResult([object]$Value) {
     return [pscustomobject]@{ ProbeOk = $true; Processes = @($Value) }
 }
 
-function Start-DshGuardianCanonicalProcess {
+function Get-DshGuardianRuntimeArguments {
     param(
-        [string]$GuardianScript,
-        [int]$PortNumber,
-        [bool]$NoKeepAwakeFlag = $false,
-        [bool]$NoLidGuardFlag = $false
+        [Parameter(Mandatory = $true)][string]$GuardianScript,
+        [Parameter(Mandatory = $true)][int]$PortNumber,
+        [bool]$NoKeepAwakeFlag = $false
     )
     $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $GuardianScript, '-Port', [string]$PortNumber)
     if ($NoKeepAwakeFlag) { $args += '-NoKeepAwake' }
-    if ($NoLidGuardFlag) { $args += '-NoLidGuard' }
+    # R1.3: power policy is installation-time authority only. Every Guardian
+    # launched by this watchdog runs without the privileged lid mutation path.
+    $args += '-NoLidGuard'
+    return @($args)
+}
+
+function New-DshGuardianProcessStartInfo {
+    param(
+        [Parameter(Mandatory = $true)][string]$GuardianScript,
+        [Parameter(Mandatory = $true)][int]$PortNumber,
+        [bool]$NoKeepAwakeFlag = $false
+    )
+    $args = Get-DshGuardianRuntimeArguments -GuardianScript $GuardianScript -PortNumber $PortNumber -NoKeepAwakeFlag $NoKeepAwakeFlag
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = 'powershell.exe'
     $psi.UseShellExecute = $true
@@ -566,6 +577,19 @@ function Start-DshGuardianCanonicalProcess {
         $s = [string]$_
         if ($s -match '[\s"]') { '"' + ($s -replace '"', '\"') + '"' } else { $s }
     }) -join ' ')
+    return $psi
+}
+
+function Start-DshGuardianCanonicalProcess {
+    param(
+        [string]$GuardianScript,
+        [int]$PortNumber,
+        [bool]$NoKeepAwakeFlag = $false,
+        # Retained for injected-test/caller compatibility. R1.3 forces the
+        # runtime contract regardless of this legacy value.
+        [bool]$NoLidGuardFlag = $false
+    )
+    $psi = New-DshGuardianProcessStartInfo -GuardianScript $GuardianScript -PortNumber $PortNumber -NoKeepAwakeFlag $NoKeepAwakeFlag
     return [System.Diagnostics.Process]::Start($psi)
 }
 
@@ -1181,18 +1205,9 @@ function Invoke-WatchdogCheck {
     }
 
     # Gate: Resolve-DshGuardianPresence must complete before the shared budget
-    # gate and the normal absent-path Process.Start edge.
-    $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', $GuardianPath, '-Port', [string]$Port)
-    if ($NoKeepAwake) { $args += '-NoKeepAwake' }
-    if ($NoLidGuard) { $args += '-NoLidGuard' }
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = 'powershell.exe'
-    $psi.UseShellExecute = $true
-    $psi.WindowStyle = 'Hidden'
-    $psi.Arguments = (($args | ForEach-Object {
-        $s = [string]$_
-        if ($s -match '[\s"]') { '"' + ($s -replace '"', '\"') + '"' } else { $s }
-    }) -join ' ')
+    # gate and the normal absent-path Process.Start edge. Use the same runtime
+    # argument contract as stale-live replacement.
+    $psi = New-DshGuardianProcessStartInfo -GuardianScript $GuardianPath -PortNumber $Port -NoKeepAwakeFlag ([bool]$NoKeepAwake)
     $startGate = Test-DshGuardianStartAllowed -Path $script:DshGuardianTakeoverBudgetPath `
         -MaxAttempts $TakeoverMaxAttempts -WindowSeconds $TakeoverWindowSeconds -Now ([DateTimeOffset]::Now)
     if (-not $startGate.Allowed) {
@@ -1207,7 +1222,7 @@ function Invoke-WatchdogCheck {
         $postProcesses = @(Get-DshGuardianIdentityProcesses -Heartbeat $postHeartbeat)
         $verification = Confirm-DshGuardianSpawn -ExpectedPid ([int]$proc.Id) -Heartbeat $postHeartbeat -Processes $postProcesses -MaxAgeSeconds $StaleSeconds
         if ($verification.Verified) {
-            TraceW ("guardian spawn verified pid=$($verification.Pid) port=$Port noKeepAwake=$NoKeepAwake noLidGuard=$NoLidGuard")
+            TraceW ("guardian spawn verified pid=$($verification.Pid) port=$Port noKeepAwake=$NoKeepAwake noLidGuard=forced")
         } else {
             TraceW ("guardian spawn unverified pid=$($proc.Id); heartbeat/identity not confirmed; no healthy claim")
         }

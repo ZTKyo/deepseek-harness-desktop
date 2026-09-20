@@ -47,11 +47,12 @@ $builderWired = ($watchdogSource -match '(?s)function Start-DshGuardianCanonical
     ($watchdogSource -match '\$StartProcess = \{.*?Start-DshGuardianCanonicalProcess')
 Assert-GuardianLifecycle 'GLA3 one canonical runtime argument contract' ($sameArgs -and $builderWired) "same=$sameArgs wired=$builderWired"
 
-# GLA4: the Guardian's powercfg writes remain behind -NoLidGuard.
-$lidGuardGated = ($guardianSource -match 'if \(-not \$NoLidGuard\)') -and
-    ($guardianSource -match 'powercfg /setacvalueindex') -and
-    ($guardianSource -match 'powercfg /setdcvalueindex')
-Assert-GuardianLifecycle 'GLA4 -NoLidGuard gates powercfg mutation' $lidGuardGated 'lid guard gate or powercfg writes missing'
+# GLA4: runtime lid writes are retired even when -NoLidGuard is omitted.
+$lidWritesRetired = ($guardianSource -match '\[switch\]\$NoLidGuard') -and
+    ($guardianSource -match 'runtime lid mutation retired') -and
+    ($guardianSource -notmatch '(?i)powercfg\s+/(?:setacvalueindex|setdcvalueindex|setactive)') -and
+    ($guardianSource -notmatch '\$lidChanged|\$lidOld')
+Assert-GuardianLifecycle 'GLA4 Guardian runtime lid writes are retired' $lidWritesRetired 'Guardian still has a runtime powercfg write or restore path'
 
 $testRoot = Join-Path $env:TEMP ('dsh-guardian-lifecycle-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
@@ -81,7 +82,7 @@ $runner = {
         '/getactivescheme' {
             return (& $ok @(('Power Scheme GUID: {0}  (Test)' -f $fake.Scheme)))
         }
-        '/q' {
+        '/qh' {
             if ($fake.QueryMode -eq 'missing') {
                 return (& $ok @(
                     'Power Setting GUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee  (Unrelated A)',

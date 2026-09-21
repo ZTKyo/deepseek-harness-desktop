@@ -9,6 +9,9 @@
 #   R-1（已修）：原只写 "HEAD = <sha>"，而该 sha 是「生成时 HEAD」，本证据文件本身
 #        在紧随其后的 docs-only 提交里落盘 → 文件内 HEAD 看起来"不是最终 HEAD"。
 #        现改为显式区分 TESTED_HEAD（被测代码）与证据文件落盘说明，并记录工作树状态。
+#        【补充】证据文件自身在生成时被改写，原 dirty 统计把它算进去 → 永远显示
+#        "dirty (1 entries)"，评审无法判断是否还有其它未提交改动。现从统计中排除
+#        本文件自身，只有真正存在其它改动时才报 dirty 并逐条列出路径。
 #   R-8（已修）：证据文件原由调用方 `pwsh ... > 文件` 重定向产生，而 Windows PowerShell
 #        5.1 的 `>` 默认写 UTF-16LE → 落盘文件带 FF FE BOM，read/grep/CI diff 等普通
 #        文本工具视其为二进制，无法复核。现由脚本自身以 UTF-8(no BOM) 写出（-OutFile），
@@ -109,12 +112,19 @@ foreach ($s in ($ac7 + $r3)) {
 }
 
 $testedHead = (git rev-parse HEAD).Trim()
-$dirty = @(git status --porcelain).Count
+# R-1 补充：证据文件自身在生成过程中被改写，必须从「工作树是否干净」里排除——
+# 否则永远显示 dirty (1 entries)，评审无法判断是否还有其它未提交改动。
+$allDirty = @(git status --porcelain)
+$selfLeaf = if ($OutFile -ne '') { Split-Path -Leaf $OutFile } else { '' }
+$dirtyList = @($allDirty | Where-Object {
+  if ($selfLeaf -ne '' -and "$_" -like "*$selfLeaf*") { $false } else { $true }
+})
+$dirty = $dirtyList.Count
 
 Emit ""
 Emit "==== P4 LEARN R3 FINAL-HEAD FULL REGRESSION ===="
 Emit ("TESTED_HEAD = " + $testedHead)
-Emit ("WORKTREE    = " + $(if ($dirty -eq 0) { 'clean (0 modified / 0 untracked)' } else { "dirty ($dirty entries)" }))
+Emit ("WORKTREE    = " + $(if ($dirty -eq 0) { 'clean (0 modified / 0 untracked；本证据文件自身已从统计中排除)' } else { "dirty ($dirty entries): " + ($dirtyList -join ' | ') }))
 Emit "NOTE        = TESTED_HEAD 是「生成本证据时被测代码所在提交」。本证据文件自身在紧随其后的"
 Emit "              docs-only 提交中落盘，故该提交 sha 会晚于 TESTED_HEAD —— 属自引用标注问题，"
 Emit "              并非「跑的不是最终代码」。二者之间 plugins/ 与 tests/learn/ 零差异，"

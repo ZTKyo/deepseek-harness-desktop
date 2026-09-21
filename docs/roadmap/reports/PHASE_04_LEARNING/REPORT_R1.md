@@ -194,7 +194,12 @@ mean overwriting the operator's live plugins, which is not mine to do unprompted
   registered in `~/.dsh/profiles/web/cordis.patch.yml`. Deploying it would require a service
   restart, which the operator's rules forbid mid-task. Deployment is a separate, operator-gated
   step.
-- **No push / merge / PR.** Commit on `p4-learning-r1` only.
+- **Pushed and PR opened; NOT merged, NOT deployed.** Branch `p4-learning-r1` (commits `ede575e`
+  + docs commit) pushed to `origin`, PR **#90** opened against `main`:
+  https://github.com/ZTKyo/deepseek-harness-desktop/pull/90 — verified state at hand-off:
+  `state=OPEN`, `isDraft=false`, `mergedAt=null`, `mergeStateStatus=BLOCKED`. The PR exists so the
+  External Review can be performed on a real, inspectable diff; **merging, deploying, and any
+  VERIFIED declaration remain explicitly outside R1** and are reserved for the Reviewer + operator.
 - **Latent P3 gap left unfixed** (pre-existing, non-blocking, out of P4 scope):
   `deriveVerificationState` returns `null` when `acceptanceCriteria` is empty
   (`autonomy-state-core.mjs:219`) while the tool output schema declares `type: "string"`

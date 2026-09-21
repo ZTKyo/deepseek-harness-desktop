@@ -171,11 +171,20 @@ check('every provenance seq points at a REAL event', autoEx.sourceEventSeqs.ever
   return ev && Number.isInteger(ev.seq) && ev.seq === q;
 }));
 check('provenance seqs are real surface nodes', autoEx.sourceEventSeqs.every((q) => real.nodes.includes(q)));
+// 标题经 oneLine() 折叠过空白（\s+ → ' '），而原始 turn 文本含换行 ⇒ 两侧都做同样的空白
+// 规范化后再比较。此断言此前是"碰巧通过"：一旦信号轮换成含换行的发言（R2 修好中文关键词后
+// 就会发生），换行 vs 空格必然导致 includes() 假失败。
+const normWs = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const titleKey = normWs(autoEx.title).slice(0, 40);
+const titleFromRealTurn = (key) => real.nodes.some((q) => {
+  const d = core.buildLearnDigest(real.events, [q]);
+  return d.ok && d.digest.turns[0] && normWs(d.digest.turns[0].text).includes(key);
+});
 check('title derived from real utterance (not invented)', typeof autoEx.title === 'string' && autoEx.title.length > 0
-  && real.nodes.some((q) => {
-    const d = core.buildLearnDigest(real.events, [q]);
-    return d.ok && d.digest.turns[0] && d.digest.turns[0].text.includes(autoEx.title.slice(0, 40));
-  }), `title=${JSON.stringify(autoEx.title.slice(0, 60))}`);
+  && titleKey.length > 0 && titleFromRealTurn(titleKey),
+  `title=${JSON.stringify(autoEx.title.slice(0, 60))}`);
+check('NEGATIVE CONTROL: an invented title is rejected by that same check',
+  !titleFromRealTurn(normWs('THIS TITLE WAS NEVER UTTERED ANYWHERE IN THIS SESSION ZZZQ').slice(0, 40)));
 check('origin session recorded', autoEx.originSessionId === SID);
 check('candidate body quotes real turns with seq anchors', /\[\d+\]\s+(user|assistant):/.test(autoEx.body),
   JSON.stringify(autoEx.body.slice(0, 120)));

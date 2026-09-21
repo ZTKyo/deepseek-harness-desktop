@@ -615,6 +615,29 @@ export function telemetrySummary(store) {
  * @param {{messageOfEvent:Function, recursiveText:Function, isPluginSourced:Function}} [extractors]
  * @returns {{ok:boolean, digest?:object, error?:string}}
  */
+/**
+ * Harness 注入内容标记（R2 对抗评审新增）。
+ *
+ * 实证：R1 的真实会话摘要里，27 个信号中有 4 个来自 `<system-reminder>` 注入块
+ * （工作区指令 / skill catalog），它们被当成"失败信号"并生成候选，标题就是注入文本本身。
+ * `isPluginSourced` 只能覆盖**部分**此类事件（实测同一会话内有的被标记、有的没有），
+ * 因此这里做一层与来源标记无关的**内容级**防御。
+ */
+export const INJECTED_BLOCK_RE = /<system-reminder>[\s\S]*?<\/system-reminder>/gi;
+/** 未闭合的注入块（截断日志）：从标记处一直切到结尾。 */
+export const INJECTED_OPEN_RE = /<system-reminder>[\s\S]*$/i;
+
+/**
+ * 剥离 harness 注入块，返回剩余的真实发言文本。
+ * 只剥块、不剥整轮：注入块常常是**追加**在真实用户消息后面的，整轮丢弃会连真人发言一起丢。
+ */
+export function stripInjectedContent(text) {
+  if (typeof text !== 'string' || !text) return '';
+  let out = text.replace(INJECTED_BLOCK_RE, '');
+  out = out.replace(INJECTED_OPEN_RE, '');
+  return out.trim();
+}
+
 export function buildLearnDigest(events, nodeSeqs, extractors = P25_EXTRACTORS) {
   if (!Array.isArray(events)) return { ok: false, error: 'events_not_array' };
   if (!Array.isArray(nodeSeqs)) return { ok: false, error: 'nodes_not_array' };
@@ -625,18 +648,29 @@ export function buildLearnDigest(events, nodeSeqs, extractors = P25_EXTRACTORS) 
     return { ok: false, error: 'missing_official_extractors' };
   }
   const { messageOfEvent, recursiveText, isPluginSourced } = extractors;
+
+  // R2 对抗评审：调用方传入的 nodeSeqs 必须先**规范化**（去重 + 升序），否则
+  //   - 重复 seq（如 [0,0,0,1]）会把同一轮发言算 3 次、放大信号与回源锚点；
+  //   - 乱序 seq（如 [1,0]）会让信号顺序随调用方顺序漂移，破坏"确定性"契约。
+  // 官方 surface.nodes 本身有序且唯一，这里是**防御性**规范化，不依赖调用方纪律。
+  const canonical = [...new Set(nodeSeqs.filter((q) => Number.isInteger(q) && q >= 0 && q < events.length))]
+    .sort((a, b) => a - b);
+
   const turns = [];
-  for (const seq of nodeSeqs) {
-    if (!Number.isInteger(seq) || seq < 0 || seq >= events.length) continue;
+  let injectedSkipped = 0;
+  for (const seq of canonical) {
     const ev = events[seq];
     if (!ev || typeof ev.type !== 'string') continue;
     const msg = messageOfEvent(ev);          // ← P2.5 官方提取路径
     if (!msg) continue;
-    const text = recursiveText(msg.content ?? msg);   // ← P2.5 官方递归文本提取
-    if (!text) continue;
+    const raw = recursiveText(msg.content ?? msg);   // ← P2.5 官方递归文本提取
+    if (!raw) continue;
     const role = ev.type === 'user/message' ? 'user' : 'assistant';
     // 插件注入的投影不算原始人类/模型发言（防反馈回路）—— 与 P2.5 同一纪律
     if (isPluginSourced(msg)) continue;
+    // 内容级防御：剥掉 harness 注入块；剥完为空 ⇒ 整轮都不是真实发言，跳过
+    const text = stripInjectedContent(raw);
+    if (!text) { injectedSkipped += 1; continue; }
     turns.push({ seq, role, text: redactSecrets(text) });
   }
   return {
@@ -644,6 +678,7 @@ export function buildLearnDigest(events, nodeSeqs, extractors = P25_EXTRACTORS) 
     digest: {
       turnCount: turns.length,
       turns,
+      injectedSkipped,
       firstSeq: turns.length ? turns[0].seq : null,
       lastSeq: turns.length ? turns[turns.length - 1].seq : null,
       sourceEventSeqs: turns.map((t) => t.seq),
@@ -651,24 +686,79 @@ export function buildLearnDigest(events, nodeSeqs, extractors = P25_EXTRACTORS) 
   };
 }
 
-/** 判定摘要中是否存在可学习的信号（失败/纠正/成功模式）。纯启发式、确定性。 */
+/**
+ * 学习信号模式表。R2 对抗评审修正了两个实证缺陷，纪律固化在这里：
+ *
+ * 1) **CJK 绝不能用 `\b`**。`\b` 基于 ASCII 的 `\w`（[A-Za-z0-9_]），中文字符不是词字符，
+ *    纯中文文本里永远构不成词边界 ⇒ `\b报错\b` 在"这里报错了"里**永不匹配**。
+ *    R1 的原实现把中英文混在同一条 `\b(...)\b` 里，导致中文分支 100% 失效
+ *    （实测：报错/失败/崩溃/已修复/测试通过 全部 signals=[]）。因此拉丁词与 CJK 词
+ *    **分成两个字段**：latin 保留 `\b`，cjk 不加边界。
+ *
+ * 2) **数组顺序 = 语义优先级（resolution > correction > failure）**，不是"谁写在前面谁赢"。
+ *    R1 用 `break` 取首个命中，而 failure 恰好排在首位 ⇒ "fixed the error"、"resolved the
+ *    failure" 这类**已经解决**的发言被判成 failure（语义反转）。现在取**最强**语义。
+ *
+ * 仍然只是启发式：本函数只决定"是否值得生成一条待人工审批的候选"，
+ * 绝不构成激活，也绝不因误判改变任何行为（误报代价 = 一条被驳回的提案）。
+ */
+export const SIGNAL_PATTERNS = Object.freeze([
+  // resolution 最强：出现"已修复/已解决"时，同一轮里的 error 字样通常是在描述被修掉的东西
+  {
+    kind: 'resolution',
+    latin: /\b(fixed|resolved|works now|passing|solved|green)\b/i,
+    cjk: /(已修复|修复了|修复完成|解决了|已解决|测试通过|全部通过|通过测试|跑通|搞定|成功)/,
+  },
+  {
+    kind: 'correction',
+    latin: /\b(instead|rather than|should be|actually|correction|corrected)\b/i,
+    cjk: /(改为|应该|纠正|更正|不是.{0,12}而是)/,
+  },
+  // failure 最弱：只在没有更强语义时才算失败
+  {
+    kind: 'failure',
+    latin: /\b(error|failed|failure|exception|crash|rejected|broken)\b/i,
+    cjk: /(报错|失败|崩溃|错误|异常|超时|无法|不能|挂了|坏了)/,
+  },
+]);
+
+/**
+ * 判定摘要中是否存在可学习的信号（失败/纠正/解决模式）。纯启发式、确定性。
+ *
+ * @returns {{hasSignal:boolean, signals:Array<{kind:string,seq:number,role:string}>,
+ *            resolved:boolean, unresolvedFailureSeqs:number[], kinds:string[]}}
+ *   - signals：每条发言最多一个 kind（取最强语义），按 seq 升序；
+ *   - resolved：存在 failure 且其**之后**出现 resolution ⇒ true（失败-解决配对）；
+ *   - unresolvedFailureSeqs：没有被后续 resolution 覆盖的 failure seq（真正的"缺口"）。
+ */
 export function learningSignals(digest) {
   if (!isPlainObject(digest) || !Array.isArray(digest.turns)) {
-    return { hasSignal: false, signals: [] };
+    return { hasSignal: false, signals: [], resolved: false, unresolvedFailureSeqs: [], kinds: [] };
   }
-  const SIGNAL_PATTERNS = [
-    { kind: 'failure', re: /\b(error|failed|failure|exception|crash|rejected|报错|失败|崩溃)\b/i },
-    { kind: 'correction', re: /\b(instead|rather than|should be|actually|correction|改为|应该|纠正)\b/i },
-    { kind: 'resolution', re: /\b(fixed|resolved|works now|passing|解决|修复|通过)\b/i },
-  ];
   const signals = [];
   for (const t of digest.turns) {
-    for (const p of SIGNAL_PATTERNS) {
-      if (p.re.test(t.text)) {
+    const text = typeof t.text === 'string' ? t.text : '';
+    for (const p of SIGNAL_PATTERNS) {          // 已按语义强度排序 → 首个命中即最强
+      if (p.latin.test(text) || p.cjk.test(text)) {
         signals.push({ kind: p.kind, seq: t.seq, role: t.role });
         break;
       }
     }
   }
-  return { hasSignal: signals.length > 0, signals };
+  // 稳定按 seq 升序（与调用方传入的 turns 顺序解耦）
+  signals.sort((a, b) => (a.seq - b.seq) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+
+  // 失败-解决配对：只看 seq 更晚的 resolution（一次 resolution 覆盖它之前的全部 failure）
+  const failureSeqs = signals.filter((s) => s.kind === 'failure').map((s) => s.seq);
+  const resolutionSeqs = signals.filter((s) => s.kind === 'resolution').map((s) => s.seq);
+  const lastResolution = resolutionSeqs.length ? resolutionSeqs[resolutionSeqs.length - 1] : null;
+  const unresolvedFailureSeqs = failureSeqs.filter((q) => lastResolution === null || q > lastResolution);
+
+  return {
+    hasSignal: signals.length > 0,
+    signals,
+    resolved: failureSeqs.length > 0 && unresolvedFailureSeqs.length === 0,
+    unresolvedFailureSeqs,
+    kinds: [...new Set(signals.map((s) => s.kind))].sort(),
+  };
 }

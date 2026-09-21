@@ -189,10 +189,15 @@ export function apply(ctx, config = {}) {
     const signalTurn = digest.turns.find((t) => sig.signals.some((s) => s.seq === t.seq)) ?? digest.turns[0];
     const title = oneLine(signalTurn.text, 120) || 'observed session signal';
     // 正文 = 真实片段 + 出处（脱敏已由 buildLearnDigest 完成）
-    const kinds = [...new Set(sig.signals.map((s) => s.kind))].sort();
+    const kinds = sig.kinds ?? [...new Set(sig.signals.map((s) => s.kind))].sort();
+    // R2：把"缺口资格"写实 —— 失败是否被后续发言解决，而不是只罗列命中的关键词
+    const outcome = sig.signals.some((s) => s.kind === 'failure')
+      ? (sig.resolved ? 'resolved' : `unresolved-failure(seq ${sig.unresolvedFailureSeqs.join(',')})`)
+      : 'no-failure';
     const body = [
       `signal: ${kinds.join('+')}`,
-      `origin: session ${sid} seq ${digest.firstSeq}-${digest.lastSeq}`,
+      `outcome: ${outcome}`,
+      `origin: session ${sid}, turns=${digest.turnCount}, window seq ${digest.firstSeq}-${digest.lastSeq}`,
       '',
       ...digest.turns.map((t) => `[${t.seq}] ${t.role}: ${oneLine(t.text, 300)}`),
     ].join('\n').slice(0, 4000);

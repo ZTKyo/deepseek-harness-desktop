@@ -14,6 +14,8 @@
 //   C11 telemetryEvent：结构化 + 脱敏 + 有界环形缓冲（AC8）
 //   C12 buildLearnDigest：复用 P2.5 官方提取器；跳过插件注入消息（AC1）
 //   C13 learningSignals：确定性启发式信号
+//   C15 R2 对抗评审回归：锁死 5 个已实证缺陷（CJK 词边界失效 / 首个命中导致语义反转 /
+//       失败-解决无配对 / harness 注入块被当学习信号 / 输入 nodeSeqs 未规范化）
 //
 // 注意：本文件刻意不出现任何"密钥形状"的字面量 —— 所有假密钥一律用字符串拼接
 // 在运行时构造，保证仓库规范扫描器（tests/reliability/secret-scan-check.mjs）零命中。
@@ -53,6 +55,8 @@ import {
   stableHash,
   normalizeTags,
   normalizeSourceSeqs,
+  stripInjectedContent,
+  SIGNAL_PATTERNS,
   P25_EXTRACTORS,
 } from "../../plugins/learn-core.mjs";
 // AC1 直证：P2.5 官方提取器本体（P4 必须复用同一实现，不得另起 parser）
@@ -467,6 +471,106 @@ section("C14: stableHash determinism");
   assert(stableHash("abc") === stableHash("abc"), "hash deterministic");
   assert(stableHash("abc") !== stableHash("abd"), "hash distinguishes input");
   assert(/^[0-9a-f]{8}$/.test(stableHash("x")), "hash format is 8 hex chars");
+}
+
+section("C15: R2 adversarial-review regressions (proven defects, locked)");
+{
+  // AC1 纪律：仍然复用 P2.5 官方提取器本体（不另起 parser）
+  const X = { messageOfEvent: p25MessageOfEvent, recursiveText: p25RecursiveText, isPluginSourced: p25IsPluginSourced };
+  const turnsOf = (arr) => ({ turns: arr.map((t, i) => ({ seq: t.seq ?? i, role: t.role ?? "user", text: t.text })) });
+  const kindOf = (text) => {
+    const s = learningSignals(turnsOf([{ text }]));
+    return s.hasSignal ? s.signals[0].kind : null;
+  };
+
+  // (1) CJK 词边界缺陷：`\b` 基于 ASCII 的 \w，中文字符不是词字符 ⇒ 纯中文文本里永远
+  //     构不成词边界，`\b报错\b` 在"这里报错了"中永不匹配。修复前本组断言全部为 null。
+  for (const t of ["报错", "失败了", "这里报错了", "程序崩溃了", "无法启动", "配置错误"]) {
+    assert(kindOf(t) === "failure", `CJK failure keyword detected: ${t}`, `got ${kindOf(t)}`);
+  }
+  for (const t of ["已修复", "问题解决了", "测试通过", "跑通了", "搞定了"]) {
+    assert(kindOf(t) === "resolution", `CJK resolution keyword detected: ${t}`, `got ${kindOf(t)}`);
+  }
+  for (const t of ["应该改成这样", "请纠正这个说法"]) {
+    assert(kindOf(t) === "correction", `CJK correction keyword detected: ${t}`, `got ${kindOf(t)}`);
+  }
+
+  // (2) 首个命中缺陷：failure 曾排在模式表首位且 `break` ⇒ "已经解决"的发言被判成 failure
+  //     （语义反转）。修复后按语义强度取最强，而不是按数组顺序取最先。
+  assert(kindOf("fixed the error") === "resolution", "resolution outranks failure in the same turn",
+    `got ${kindOf("fixed the error")}`);
+  assert(kindOf("resolved the failure") === "resolution", "resolved+noun stays resolution");
+  assert(kindOf("the crash was fixed") === "resolution", "fixed outranks crash");
+  assert(SIGNAL_PATTERNS[0].kind === "resolution" && SIGNAL_PATTERNS[SIGNAL_PATTERNS.length - 1].kind === "failure",
+    "pattern table is declared strongest-first (resolution ... failure)");
+
+  // (3) 失败-解决配对：R1 只罗列命中的关键词，从不判断失败是否被后续发言解决。
+  const paired = learningSignals(turnsOf([{ seq: 10, text: "the build failed" }, { seq: 11, role: "assistant", text: "fixed now" }]));
+  assert(paired.resolved === true, "failure followed by a later resolution -> resolved");
+  assert(paired.unresolvedFailureSeqs.length === 0, "no open gap when resolved");
+  const lone = learningSignals(turnsOf([{ seq: 10, text: "the build failed" }]));
+  assert(lone.resolved === false, "lone failure -> not resolved");
+  assert(lone.unresolvedFailureSeqs.length === 1 && lone.unresolvedFailureSeqs[0] === 10,
+    "lone failure reported as an open gap", JSON.stringify(lone.unresolvedFailureSeqs));
+  const late = learningSignals(turnsOf([{ seq: 10, role: "assistant", text: "fixed now" }, { seq: 11, text: "it failed again" }]));
+  assert(late.resolved === false, "a resolution BEFORE the failure does not resolve it (seq order matters)");
+  assert(late.unresolvedFailureSeqs.join(",") === "11", "the later failure is the open gap",
+    late.unresolvedFailureSeqs.join(","));
+  assert(Array.isArray(lone.kinds) && lone.kinds.join(",") === "failure", "kinds summary exposed");
+
+  // (4) 注入块曾被当成学习信号（真实会话实测：27 个信号里 4 个来自 <system-reminder> 注入块，
+  //     标题就是注入文本本身）。isPluginSourced 只覆盖部分事件 ⇒ 增加内容级防御。
+  assert(stripInjectedContent("<system-reminder>noise</system-reminder>real words") === "real words",
+    "closed injected block stripped, real speech kept");
+  assert(stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me",
+    "unterminated injected block stripped (truncated logs)");
+  assert(stripInjectedContent("<system-reminder>only noise</system-reminder>") === "",
+    "injection-only turn becomes empty");
+  assert(stripInjectedContent("plain text") === "plain text", "plain text untouched");
+  assert(stripInjectedContent("") === "" && stripInjectedContent(null) === "", "empty/null safe");
+
+  const evInj = [
+    { type: "user/message", data: { role: "user", content: [{ type: "text", text: "<system-reminder>the word error appears in injected text</system-reminder>" }] } },
+    { type: "user/message", data: { role: "user", content: [{ type: "text", text: "real question<system-reminder>injected tail</system-reminder>" }] } },
+  ];
+  const injDigest = buildLearnDigest(evInj, [0, 1], X);
+  assert(injDigest.digest.turnCount === 1, "injection-only turn excluded from digest", `got ${injDigest.digest.turnCount}`);
+  assert(injDigest.digest.injectedSkipped === 1, "injectedSkipped counted", `got ${injDigest.digest.injectedSkipped}`);
+  assert(injDigest.digest.turns[0].text === "real question", "real speech survives stripping");
+  assert(learningSignals(injDigest.digest).hasSignal === false,
+    "harness-injected reminder text no longer produces a learning signal");
+
+  // (5) 输入规范化：重复/乱序 nodeSeqs 曾被原样采信 —— 重复会放大计数与回源锚点，
+  //     乱序会让信号顺序随调用方漂移（破坏"同一输入同一输出"的确定性契约）。
+  const ev2 = [
+    { type: "user/message", data: { role: "user", content: [{ type: "text", text: "it failed" }] } },
+    { type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "fixed now" }] } } },
+  ];
+  const dup = buildLearnDigest(ev2, [0, 0, 0, 1], X);
+  assert(dup.digest.turnCount === 2, "duplicate nodeSeqs deduplicated", `got ${dup.digest.turnCount}`);
+  assert(dup.digest.sourceEventSeqs.join(",") === "0,1", "sourceEventSeqs unique + ascending",
+    dup.digest.sourceEventSeqs.join(","));
+  const rev = buildLearnDigest(ev2, [1, 0], X);
+  assert(rev.digest.turns.map((t) => t.seq).join(",") === "0,1", "out-of-order nodeSeqs canonicalized",
+    rev.digest.turns.map((t) => t.seq).join(","));
+  assert(JSON.stringify(learningSignals(rev.digest).signals) === JSON.stringify(learningSignals(dup.digest).signals),
+    "signals are independent of caller-supplied ordering");
+  assert(learningSignals(dup.digest).resolved === true, "canonicalized digest still pairs failure->resolution");
+
+  // (6) 能力不回退：R1 的英文关键词必须**全部**仍被识别。R2 曾静默丢掉 correction 的
+  //     `actually`，在真实会话里表现为若干英文发言不再产生任何信号（标题消失）。
+  //     本组断言防止今后再出现"修中文却丢英文"的隐性回退。
+  const R1_LATIN = [
+    "error", "failed", "failure", "exception", "crash", "rejected",
+    "instead", "rather than", "should be", "actually", "correction",
+    "fixed", "resolved", "works now", "passing",
+  ];
+  for (const w of R1_LATIN) {
+    const got = kindOf(`this sentence mentions ${w} somewhere`);
+    assert(got !== null, `R1 latin keyword still detected: "${w}"`, `got ${got}`);
+  }
+  assert(SIGNAL_PATTERNS.every((p) => p.latin instanceof RegExp && p.cjk instanceof RegExp),
+    "every pattern carries both a latin and a cjk regex");
 }
 
 console.log(`\n${"=".repeat(60)}`);

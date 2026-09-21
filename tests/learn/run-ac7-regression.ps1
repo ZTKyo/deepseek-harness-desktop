@@ -26,6 +26,7 @@ $suites = @(
   'tests\router\test-exact-model-preservation.mjs',
   'tests\supervisor\test-supervisor-mutation-state.mjs',
   'tests\learn\test-learn-core.mjs',
+  'tests\learn\test-learn-r3-fixes.mjs',
   'tests\learn\run-learn-real-e2e.mjs'
 )
 

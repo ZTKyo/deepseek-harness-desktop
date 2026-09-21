@@ -46,6 +46,7 @@ import {
   learningSignals,
   redactSecrets,
   containsSecret,
+  stableHash,
   MAX_TITLE_LEN,
 } from './learn-core.mjs';
 
@@ -71,7 +72,14 @@ try {
 }
 
 function sanitizeFileId(sid) {
-  return String(sid ?? 'unknown').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+  const s = String(sid ?? 'unknown');
+  const safe = s.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+  // R3 根因修复：清洗与截断都会撞名（'a b' vs 'a_b'；超长 sid 截断到 120 后同名）。撞名会让
+  // 两个会话共用一个库文件并互相覆盖（互相丢数据）——仅靠 loadStore 的归属守卫只能拒绝载入、
+  // 不能避免覆盖。故在"清洗确实改变了原 sid"时追加原 sid 的短哈希以消除撞名；
+  // 未被改动的常规 sessionId（如 session-<uuid>）文件名保持原样 ⇒ 对既有库文件零迁移影响。
+  if (safe === s) return safe;
+  return `${safe}-${stableHash(s).slice(0, 8)}`;
 }
 
 /** 单行化 + 截断（用于从真实发言派生标题）。 */
@@ -111,6 +119,11 @@ export function apply(ctx, config = {}) {
       const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
       const ok = validateStore(parsed);      // 结构不符/损坏 → null（绝不部分信任）
       if (!ok) return null;
+      // R3 隔离守卫：库归属必须与请求方一致，否则 fail-closed 拒绝载入。
+      // 实证（redteam-r3-isolation.mjs）：sanitizeFileId 会把 'probe session X' 与
+      // 'probe_session_X' 映射到同一文件，超长 sid 截断到 120 后同样撞名；若无此守卫，
+      // 后请求方会静默继承前一方的经验（跨会话污染），且不产生任何 STORE_REBUILT 告警。
+      if (ok.sessionId !== sid) return null;
       return ok;
     } catch {
       return null;

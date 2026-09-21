@@ -179,7 +179,9 @@ export function normalizeTags(tags) {
     if (!c) continue;
     set.add(c.length > MAX_TAG_LEN ? c.slice(0, MAX_TAG_LEN) : c);
   }
-  return [...set].sort();
+  // R3：数量也必须受限（此前只限单个 tag 长度，未限个数 → 可持久化无界 tags）。
+  // 先排序再截断 ⇒ 保留哪 MAX_TAGS 个是确定的（幂等、顺序无关）。
+  return [...set].sort().slice(0, MAX_TAGS);
 }
 
 /** 规范化回源锚点：非负整数、去重、升序（确定性）。 */
@@ -330,6 +332,10 @@ function withExperience(store, exp) {
  * 注意：本函数永远不产生 APPROVED 状态。
  */
 export function propose(store, draft) {
+  // R3：畸形 store 必须返回结构化错误（此前直接读 store.experiences 抛 TypeError）
+  if (!isPlainObject(store) || !Array.isArray(store.experiences)) {
+    return { ok: false, error: 'invalid_store' };
+  }
   const made = makeExperience(draft);
   if (!made.ok) return { ok: false, error: made.error };
   const exp = made.value;
@@ -439,6 +445,10 @@ export function isRecallable(exp) {
  * @returns {{ok:boolean, items:Array, considered:number, excluded:number}}
  */
 export function recall(store, query, opts = {}) {
+  // R3：畸形 store 必须返回结构化错误（此前直接读 store.experiences 抛 TypeError）
+  if (!isPlainObject(store) || !Array.isArray(store.experiences)) {
+    return { ok: false, error: 'invalid_store', items: [], considered: 0, excluded: 0 };
+  }
   const limit = Number.isInteger(opts.limit) && opts.limit > 0
     ? Math.min(opts.limit, MAX_RECALL_LIMIT)
     : 5;
@@ -479,6 +489,8 @@ export function recall(store, query, opts = {}) {
 
 /** 记录一次召回（更新命中条目的召回统计）。 */
 export function recordRecall(store, ids, at) {
+  // R3：畸形 store 安全返回（此前 store.experiences.map 抛 TypeError）
+  if (!isPlainObject(store) || !Array.isArray(store.experiences)) return store;
   const set = new Set(Array.isArray(ids) ? ids : []);
   const ts = Number.isSafeInteger(at) ? at : 0;
   const experiences = store.experiences.map((e) =>
@@ -802,6 +814,8 @@ export function learningSignals(digest) {
   }
   const signals = [];
   for (const t of digest.turns) {
+    // R3：turns 里的非对象元素必须跳过（此前 t.text 在 null 元素上抛 TypeError）
+    if (!isPlainObject(t)) continue;
     const text = typeof t.text === 'string' ? t.text : '';
     for (const p of SIGNAL_PATTERNS) {          // 已按语义强度排序 → 首个命中即最强
       // R3：必须排除否定语境（"没有报错" 不是失败），逐个匹配检查而非一次性 test

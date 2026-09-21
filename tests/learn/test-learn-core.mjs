@@ -520,10 +520,25 @@ section("C15: R2 adversarial-review regressions (proven defects, locked)");
 
   // (4) 注入块曾被当成学习信号（真实会话实测：27 个信号里 4 个来自 <system-reminder> 注入块，
   //     标题就是注入文本本身）。isPluginSourced 只覆盖部分事件 ⇒ 增加内容级防御。
+  //
+  //     R3 对抗评审修正：R2 的 "unterminated" 断言写的是
+  //       stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me"
+  //     —— 它把**缺陷行为锁进了测试**。原正则 /<system-reminder>[\s\S]*$/i 在任意位置命中即吞到结尾，
+  //     实测会吃掉真人发言：用户只是讨论这个标签时（"我注意到日志里有 <system-reminder> 这个标签，
+  //     它后面的报错都没被记录"）81% 文本被删。已收紧为"标签独占一行"（真注入块的排版形态），
+  //     实证见 docs/roadmap/evidence/P4_LEARN_R3_INJECTION_POSITIONS.txt：
+  //     真注入 720 次全部 = 行首且独占一行；引用/讨论 1454 次全部 = 行中且标签后跟行内文字。
+  //     故此处把断言升级为 R3 规格（真注入仍被剥、讨论不再被吞），并保留"行中注入尾巴"用例
+  //     作为**反向锁**：它现在必须被保留（因为那正是用户讨论该标签的形态）。
   assert(stripInjectedContent("<system-reminder>noise</system-reminder>real words") === "real words",
     "closed injected block stripped, real speech kept");
-  assert(stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me",
-    "unterminated injected block stripped (truncated logs)");
+  assert(stripInjectedContent("keep me\n<system-reminder>\nunterminated tail") === "keep me",
+    "unterminated injected block stripped (truncated logs, tag alone on its line)");
+  assert(stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me<system-reminder>unterminated tail",
+    "R3 reverse lock: an inline tag is a discussion/quote, its text must survive");
+  const discuss = "我注意到日志里有 <system-reminder> 这个标签，它后面的报错都没被记录";
+  assert(stripInjectedContent(discuss) === discuss,
+    "R3: a user discussing the tag keeps their whole sentence", JSON.stringify(stripInjectedContent(discuss)));
   assert(stripInjectedContent("<system-reminder>only noise</system-reminder>") === "",
     "injection-only turn becomes empty");
   assert(stripInjectedContent("plain text") === "plain text", "plain text untouched");

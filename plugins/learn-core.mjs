@@ -624,8 +624,20 @@ export function telemetrySummary(store) {
  * 因此这里做一层与来源标记无关的**内容级**防御。
  */
 export const INJECTED_BLOCK_RE = /<system-reminder>[\s\S]*?<\/system-reminder>/gi;
-/** 未闭合的注入块（截断日志）：从标记处一直切到结尾。 */
-export const INJECTED_OPEN_RE = /<system-reminder>[\s\S]*$/i;
+/**
+ * 未闭合的注入块（截断日志）：从标记处一直切到结尾。
+ *
+ * R3 对抗评审修正：R2 原实现是 `/<system-reminder>[\s\S]*$/i`（任意位置命中即吞到结尾），
+ * 实测会**吞掉真人发言**：用户只是**讨论/引用**这个标签时（"我注意到日志里有
+ * <system-reminder> 这个标签，它后面的报错都没被记录"），81% 的文本被删掉。
+ *
+ * 收紧为"标签独占一行"（标签后只允许空白再换行）——这是真注入块的排版形态。
+ * 实证（两个真实会话、官方提取器口径、2174 次出现）：
+ *   - 真注入 720 次 = 行首 **且** 标签独占一行（两者 100% 重合，lsOnly=0/aloneOnly=0）
+ *   - 引用/讨论 1454 次 = 行中 **且** 标签后紧跟行内文字（neither=1454）
+ * 普通工作会话 21/21 真实注入全部保留；引用文本不再被吞。
+ */
+export const INJECTED_OPEN_RE = /^[ \t]*<system-reminder>[ \t]*\r?\n[\s\S]*$/im;
 
 /**
  * 剥离 harness 注入块，返回剩余的真实发言文本。
@@ -699,15 +711,26 @@ export function buildLearnDigest(events, nodeSeqs, extractors = P25_EXTRACTORS) 
  *    R1 用 `break` 取首个命中，而 failure 恰好排在首位 ⇒ "fixed the error"、"resolved the
  *    failure" 这类**已经解决**的发言被判成 failure（语义反转）。现在取**最强**语义。
  *
+ * R3 对抗评审（真实会话 116 条信号人工核对，precision 20.7%）新增第 3 条纪律：
+ *
+ * 3) **否定必须显式排除**。R2 的词表是纯关键词，`没有报错` / `not broken` / `not fixed`
+ *    全部被当成正向信号（实测 6/6 反向表述误判），而规范 §9 明确要求它们不能产生信号。
+ *    这里加一层**有界的**否定作用域判定（见 isNegated）：只要求否定词**紧贴**关键词之前
+ *    （中间只允许少量虚词），不引入句法分析，只覆盖"紧贴否定"这一最常见形态。
+ *
  * 仍然只是启发式：本函数只决定"是否值得生成一条待人工审批的候选"，
  * 绝不构成激活，也绝不因误判改变任何行为（误报代价 = 一条被驳回的提案）。
+ *
+ * R3 已知边界（不修，如实记录）：假设句（"如果它报错就重试"）、文档/字段名描述
+ * （"「failure」字段表示失败状态"）、引用块（"用户说'我这边报错了'，我怎么回？"）
+ * 与真实陈述在**词形上不可区分**，纯关键词方案无法排除——需句法/语义层，超出最小修复范围。
  */
 export const SIGNAL_PATTERNS = Object.freeze([
   // resolution 最强：出现"已修复/已解决"时，同一轮里的 error 字样通常是在描述被修掉的东西
   {
     kind: 'resolution',
     latin: /\b(fixed|resolved|works now|passing|solved|green)\b/i,
-    cjk: /(已修复|修复了|修复完成|解决了|已解决|测试通过|全部通过|通过测试|跑通|搞定|成功)/,
+    cjk: /(已修复|修复了|修复完成|修好了|修好|解决了|已解决|测试通过|全部通过|通过测试|跑通|搞定|成功)/,
   },
   {
     kind: 'correction',
@@ -715,12 +738,54 @@ export const SIGNAL_PATTERNS = Object.freeze([
     cjk: /(改为|应该|纠正|更正|不是.{0,12}而是)/,
   },
   // failure 最弱：只在没有更强语义时才算失败
+  // R3 补齐：latin 原缺 failing/fails/fail（规范 §4 要求 "still failing" → failure，
+  // 原实现漏检）；cjk 原缺 出错/不工作/没反应/崩了（真实缺口，含回归检测 "又崩了"）。
   {
     kind: 'failure',
-    latin: /\b(error|failed|failure|exception|crash|rejected|broken)\b/i,
-    cjk: /(报错|失败|崩溃|错误|异常|超时|无法|不能|挂了|坏了)/,
+    latin: /\b(error|failed|failing|fails|fail|failure|exception|crash|rejected|broken)\b/i,
+    cjk: /(报错|出错|失败|崩溃|崩了|错误|异常|超时|无法|不能|不工作|没反应|挂了|坏了)/,
   },
 ]);
+
+/**
+ * 否定作用域判定（R3）。返回 true 表示该命中处于否定语境、应被忽略。
+ *
+ * 有界设计（刻意保守，避免把真实失败也否掉）：
+ *   - CJK：看命中前最多 6 个字符，要求**结尾**是「否定词 + 少量虚词」。
+ *     这样 "没有报错"/"已经不报错了"/"还没修好"/"根本没有报错"/"会不会报错" 被否掉，
+ *     而 "这里报错了"、"我不确定，但是报错了"（否定词离得远、后面不是否定词）仍是失败。
+ *     第一版曾用"窗口内遇标点即结束"，实测在 "运行了一下，没有报错" 上误判
+ *     （逗号在否定词之前却被当成作用域结束）——改为结尾锚定后与标点无关。
+ *   - Latin：只看命中前 2 个词；出现否定词即否掉，但 "not only X" 例外（only 紧邻时不算否定）。
+ *     这样 "no error"/"not broken"/"not fixed"/"never failed"/"no longer failing" 被否掉，
+ *     而 "the build failed" 仍是失败。
+ */
+const NEG_CJK_TAIL_RE = /(没有|没|不|未|别|勿)(?:了|再|也|都|会|曾|过|太|很|还|经常|偶尔|真的|完全|根本){0,2}$/;
+const NEG_LATIN_RE = /\b(no|not|never|nor|none|without|isn't|aren't|don't|doesn't|didn't|won't|can't|cannot)\b/i;
+
+export function isNegated(text, idx, isCjk) {
+  if (typeof text !== 'string' || idx <= 0) return false;
+  if (isCjk) {
+    const win = text.slice(Math.max(0, idx - 6), idx);
+    return NEG_CJK_TAIL_RE.test(win);
+  }
+  const words = text.slice(0, idx).split(/\s+/).filter(Boolean).slice(-2);
+  if (!words.length) return false;
+  if (words[words.length - 1].toLowerCase() === 'only') return false;   // "not only failed"
+  return words.some((w) => NEG_LATIN_RE.test(w));
+}
+
+/** 是否存在**未被否定**的命中（逐个匹配检查，否定掉一个继续找下一个）。 */
+export function hasNonNegatedMatch(re, text, isCjk) {
+  if (typeof text !== 'string' || !text) return false;
+  const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+  let m;
+  while ((m = g.exec(text)) !== null) {
+    if (!isNegated(text, m.index, isCjk)) return true;
+    if (m.index === g.lastIndex) g.lastIndex += 1;      // 防零宽死循环
+  }
+  return false;
+}
 
 /**
  * 判定摘要中是否存在可学习的信号（失败/纠正/解决模式）。纯启发式、确定性。
@@ -739,7 +804,8 @@ export function learningSignals(digest) {
   for (const t of digest.turns) {
     const text = typeof t.text === 'string' ? t.text : '';
     for (const p of SIGNAL_PATTERNS) {          // 已按语义强度排序 → 首个命中即最强
-      if (p.latin.test(text) || p.cjk.test(text)) {
+      // R3：必须排除否定语境（"没有报错" 不是失败），逐个匹配检查而非一次性 test
+      if (hasNonNegatedMatch(p.latin, text, false) || hasNonNegatedMatch(p.cjk, text, true)) {
         signals.push({ kind: p.kind, seq: t.seq, role: t.role });
         break;
       }

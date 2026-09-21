@@ -1,0 +1,57 @@
+﻿sample size      : 116
+labels present   : 116 / 116
+session nodes    : 9465
+total signals    : 3599
+
+=== 1. Overall precision ===
+should_learn=yes       : 24  -> precision(严格) = 24/116 = 20.7%
+should_learn=uncertain : 1
+should_learn=no        : 91
+precision(宽口径, yes+uncertain) = 25/116 = 21.6%
+false-positive rate(严格, 判为 no 的比例) = 78.4%
+
+=== 2. Per-label precision（预测标签 vs 人工正确标签） ===
+
+  predicted=correction  样本 37
+    标签正确(correct_label===correction) : 9/37 = 24.3%
+    值得学习(should_learn=yes)    : 8/37 = 21.6%
+    人工实际标签分布: {"none":24,"failure":4,"correction":9}
+
+  predicted=failure  样本 41
+    标签正确(correct_label===failure) : 26/41 = 63.4%
+    值得学习(should_learn=yes)    : 13/41 = 31.7%
+    人工实际标签分布: {"failure":26,"resolution":1,"none":12,"correction":2}
+
+  predicted=resolution  样本 38
+    标签正确(correct_label===resolution) : 15/38 = 39.5%
+    值得学习(should_learn=yes)    : 3/38 = 7.9%
+    人工实际标签分布: {"none":18,"failure":3,"resolution":15,"correction":2}
+
+=== 3. Language precision（中文召回提升后，精度是否下降？） ===
+  cjk    n=  8  precision(严格)= 37.5%  precision(宽)= 37.5%
+  latin  n= 39  precision(严格)= 25.6%  precision(宽)= 25.6%
+  mixed  n= 69  precision(严格)= 15.9%  precision(宽)= 17.4%
+
+=== 3b. 语言分布（全量 signals，非样本） ===
+
+=== 4. Contamination rate ===
+contamination=yes : 13/116 = 11.2%
+  污染条目 role 分布: {"assistant":4,"user":9}
+  污染下标: 14,44,45,57,61,71,73,74,75,95,108,113,114
+
+=== 5. Duplicate rate（人工判定：同语义事件重复） ===
+duplicate=yes(人工) : 20/116 = 17.2%
+  重复下标: 35,43,45,49,51,53,56,71,73,74,75,79,80,84,89,102,107,109,113,114
+
+  脚本侧（全量 signals 口径）: raw=3599 uniqueExact=3598 uniqueNormalized=3597 uniqueKindNorm=3597
+  exact-dup rate=0.0%  normalized-dup rate=0.1%
+
+=== 6. Role-based quality（assistant 自污染） ===
+  user      n= 20  precision=  0.0%  contamination= 45.0%
+  assistant n= 96  precision= 25.0%  contamination=  4.2%
+
+=== 7. 污染面交叉（transient / temporary-state 标记的样本其质量） ===
+  looksTransient       n= 11  should_learn=yes 1 (9.1%)
+  looksTemporaryState  n= 38  should_learn=yes 2 (5.3%)
+
+=== R3 metrics complete ===

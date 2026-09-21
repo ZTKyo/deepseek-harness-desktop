@@ -1,0 +1,35 @@
+﻿=== F1 latin failure 形态补齐（规范 §4）===
+  PASS  F1+ "still failing" → failure（原实现漏检）
+  PASS  F1+ "it fails every time" → failure
+  PASS  F1- "the build passed, no failures" → 不是 failure
+  PASS  F1孪生 "failed" 仍是 failure（回归）
+=== F2 CJK 覆盖补齐（真实缺口 + 回归检测）===
+  PASS  F2+ "出错" → failure
+  PASS  F2+ "又崩了" → failure（规范 §6 回归检测）
+  PASS  F2+ "不工作" → failure
+  PASS  F2+ "没反应" → failure
+  PASS  F2+ "修好了" → resolution
+  PASS  F2孪生 "报错"/"崩溃"/"已修复" 仍是原语义（回归）
+=== F3 否定作用域（规范 §9：反向表述不得产生信号）===
+  PASS  F3+ "没有报错" → 无信号
+  PASS  F3+ "not broken" → 无信号
+  PASS  F3+ "not fixed" → 不是 resolution（规范 §4）
+  PASS  F3+ "no longer failing" → 无信号
+  PASS  F3+ "never failed" → 无信号
+  PASS  F3- "报错了" 仍是 failure（过否定回归）
+  PASS  F3- "the build failed" 仍是 failure（过否定回归）
+  PASS  F3- "已经修复了" 仍是 resolution（过否定回归）
+  PASS  F3边界 否定作用域遇标点即结束："我不确定，但是报错了" → failure
+  PASS  F3边界 "没有报错，但崩溃了" → failure（否定不吞掉整句）
+  PASS  F3边界 "not only failed" → failure（only 例外）
+  PASS  F3边界 "还没修好" → 不是 resolution
+  PASS  F3单元 isNegated 直接行为
+=== F4 注入剥离：区分"真注入"与"讨论标签"（规范 §4）===
+  PASS  F4 真注入（闭合）被剥掉，真人发言保留
+  PASS  F4 真注入（未闭合，行首+独占行）被剥掉，真人发言保留
+  PASS  F4- 用户讨论该标签时其真实发言不被删除（原实现丢失 81%）
+  PASS  F4- 引用形态的标签不被吞
+  PASS  F4 讨论文本里的失败信号仍能被学到
+  PASS  F4 R2 既有锁定用例仍成立（回归）
+
+=== R3 最小修复回归: 29 PASS / 0 FAIL ===

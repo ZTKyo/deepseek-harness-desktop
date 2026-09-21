@@ -85,7 +85,8 @@ export const PROTECTED_TARGETS = [
 // 1. 密钥脱敏（AC3）：运行时脱敏，覆盖 Security-Hardening 的 9 个规范家族
 //    （notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws）
 //    外加通用 "KEY=值" / Bearer 形态。families 名称与 tests/reliability/
-//    secret-scan-check.mjs 保持一致，并由 test-learn-no-secrets.mjs 做覆盖平价校验。
+//    secret-scan-check.mjs 保持一致，并由 tests/learn/test-learn-r3-secrets.mjs
+//    做覆盖平价校验（§A 家族名平价 + §B~§H 通用形态与真实落盘脱敏）。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 运行时脱敏模式表。name 与仓库规范扫描器 secret-scan-check.mjs 的家族名对齐。 */

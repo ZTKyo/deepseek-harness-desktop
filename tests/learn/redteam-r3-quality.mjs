@@ -201,7 +201,7 @@ console.log(`样本覆盖层数: ${new Set(sample.map((s) => s.stratum)).size} /
 
 // ─────────────────────────────────────────────────────────────
 section("6. 导出样本集（供人工打标）");
-const outDir = path.join(os.homedir(), 'Desktop', 'sdeepseek harness', '_r3');
+const outDir = path.join(os.tmpdir(), 'p4-r3-quality');
 fs.mkdirSync(outDir, { recursive: true });
 const outFile = path.join(outDir, 'r3_quality_sample.json');
 const payload = {

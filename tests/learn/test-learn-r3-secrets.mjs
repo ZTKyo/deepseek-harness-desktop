@@ -18,8 +18,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { redactSecrets, containsSecret, secretFamiliesIn } from '../../plugins/learn-core.mjs';
+import { redactSecrets, containsSecret, secretFamiliesIn, SECRET_PATTERNS } from '../../plugins/learn-core.mjs';
+
+// 仓库根（本文件位于 <root>/tests/learn/）
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+// 通用形态族：不属于「与仓库规范扫描器平价」的范围（learn-core 自有的加固规则）
+const GENERIC_FAMILIES = new Set(['uri-credential', 'generic-assignment', 'generic-bearer']);
 
 let pass = 0; let fail = 0;
 const failures = [];
@@ -302,6 +308,44 @@ const tmpState = fs.mkdtempSync(path.join(os.tmpdir(), 'p4-r3-secrets-'));
   });
 }
 fs.rmSync(tmpState, { recursive: true, force: true });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I. 家族名平价（与仓库规范扫描器 tests/reliability/secret-scan-check.mjs 对齐）
+//    learn-core.mjs 第 85-88 行的注释声明「families 名称与 secret-scan-check.mjs 保持一致」。
+//    该声明原先**没有任何测试守住**（独立 Release Gate 评审记录项 R-4：注释引用了仓库中
+//    不存在的 test-learn-no-secrets.mjs）。本节把该声明变成可执行断言：两边的规范家族名
+//    集合必须完全相等（双向包含、顺序无关），扫描器新增家族而 learn-core 未跟随时即失败。
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n=== I. 家族名平价（secret-scan-check.mjs）===');
+
+const SCANNER = path.join(ROOT, 'tests', 'reliability', 'secret-scan-check.mjs');
+
+check('I1 仓库规范扫描器存在且可读', () => {
+  assert.ok(fs.existsSync(SCANNER), `未找到规范扫描器: ${SCANNER}`);
+});
+
+const scannerSrc = fs.existsSync(SCANNER) ? fs.readFileSync(SCANNER, 'utf8') : '';
+const patStart = scannerSrc.indexOf('const PATTERNS = [');
+const patEnd = patStart >= 0 ? scannerSrc.indexOf('];', patStart) : -1;
+const patBlock = patStart >= 0 && patEnd > patStart ? scannerSrc.slice(patStart, patEnd) : '';
+const scannerNames = [...patBlock.matchAll(/name:\s*'([^']+)'/g)].map((m) => m[1]).sort();
+const oursNames = SECRET_PATTERNS.map((p) => p.name);
+const canonicalOurs = oursNames.filter((n) => !GENERIC_FAMILIES.has(n)).sort();
+
+check(`I2 扫描器家族名解析成功（解析出 ${scannerNames.length} 个）`, () => {
+  assert.ok(scannerNames.length >= 9, `只解析出 ${scannerNames.length} 个家族名 —— 解析逻辑可能已失效`);
+});
+
+check('I3 规范家族名集合与扫描器完全平价（双向包含，顺序无关）', () => {
+  const missing = scannerNames.filter((n) => !canonicalOurs.includes(n));
+  const extra = canonicalOurs.filter((n) => !scannerNames.includes(n));
+  assert.deepEqual(missing, [], `learn-core 缺少扫描器已覆盖的家族: ${missing.join(', ')}`);
+  assert.deepEqual(extra, [], `learn-core 多出未与扫描器对齐的家族: ${extra.join(', ')}`);
+});
+
+check('I4 三个通用形态族仍在（脱敏加固不被本次平价重构误删）', () => {
+  for (const g of GENERIC_FAMILIES) assert.ok(oursNames.includes(g), `通用族缺失: ${g}`);
+});
 
 console.log(`\n=== R-3 通用密钥脱敏加固回归: ${pass} PASS / ${fail} FAIL ===`);
 if (failures.length) { console.log('\n失败明细:'); for (const f of failures) console.log('  - ' + f); }

@@ -225,19 +225,22 @@ R-3 套件产生 **21 个 FAIL**，其中 H 段 3 条全部报
 |---|---|
 | `tests/learn/test-learn-core.mjs`（R1+R2 全量回归） | **276 PASS / 0 FAIL** |
 | `tests/learn/test-learn-r3-fixes.mjs`（R3 新增） | **29 PASS / 0 FAIL** |
-| `tests/learn/test-learn-r3-hardening.mjs`（R3 加固） | **26 PASS / 0 FAIL** |
-| `tests/learn/test-learn-r3-secrets.mjs`（PRE-MERGE R-3 新增，F6） | **58 PASS / 0 FAIL** |
+| `tests/learn/test-learn-r3-hardening.mjs`（R3 加固） | **30 PASS / 0 FAIL**（PRE-MERGE R-3 增 H2.13–H2.16） |
+| `tests/learn/test-learn-r3-secrets.mjs`（PRE-MERGE R-3 新增，F6） | **62 PASS / 0 FAIL**（PRE-MERGE R-3 增 I1–I4） |
 | `tests/learn/run-learn-real-e2e.mjs`（真实会话 E2E） | **59 PASS / 0 FAIL** |
 | `tests/learn/redteam-r3-isolation.mjs`（会话隔离红队） | **13 PASS / 0 FAIL** |
 | `tests/learn/redteam-r3-contamination.mjs`（污染红队） | **9 PASS / 0 FAIL** |
 | `redteam-r3-{metrics,quality,labels,injection-positions}` | 全部 **exit=0**（观测模式，无 pass/fail 门槛） |
 
-合计 **470 PASS / 0 FAIL**（276 + 29 + 26 + 58 + 59 + 13 + 9），`tests/learn/` 全目录 **0 个非零退出**。
+合计 **478 PASS / 0 FAIL**（276 + 29 + 30 + 62 + 59 + 13 + 9），`tests/learn/` 全目录 **0 个非零退出**。
 
 **数字更正记录**：本报告早期版本写作「413 PASS」，经最终 HEAD 逐套件复核为**算术错误**
 （六套之和 = 412）。已在最终 HEAD 全量回归中逐条重算并修正，避免把错误数字交给评审。
 **PRE-MERGE R-3 再更正**：新增 `test-learn-r3-secrets.mjs`（58 条）后，合计由 412 → **470**；
 本行数字于本轮**逐套件实跑复核**（非沿用旧表），每个套件的 PASS 数均取自该套件自身的汇总行。
+**PRE-MERGE R-3 gate 记录收口后三更正**：R-5/R-6 修复使 hardening 26 → **30**（新增 H2.13–H2.16）、
+R-4 修复使 secrets 58 → **62**（新增 I1–I4）⇒ 合计 470 → **478**。同样取自各套件自身汇总行，
+并由最终 HEAD 全量回归复核（29 套 / 28 绿 / 1 红 / 986 PASS / 2 FAIL）。
 
 **关于那条"变红"的 R2 断言**：R2 的
 `stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me"`
@@ -293,6 +296,11 @@ R2 由 274 → **276 PASS / 0 FAIL**（净增 3 条、改判 1 条）。
 - `docs/roadmap/evidence/P4_LEARN_R3_CONTAMINATION.txt` — 污染归因
 - `docs/roadmap/evidence/P4_LEARN_R3_ISOLATION.txt` — **会话隔离红队最终输出（13 PASS / 0 FAIL）**
 - `docs/roadmap/evidence/P4_LEARN_R3_AC7_FULL.txt` — **AC7 全量回归最终输出（全目录 0 非零退出）**
+- `docs/roadmap/evidence/P4_LEARN_R3_FINAL_HEAD_FULL.txt` — **PRE-MERGE R-3 gate 记录收口后的最终 HEAD 全量回归
+  （29 套 / GREEN=28 / RED=1 / MISSING=0 / totalPASS=986 / totalFAIL=2；含 `TESTED_HEAD`、`WORKTREE=clean`
+  与复核命令）。**编码说明（R-8）**：该文件此前为 UTF-16LE（`FF FE` BOM），与同目录其它证据不一致，
+  导致 `read`/`grep`/CI diff 判定为二进制、评审无法读取；现已由 `run-r3-final-head-full.ps1 -OutFile`
+  以 **UTF-8（无 BOM）** 写出，调用方的重定向方式不再能改变产物编码。
 - `docs/roadmap/evidence/P4_LEARN_R3_SECRETS.txt` — **F6 通用密钥脱敏取证（含修复 diff、修复版 58 PASS、
   负向对照 26 FAIL、还原 sha256 校验）**
 - **人工标注真值**：`tests/learn/redteam-r3-labels.mjs`（`export const LABELS`，133 行数据模块，
@@ -342,12 +350,13 @@ Branch: p4-learning-r1   PR: #90 (OPEN, 未 merge)
 |---|---|
 | `test-learn-core.mjs` | 276 PASS / 0 FAIL |
 | `test-learn-r3-fixes.mjs` | 29 PASS / 0 FAIL |
-| `test-learn-r3-hardening.mjs` | 26 PASS / 0 FAIL |
+| `test-learn-r3-hardening.mjs` | 30 PASS / 0 FAIL（gate 记录 R-5/R-6 后 +4） |
+| `test-learn-r3-secrets.mjs` | 62 PASS / 0 FAIL（gate 记录 R-4 后 +4） |
 | `run-learn-real-e2e.mjs`（真实会话） | 59 PASS / 0 FAIL |
 | `redteam-r3-isolation.mjs` | 13 PASS / 0 FAIL |
 | `redteam-r3-contamination.mjs` | 9 PASS / 0 FAIL |
-| **合计** | **412 PASS / 0 FAIL** |
-| 全量回归（28 套，AC7 + R3） | 27 绿 / 1 红 / 908 PASS / 2 FAIL |
+| **合计** | **478 PASS / 0 FAIL** |
+| 全量回归（29 套，AC7 22 + R3 7） | 28 绿 / 1 红 / 986 PASS / 2 FAIL |
 | 唯一红 `verify-install-plugin.mjs` | **PRE-EXISTING**（pristine HEAD 上同样 13/2，插件同步漂移，与 P4 无关）|
 
 **为什么是 B 而不是 A**：A 要求「未发现缺陷」。R3 **确实发现了 5 个真实缺陷**（含 2 个
@@ -359,4 +368,63 @@ Branch: p4-learning-r1   PR: #90 (OPEN, 未 merge)
 
 **诚实登记的未修边界**（见 §4）：假设句 / 文档字段名描述 / 引用他人发言三类词形不可区分，
 需句法或语义层，超出最小修复范围；**误报代价有界**（只生成待人工审批候选，绝不激活）。
+
+---
+
+## 8. PRE-MERGE R-3 独立 Release Gate 记录处置（R-1 … R-9）
+
+PR #90 的独立 Release Gate 评审（**非自评**，评审对象 HEAD `6fe9b04`，结论
+`APPROVE FOR MERGE GATE`）在 R3 收口后追加提出 **9 条记录项**：3 条 pre-merge（R-1/R-2/R-3）
++ 6 条 low-risk（R-4…R-9）。**9 条全部关闭，无遗留**。
+
+### 8.1 处置总表
+
+| ID | 等级 | 记录项 | 性质 | 关闭方式 |
+|---|---|---|---|---|
+| **R-1** | 中 | 证据文件内部记 `HEAD = cb64d8b`（父提交），而文件名/提交语义写 FINAL_HEAD（`6fe9b04`） | 自引用标注不精确 | 改为显式 `TESTED_HEAD` + `WORKTREE` + 复核命令（`9a57008`） |
+| **R-2** | 中 | **PR #90 body 停留在 R1**（220 PASS / 58 E2E / 19-of-20 / 619+407 行；`R2`·`R3`·`412`·`276`·`F5`·`isolation` 命中 0 次） | 评审信息遗漏（**低估**而非夸大） | 重写 PR body 至 R3 + gate 记录收口状态（本节 §8.4） |
+| **R-3** | 中（AC3） | 通用密钥形态 **4/13 漏脱敏**：`P@ssw0rd!xyz`、`a!b@c#d$e%f^g&h`、`postgres://user:s3cr3tP@ss@host`、`Server=x;Password=Hunter2!Long` | **真实缺陷（F6）** + 测试覆盖缺口 | `d70a169`：新增 uri-credential 规则 + generic-assignment 改引号/空白定界 + `api_token`；新套件 `test-learn-r3-secrets.mjs` |
+| **R-4** | 低 | `learn-core.mjs:88` 声称覆盖平价由 `test-learn-no-secrets.mjs` 校验，**该文件不存在** | 陈旧注释 + 缺失守卫 | 指向真实套件，并新增 I 段（I1–I4）**真做**集合相等断言（`9a57008`） |
+| **R-5** | 低 | `approve`/`reject`/`retire` 对畸形 store 抛 `TypeError`，而 `propose`/`recall`/`recordRecall` 返回结构化 `invalid_store` | **真实缺陷**（同一输入两种行为） | 收敛为共用 `findExperience(store,id)`；H2.13/H2.14 锁死（`7202f68`） |
+| **R-6** | 低 | 库满载 200 且 `createdAt=0` 时，新提案**被静默丢弃**（`propose()` 仍返回 `ok:true`） | **真实缺陷**（成功写入丢失） | 改为淘汰**最旧**条目；H2.15/H2.16 锁死（`7202f68`） |
+| **R-7** | 低 | 回归脚本把 isolation 套件计为 `pass=1`（套件自报 `PASS=13`）⇒ `totalPASS=908` 低估 12 | 证据少算 | 取「自报总数 vs 逐行计数」较大值 + `src` 列；isolation 1→13，totalPASS 908→978（`9a57008`） |
+| **R-8** | 低 | 最终 HEAD 证据为 **UTF-16LE（`FF FE` BOM）**，同目录其它证据均 UTF-8 ⇒ `read`/`grep`/CI diff 判为二进制、**评审无法读取** | 可复核性受损 | **根治**：脚本以 `-OutFile` + `UTF8Encoding($false)` 写出，不再受调用方重定向影响；`Write-Host` 全改 `Emit`（`6ba394a`） |
+| **R-9** | 低 | `redteam-r3-quality.mjs` 把 `_r3/r3_quality_sample.json` 写进**主工作区**，与其头注释「只写 `os.tmpdir()` 与 stdout」矛盾 | 越界写入 | 改为 tmpdir（`9a57008`） |
+
+**附带**：`test-learn-r3-secrets.mjs` 正式纳入全量回归清单（28 → 29 套，`9a57008`）。
+
+### 8.2 关于 R-5/R-6「不可达」的处置判断
+
+评审明确标注这两条**在当前调用图不可达**（`getStore` 保证 store 合法；两个调用方均传
+`Date.now()`）。**仍然修复**的理由：二者是**真实的行为不一致**（而非风格问题）——同一个畸形输入
+两种返回形态、以及 `ok:true` 却未落库，属于「一旦未来新增调用方就会静默出错」的地雷。
+修复成本极低（一个共用助手 + 一处淘汰策略），且**不扰动已通过评审的核心实现**
+（`plugins/learn-core.mjs` 净改动 +45/−9，无架构变更），符合「保护 REVIEWED BASELINE STABILITY」原则。
+
+### 8.3 变异对照（证明新断言非空洞，非"测试跟着实现改"）
+
+每次变异后**逐字节还原**源码：
+
+| 变异 | 结果 |
+|---|---|
+| 让 `findExperience` 的畸形 store 守卫失效 | **恰好 1 条 FAIL**，命中 H2.13 |
+| 移除 R-6 容量淘汰修复 | **恰好 1 条 FAIL**，命中 H2.15 |
+| 扫描器家族 `aws` 改名为 `aws-renamed-mutation` | I3 与 F-aws **同时 FAIL**（"learn-core 缺少扫描器已覆盖的家族: aws"） |
+| 对 R-3 修复前 HEAD 跑新密钥套件 | **32 PASS / 26 FAIL**（三条端到端断言均报"落盘字节含原始密钥"）；还原修复后 58/0 且 sha256 逐字节一致 |
+
+### 8.4 R-2 的实际处置（PR body 重写）
+
+原 body 只描述 R1，评审者若只读 PR 不会知道 R2/R3 又发现并修复了 10 个真实缺陷
+（R2 的 D1–D5 + R3 的 F1–F5）。新 body 覆盖：R1/R2/R3 三代范围与各自缺陷清单、
+当前最终 HEAD 与被测 HEAD、逐套件测试数字（**478 PASS / 0 FAIL**）、全量回归
+（29 套 / 28 绿 / 1 红 / 986 PASS / 2 FAIL）、唯一红的 PRE-EXISTING 证明、
+已知 limitation（§4 三类词形不可区分 + 无引号值 `{8,}` 下限）、独立 Release Gate 结论
+（B — FIXED AND VERIFIED）与 9 条 gate 记录处置。
+
+### 8.5 本轮边界声明（不变）
+
+- **未 merge、未部署、未重启服务、未进生产 profile**：仍在隔离工作树 `.worktree-p4-learning-r1` 内。
+- 未触碰 `%APPDATA%\npm\node_modules\@deepseek-ai\dsh\**`。
+- `verificationState` 保持 `UNVERIFIED`（AC 声明时 bindings 为 `kind:'none'`，write-once 不可改）。
+- 本次变更**全部是测试/脚本/文档 + `learn-core.mjs` 内两处局部修复**，无架构改动。
 

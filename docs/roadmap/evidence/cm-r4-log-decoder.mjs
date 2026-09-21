@@ -4,13 +4,19 @@
 // each with node:zlib zstdDecompressSync, then extracts request/header routes,
 // provider usage records, model switches, and consecutive-step pressure pairs.
 // Usage: node cm-r4-probe.mjs <file1.jsonl.zstd> [more...]
+//
+// P4 LEARN R1: parseFrames/decodeLines/analyze are EXPORTED so other tools
+// (e.g. the P4 real-session learning E2E) reuse this single decoder instead of
+// growing a second zstd-frame parser. CLI behaviour is unchanged (guarded by a
+// main-module check, so importing this file has no side effects).
 import fs from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
+import { pathToFileURL } from "node:url";
 
 const FRAME_MAGIC = 0xfd2fb528;
 
 /** Parse exact frame byte ranges of a concatenated-zstd buffer. */
-function parseFrames(buf) {
+export function parseFrames(buf) {
   const frames = [];
   let off = 0;
   while (off + 4 <= buf.length) {
@@ -45,7 +51,7 @@ function parseFrames(buf) {
   return frames;
 }
 
-function decodeLines(file) {
+export function decodeLines(file) {
   const buf = fs.readFileSync(file);
   const frames = parseFrames(buf);
   if (!frames.length) throw new Error("no zstd frames found");
@@ -54,7 +60,7 @@ function decodeLines(file) {
   return { frames: frames.length, rawTailBytes: buf.length - frames[frames.length - 1][1], lines: text.split("\n").filter((l) => l.trim()) };
 }
 
-function analyze(file) {
+export function analyze(file) {
   try {
     var { frames, rawTailBytes, lines } = decodeLines(file);
   } catch (e) {
@@ -127,8 +133,11 @@ function analyze(file) {
   };
 }
 
-const files = process.argv.slice(2);
-if (!files.length) { console.error("no files"); process.exit(1); }
-const out = [];
-for (const f of files) out.push(analyze(f));
-process.stdout.write(JSON.stringify(out, null, 1));
+// CLI entry — only when executed directly (importing this module is side-effect free).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const files = process.argv.slice(2);
+  if (!files.length) { console.error("no files"); process.exit(1); }
+  const out = [];
+  for (const f of files) out.push(analyze(f));
+  process.stdout.write(JSON.stringify(out, null, 1));
+}

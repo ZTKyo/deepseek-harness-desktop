@@ -1,0 +1,28 @@
+=== DEFECT 1: CJK keywords (\b word-boundary) ===
+=== DEFECT 2: first-match-wins -> semantic inversion ===
+=== DEFECT 3: failure<->resolution pairing ===
+=== DEFECT 4: harness-injected <system-reminder> learned as signal ===
+=== DEFECT 5: input nodeSeqs not canonicalized ===
+
+  FIXED   报错                         before=null                                             after="failure"
+  FIXED   失败了                        before=null                                             after="failure"
+  FIXED   这里报错了                      before=null                                             after="failure"
+  FIXED   程序崩溃了                      before=null                                             after="failure"
+  FIXED   无法启动                       before=null                                             after="failure"
+  FIXED   配置错误                       before=null                                             after="failure"
+  FIXED   已修复                        before=null                                             after="resolution"
+  FIXED   问题解决了                      before=null                                             after="resolution"
+  FIXED   测试通过                       before=null                                             after="resolution"
+  FIXED   跑通了                        before=null                                             after="resolution"
+  FIXED   fixed the error            before="failure"                                        after="resolution"
+  FIXED   resolved the failure       before="failure"                                        after="resolution"
+  FIXED   the crash was fixed        before="failure"                                        after="resolution"
+  FIXED   paired.resolved            before=undefined                                        after=true
+  FIXED   lone.unresolvedFailureSeqs before=undefined                                        after=[10]
+  FIXED   injection-only turn signal before=true                                             after=false
+  FIXED   dup turnCount              before=4                                                after=2
+  FIXED   dup sourceEventSeqs        before=[0,0,0,1]                                        after=[0,1]
+  FIXED   reverse order              before=[1,0]                                            after=[0,1]
+
+behaviour CHANGED by the fix: 19 / 19 checks
+checks still identical      : 0 / 19

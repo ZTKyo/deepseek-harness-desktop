@@ -1,0 +1,29 @@
+﻿=== real turn text: position of <system-reminder> ===
+{
+  "turnsWithTag": 2165,
+  "occurrences": 2174,
+  "lineStart": 720,
+  "midLine": 1454,
+  "closed": 720,
+  "unclosed": 1454,
+  "tagAlone": 720,
+  "tagInline": 1454,
+  "bothLSandAlone": 720,
+  "lsOnly": 0,
+  "aloneOnly": 0,
+  "neither": 1454
+}
+
+=== per session (midLine split by role) ===
+  {"dir":"session-9e3b29bb-3f36-","occ":21,"lineStart":21,"midLine":0,"midUser":0,"midAssistant":0,"alone":21,"inline":0}
+  {"dir":"session-a144fe3f-1042-","occ":2153,"lineStart":699,"midLine":1454,"midUser":1439,"midAssistant":15,"alone":699,"inline":1454}
+
+=== mid-line samples (the "discussion/quote" candidates) ===
+  [0] user  "ite the seq shown next to any item.\n\n## Current goal\n- <system-reminder> A skill is a reus"
+  [1] assistant  "/tool-generated injection. i.e., exclude text matching <system-reminder>, workspace instru"
+  [2] assistant  "e user/message — even if the underlying event text is `<system-reminder>` wrapped content "
+  [3] assistant  "data needed):\n- NEG-FINAL-1: events=[user/message with <system-reminder> wrapping], store "
+  [4] assistant  "ed in header, mirrored by NEG tests):\n\nINJECTION_RX = /<system-reminder>|<system_warning>|"
+  [5] user  "ite the seq shown next to any item.\n\n## Current goal\n- <system-reminder> The available ski"
+  [6] assistant  "nted in header comment):\n\nRX tables:\n- INJECTION_RX = /<system-reminder>|<system_warning>|"
+  [7] assistant  "s:\n- NEG-FINAL-1: events [{seq,type:user,message,data:'<system-reminder> workspace instruc"

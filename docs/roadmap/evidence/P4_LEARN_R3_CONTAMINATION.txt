@@ -1,0 +1,41 @@
+﻿
+=== A. Secret 持久化红队（blocker 级） ===
+  落盘文件数: 1, 总字节: 1661
+  经验条目数: 2
+  PASS  store 确实落盘（非空转测试）
+  条目 title 预览: ["\"title\":\"请求头是 Authorization: [REDACTED:generic-bearer]，配置里还有 [REDACTED:openai]，结果 401 失败了","\"title\":\"[REDACTED:generic-assignment] 且 [REDACTED:openai] 之后服务无法启动，程序崩溃了"]
+  PASS  store 中不含原始 openai 密钥
+  PASS  store 中不含原始 bearer 密钥
+  PASS  store 中不含原始 pw 密钥
+  store 中出现脱敏标记: true
+
+=== B. Assistant 自污染 Case A/B/C ===
+  Case A kinds=["1:assistant:resolution"]
+         resolved=false  unresolvedFailureSeqs=[]
+  PASS  Case A: 用户的纠正未被误判为 resolution
+  PASS  Case A: assistant 的错误'已解决'声明仍被判为 resolution（可学）
+  PASS  Case A: 系统未因 assistant 声明就把失败判为已解决
+  Case B kinds=["1:assistant:correction"]
+  PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选）
+  Case C kinds=["2:assistant:failure"]
+         resolved=false
+
+=== C. 161 → 769 增长归因（R2 使用的同一真实会话） ===
+  R2 session nodes=3227 (声明 3227)
+  R2 口径 signals=769 (声明 769)
+  turnCount=2863 injectedSkipped=28
+  kind 分布: {"failure":279,"resolution":260,"correction":230}
+  role 分布: {"user":37,"assistant":732}
+  命中来源分解: 仅CJK=667 仅Latin=71 两者=31
+  --> 若 CJK 分支仍失效(R1 状态)，signals ≈ 102（即 R1 的 161 口径应≈此值）
+
+=== D. 注入边界：讨论 vs 真注入 ===
+  真注入(闭合,行首): kept=6/57 (丢失 89%)
+      kept 文本: "帮我看看这个"
+  真注入(未闭合,行首): kept=6/38 (丢失 84%)
+      kept 文本: "帮我看看这个"
+  用户讨论(未闭合,句中): kept=8/43 (丢失 81%)
+      kept 文本: "我注意到日志里有"
+  FAIL  用户讨论该标签时其真实发言不被删除 — 丢失 81% — 用户发言被吞
+
+=== 污染红队: 8 PASS / 1 FAIL ===

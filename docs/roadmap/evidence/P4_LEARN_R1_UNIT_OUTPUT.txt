@@ -1,0 +1,251 @@
+
+=== C1: emptyStore default shape ===
+  PASS  schema version is 1
+  PASS  sessionId set
+  PASS  version starts at 0
+  PASS  experiences empty array
+  PASS  telemetry empty array
+  PASS  missing sessionId -> unknown
+
+=== C2: secret redaction covers all canonical families (AC3) ===
+  PASS  notion: raw value removed
+  PASS  notion: redaction token present
+  PASS  notion: containsSecret detects it
+  PASS  notion: family reported
+  PASS  openai: raw value removed
+  PASS  openai: redaction token present
+  PASS  openai: containsSecret detects it
+  PASS  openai: family reported
+  PASS  openrouter: raw value removed
+  PASS  openrouter: redaction token present
+  PASS  openrouter: containsSecret detects it
+  PASS  openrouter: family reported
+  PASS  anthropic: raw value removed
+  PASS  anthropic: redaction token present
+  PASS  anthropic: containsSecret detects it
+  PASS  anthropic: family reported
+  PASS  slack: raw value removed
+  PASS  slack: redaction token present
+  PASS  slack: containsSecret detects it
+  PASS  slack: family reported
+  PASS  github: raw value removed
+  PASS  github: redaction token present
+  PASS  github: containsSecret detects it
+  PASS  github: family reported
+  PASS  jwt: raw value removed
+  PASS  jwt: redaction token present
+  PASS  jwt: containsSecret detects it
+  PASS  jwt: family reported
+  PASS  telegram: raw value removed
+  PASS  telegram: redaction token present
+  PASS  telegram: containsSecret detects it
+  PASS  telegram: family reported
+  PASS  aws: raw value removed
+  PASS  aws: redaction token present
+  PASS  aws: containsSecret detects it
+  PASS  aws: family reported
+  PASS  generic assignment redacted
+  PASS  generic bearer redacted
+  PASS  redaction is deterministic
+  PASS  redaction is idempotent (no double-token)
+  PASS  clean text untouched
+  PASS  containsSecret false on clean text
+  PASS  aws redacted on repeat call #1
+  PASS  aws redacted on repeat call #2
+  PASS  aws redacted on repeat call #3
+  PASS  pattern table includes 9 canonical families + generics
+
+=== C3: makeExperience validation ===
+  PASS  valid draft accepted
+  PASS  empty title rejected
+  PASS  empty body rejected
+  PASS  no provenance rejected
+  PASS  null draft rejected
+  PASS  born PROPOSED
+  PASS  no approval trace at birth
+  PASS  promotion NONE at birth
+  PASS  provenance preserved
+  PASS  stable id for identical evidence
+  PASS  different title -> different id
+  PASS  source seqs deduped/sorted/non-negative
+  PASS  tags normalized + sorted
+
+=== C4: propose is never activation (AC2) ===
+  PASS  propose ok
+  PASS  stored as PROPOSED
+  PASS  first propose not deduped
+  PASS  same evidence -> deduped
+  PASS  no duplicate row
+  PASS  invalid draft rejected at propose
+  PASS  PROPOSED is not recallable
+
+=== C5: approval boundary requires approver + evidence (AC2) ===
+  PASS  approval without approver rejected
+  PASS  approval without evidence rejected
+  PASS  secret in evidence rejected
+  PASS  unknown id rejected
+  PASS  valid approval accepted
+  PASS  state APPROVED
+  PASS  approver recorded
+  PASS  approvedAt recorded
+  PASS  APPROVED is recallable
+  PASS  original store not mutated (immutable update)
+
+=== C6: transition whitelist — terminal states cannot be revived ===
+  PASS  PROPOSED->APPROVED allowed
+  PASS  PROPOSED->REJECTED allowed
+  PASS  APPROVED->RETIRED allowed
+  PASS  REJECTED->APPROVED blocked (terminal)
+  PASS  RETIRED->APPROVED blocked (terminal)
+  PASS  APPROVED->REJECTED blocked
+  PASS  reject works
+  PASS  cannot approve a REJECTED entry
+  PASS  rejection requires reason
+  PASS  re-propose does not revive REJECTED
+  PASS  retire works
+  PASS  RETIRED not recallable
+
+=== C7: deterministic recall from APPROVED only (AC4) ===
+  PASS  recall ok
+  PASS  only approved+scoring item returned
+  PASS  correct item recalled
+  PASS  unapproved entry excluded
+  PASS  provenance returned for re-sourcing
+  PASS  approver surfaced
+  PASS  unapproved never recalled (q="Unapproved idea")
+  PASS  unapproved never recalled (q="never be recalled")
+  PASS  unapproved never recalled (q="idea")
+  PASS  recall is deterministic across calls
+  PASS  recall ordering stable
+  PASS  empty query -> no items
+  PASS  no match -> no items
+  PASS  limit respected
+  PASS  limit clamped to MAX_RECALL_LIMIT
+  PASS  recall recorded
+  PASS  recordRecall immutable
+  PASS  tokenize deterministic
+
+=== C8: validateStore is fail-closed (AC5) ===
+  PASS  empty store valid
+  PASS  null -> null
+  PASS  array -> null
+  PASS  wrong schemaVersion -> null
+  PASS  empty sessionId -> null
+  PASS  negative version -> null
+  PASS  non-integer version -> null
+  PASS  non-array experiences -> null
+  PASS  non-array telemetry -> null
+  PASS  over-limit experiences -> null
+  PASS  over-limit telemetry -> null
+  PASS  store with one valid experience valid
+  PASS  one bad entry invalidates whole store (no partial trust)
+  PASS  empty body invalidates store
+  PASS  unknown telemetry kind invalidates store
+  PASS  APPROVED without approver rejected
+  PASS  APPROVED without evidence rejected
+  PASS  PROPOSED with approval trace rejected
+  PASS  PROPOSED carrying promotion rejected
+  PASS  PROMOTED while not APPROVED rejected
+  PASS  PROMOTED while RETIRED rejected
+  PASS  PROMOTED without evidence rejected
+
+=== C9: promotion eligibility vs promotion (AC11) ===
+  PASS  PROPOSED not eligible
+  PASS  approved but never recalled -> blocked
+  PASS  eligibility check does not mutate state
+  PASS  approved + recalled -> eligible
+  PASS  eligible is NOT auto-promoted
+  PASS  promotion without evidence rejected
+  PASS  secret in promotion evidence rejected
+  PASS  explicit promotion works
+  PASS  already-promoted reported
+  PASS  cannot promote unapproved
+
+=== C10: write boundary protects runtime state/goals/credentials/policy (AC10) ===
+  PASS  protected target blocked: runtime-state
+  PASS  protected target blocked: session
+  PASS  protected target blocked: sessions
+  PASS  protected target blocked: goal
+  PASS  protected target blocked: goals
+  PASS  protected target blocked: credentials
+  PASS  protected target blocked: policy
+  PASS  protected target blocked: settings
+  PASS  protected target blocked: config
+  PASS  protected target blocked: profile
+  PASS  protected target blocked: profiles
+  PASS  protected target blocked: autonomy-state
+  PASS  protected variant blocked: runtime-state.json
+  PASS  protected variant blocked: GOAL-STORE
+  PASS  protected variant blocked: my-credentials.yaml
+  PASS  protected variant blocked: agent/policy.yml
+  PASS  protected variant blocked: settings.yaml
+  PASS  protected variant blocked: profiles/web/x
+  PASS  experience-store allowed
+  PASS  telemetry allowed
+  PASS  audit-log allowed
+  PASS  non-whitelisted target blocked
+  PASS  empty target blocked
+  PASS  null target blocked
+
+=== C11: telemetry is structured, redacted, bounded (AC8) ===
+  PASS  unknown kind rejected
+  PASS  valid event built
+  PASS  kind + timestamp
+  PASS  telemetry detail redacted
+  PASS  count preserved
+  PASS  telemetry ring buffer bounded
+  PASS  newest kept
+  PASS  bounded store still valid
+  PASS  invalid telemetry ignored
+  PASS  summary counts
+  PASS  summary experience counts
+  PASS  summary includes kind PROPOSED
+  PASS  summary includes kind APPROVED
+  PASS  summary includes kind REJECTED
+  PASS  summary includes kind RECALLED
+  PASS  summary includes kind PROMOTION_BLOCKED
+  PASS  summary includes kind PROMOTION_ELIGIBLE
+  PASS  summary includes kind STORE_REBUILT
+  PASS  summary includes kind WRITE_DENIED
+  PASS  summary includes state PROPOSED
+  PASS  summary includes state APPROVED
+  PASS  summary includes state REJECTED
+  PASS  summary includes state RETIRED
+
+=== C12: buildLearnDigest reuses P2.5 official extractors (AC1) ===
+  PASS  default messageOfEvent IS P2.5's (identity)
+  PASS  default recursiveText IS P2.5's (identity)
+  PASS  default isPluginSourced IS P2.5's (identity)
+  PASS  P25_EXTRACTORS is frozen (cannot be swapped at runtime)
+  PASS  digest built
+  PASS  4 real turns extracted (plugin-injected skipped)
+  PASS  plugin-sourced projection skipped (no feedback loop)
+  PASS  provenance seqs recorded
+  PASS  roles derived
+  PASS  bounds derived
+  PASS  default-path digest built
+  PASS  default path identical to P2.5-extractor path
+  PASS  text extraction byte-identical to P2.5 official path
+  PASS  digest text redacted
+  PASS  null events rejected
+  PASS  null nodes rejected
+  PASS  missing official extractors rejected (no second parser)
+  PASS  null extractors rejected
+  PASS  partial extractors rejected
+  PASS  out-of-range seqs skipped safely
+
+=== C13: learning signals are deterministic ===
+  PASS  signals detected
+  PASS  three signals
+  PASS  kinds classified
+  PASS  signals deterministic
+  PASS  null digest safe
+  PASS  empty turns -> no signal
+
+=== C14: stableHash determinism ===
+  PASS  hash deterministic
+  PASS  hash distinguishes input
+  PASS  hash format is 8 hex chars
+
+============================================================
+RESULT: 220 PASS / 0 FAIL

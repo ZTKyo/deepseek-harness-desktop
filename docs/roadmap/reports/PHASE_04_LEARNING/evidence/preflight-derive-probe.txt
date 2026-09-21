@@ -1,0 +1,85 @@
+﻿{
+  "autonomySchemaVersion": 4,
+  "criterionStatuses": [
+    "PASS",
+    "FAIL",
+    "UNVERIFIED"
+  ],
+  "verificationStates": [
+    "UNVERIFIED",
+    "PARTIAL",
+    "VERIFIED",
+    "FAILED"
+  ],
+  "cases": [
+    {
+      "label": "empty criteria + empty evidence",
+      "value": null,
+      "typeof": "object",
+      "isString": false
+    },
+    {
+      "label": "null criteria",
+      "value": null,
+      "typeof": "object",
+      "isString": false
+    },
+    {
+      "label": "undefined criteria",
+      "value": null,
+      "typeof": "object",
+      "isString": false
+    },
+    {
+      "label": "2 criteria, no evidence",
+      "value": "UNVERIFIED",
+      "typeof": "string",
+      "isString": true
+    },
+    {
+      "label": "2 criteria, both PASS",
+      "value": "VERIFIED",
+      "typeof": "string",
+      "isString": true
+    },
+    {
+      "label": "2 criteria, one FAIL",
+      "value": "FAILED",
+      "typeof": "string",
+      "isString": true
+    },
+    {
+      "label": "soft PASS only (ai_judgment)",
+      "value": "UNVERIFIED",
+      "typeof": "string",
+      "isString": true
+    },
+    {
+      "label": "hard PASS + soft PASS",
+      "value": "PARTIAL",
+      "typeof": "string",
+      "isString": true
+    }
+  ]
+}
+
+=== SCHEMA-VIOLATION CASES (non-string -> output schema 'type:string' fails) ===
+[
+  {
+    "label": "empty criteria + empty evidence",
+    "value": null,
+    "typeof": "object"
+  },
+  {
+    "label": "null criteria",
+    "value": null,
+    "typeof": "object"
+  },
+  {
+    "label": "undefined criteria",
+    "value": null,
+    "typeof": "object"
+  }
+]
+
+violationCount=3 totalCases=8

@@ -1,0 +1,43 @@
+[AC7] exit=0    pass=104  fail=0    src=both  tests\autonomy\test-autonomy-state-core.mjs
+[AC7] exit=0    pass=72   fail=0    src=both  tests\context-memory\verify-context-memory.mjs
+[AC7] exit=1    pass=13   fail=2    src=both  tests\install-plugin\verify-install-plugin.mjs
+[AC7] exit=0    pass=6    fail=0    src=lines tests\reliability\test-capacity-resolver.mjs
+[AC7] exit=0    pass=18   fail=0    src=lines tests\reliability\test-completion-truth.mjs
+[AC7] exit=0    pass=14   fail=0    src=lines tests\reliability\test-ec-router-bridge.mjs
+[AC7] exit=0    pass=34   fail=0    src=lines tests\reliability\test-failure-classifier-v1.mjs
+[AC7] exit=0    pass=33   fail=0    src=lines tests\reliability\test-model-registry.mjs
+[AC7] exit=0    pass=90   fail=0    src=lines tests\reliability\test-r5-addendum-ec.mjs
+[AC7] exit=0    pass=12   fail=0    src=lines tests\reliability\test-resume-defer.mjs
+[AC7] exit=0    pass=21   fail=0    src=lines tests\reliability\test-rh2-ec.mjs
+[AC7] exit=0    pass=19   fail=0    src=lines tests\reliability\test-rh2-r11-goal-resume.mjs
+[AC7] exit=0    pass=13   fail=0    src=lines tests\reliability\test-runtime-capacity-adapter.mjs
+[AC7] exit=0    pass=6    fail=0    src=lines tests\reliability\test-secret-scan-fixtures.mjs
+[AC7] exit=0    pass=0    fail=0    src=lines tests\reliability\yaml-parse-check.mjs
+[AC7] exit=0    pass=25   fail=0    src=lines tests\router\test-deepseek-native-multimodal.mjs
+[AC7] exit=0    pass=9    fail=0    src=lines tests\router\test-exact-model-preservation.mjs
+[AC7] exit=0    pass=19   fail=0    src=lines tests\supervisor\test-supervisor-mutation-state.mjs
+[AC7] exit=0    pass=276  fail=0    src=both  tests\learn\test-learn-core.mjs
+[AC7] exit=0    pass=29   fail=0    src=both  tests\learn\test-learn-r3-fixes.mjs
+[AC7] exit=0    pass=62   fail=0    src=both  tests\learn\test-learn-r3-secrets.mjs
+[AC7] exit=0    pass=59   fail=0    src=both  tests\learn\run-learn-real-e2e.mjs
+[R3 ] exit=0    pass=30   fail=0    src=both  tests\learn\test-learn-r3-hardening.mjs
+[R3 ] exit=0    pass=13   fail=0    src=self  tests\learn\redteam-r3-isolation.mjs
+[R3 ] exit=0    pass=9    fail=0    src=both  tests\learn\redteam-r3-contamination.mjs
+[R3 ] exit=0    pass=0    fail=0    src=lines tests\learn\redteam-r3-metrics.mjs
+[R3 ] exit=0    pass=0    fail=0    src=lines tests\learn\redteam-r3-quality.mjs
+[R3 ] exit=0    pass=0    fail=0    src=lines tests\learn\redteam-r3-injection-positions.mjs
+[R3 ] exit=0    pass=0    fail=0    src=lines tests\learn\redteam-r3-probe.mjs
+
+==== P4 LEARN R3 FINAL-HEAD FULL REGRESSION ====
+TESTED_HEAD = e31ebd8a340645d00f8148c8a61d3d09d0e49442
+WORKTREE    = clean (0 modified / 0 untracked；本证据文件自身已从统计中排除)
+NOTE        = TESTED_HEAD 是「生成本证据时被测代码所在提交」。本证据文件自身在紧随其后的
+              docs-only 提交中落盘，故该提交 sha 会晚于 TESTED_HEAD —— 属自引用标注问题，
+              并非「跑的不是最终代码」。二者之间 plugins/ 与 tests/learn/ 零差异，
+              复核命令：git diff TESTED_HEAD <evidence-commit> -- plugins tests/learn  （应为空）
+TOTAL=29  GREEN=28  RED=1  MISSING=0  totalPASS=986  totalFAIL=2
+COUNTING    = pass/fail 取「套件自报总数」与「逐行计数」的较大值（R-7 修复）；src 列标明来源
+
+--- non-green detail ---
+  [exit=1] tests\install-plugin\verify-install-plugin.mjs  结果: FAIL（13 通过，2 失败）
+==== END ====

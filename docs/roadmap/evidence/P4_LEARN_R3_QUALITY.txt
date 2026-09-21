@@ -1,0 +1,69 @@
+﻿real session candidates: 433
+main real session: C:\Users\Administrator\.dsh\sessions\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\session-a144fe3f-1042-4466-b70b-a10642fae037\session.jsonl.zstd
+surface nodes: 9465, events: 116496
+
+=== 1. 全量 digest（复现 769 口径） ===
+turnCount=5914 injectedSkipped=698 seqRange=8-5225209
+signals=3599  (R2 声明 769)
+kinds=["correction","failure","resolution"]  resolved=false unresolvedFailureSeqs=1
+
+=== 2. signal 明细（每条：seq/role/kind/text） ===
+rows=3599
+role 分布: {"user":113,"assistant":3486}
+kind 分布: {"correction":1610,"resolution":1421,"failure":568}
+污染面(只标记): transient=579 temporaryState=1753 secretShape=0 injectionStripped=0
+
+=== 3. Duplicate 分析 ===
+raw signals          : 3599
+unique exact text    : 3598   (exact-dup groups=1, 冗余条数=1)
+unique normalized    : 3597   (norm-dup groups=2, 冗余条数=2)
+unique kind+norm     : 3597   (kind-norm-dup groups=2, 冗余条数=2)
+exact duplicate rate    : 0.0%
+normalized duplicate rate: 0.1%
+semantic(kind+norm) dup rate: 0.1%
+
+  top exact-dup 文本:
+    x2  "[execution-continuity] A recoverable provider/network interruption occ"
+
+=== 4. Candidate volume（按插件的窗口口径模拟） ===
+window=  8  windows=1183  signals/session= 3599  candidates/session=1183  sig/window: max=7 median=3 p95=6
+window= 16  windows= 591  signals/session= 3597  candidates/session=591  sig/window: max=12 median=6 p95=10
+window= 32  windows= 295  signals/session= 3591  candidates/session=295  sig/window: max=21 median=12 p95=19
+window= 64  windows= 147  signals/session= 3574  candidates/session=147  sig/window: max=42 median=24 p95=35
+
+=== 5. 分层抽样（stratified sampling） ===
+strata 数: 26
+     1  correction|cjk|medium|assistant|uniq
+     2  correction|cjk|short|assistant|uniq
+   178  correction|latin|long|assistant|uniq
+    20  correction|latin|medium|assistant|uniq
+  1292  correction|mixed|long|assistant|uniq
+    48  correction|mixed|long|user|uniq
+    65  correction|mixed|medium|assistant|uniq
+     4  correction|mixed|short|assistant|uniq
+     1  failure|cjk|medium|assistant|uniq
+     3  failure|cjk|short|assistant|uniq
+    28  failure|latin|long|assistant|uniq
+    18  failure|latin|medium|assistant|uniq
+     1  failure|latin|medium|user|uniq
+     1  failure|latin|short|assistant|uniq
+   372  failure|mixed|long|assistant|uniq
+     5  failure|mixed|long|user|uniq
+   128  failure|mixed|medium|assistant|uniq
+    11  failure|mixed|short|assistant|uniq
+     1  resolution|cjk|short|assistant|uniq
+    60  resolution|latin|long|assistant|uniq
+     2  resolution|latin|long|user|dup
+     5  resolution|latin|medium|assistant|uniq
+  1191  resolution|mixed|long|assistant|uniq
+    57  resolution|mixed|long|user|uniq
+    92  resolution|mixed|medium|assistant|uniq
+    13  resolution|mixed|short|assistant|uniq
+
+分层样本数: 116 (target=120, perStratum<=6)
+样本覆盖层数: 26 / 26
+
+=== 6. 导出样本集（供人工打标） ===
+written: C:\Users\Administrator\Desktop\sdeepseek harness\_r3\r3_quality_sample.json  (116 rows)
+
+=== R3 quality measurement complete ===

@@ -1,0 +1,80 @@
+real session candidates: 82 (from C:\Users\Administrator\.dsh\sessions)
+temp stateDir: C:\Users\ADMINI~1\AppData\Local\Temp\p4-learn-e2e-QcVz2H
+
+=== E0 真实会话加载（官方 append 事件，无合成数据） ===
+main real session: C:\Users\Administrator\.dsh\sessions\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\session-9e3b29bb-3f36-4659-9162-18ad928a7f49\session.jsonl.zstd
+  PASS  zstd frames decoded
+  PASS  real events parsed
+  PASS  real surface nodes present
+  PASS  zero JSON parse errors
+  PASS  event shape is official {type,seq,time,data}
+
+=== E1 自动学习：真实会话 → 候选经验（PROPOSED，携带真实出处） ===
+  PASS  plugin exposes real tool specs
+  PASS  all 5 tool names correct
+  PASS  phase1 establishes watermark only (no history backfill)
+  (grew session node-by-node: 60 pre-step calls)
+  PASS  auto-proposed at least one candidate from real session
+  PASS  candidate state is PROPOSED (never auto-active)
+  PASS  candidate carries real provenance seqs
+  PASS  every provenance seq points at a REAL event
+  PASS  provenance seqs are real surface nodes
+  PASS  title derived from real utterance (not invented)
+  PASS  origin session recorded
+  PASS  candidate body quotes real turns with seq anchors
+  PASS  telemetry recorded PROPOSED
+  PASS  PROPOSED is NOT recallable (proposal ≠ activation)
+
+=== E2 人工审批边界（唯一激活通道） ===
+  PASS  explicit propose via real tool returns PROPOSED
+  PASS  second explicit proposal created
+  PASS  approve WITHOUT approver rejected
+  PASS  approve WITHOUT evidence rejected
+  PASS  approve with SECRET in evidence rejected
+  PASS  approve WITH approver+evidence succeeds
+  PASS  approver identity recorded
+  PASS  approval evidence recorded
+  PASS  reject succeeds
+  PASS  rejection is TERMINAL (cannot be revived)
+  PASS  unknown experienceId rejected
+
+=== E3 确定性召回（只召回 APPROVED，同一输入同一输出） ===
+  PASS  approved experience is recallable
+  PASS  recall returns the approved id
+  PASS  recall item carries provenance for official re-source
+  PASS  recall provenance points at real events
+  PASS  rejected experience NOT recallable
+  PASS  PROPOSED (auto candidate) NOT recallable
+  PASS  recall is DETERMINISTIC (identical output for identical input)
+  PASS  irrelevant query recalls nothing
+  PASS  recall telemetry recorded
+
+=== E3b 晋升只做资格判定，绝不自动晋升 ===
+  PASS  explicit promotion succeeds when eligible
+  PASS  promotion BLOCKED for non-approved experience
+  PASS  blocked promotion recorded in telemetry
+
+=== E4 故障注入与 fail-closed ===
+  PASS  store survives plugin restart (persisted)
+  PASS  every experience id survives restart
+  PASS  APPROVED state survives restart
+  PASS  PROMOTED state survives restart
+  PASS  REJECTED state survives restart
+  PASS  corrupt store rejected (no partial trust)
+  PASS  corrupt store rebuilt to a valid empty store
+  PASS  STORE_REBUILT telemetry recorded
+  PASS  protected write targets denied
+  PASS  experience-store target allowed
+  PASS  unknown target denied (fail-closed)
+  PASS  null/empty target denied
+  PASS  raw secret NEVER written to disk
+  PASS  secret redaction applied in stored body
+  PASS  kill switch registers NO hooks
+  PASS  LEARN_DISABLED=true registers NO hooks
+  PASS  malformed sessions do not throw (fail-open)
+
+================================================================
+P4 LEARN R1 REAL-SESSION E2E: 58 PASS / 0 FAIL
+main real session: session-9e3b29bb-3f36-4659-9162-18ad928a7f49 (3227 surface nodes, 44252 zstd frames)
+temp stateDir (safe to delete): C:\Users\ADMINI~1\AppData\Local\Temp\p4-learn-e2e-QcVz2H
+================================================================

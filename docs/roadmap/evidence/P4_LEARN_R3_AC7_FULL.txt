@@ -1,0 +1,785 @@
+# P4 LEARN R3 — AC7 全量回归（最终）
+# 生成时间: 2026-09-21 22:07:50
+# 含 R3 最小修复 6 处 + 撞名根因修复 1 处 + 加固 26 项
+
+===== tests\learn\test-learn-core.mjs  exit=0 =====
+
+=== C1: emptyStore default shape ===
+  PASS  schema version is 1
+  PASS  sessionId set
+  PASS  version starts at 0
+  PASS  experiences empty array
+  PASS  telemetry empty array
+  PASS  missing sessionId -> unknown
+
+=== C2: secret redaction covers all canonical families (AC3) ===
+  PASS  notion: raw value removed
+  PASS  notion: redaction token present
+  PASS  notion: containsSecret detects it
+  PASS  notion: family reported
+  PASS  openai: raw value removed
+  PASS  openai: redaction token present
+  PASS  openai: containsSecret detects it
+  PASS  openai: family reported
+  PASS  openrouter: raw value removed
+  PASS  openrouter: redaction token present
+  PASS  openrouter: containsSecret detects it
+  PASS  openrouter: family reported
+  PASS  anthropic: raw value removed
+  PASS  anthropic: redaction token present
+  PASS  anthropic: containsSecret detects it
+  PASS  anthropic: family reported
+  PASS  slack: raw value removed
+  PASS  slack: redaction token present
+  PASS  slack: containsSecret detects it
+  PASS  slack: family reported
+  PASS  github: raw value removed
+  PASS  github: redaction token present
+  PASS  github: containsSecret detects it
+  PASS  github: family reported
+  PASS  jwt: raw value removed
+  PASS  jwt: redaction token present
+  PASS  jwt: containsSecret detects it
+  PASS  jwt: family reported
+  PASS  telegram: raw value removed
+  PASS  telegram: redaction token present
+  PASS  telegram: containsSecret detects it
+  PASS  telegram: family reported
+  PASS  aws: raw value removed
+  PASS  aws: redaction token present
+  PASS  aws: containsSecret detects it
+  PASS  aws: family reported
+  PASS  generic assignment redacted
+  PASS  generic bearer redacted
+  PASS  redaction is deterministic
+  PASS  redaction is idempotent (no double-token)
+  PASS  clean text untouched
+  PASS  containsSecret false on clean text
+  PASS  aws redacted on repeat call #1
+  PASS  aws redacted on repeat call #2
+  PASS  aws redacted on repeat call #3
+  PASS  pattern table includes 9 canonical families + generics
+
+=== C3: makeExperience validation ===
+  PASS  valid draft accepted
+  PASS  empty title rejected
+  PASS  empty body rejected
+  PASS  no provenance rejected
+  PASS  null draft rejected
+  PASS  born PROPOSED
+  PASS  no approval trace at birth
+  PASS  promotion NONE at birth
+  PASS  provenance preserved
+  PASS  stable id for identical evidence
+  PASS  different title -> different id
+  PASS  source seqs deduped/sorted/non-negative
+  PASS  tags normalized + sorted
+
+=== C4: propose is never activation (AC2) ===
+  PASS  propose ok
+  PASS  stored as PROPOSED
+  PASS  first propose not deduped
+  PASS  same evidence -> deduped
+  PASS  no duplicate row
+  PASS  invalid draft rejected at propose
+  PASS  PROPOSED is not recallable
+
+=== C5: approval boundary requires approver + evidence (AC2) ===
+  PASS  approval without approver rejected
+  PASS  approval without evidence rejected
+  PASS  secret in evidence rejected
+  PASS  unknown id rejected
+  PASS  valid approval accepted
+  PASS  state APPROVED
+  PASS  approver recorded
+  PASS  approvedAt recorded
+  PASS  APPROVED is recallable
+  PASS  original store not mutated (immutable update)
+
+=== C6: transition whitelist — terminal states cannot be revived ===
+  PASS  PROPOSED->APPROVED allowed
+  PASS  PROPOSED->REJECTED allowed
+  PASS  APPROVED->RETIRED allowed
+  PASS  REJECTED->APPROVED blocked (terminal)
+  PASS  RETIRED->APPROVED blocked (terminal)
+  PASS  APPROVED->REJECTED blocked
+  PASS  reject works
+  PASS  cannot approve a REJECTED entry
+  PASS  rejection requires reason
+  PASS  re-propose does not revive REJECTED
+  PASS  retire works
+  PASS  RETIRED not recallable
+
+=== C7: deterministic recall from APPROVED only (AC4) ===
+  PASS  recall ok
+  PASS  only approved+scoring item returned
+  PASS  correct item recalled
+  PASS  unapproved entry excluded
+  PASS  provenance returned for re-sourcing
+  PASS  approver surfaced
+  PASS  unapproved never recalled (q="Unapproved idea")
+  PASS  unapproved never recalled (q="never be recalled")
+  PASS  unapproved never recalled (q="idea")
+  PASS  recall is deterministic across calls
+  PASS  recall ordering stable
+  PASS  empty query -> no items
+  PASS  no match -> no items
+  PASS  limit respected
+  PASS  limit clamped to MAX_RECALL_LIMIT
+  PASS  recall recorded
+  PASS  recordRecall immutable
+  PASS  tokenize deterministic
+
+=== C8: validateStore is fail-closed (AC5) ===
+  PASS  empty store valid
+  PASS  null -> null
+  PASS  array -> null
+  PASS  wrong schemaVersion -> null
+  PASS  empty sessionId -> null
+  PASS  negative version -> null
+  PASS  non-integer version -> null
+  PASS  non-array experiences -> null
+  PASS  non-array telemetry -> null
+  PASS  over-limit experiences -> null
+  PASS  over-limit telemetry -> null
+  PASS  store with one valid experience valid
+  PASS  one bad entry invalidates whole store (no partial trust)
+  PASS  empty body invalidates store
+  PASS  unknown telemetry kind invalidates store
+  PASS  APPROVED without approver rejected
+  PASS  APPROVED without evidence rejected
+  PASS  PROPOSED with approval trace rejected
+  PASS  PROPOSED carrying promotion rejected
+  PASS  PROMOTED while not APPROVED rejected
+  PASS  PROMOTED while RETIRED rejected
+  PASS  PROMOTED without evidence rejected
+
+=== C9: promotion eligibility vs promotion (AC11) ===
+  PASS  PROPOSED not eligible
+  PASS  approved but never recalled -> blocked
+  PASS  eligibility check does not mutate state
+  PASS  approved + recalled -> eligible
+  PASS  eligible is NOT auto-promoted
+  PASS  promotion without evidence rejected
+  PASS  secret in promotion evidence rejected
+  PASS  explicit promotion works
+  PASS  already-promoted reported
+  PASS  cannot promote unapproved
+
+=== C10: write boundary protects runtime state/goals/credentials/policy (AC10) ===
+  PASS  protected target blocked: runtime-state
+  PASS  protected target blocked: session
+  PASS  protected target blocked: sessions
+  PASS  protected target blocked: goal
+  PASS  protected target blocked: goals
+  PASS  protected target blocked: credentials
+  PASS  protected target blocked: policy
+  PASS  protected target blocked: settings
+  PASS  protected target blocked: config
+  PASS  protected target blocked: profile
+  PASS  protected target blocked: profiles
+  PASS  protected target blocked: autonomy-state
+  PASS  protected variant blocked: runtime-state.json
+  PASS  protected variant blocked: GOAL-STORE
+  PASS  protected variant blocked: my-credentials.yaml
+  PASS  protected variant blocked: agent/policy.yml
+  PASS  protected variant blocked: settings.yaml
+  PASS  protected variant blocked: profiles/web/x
+  PASS  experience-store allowed
+  PASS  telemetry allowed
+  PASS  audit-log allowed
+  PASS  non-whitelisted target blocked
+  PASS  empty target blocked
+  PASS  null target blocked
+
+=== C11: telemetry is structured, redacted, bounded (AC8) ===
+  PASS  unknown kind rejected
+  PASS  valid event built
+  PASS  kind + timestamp
+  PASS  telemetry detail redacted
+  PASS  count preserved
+  PASS  telemetry ring buffer bounded
+  PASS  newest kept
+  PASS  bounded store still valid
+  PASS  invalid telemetry ignored
+  PASS  summary counts
+  PASS  summary experience counts
+  PASS  summary includes kind PROPOSED
+  PASS  summary includes kind APPROVED
+  PASS  summary includes kind REJECTED
+  PASS  summary includes kind RECALLED
+  PASS  summary includes kind PROMOTION_BLOCKED
+  PASS  summary includes kind PROMOTION_ELIGIBLE
+  PASS  summary includes kind STORE_REBUILT
+  PASS  summary includes kind WRITE_DENIED
+  PASS  summary includes state PROPOSED
+  PASS  summary includes state APPROVED
+  PASS  summary includes state REJECTED
+  PASS  summary includes state RETIRED
+
+=== C12: buildLearnDigest reuses P2.5 official extractors (AC1) ===
+  PASS  default messageOfEvent IS P2.5's (identity)
+  PASS  default recursiveText IS P2.5's (identity)
+  PASS  default isPluginSourced IS P2.5's (identity)
+  PASS  P25_EXTRACTORS is frozen (cannot be swapped at runtime)
+  PASS  digest built
+  PASS  4 real turns extracted (plugin-injected skipped)
+  PASS  plugin-sourced projection skipped (no feedback loop)
+  PASS  provenance seqs recorded
+  PASS  roles derived
+  PASS  bounds derived
+  PASS  default-path digest built
+  PASS  default path identical to P2.5-extractor path
+  PASS  text extraction byte-identical to P2.5 official path
+  PASS  digest text redacted
+  PASS  null events rejected
+  PASS  null nodes rejected
+  PASS  missing official extractors rejected (no second parser)
+  PASS  null extractors rejected
+  PASS  partial extractors rejected
+  PASS  out-of-range seqs skipped safely
+
+=== C13: learning signals are deterministic ===
+  PASS  signals detected
+  PASS  three signals
+  PASS  kinds classified
+  PASS  signals deterministic
+  PASS  null digest safe
+  PASS  empty turns -> no signal
+
+=== C14: stableHash determinism ===
+  PASS  hash deterministic
+  PASS  hash distinguishes input
+  PASS  hash format is 8 hex chars
+
+=== C15: R2 adversarial-review regressions (proven defects, locked) ===
+  PASS  CJK failure keyword detected: 报错
+  PASS  CJK failure keyword detected: 失败了
+  PASS  CJK failure keyword detected: 这里报错了
+  PASS  CJK failure keyword detected: 程序崩溃了
+  PASS  CJK failure keyword detected: 无法启动
+  PASS  CJK failure keyword detected: 配置错误
+  PASS  CJK resolution keyword detected: 已修复
+  PASS  CJK resolution keyword detected: 问题解决了
+  PASS  CJK resolution keyword detected: 测试通过
+  PASS  CJK resolution keyword detected: 跑通了
+  PASS  CJK resolution keyword detected: 搞定了
+  PASS  CJK correction keyword detected: 应该改成这样
+  PASS  CJK correction keyword detected: 请纠正这个说法
+  PASS  resolution outranks failure in the same turn
+  PASS  resolved+noun stays resolution
+  PASS  fixed outranks crash
+  PASS  pattern table is declared strongest-first (resolution ... failure)
+  PASS  failure followed by a later resolution -> resolved
+  PASS  no open gap when resolved
+  PASS  lone failure -> not resolved
+  PASS  lone failure reported as an open gap
+  PASS  a resolution BEFORE the failure does not resolve it (seq order matters)
+  PASS  the later failure is the open gap
+  PASS  kinds summary exposed
+  PASS  closed injected block stripped, real speech kept
+  PASS  unterminated injected block stripped (truncated logs, tag alone on its line)
+  PASS  R3 reverse lock: an inline tag is a discussion/quote, its text must survive
+  PASS  R3: a user discussing the tag keeps their whole sentence
+  PASS  injection-only turn becomes empty
+  PASS  plain text untouched
+  PASS  empty/null safe
+  PASS  injection-only turn excluded from digest
+  PASS  injectedSkipped counted
+  PASS  real speech survives stripping
+  PASS  harness-injected reminder text no longer produces a learning signal
+  PASS  duplicate nodeSeqs deduplicated
+  PASS  sourceEventSeqs unique + ascending
+  PASS  out-of-order nodeSeqs canonicalized
+  PASS  signals are independent of caller-supplied ordering
+  PASS  canonicalized digest still pairs failure->resolution
+  PASS  R1 latin keyword still detected: "error"
+  PASS  R1 latin keyword still detected: "failed"
+  PASS  R1 latin keyword still detected: "failure"
+  PASS  R1 latin keyword still detected: "exception"
+  PASS  R1 latin keyword still detected: "crash"
+  PASS  R1 latin keyword still detected: "rejected"
+  PASS  R1 latin keyword still detected: "instead"
+  PASS  R1 latin keyword still detected: "rather than"
+  PASS  R1 latin keyword still detected: "should be"
+  PASS  R1 latin keyword still detected: "actually"
+  PASS  R1 latin keyword still detected: "correction"
+  PASS  R1 latin keyword still detected: "fixed"
+  PASS  R1 latin keyword still detected: "resolved"
+  PASS  R1 latin keyword still detected: "works now"
+  PASS  R1 latin keyword still detected: "passing"
+  PASS  every pattern carries both a latin and a cjk regex
+
+============================================================
+RESULT: 276 PASS / 0 FAIL
+
+
+===== tests\learn\test-learn-r3-fixes.mjs  exit=0 =====
+=== F1 latin failure 形态补齐（规范 §4）===
+  PASS  F1+ "still failing" → failure（原实现漏检）
+  PASS  F1+ "it fails every time" → failure
+  PASS  F1- "the build passed, no failures" → 不是 failure
+  PASS  F1孪生 "failed" 仍是 failure（回归）
+=== F2 CJK 覆盖补齐（真实缺口 + 回归检测）===
+  PASS  F2+ "出错" → failure
+  PASS  F2+ "又崩了" → failure（规范 §6 回归检测）
+  PASS  F2+ "不工作" → failure
+  PASS  F2+ "没反应" → failure
+  PASS  F2+ "修好了" → resolution
+  PASS  F2孪生 "报错"/"崩溃"/"已修复" 仍是原语义（回归）
+=== F3 否定作用域（规范 §9：反向表述不得产生信号）===
+  PASS  F3+ "没有报错" → 无信号
+  PASS  F3+ "not broken" → 无信号
+  PASS  F3+ "not fixed" → 不是 resolution（规范 §4）
+  PASS  F3+ "no longer failing" → 无信号
+  PASS  F3+ "never failed" → 无信号
+  PASS  F3- "报错了" 仍是 failure（过否定回归）
+  PASS  F3- "the build failed" 仍是 failure（过否定回归）
+  PASS  F3- "已经修复了" 仍是 resolution（过否定回归）
+  PASS  F3边界 否定作用域遇标点即结束："我不确定，但是报错了" → failure
+  PASS  F3边界 "没有报错，但崩溃了" → failure（否定不吞掉整句）
+  PASS  F3边界 "not only failed" → failure（only 例外）
+  PASS  F3边界 "还没修好" → 不是 resolution
+  PASS  F3单元 isNegated 直接行为
+=== F4 注入剥离：区分"真注入"与"讨论标签"（规范 §4）===
+  PASS  F4 真注入（闭合）被剥掉，真人发言保留
+  PASS  F4 真注入（未闭合，行首+独占行）被剥掉，真人发言保留
+  PASS  F4- 用户讨论该标签时其真实发言不被删除（原实现丢失 81%）
+  PASS  F4- 引用形态的标签不被吞
+  PASS  F4 讨论文本里的失败信号仍能被学到
+  PASS  F4 R2 既有锁定用例仍成立（回归）
+
+=== R3 最小修复回归: 29 PASS / 0 FAIL ===
+
+
+===== tests\learn\test-learn-r3-hardening.mjs  exit=0 =====
+
+=== H1 幂等 / 确定性（idempotency & determinism） ===
+  PASS  H1.1 同一 draft 连续提案 3 次 → 只产生 1 条，id 稳定
+  PASS  H1.2 重复提案标记 deduped=true（不产生新条目）
+  PASS  H1.3 sourceEventSeqs 乱序/重复不影响 id（规范化幂等）
+  PASS  H1.4 提案顺序不影响最终库内容（顺序无关）
+  PASS  H1.5 stableHash 确定性（1000 次同输入同输出）
+  PASS  H1.6 recordRecall 同一批 id 应用两次 → recallCount 精确为 2
+  PASS  H1.7 真实插件：同一会话重复驱动不重复学习（水位防抖）
+  PASS  H1.8 确定性：两个独立 stateDir 同场景 → 除时间字段外逐字节一致
+
+=== H2 畸形输入（malformed input，绝不抛出） ===
+  PASS  H2.1 buildLearnDigest 对任意畸形参数不抛异常
+  PASS  H2.2 learningSignals 对任意畸形 digest 不抛异常
+  PASS  H2.3 propose / makeExperience 对畸形 draft 返回结构化错误
+  PASS  H2.4 propose 对畸形 store 不抛异常（返回 ok:false 或安全结果）
+  PASS  H2.5 sanitizeExperience / validateStore 拒绝畸形且不抛
+  PASS  H2.6 recall / tokenize 对畸形查询不抛异常
+  PASS  H2.7 脱敏函数对畸形输入不抛异常
+  PASS  H2.8 超限输入被安全钳制（不产生超长/超量字段）
+  PASS  H2.9 normalizeSourceSeqs 只接受非负整数（拒绝 NaN/负数/小数/字符串）
+  PASS  H2.10 原型污染尝试不污染全局原型
+  PASS  H2.12 recordRecall 对畸形 store/ids 不抛异常（且正常路径仍递增）
+  PASS  H2.11 validateStore 拒绝超过 MAX_EXPERIENCES 的库
+
+=== H3 会话隔离（session isolation） ===
+  PASS  H3.1 两个真实形状 sessionId → 两个独立库文件、各自归属正确
+  PASS  H3.2 跨会话召回不成立：B 的库召回不到 A 的经验
+  PASS  H3.3 撞名已消除：清洗会改变 sid 时文件名不再相撞，各自归属正确
+  PASS  H3.4 超长 sessionId 截断不再撞名：两个独立文件、无互相覆盖
+  PASS  H3.5 归属守卫兜底直测：伪造他人归属的库必须被拒绝载入并记 STORE_REBUILT
+  PASS  H3.6 会话隔离不受 store 版本号/遥测影响（重载后仍归属正确）
+
+=== R3 加固回归: 26 PASS / 0 FAIL ===
+
+
+===== tests\learn\run-learn-real-e2e.mjs  exit=0 =====
+real session candidates: 82 (from C:\Users\Administrator\.dsh\sessions)
+temp stateDir: C:\Users\ADMINI~1\AppData\Local\Temp\p4-learn-e2e-CVWfXq
+
+=== E0 真实会话加载（官方 append 事件，无合成数据） ===
+main real session: C:\Users\Administrator\.dsh\sessions\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\session-9e3b29bb-3f36-4659-9162-18ad928a7f49\session.jsonl.zstd
+  PASS  zstd frames decoded
+  PASS  real events parsed
+  PASS  real surface nodes present
+  PASS  zero JSON parse errors
+  PASS  event shape is official {type,seq,time,data}
+
+=== E1 自动学习：真实会话 → 候选经验（PROPOSED，携带真实出处） ===
+  PASS  plugin exposes real tool specs
+  PASS  all 5 tool names correct
+  PASS  phase1 establishes watermark only (no history backfill)
+  (grew session node-by-node: 4 pre-step calls)
+  PASS  auto-proposed at least one candidate from real session
+  PASS  candidate state is PROPOSED (never auto-active)
+  PASS  candidate carries real provenance seqs
+  PASS  every provenance seq points at a REAL event
+  PASS  provenance seqs are real surface nodes
+  PASS  title derived from real utterance (not invented)
+  PASS  NEGATIVE CONTROL: an invented title is rejected by that same check
+  PASS  origin session recorded
+  PASS  candidate body quotes real turns with seq anchors
+  PASS  telemetry recorded PROPOSED
+  PASS  PROPOSED is NOT recallable (proposal ≠ activation)
+
+=== E2 人工审批边界（唯一激活通道） ===
+  PASS  explicit propose via real tool returns PROPOSED
+  PASS  second explicit proposal created
+  PASS  approve WITHOUT approver rejected
+  PASS  approve WITHOUT evidence rejected
+  PASS  approve with SECRET in evidence rejected
+  PASS  approve WITH approver+evidence succeeds
+  PASS  approver identity recorded
+  PASS  approval evidence recorded
+  PASS  reject succeeds
+  PASS  rejection is TERMINAL (cannot be revived)
+  PASS  unknown experienceId rejected
+
+=== E3 确定性召回（只召回 APPROVED，同一输入同一输出） ===
+  PASS  approved experience is recallable
+  PASS  recall returns the approved id
+  PASS  recall item carries provenance for official re-source
+  PASS  recall provenance points at real events
+  PASS  rejected experience NOT recallable
+  PASS  PROPOSED (auto candidate) NOT recallable
+  PASS  recall is DETERMINISTIC (identical output for identical input)
+  PASS  irrelevant query recalls nothing
+  PASS  recall telemetry recorded
+
+=== E3b 晋升只做资格判定，绝不自动晋升 ===
+  PASS  explicit promotion succeeds when eligible
+  PASS  promotion BLOCKED for non-approved experience
+  PASS  blocked promotion recorded in telemetry
+
+=== E4 故障注入与 fail-closed ===
+  PASS  store survives plugin restart (persisted)
+  PASS  every experience id survives restart
+  PASS  APPROVED state survives restart
+  PASS  PROMOTED state survives restart
+  PASS  REJECTED state survives restart
+  PASS  corrupt store rejected (no partial trust)
+  PASS  corrupt store rebuilt to a valid empty store
+  PASS  STORE_REBUILT telemetry recorded
+  PASS  protected write targets denied
+  PASS  experience-store target allowed
+  PASS  unknown target denied (fail-closed)
+  PASS  null/empty target denied
+  PASS  raw secret NEVER written to disk
+  PASS  secret redaction applied in stored body
+  PASS  kill switch registers NO hooks
+  PASS  LEARN_DISABLED=true registers NO hooks
+  PASS  malformed sessions do not throw (fail-open)
+
+================================================================
+P4 LEARN R1 REAL-SESSION E2E: 59 PASS / 0 FAIL
+main real session: session-9e3b29bb-3f36-4659-9162-18ad928a7f49 (3227 surface nodes, 44252 zstd frames)
+temp stateDir (safe to delete): C:\Users\ADMINI~1\AppData\Local\Temp\p4-learn-e2e-CVWfXq
+================================================================
+
+
+===== tests\learn\redteam-r3-isolation.mjs  exit=0 =====
+
+=== A. 正常会话隔离（真实 DSH 形状 sessionId） ===
+  [PASS] A0 真实插件确实产出了候选（前置条件）
+         A=1 B=1 logs=3
+  [PASS] A1 两个会话映射到两个不同文件
+         storePath(A)=session-04ecc1a4-fae9-4eb9-9a08-89b79128bcd4.json  storePath(B)=session-11112222-3333-4444-5555-666677778888.json
+  [PASS] A2 磁盘上确实两个库文件
+         files=[session-04ecc1a4-fae9-4eb9-9a08-89b79128bcd4.json, session-11112222-3333-4444-5555-666677778888.json]
+  [PASS] A3 两库各自归属正确 sessionId
+         A=session-04ecc1a4-fae9-4eb9-9a0  B=session-11112222-3333-4444-555
+  [PASS] A4 A/B 候选标题无交集
+         A=1 B=1 交集=0
+  [PASS] A5 B 库无 A 的语料痕迹
+         B=[数据库连接超时了]
+
+=== B. sanitizeFileId 撞名（R3 根因修复验证：撞名应已消除） ===
+  [PASS] B1 两个不同 sid 不再映射到同一文件（撞名已消除）
+         storePath(X)=probe_session_X-4d6e3e7d.json  storePath(Y)=probe_session_X.json
+  [PASS] B2 磁盘上两个独立库文件
+         files=[probe_session_X-4d6e3e7d.json, probe_session_X.json]
+  [PASS] B3 两库各自归属正确 sessionId（无顶替）
+         X="probe session X"  Y="probe_session_X"
+  [PASS] B4 无跨会话污染（后跑方不继承先跑方经验）
+         Y 看到 X 语料=false; X 看到 Y 语料=false; X exps=1; Y exps=1
+  [PASS] B5 守卫直测：伪造他人归属的库必须被拒绝载入并重建
+         伪造后 sessionId="some-other-session" → 再驱动后 sessionId="probe session X" telemetry=[STORE_REBUILT,PROPOSED]
+
+=== C. 超长 sessionId（>120 字符）截断撞名应已消除 ===
+  [PASS] C1 超长 sid 不再撞名（两个独立文件）
+         storePath 相同=false  文件数=2
+  [PASS] C2 超长 sid 两库各自归属正确（无互相覆盖）
+         A 归属正确=true  B 归属正确=true
+
+=== D. 结论 ===
+
+  PASS=13  FAIL=0
+  正常 DSH sessionId 形状下隔离 = HOLDS
+  撞名是否仍可达 = NO（根因已消除）
+  归属守卫（fail-closed 兜底）= YES
+  跨会话污染 = NOT CONFIRMED
+
+
+===== tests\learn\redteam-r3-contamination.mjs  exit=0 =====
+
+=== A. Secret 持久化红队（blocker 级） ===
+  落盘文件数: 1, 总字节: 1661
+  经验条目数: 2
+  PASS  store 确实落盘（非空转测试）
+  条目 title 预览: ["\"title\":\"请求头是 Authorization: [REDACTED:generic-bearer]，配置里还有 [REDACTED:openai]，结果 401 失败了","\"title\":\"[REDACTED:generic-assignment] 且 [REDACTED:openai] 之后服务无法启动，程序崩溃了"]
+  PASS  store 中不含原始 openai 密钥
+  PASS  store 中不含原始 bearer 密钥
+  PASS  store 中不含原始 pw 密钥
+  store 中出现脱敏标记: true
+
+=== B. Assistant 自污染 Case A/B/C ===
+  Case A kinds=["1:assistant:resolution"]
+         resolved=false  unresolvedFailureSeqs=[]
+  PASS  Case A: 用户的纠正未被误判为 resolution
+  PASS  Case A: assistant 的错误'已解决'声明仍被判为 resolution（可学）
+  PASS  Case A: 系统未因 assistant 声明就把失败判为已解决
+  Case B kinds=["1:assistant:correction"]
+  PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选）
+  Case C kinds=["2:assistant:failure"]
+         resolved=false
+
+=== C. 161 → 769 增长归因（R2 使用的同一真实会话） ===
+  R2 session nodes=3227 (声明 3227)
+  R2 口径 signals=874 (声明 769)
+  turnCount=2863 injectedSkipped=28
+  kind 分布: {"failure":384,"resolution":259,"correction":231}
+  role 分布: {"user":43,"assistant":831}
+  命中来源分解: 仅CJK=640 仅Latin=176 两者=58
+  --> 若 CJK 分支仍失效(R1 状态)，signals ≈ 234（即 R1 的 161 口径应≈此值）
+
+=== D. 注入边界：讨论 vs 真注入 ===
+  真注入(闭合,行首): kept=6/57 (丢失 89%)
+      kept 文本: "帮我看看这个"
+  真注入(未闭合,行首): kept=6/38 (丢失 84%)
+      kept 文本: "帮我看看这个"
+  用户讨论(未闭合,句中): kept=43/43 (丢失 0%)
+      kept 文本: "我注意到日志里有 <system-reminder> 这个标签，它后面的报错都没被记录"
+  PASS  用户讨论该标签时其真实发言不被删除
+
+=== 污染红队: 9 PASS / 0 FAIL ===
+
+
+===== tests\learn\redteam-r3-metrics.mjs  exit=0 =====
+sample size      : 116
+labels present   : 116 / 116
+session nodes    : 9465
+total signals    : 3697
+
+=== 1. Overall precision ===
+should_learn=yes       : 24  -> precision(严格) = 24/116 = 20.7%
+should_learn=uncertain : 1
+should_learn=no        : 91
+precision(宽口径, yes+uncertain) = 25/116 = 21.6%
+false-positive rate(严格, 判为 no 的比例) = 78.4%
+
+=== 2. Per-label precision（预测标签 vs 人工正确标签） ===
+
+  predicted=correction  样本 37
+    标签正确(correct_label===correction) : 8/37 = 21.6%
+    值得学习(should_learn=yes)    : 6/37 = 16.2%
+    人工实际标签分布: {"none":19,"failure":9,"correction":8,"resolution":1}
+
+  predicted=failure  样本 41
+    标签正确(correct_label===failure) : 16/41 = 39.0%
+    值得学习(should_learn=yes)    : 11/41 = 26.8%
+    人工实际标签分布: {"failure":16,"resolution":5,"none":17,"correction":3}
+
+  predicted=resolution  样本 38
+    标签正确(correct_label===resolution) : 10/38 = 26.3%
+    值得学习(should_learn=yes)    : 7/38 = 18.4%
+    人工实际标签分布: {"none":18,"failure":8,"resolution":10,"correction":2}
+
+=== 3. Language precision（中文召回提升后，精度是否下降？） ===
+  cjk    n=  8  precision(严格)= 37.5%  precision(宽)= 37.5%
+  latin  n= 39  precision(严格)= 25.6%  precision(宽)= 25.6%
+  mixed  n= 69  precision(严格)= 15.9%  precision(宽)= 17.4%
+
+=== 3b. 语言分布（全量 signals，非样本） ===
+
+=== 4. Contamination rate ===
+contamination=yes : 13/116 = 11.2%
+  污染条目 role 分布: {"assistant":7,"user":6}
+  污染下标: 14,44,45,57,61,71,73,74,75,95,108,113,114
+
+=== 5. Duplicate rate（人工判定：同语义事件重复） ===
+duplicate=yes(人工) : 20/116 = 17.2%
+  重复下标: 35,43,45,49,51,53,56,71,73,74,75,79,80,84,89,102,107,109,113,114
+
+  脚本侧（全量 signals 口径）: raw=3697 uniqueExact=3696 uniqueNormalized=3695 uniqueKindNorm=3695
+  exact-dup rate=0.0%  normalized-dup rate=0.1%
+
+=== 6. Role-based quality（assistant 自污染） ===
+  user      n= 20  precision=  0.0%  contamination= 30.0%
+  assistant n= 96  precision= 25.0%  contamination=  7.3%
+
+=== 7. 污染面交叉（transient / temporary-state 标记的样本其质量） ===
+  looksTransient       n= 12  should_learn=yes 1 (8.3%)
+  looksTemporaryState  n= 38  should_learn=yes 3 (7.9%)
+
+=== R3 metrics complete ===
+
+
+===== tests\learn\redteam-r3-quality.mjs  exit=0 =====
+real session candidates: 433
+main real session: C:\Users\Administrator\.dsh\sessions\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\session-a144fe3f-1042-4466-b70b-a10642fae037\session.jsonl.zstd
+surface nodes: 9465, events: 116496
+
+=== 1. 全量 digest（复现 769 口径） ===
+turnCount=5914 injectedSkipped=698 seqRange=8-5225209
+signals=3697  (R2 声明 769)
+kinds=["correction","failure","resolution"]  resolved=true unresolvedFailureSeqs=0
+
+=== 2. signal 明细（每条：seq/role/kind/text） ===
+rows=3697
+role 分布: {"user":113,"assistant":3584}
+kind 分布: {"correction":1598,"resolution":1423,"failure":676}
+污染面(只标记): transient=590 temporaryState=1779 secretShape=0 injectionStripped=0
+
+=== 3. Duplicate 分析 ===
+raw signals          : 3697
+unique exact text    : 3696   (exact-dup groups=1, 冗余条数=1)
+unique normalized    : 3695   (norm-dup groups=2, 冗余条数=2)
+unique kind+norm     : 3695   (kind-norm-dup groups=2, 冗余条数=2)
+exact duplicate rate    : 0.0%
+normalized duplicate rate: 0.1%
+semantic(kind+norm) dup rate: 0.1%
+
+  top exact-dup 文本:
+    x2  "[execution-continuity] A recoverable provider/network interruption occ"
+
+=== 4. Candidate volume（按插件的窗口口径模拟） ===
+window=  8  windows=1183  signals/session= 3697  candidates/session=1183  sig/window: max=8 median=3 p95=6
+window= 16  windows= 591  signals/session= 3695  candidates/session=591  sig/window: max=13 median=6 p95=10
+window= 32  windows= 295  signals/session= 3689  candidates/session=295  sig/window: max=21 median=12 p95=19
+window= 64  windows= 147  signals/session= 3670  candidates/session=147  sig/window: max=42 median=25 p95=36
+
+=== 5. 分层抽样（stratified sampling） ===
+strata 数: 26
+     1  correction|cjk|medium|assistant|uniq
+     2  correction|cjk|short|assistant|uniq
+   175  correction|latin|long|assistant|uniq
+    20  correction|latin|medium|assistant|uniq
+  1283  correction|mixed|long|assistant|uniq
+    48  correction|mixed|long|user|uniq
+    65  correction|mixed|medium|assistant|uniq
+     4  correction|mixed|short|assistant|uniq
+     1  failure|cjk|medium|assistant|uniq
+     3  failure|cjk|short|assistant|uniq
+    44  failure|latin|long|assistant|uniq
+    20  failure|latin|medium|assistant|uniq
+     1  failure|latin|medium|user|uniq
+     1  failure|latin|short|assistant|uniq
+   451  failure|mixed|long|assistant|uniq
+     5  failure|mixed|long|user|uniq
+   140  failure|mixed|medium|assistant|uniq
+    10  failure|mixed|short|assistant|uniq
+     1  resolution|cjk|short|assistant|uniq
+    58  resolution|latin|long|assistant|uniq
+     2  resolution|latin|long|user|dup
+     5  resolution|latin|medium|assistant|uniq
+  1195  resolution|mixed|long|assistant|uniq
+    57  resolution|mixed|long|user|uniq
+    92  resolution|mixed|medium|assistant|uniq
+    13  resolution|mixed|short|assistant|uniq
+
+分层样本数: 116 (target=120, perStratum<=6)
+样本覆盖层数: 26 / 26
+
+=== 6. 导出样本集（供人工打标） ===
+written: C:\Users\Administrator\Desktop\sdeepseek harness\_r3\r3_quality_sample.json  (116 rows)
+
+=== R3 quality measurement complete ===
+
+
+===== tests\learn\redteam-r3-labels.mjs  exit=0 =====
+
+
+===== tests\learn\redteam-r3-injection-positions.mjs  exit=0 =====
+=== real turn text: position of <system-reminder> ===
+{
+  "turnsWithTag": 2165,
+  "occurrences": 2174,
+  "lineStart": 720,
+  "midLine": 1454,
+  "closed": 720,
+  "unclosed": 1454,
+  "tagAlone": 720,
+  "tagInline": 1454,
+  "bothLSandAlone": 720,
+  "lsOnly": 0,
+  "aloneOnly": 0,
+  "neither": 1454
+}
+
+=== per session (midLine split by role) ===
+  {"dir":"session-9e3b29bb-3f36-","occ":21,"lineStart":21,"midLine":0,"midUser":0,"midAssistant":0,"alone":21,"inline":0}
+  {"dir":"session-a144fe3f-1042-","occ":2153,"lineStart":699,"midLine":1454,"midUser":1439,"midAssistant":15,"alone":699,"inline":1454}
+
+=== mid-line samples (the "discussion/quote" candidates) ===
+  [0] user  "ite the seq shown next to any item.\n\n## Current goal\n- <system-reminder> A skill is a reus"
+  [1] assistant  "/tool-generated injection. i.e., exclude text matching <system-reminder>, workspace instru"
+  [2] assistant  "e user/message — even if the underlying event text is `<system-reminder>` wrapped content "
+  [3] assistant  "data needed):\n- NEG-FINAL-1: events=[user/message with <system-reminder> wrapping], store "
+  [4] assistant  "ed in header, mirrored by NEG tests):\n\nINJECTION_RX = /<system-reminder>|<system_warning>|"
+  [5] user  "ite the seq shown next to any item.\n\n## Current goal\n- <system-reminder> The available ski"
+  [6] assistant  "nted in header comment):\n\nRX tables:\n- INJECTION_RX = /<system-reminder>|<system_warning>|"
+  [7] assistant  "s:\n- NEG-FINAL-1: events [{seq,type:user,message,data:'<system-reminder> workspace instruc"
+
+
+================================================================================
+PRE-MERGE R-3 追加：AC7 全量回归（含新增 test-learn-r3-secrets.mjs，F6 修复后）
+时间(UTC): 2026-09-21 15:36:17
+learn-core.mjs sha256 = 68CE70DB91723B650A59ABE5A0FAE57AF11533252AC4E71967052D91DF6042A1
+================================================================================
+exit=0    fails=0    tests\autonomy\test-autonomy-state-core.mjs
+             RESULT: 104 PASS / 0 FAIL
+exit=0    fails=0    tests\context-memory\verify-context-memory.mjs
+             RESULT: 72 PASS / 0 FAIL
+exit=1    fails=2    tests\install-plugin\verify-install-plugin.mjs
+             结果: FAIL（13 通过，2 失败）
+exit=0    fails=0    tests\reliability\test-capacity-resolver.mjs
+             CAPACITY RESOLVER TEST PASSED
+exit=0    fails=0    tests\reliability\test-completion-truth.mjs
+             COMPLETION TRUTH TEST PASSED
+exit=0    fails=0    tests\reliability\test-ec-router-bridge.mjs
+             EC-ROUTER BRIDGE TEST PASSED
+exit=0    fails=0    tests\reliability\test-failure-classifier-v1.mjs
+             34 pass, 0 fail
+exit=0    fails=0    tests\reliability\test-model-registry.mjs
+             MODEL REGISTRY TEST PASSED
+exit=0    fails=0    tests\reliability\test-r5-addendum-ec.mjs
+             R5 ADDENDUM EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-resume-defer.mjs
+             PASS  T4 state RUNNING after OK
+exit=0    fails=0    tests\reliability\test-rh2-ec.mjs
+             RH2 EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-rh2-r11-goal-resume.mjs
+             RH2 R1.1 GOAL.RESUME TEST PASSED
+exit=0    fails=0    tests\reliability\test-runtime-capacity-adapter.mjs
+             RUNTIME CAPACITY ADAPTER TEST PASSED
+exit=0    fails=0    tests\reliability\test-secret-scan-fixtures.mjs
+             SECRET SCAN FIXTURE TEST PASSED
+exit=0    fails=0    tests\reliability\yaml-parse-check.mjs
+             YAML CHECK: 6 ok, 0 failed (6 files, cordis !!js aware, mode=custom-schema)
+exit=0    fails=0    tests\router\test-deepseek-native-multimodal.mjs
+             25 passed, 0 failed
+exit=0    fails=0    tests\router\test-exact-model-preservation.mjs
+             9 passed, 0 failed
+exit=0    fails=0    tests\supervisor\test-supervisor-mutation-state.mjs
+             19 passed, 0 failed
+exit=0    fails=0    tests\learn\test-learn-core.mjs
+             RESULT: 276 PASS / 0 FAIL
+exit=0    fails=0    tests\learn\test-learn-r3-fixes.mjs
+             === R3 最小修复回归: 29 PASS / 0 FAIL ===
+exit=0    fails=0    tests\learn\test-learn-r3-secrets.mjs
+             === R-3 通用密钥脱敏加固回归: 58 PASS / 0 FAIL ===
+exit=0    fails=0    tests\learn\run-learn-real-e2e.mjs
+             P4 LEARN R1 REAL-SESSION E2E: 59 PASS / 0 FAIL
+
+==== P4 AC7 REGRESSION SUMMARY ====
+GREEN=21  RED=1  MISSING=0  TOTAL=22  totalFAILlines=2
+
+--- non-green detail ---
+  [exit=1] tests\install-plugin\verify-install-plugin.mjs
+        结果: FAIL（13 通过，2 失败）

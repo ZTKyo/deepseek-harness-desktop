@@ -35,3 +35,5 @@ DSH-Client/
 _r51-work/
 _r3-checkpoint/
 
+# R3 变更前的本地回滚备份（不入库）
+_backup-r3-*/

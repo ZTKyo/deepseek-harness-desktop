@@ -99,8 +99,21 @@ export const SECRET_PATTERNS = [
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g },
   { name: 'telegram', re: /\b\d{8,10}:[A-Za-z0-9_-]{30,}\b/g },
   { name: 'aws', re: /\bAKIA[A-Z0-9]{16}\b/g },
-  // 通用形态：显式凭据赋值 与 Bearer/Authorization 头
-  { name: 'generic-assignment', re: /\b(?:api[_-]?key|apikey|secret|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?([A-Za-z0-9_\-./+]{12,})["']?/gi },
+  // 通用形态 1：URI userinfo（DB / broker / 服务的连接串）
+  //   PRE-MERGE R-3：此前完全缺失。口令内的 "@" 与 userinfo/host 分隔符的 "@" 同形，
+  //   故从 "://" 之后**贪婪**取到 authority 内最后一个 "@"（authority 不含 "/"），
+  //   这样 postgres://user:s3cr3tP@ss@host 会整段命中，而不是只截到第一个 "@" 把 "ss@host" 泄漏出去。
+  //   用 lookbehind 不消费 scheme、lookahead 不消费 "@"，因此输出形如
+  //   postgres://[REDACTED:uri-credential]@host/db —— scheme、@ 分隔符与 host 全部保留，便于诊断。
+  { name: 'uri-credential', re: /(?<=:\/\/)[^\s/?#]+(?=@)/g },
+  // 通用形态 2：显式凭据赋值 与 Bearer/Authorization 头
+  //   PRE-MERGE R-3：原值字符集为 [A-Za-z0-9_\-./+]{12,}（纯字母数字），遇到
+  //   ! @ # $ % ^ & * ( ) 等常见口令符号即断 → 含符号的口令整体漏脱敏。
+  //   现按**分隔符**取值：引号内取到闭合引号，无引号取到空白/分号/逗号/引号为止。
+  //   仍要求 keyword 后紧跟 [:]=（不允许插入其他词），故 "token count = 5"、
+  //   "the password field is required" 这类普通说明文本不会被误脱敏。
+  //   另外补 api_token（此前因 \btoken\b 在 "api_token" 中无词边界而漏掉）。
+  { name: 'generic-assignment', re: /\b(?:api[_-]?key|apikey|api[_-]?token|secret|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)\b\s*[:=]\s*(?:"[^"\r\n]{4,}"|'[^'\r\n]{4,}'|[^\s;,'"]{8,})/gi },
   { name: 'generic-bearer', re: /\bBearer\s+([A-Za-z0-9_\-./+=]{16,})/gi },
 ];
 

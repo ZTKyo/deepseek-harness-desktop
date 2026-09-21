@@ -132,6 +132,93 @@ B5 为**守卫直测**：撞名既已从根因消除，就手工伪造一个「�
 
 ---
 
+### F6（PRE-MERGE R-3：通用密钥脱敏覆盖缺口 — PR #90 独立 Release Gate 评审发现）
+
+**发现渠道**：PR #90 的独立 Release Gate 评审（非自评）。规范家族
+（notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws）覆盖良好，
+缺口在**通用形态**——即"不属于任何已知厂商、但明显是口令"的值。
+
+**缺陷 1：`generic-assignment` 值字符集过窄**
+
+```js
+// 修复前
+/\b(?:api[_-]?key|apikey|secret|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)\b\s*[:=]\s*["']?([A-Za-z0-9_\-./+]{12,})["']?/gi
+```
+
+值字符集为 `[A-Za-z0-9_\-./+]`（**纯字母数字加少量符号**），遇到 `! @ # $ % ^ & * ( )`
+即断。真实口令极少只有字母数字，因此含符号的口令**整体漏脱敏**。实测漏脱敏样例：
+
+| 输入 | 修复前输出 |
+|---|---|
+| `password: "P@ssw0rd!xyz"` | 原样泄漏（`@` 断在 `P`） |
+| `DB password=P@ssw0rd!xyz` | 原样泄漏 |
+| `passwd: p@ss#w0rd$2026` | 原样泄漏（`#`、`$` 断） |
+| `pwd = "a%b^c&d*e(f)"` | 原样泄漏 |
+| `client_secret="s!e@c#r$e%t^&*"` | 原样泄漏 |
+
+**缺陷 2：完全缺失 URI credential 形态**
+
+`postgres://user:PASS@host/db`、`mysql://root:PASS@host`、`redis://default:PASS@host`
+这类连接串里的口令**没有任何规则覆盖**，原样进入摘要与持久化产物。
+
+关键难点：口令内部的 `@` 与 userinfo/host 分隔符的 `@` **同形**——
+`postgres://user:s3cr3tP@ss@host/db` 若只截到第一个 `@`，会把 `ss@host/db` 继续泄漏。
+故实现从 `://` 之后**贪婪**取到 authority 内最后一个 `@`（authority 不含 `/`）：
+
+```js
+// 修复后：lookbehind 不消费 scheme、lookahead 不消费 "@"
+{ name: 'uri-credential', re: /(?<=:\/\/)[^\s/?#]+(?=@)/g }
+```
+
+输出形如 `postgres://[REDACTED:uri-credential]@db.internal:5432/app` ——
+**scheme、`@` 分隔符与 host 全部保留**，既脱敏又保留可诊断性（C7 专门锁这一点）。
+
+**修复 2：改为按分隔符取值（而非按字符集）**
+
+```js
+// 修复后
+/\b(?:api[_-]?key|apikey|api[_-]?token|secret|password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)\b\s*[:=]\s*(?:"[^"\r\n]{4,}"|'[^'\r\n]{4,}'|[^\s;,'"]{8,})/gi
+```
+
+引号内取到闭合引号，无引号取到空白/分号/逗号/引号为止 —— 与符号种类**解耦**。
+另补 `api[_-]?token`：此前 `\btoken\b` 在 `api_token` 中无词边界（`_` 是词字符）而漏掉。
+
+**防过度脱敏（负向孪生）**：仍要求 keyword 后**紧跟** `[:=]`（不允许插入其他词），
+故 `token count = 5`、`the password field is required` 这类普通说明文本**不被误脱敏**
+（E3/E4 锁定）。
+
+**为什么这不是"改个正则"就完事 —— 端到端落盘证据**
+
+只测 sanitizer 函数**不足以**证明密钥不落盘：真正的风险在
+`digest → signal → candidate → title/body → 持久化 JSON` 全链路。
+故新增 H 段，驱动**真实插件壳**（`plugins/learn.mjs` 的 `apply()`，不是复制品），
+让假密钥经真实会话事件流进入学习管线，最后断言**落盘文件字节**中不含完整原始密钥。
+
+**H 段设计要点（防空洞通过）**：H2/H3/H4/H5 全部 **fail-closed** ——
+若前置（确实产出候选且已落盘）不成立，它们**判失败**而非通过。
+首版曾因前置不成立而"通过"（产物为空时当然不含密钥），那是**比没有测试更糟的假绿**，
+已修正。
+
+**负向对照（证明测试有真实保护力，而非纸面通过）**：把实现换回 HEAD（修复前）版本后，
+R-3 套件产生 **21 个 FAIL**，其中 H 段 3 条全部报
+「原始密钥出现在持久化产物中」；换回修复版后恢复 **58 PASS / 0 FAIL**，
+且按 sha256 校验还原字节完全一致（`68CE70DB…6042A1`）。
+
+**过程中确认的两个 harness 事实（易错，已写入测试注释）**：
+
+1. **会话事件形状按角色不同**：`user/message` 的 message 是**扁平**的 `data.content`；
+   `assistant/message` 的 message **嵌在** `data.message` 下。P2.5 官方提取器
+   `messageOfEvent` 对 assistant 只读 `data.message` —— 用扁平形状造 assistant 事件
+   会返回 `null`，该轮被**静默丢弃**（`digest.turnCount` 偏小但不报错）。
+2. `minNewNodes` 是**单次推进的增量下限**，不是累计：逐节点推进时每次只新增 1 个节点，
+   若 `minNewNodes=2` 则**永不触发**自动候选（首版 H 段即因此产出 0 候选）。
+
+**修复规模**：`plugins/learn-core.mjs` +15 / −2 行（仅 `SECRET_PATTERNS` 两处）。
+
+**如实登记的未修边界**：见 §4「无引号值的下限 `{8,}`」条目。
+
+---
+
 ## 3. 测试与验证
 
 | 套件 | 结果 |
@@ -139,15 +226,18 @@ B5 为**守卫直测**：撞名既已从根因消除，就手工伪造一个「�
 | `tests/learn/test-learn-core.mjs`（R1+R2 全量回归） | **276 PASS / 0 FAIL** |
 | `tests/learn/test-learn-r3-fixes.mjs`（R3 新增） | **29 PASS / 0 FAIL** |
 | `tests/learn/test-learn-r3-hardening.mjs`（R3 加固） | **26 PASS / 0 FAIL** |
+| `tests/learn/test-learn-r3-secrets.mjs`（PRE-MERGE R-3 新增，F6） | **58 PASS / 0 FAIL** |
 | `tests/learn/run-learn-real-e2e.mjs`（真实会话 E2E） | **59 PASS / 0 FAIL** |
 | `tests/learn/redteam-r3-isolation.mjs`（会话隔离红队） | **13 PASS / 0 FAIL** |
 | `tests/learn/redteam-r3-contamination.mjs`（污染红队） | **9 PASS / 0 FAIL** |
-| `redteam-r3-{metrics,quality,labels,injection-positions}` | 全部 **exit=0** |
+| `redteam-r3-{metrics,quality,labels,injection-positions}` | 全部 **exit=0**（观测模式，无 pass/fail 门槛） |
 
-合计 **412 PASS / 0 FAIL**（276 + 29 + 26 + 59 + 13 + 9），`tests/learn/` 全目录 **0 个非零退出**。
+合计 **470 PASS / 0 FAIL**（276 + 29 + 26 + 58 + 59 + 13 + 9），`tests/learn/` 全目录 **0 个非零退出**。
 
 **数字更正记录**：本报告早期版本写作「413 PASS」，经最终 HEAD 逐套件复核为**算术错误**
 （六套之和 = 412）。已在最终 HEAD 全量回归中逐条重算并修正，避免把错误数字交给评审。
+**PRE-MERGE R-3 再更正**：新增 `test-learn-r3-secrets.mjs`（58 条）后，合计由 412 → **470**；
+本行数字于本轮**逐套件实跑复核**（非沿用旧表），每个套件的 PASS 数均取自该套件自身的汇总行。
 
 **关于那条"变红"的 R2 断言**：R2 的
 `stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me"`
@@ -176,6 +266,14 @@ R2 由 274 → **276 PASS / 0 FAIL**（净增 3 条、改判 1 条）。
 成本远超收益，且**误报代价有界**——本模块只生成"待人工审批的候选"，
 绝不构成激活、绝不改变任何行为（误报 = 一条被驳回的提案）。
 
+**F6 引入的新边界（无引号值下限 `{8,}`）**：`generic-assignment` 无引号分支要求值
+**至少 8 字符**（`[^\s;,'"]{8,}`）。故 `password=abc123`（6 字符）这类**极短无引号值**
+仍不会被脱敏。**不修的理由**：下限是**误报与漏报的权衡旋钮**——降到 4 会让
+`token = null`、`secret: true` 这类普通代码/文档文本被误脱敏，而"看到 password 就吞掉
+正常文档内容"正是本套件负向孪生（E3/E4）明确要防的错误。真实凭据长度普遍 ≥8，
+故取 8 作为下限，并把该边界**如实登记**而非隐去。
+（注：**带引号**的值下限为 4，因为引号本身已是强边界，误报风险低。）
+
 ---
 
 ## 5. 边界声明
@@ -195,6 +293,8 @@ R2 由 274 → **276 PASS / 0 FAIL**（净增 3 条、改判 1 条）。
 - `docs/roadmap/evidence/P4_LEARN_R3_CONTAMINATION.txt` — 污染归因
 - `docs/roadmap/evidence/P4_LEARN_R3_ISOLATION.txt` — **会话隔离红队最终输出（13 PASS / 0 FAIL）**
 - `docs/roadmap/evidence/P4_LEARN_R3_AC7_FULL.txt` — **AC7 全量回归最终输出（全目录 0 非零退出）**
+- `docs/roadmap/evidence/P4_LEARN_R3_SECRETS.txt` — **F6 通用密钥脱敏取证（含修复 diff、修复版 58 PASS、
+  负向对照 26 FAIL、还原 sha256 校验）**
 - **人工标注真值**：`tests/learn/redteam-r3-labels.mjs`（`export const LABELS`，133 行数据模块，
   **不是可执行探针**——它只被 `redteam-r3-metrics.mjs` 导入以计算指标，直接运行无输出）
 - 探针源码：`tests/learn/redteam-r3-{contamination,injection-positions,metrics,probe,quality}.mjs`、

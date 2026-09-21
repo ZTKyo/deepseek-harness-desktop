@@ -726,3 +726,60 @@ written: C:\Users\Administrator\Desktop\sdeepseek harness\_r3\r3_quality_sample.
   [6] assistant  "nted in header comment):\n\nRX tables:\n- INJECTION_RX = /<system-reminder>|<system_warning>|"
   [7] assistant  "s:\n- NEG-FINAL-1: events [{seq,type:user,message,data:'<system-reminder> workspace instruc"
 
+
+================================================================================
+PRE-MERGE R-3 追加：AC7 全量回归（含新增 test-learn-r3-secrets.mjs，F6 修复后）
+时间(UTC): 2026-09-21 15:36:17
+learn-core.mjs sha256 = 68CE70DB91723B650A59ABE5A0FAE57AF11533252AC4E71967052D91DF6042A1
+================================================================================
+exit=0    fails=0    tests\autonomy\test-autonomy-state-core.mjs
+             RESULT: 104 PASS / 0 FAIL
+exit=0    fails=0    tests\context-memory\verify-context-memory.mjs
+             RESULT: 72 PASS / 0 FAIL
+exit=1    fails=2    tests\install-plugin\verify-install-plugin.mjs
+             结果: FAIL（13 通过，2 失败）
+exit=0    fails=0    tests\reliability\test-capacity-resolver.mjs
+             CAPACITY RESOLVER TEST PASSED
+exit=0    fails=0    tests\reliability\test-completion-truth.mjs
+             COMPLETION TRUTH TEST PASSED
+exit=0    fails=0    tests\reliability\test-ec-router-bridge.mjs
+             EC-ROUTER BRIDGE TEST PASSED
+exit=0    fails=0    tests\reliability\test-failure-classifier-v1.mjs
+             34 pass, 0 fail
+exit=0    fails=0    tests\reliability\test-model-registry.mjs
+             MODEL REGISTRY TEST PASSED
+exit=0    fails=0    tests\reliability\test-r5-addendum-ec.mjs
+             R5 ADDENDUM EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-resume-defer.mjs
+             PASS  T4 state RUNNING after OK
+exit=0    fails=0    tests\reliability\test-rh2-ec.mjs
+             RH2 EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-rh2-r11-goal-resume.mjs
+             RH2 R1.1 GOAL.RESUME TEST PASSED
+exit=0    fails=0    tests\reliability\test-runtime-capacity-adapter.mjs
+             RUNTIME CAPACITY ADAPTER TEST PASSED
+exit=0    fails=0    tests\reliability\test-secret-scan-fixtures.mjs
+             SECRET SCAN FIXTURE TEST PASSED
+exit=0    fails=0    tests\reliability\yaml-parse-check.mjs
+             YAML CHECK: 6 ok, 0 failed (6 files, cordis !!js aware, mode=custom-schema)
+exit=0    fails=0    tests\router\test-deepseek-native-multimodal.mjs
+             25 passed, 0 failed
+exit=0    fails=0    tests\router\test-exact-model-preservation.mjs
+             9 passed, 0 failed
+exit=0    fails=0    tests\supervisor\test-supervisor-mutation-state.mjs
+             19 passed, 0 failed
+exit=0    fails=0    tests\learn\test-learn-core.mjs
+             RESULT: 276 PASS / 0 FAIL
+exit=0    fails=0    tests\learn\test-learn-r3-fixes.mjs
+             === R3 最小修复回归: 29 PASS / 0 FAIL ===
+exit=0    fails=0    tests\learn\test-learn-r3-secrets.mjs
+             === R-3 通用密钥脱敏加固回归: 58 PASS / 0 FAIL ===
+exit=0    fails=0    tests\learn\run-learn-real-e2e.mjs
+             P4 LEARN R1 REAL-SESSION E2E: 59 PASS / 0 FAIL
+
+==== P4 AC7 REGRESSION SUMMARY ====
+GREEN=21  RED=1  MISSING=0  TOTAL=22  totalFAILlines=2
+
+--- non-green detail ---
+  [exit=1] tests\install-plugin\verify-install-plugin.mjs
+        结果: FAIL（13 通过，2 失败）

@@ -1,0 +1,82 @@
+# P4 LEARN R1 — AC7 regression sweep, captured output
+# Command: & tests\learn\run-ac7-regression.ps1
+# Scope: pure-node suites only. Deliberately EXCLUDES anything that starts/stops/restarts
+#        the dsh service or binds port 3080, so the operator's desktop session is not interrupted.
+# Date: 2026-09-21
+
+exit=0    fails=0    tests\autonomy\test-autonomy-state-core.mjs
+             RESULT: 104 PASS / 0 FAIL
+exit=0    fails=0    tests\context-memory\verify-context-memory.mjs
+             RESULT: 72 PASS / 0 FAIL
+exit=1    fails=2    tests\install-plugin\verify-install-plugin.mjs
+             结果: FAIL（13 通过，2 失败）
+exit=0    fails=0    tests\reliability\test-capacity-resolver.mjs
+             CAPACITY RESOLVER TEST PASSED
+exit=0    fails=0    tests\reliability\test-completion-truth.mjs
+             COMPLETION TRUTH TEST PASSED
+exit=0    fails=0    tests\reliability\test-ec-router-bridge.mjs
+             EC-ROUTER BRIDGE TEST PASSED
+exit=0    fails=0    tests\reliability\test-failure-classifier-v1.mjs
+             34 pass, 0 fail
+exit=0    fails=0    tests\reliability\test-model-registry.mjs
+             MODEL REGISTRY TEST PASSED
+exit=0    fails=0    tests\reliability\test-r5-addendum-ec.mjs
+             R5 ADDENDUM EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-resume-defer.mjs
+             PASS  T4 state RUNNING after OK
+exit=0    fails=0    tests\reliability\test-rh2-ec.mjs
+             RH2 EC TEST PASSED
+exit=0    fails=0    tests\reliability\test-rh2-r11-goal-resume.mjs
+             RH2 R1.1 GOAL.RESUME TEST PASSED
+exit=0    fails=0    tests\reliability\test-runtime-capacity-adapter.mjs
+             RUNTIME CAPACITY ADAPTER TEST PASSED
+exit=0    fails=0    tests\reliability\test-secret-scan-fixtures.mjs
+             SECRET SCAN FIXTURE TEST PASSED
+exit=0    fails=0    tests\reliability\yaml-parse-check.mjs
+             YAML CHECK: 6 ok, 0 failed (6 files, cordis !!js aware, mode=custom-schema)
+exit=0    fails=0    tests\router\test-deepseek-native-multimodal.mjs
+             25 passed, 0 failed
+exit=0    fails=0    tests\router\test-exact-model-preservation.mjs
+             9 passed, 0 failed
+exit=0    fails=0    tests\supervisor\test-supervisor-mutation-state.mjs
+             19 passed, 0 failed
+exit=0    fails=0    tests\learn\test-learn-core.mjs
+             RESULT: 220 PASS / 0 FAIL
+exit=0    fails=0    tests\learn\run-learn-real-e2e.mjs
+             P4 LEARN R1 REAL-SESSION E2E: 58 PASS / 0 FAIL
+
+==== P4 AC7 REGRESSION SUMMARY ====
+GREEN=19  RED=1  MISSING=0  TOTAL=20  totalFAILlines=2
+
+--- non-green detail ---
+  [exit=1] tests\install-plugin\verify-install-plugin.mjs
+        结果: FAIL（13 通过，2 失败）
+
+# ---------------------------------------------------------------------------
+# Classification of the single red suite: PRE-EXISTING, NOT introduced by P4.
+#
+# Failing assertions:
+#   FAIL  T3.1 preflight 退出码 0 :: got 1; out=PREFLIGHT FAIL: restart preflight failed:
+#         install-plugin --check 未通过
+#   FAIL  T3.2 输出包含 'PREFLIGHT PASS' :: PREFLIGHT FAIL
+#
+# Root cause: `install-plugin --check` compares the WORKTREE REPO against the DEPLOYED
+# PRODUCTION PROFILE (~/.dsh/profiles/web/) and reports 11 checksum mismatches:
+#   ask-telegram, computer-use, secret-gate, completion-notify, failure-classifier,
+#   openrouter-router, agentrouter-wire, agent-inspector, keepalive-patch,
+#   model-selection-guard, execution-continuity
+# These are version drift between the worktree (baseline 6d062362) and the currently
+# deployed builds.
+#
+# Proof P4 did not cause it:
+#   1. All 11 mismatched files are UNCHANGED-from-baseline per `git status`.
+#   2. The new P4 plugin files (learn-core.mjs, learn.mjs) NEVER appear in the check
+#      output (verified with the precise pattern learn-core\.mjs | [\\/]learn\.mjs).
+#      NOTE: an earlier check using the substring 'learn' was a FALSE POSITIVE, because
+#      the worktree path `.worktree-p4-learning-r1` itself contains "learn".
+#   3. The production cordis.patch.yml contains no learn registration.
+#   4. The failure is "repo != deployed", which was already true before P4 existed.
+#
+# Action taken: recorded, not fixed. Re-syncing the production profile would overwrite
+# the operator's live plugins, which is outside this task's authorization.
+# ---------------------------------------------------------------------------

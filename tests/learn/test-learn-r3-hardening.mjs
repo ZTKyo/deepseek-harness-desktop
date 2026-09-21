@@ -17,7 +17,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { apply } from '../../plugins/learn.mjs';
 import {
-  propose, emptyStore, makeExperience, sanitizeExperience, validateStore,
+  propose, approve, reject, retire, emptyStore, makeExperience, sanitizeExperience, validateStore,
   recall, recordRecall, stableHash, normalizeSourceSeqs, buildLearnDigest,
   learningSignals, redactSecrets, containsSecret, tokenize, stripInjectedContent,
   normalizeTags, MAX_TITLE_LEN, MAX_BODY_LEN, MAX_TAGS, MAX_SOURCE_SEQS, MAX_EXPERIENCES,
@@ -220,6 +220,81 @@ await check('H2.4 propose 对畸形 store 不抛异常（返回 ok:false 或安�
     if (!r.ok) errs.push(r.error);
   }
   assert.deepEqual(errs, [], errs.join(' | '));
+});
+
+// ── R-5（独立 Release Gate 评审记录项）：approve/reject/retire 的畸形 store 硬化 ──
+// 原状：R3 加固只做了 6 个函数中的 3 个（propose/recall/recordRecall 返回结构化
+// invalid_store），approve/reject/retire 直接读 store.experiences → 抛 TypeError。
+// 评审判定为「不可达」（getStore 保证 store 合法），但同类入参不应有两套行为。
+await check('H2.13 approve/reject/retire 对畸形 store 返回结构化错误，绝不抛 TypeError', () => {
+  const errs = [];
+  for (const v of badInputs) {
+    for (const fn of [approve, reject, retire]) {
+      const r = tryCall(fn.name, () => fn(v, 'x', { approver: 'a', evidence: 'e', reason: 'r' }));
+      if (!r.ok) errs.push(r.error);
+      else {
+        assert.equal(r.value.ok, false, `${fn.name} 对畸形 store 应返回 ok:false`);
+        assert.equal(r.value.error, 'invalid_store', `${fn.name} 应返回 invalid_store，实际 ${r.value.error}`);
+      }
+    }
+    // 半畸形：store 是对象但 experiences 不是数组
+    for (const fn of [approve, reject, retire]) {
+      const r = tryCall(fn.name, () => fn({ experiences: 'not-an-array' }, 'x', {}));
+      if (!r.ok) errs.push(r.error);
+      else assert.equal(r.value.error, 'invalid_store', `${fn.name} experiences 非数组时应返回 invalid_store`);
+    }
+  }
+  assert.deepEqual(errs, [], errs.join(' | '));
+});
+
+await check('H2.14 approve/reject/retire 对合法 store 但 id 不存在 → experience_not_found（非抛错）', () => {
+  const s = emptyStore('sess-r5');
+  for (const fn of [approve, reject, retire]) {
+    const r = tryCall(fn.name, () => fn(s, 'no-such-id', { approver: 'a', evidence: 'e', reason: 'r' }));
+    assert.ok(r.ok, `${fn.name} 抛异常了: ${r.error}`);
+    assert.equal(r.value.ok, false, `${fn.name} 应返回 ok:false`);
+    assert.equal(r.value.error, 'experience_not_found', `${fn.name} 错误码应为 experience_not_found`);
+  }
+});
+
+// ── R-6（独立 Release Gate 评审记录项）：库满时新写入不得被静默丢弃 ──
+// 原状：withExperience 按 createdAt 升序排序后 slice(-MAX_EXPERIENCES)，而 makeExperience
+// 在调用方未给时间戳时把 createdAt 落为 0 → 新提案排到最前被裁掉 → 「写成功但库里没有」。
+await check('H2.15 库满 + createdAt 缺失时，新提案必须仍在库中（淘汰最旧而非丢弃最新）', () => {
+  let s = emptyStore('sess-r6');
+  for (let i = 0; i < MAX_EXPERIENCES; i++) {
+    const r = propose(s, draft({ title: `填充条目 ${i}`, createdAt: 1700000000000 + i, originSessionId: 'sess-r6' }));
+    assert.ok(r.ok, `填充第 ${i} 条失败: ${r.error}`);
+    s = r.value;
+  }
+  assert.equal(s.experiences.length, MAX_EXPERIENCES, '库应已满');
+
+  const beforeIds = new Set(s.experiences.map((e) => e.id));
+  const r2 = propose(s, draft({ title: 'createdAt 缺失的新提案', createdAt: undefined, originSessionId: 'sess-r6' }));
+  assert.ok(r2.ok, `新提案失败: ${r2.error}`);
+  assert.equal(r2.experience.createdAt, 0, '前置：本用例必须命中 createdAt=0 这条路径');
+
+  const after = r2.value.experiences;
+  assert.equal(after.length, MAX_EXPERIENCES, '容量上限应保持');
+  const afterIds = new Set(after.map((e) => e.id));
+  assert.ok(afterIds.has(r2.experience.id), 'R-6：返回 ok:true 但新提案不在库中 —— 静默丢弃');
+
+  const evicted = [...beforeIds].filter((id) => !afterIds.has(id));
+  assert.equal(evicted.length, 1, `应恰好淘汰 1 条，实际 ${evicted.length}`);
+  const evictedExp = s.experiences.find((e) => e.id === evicted[0]);
+  const minCreated = Math.min(...s.experiences.map((e) => e.createdAt));
+  assert.equal(evictedExp.createdAt, minCreated, '被淘汰的应是最旧（createdAt 最小）的一条');
+});
+
+await check('H2.16 R-6 修复后仍保持确定性（同输入 → 同输出，逐字节一致）', () => {
+  const build = () => {
+    let s = emptyStore('sess-r6d');
+    for (let i = 0; i < MAX_EXPERIENCES; i++) {
+      s = propose(s, draft({ title: `d${i}`, createdAt: 1700000000000 + i, originSessionId: 'sess-r6d' })).value;
+    }
+    return propose(s, draft({ title: 'new', createdAt: undefined, originSessionId: 'sess-r6d' })).value;
+  };
+  assert.equal(JSON.stringify(build()), JSON.stringify(build()), 'R-6 修复破坏了确定性');
 });
 
 await check('H2.5 sanitizeExperience / validateStore 拒绝畸形且不抛', () => {

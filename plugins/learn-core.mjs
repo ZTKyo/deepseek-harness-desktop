@@ -333,12 +333,22 @@ export function validateStore(raw) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 内部：不可变追加/替换。 */
+/** 稳定排序比较器：createdAt 升序 → id 升序（完全确定性，与输入顺序无关）。 */
+const byCreatedThenId = (a, b) => (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
 function withExperience(store, exp) {
   const next = store.experiences.filter((e) => e.id !== exp.id);
   next.push(exp);
   // 稳定排序：按 createdAt 升序、id 升序 → 确定性
-  next.sort((a, b) => (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { ...store, experiences: next.slice(-MAX_EXPERIENCES) };
+  next.sort(byCreatedThenId);
+  let kept = next.slice(-MAX_EXPERIENCES);
+  // R-6：容量淘汰必须「保留刚写入的这条」。当 exp.createdAt 为 0（调用方未传时间戳）时它会排到
+  // 最前，被 slice(-N) 直接裁掉 → 新提案"写成功但库里没有"，属静默数据丢失。此处改为淘汰最旧的
+  // 一条给它腾位，保证任何返回 ok:true 的写入都一定存在于返回的 store 中，绝不静默丢失。
+  if (kept.length >= MAX_EXPERIENCES && !kept.some((e) => e.id === exp.id)) {
+    kept = next.slice(-(MAX_EXPERIENCES - 1)).concat(exp).sort(byCreatedThenId);
+  }
+  return { ...store, experiences: kept };
 }
 
 /**
@@ -368,12 +378,29 @@ export function canTransition(from, to) {
 }
 
 /**
+ * R-5：畸形 store 的统一前置校验。
+ * 此前只有 propose/recall 做了结构化返回，approve/reject/retire 直接读
+ * store.experiences → 畸形入参抛 TypeError 而非结构化错误（R3 加固只做了 6 个
+ * 函数中的 3 个）。此处收敛为单一助手，三个函数共用，避免再次漏做。
+ * 返回 { exp } 或 { error }（error 可直接作为函数返回值）。
+ */
+function findExperience(store, id) {
+  if (!isPlainObject(store) || !Array.isArray(store.experiences)) {
+    return { error: { ok: false, error: 'invalid_store' } };
+  }
+  const exp = store.experiences.find((e) => e.id === id);
+  if (!exp) return { error: { ok: false, error: 'experience_not_found' } };
+  return { exp };
+}
+
+/**
  * 人工审批：PROPOSED → APPROVED。
  * 硬性要求：审批人 + 非空证据。缺少任一项 → 拒绝（审批边界不可绕过）。
  */
 export function approve(store, id, opts = {}) {
-  const exp = store.experiences.find((e) => e.id === id);
-  if (!exp) return { ok: false, error: 'experience_not_found' };
+  const found = findExperience(store, id);
+  if (found.error) return found.error;
+  const exp = found.exp;
   const approver = cleanStr(opts.approver, MAX_APPROVER_LEN);
   const evidence = cleanStr(opts.evidence, MAX_EVIDENCE_LEN);
   if (!approver) return { ok: false, error: 'approval_requires_approver' };
@@ -394,8 +421,9 @@ export function approve(store, id, opts = {}) {
 
 /** 人工驳回：PROPOSED → REJECTED（终态，不得复活）。 */
 export function reject(store, id, opts = {}) {
-  const exp = store.experiences.find((e) => e.id === id);
-  if (!exp) return { ok: false, error: 'experience_not_found' };
+  const found = findExperience(store, id);
+  if (found.error) return found.error;
+  const exp = found.exp;
   const approver = cleanStr(opts.approver, MAX_APPROVER_LEN);
   const reason = cleanStr(opts.reason, MAX_REASON_LEN);
   if (!approver) return { ok: false, error: 'rejection_requires_approver' };
@@ -415,8 +443,9 @@ export function reject(store, id, opts = {}) {
 
 /** 退役：APPROVED → RETIRED（终态）。 */
 export function retire(store, id, opts = {}) {
-  const exp = store.experiences.find((e) => e.id === id);
-  if (!exp) return { ok: false, error: 'experience_not_found' };
+  const found = findExperience(store, id);
+  if (found.error) return found.error;
+  const exp = found.exp;
   if (!canTransition(exp.state, 'RETIRED')) return { ok: false, error: `illegal_transition:${exp.state}->RETIRED` };
   const updated = { ...exp, state: 'RETIRED', retiredAt: Number.isSafeInteger(opts.at) ? opts.at : 0 };
   const checked = sanitizeExperience(updated);

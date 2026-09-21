@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DSH Watchdog</string>
+    <string name="widget_label">DSH 看板</string>
+    <string name="widget_desc">DeepSeek Harness 任务看板（只读）：状态 + 多任务卡片 + 最近完成</string>
+    <string name="config_title">DSH 看板设置</string>
+    <string name="save">保存并刷新</string>
+    <string name="init_state">DSH</string>
+    <string name="main_title">DSH Watchdog</string>
+    <string name="main_hint">本应用提供桌面小部件（只读看板）。\n\n点下方按钮可直接把「DSH 看板」钉到桌面（推荐）；也可长按桌面空白处 → 添加小部件 → 找到「DSH Watchdog」手动添加。</string>
+    <string name="btn_pin_widget">添加到桌面</string>
+    <string name="pin_not_supported">当前系统不支持请求添加小部件，请尝试长按桌面 → 添加小部件</string>
+    <string name="pin_requested">已请求添加小部件，请在系统弹出的「添加小部件」窗口确认</string>
+    <string name="pin_accepted">已开始添加小部件，请在窗口确认（成功会显示「DSH 看板」）</string>
+    <string name="pin_rejected">系统未添加小部件（已取消或失败），请重试</string>
+</resources>

@@ -35,3 +35,11 @@ DSH-Client/
 _r51-work/
 _r3-checkpoint/
 
+# --- backups + local test artifacts (Phase 02.8 watchdog; never into repo) ---
+*backup*
+*.bak*
+tests/watchdog/_r4spec/
+tests/watchdog/out/
+tests/watchdog/e2e-out-*.txt
+tests/widget/
+

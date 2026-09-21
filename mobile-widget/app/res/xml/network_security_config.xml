@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DSH Watchdog Widget — 网络安全配置（0.3.1 修复：Android 9+ 默认禁止明文 HTTP，
+     导致 App 内 GET http://127.0.0.1:8091/... 被系统拦截（last_fetch_error_at，
+     shell curl 不受此限造成"测通假象"）。
+     采用精确放行而非全局 usesCleartextTraffic：仅允许对本机回环地址明文
+     （SAFE LOCAL 方案经 adb reverse 转发，源地址恒为 127.0.0.1；
+     未来公网走 trycloudflare 等 HTTPS 无需放行），其余域名保持系统默认拒绝。 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

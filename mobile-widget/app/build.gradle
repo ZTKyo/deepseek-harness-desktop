@@ -1,0 +1,68 @@
+// DSH Watchdog Widget — app module（R2 C）。
+// 官方 Firebase BoM + firebase-messaging（禁止自实现 FCM transport/protocol）。
+// google-services.json（本机 Firebase app config）置于 app/ 下，已被 .gitignore，
+// 由 com.google.gms.google-services 插件在构建期生成官方配置资源。
+// 签名沿用既有本地 debug keystore（与已安装 APK 同签名 → 手机可覆盖升级安装）。
+plugins {
+	id 'com.android.application'
+	id 'com.google.gms.google-services'
+}
+
+android {
+	namespace 'com.dsh.watchdog.widget'
+	compileSdk 35
+	buildToolsVersion '35.0.0'
+
+	defaultConfig {
+		applicationId 'com.dsh.watchdog.widget'
+		minSdk 26
+		targetSdk 34
+		versionCode 5
+		versionName '0.4.0'
+	}
+
+	// 沿用既有源码布局（app/java、app/res、app/AndroidManifest.xml），不迁移文件
+	sourceSets {
+		main {
+			java.srcDirs = ['java']
+			res.srcDirs = ['res']
+			manifest.srcFile 'AndroidManifest.xml'
+		}
+	}
+
+	signingConfigs {
+		dshDebug {
+			storeFile rootProject.file('keystore/dsh-widget-debug.jks')
+			storePassword 'dshwidget'
+			keyAlias 'dshwidget'
+			keyPassword 'dshwidget'
+		}
+	}
+
+	buildTypes {
+		debug {
+			signingConfig signingConfigs.dshDebug
+			minifyEnabled false
+		}
+	}
+}
+
+dependencies {
+	implementation platform('com.google.firebase:firebase-bom:33.7.0')
+	implementation 'com.google.firebase:firebase-messaging'
+}
+
+// APK 稳定输出路径：mobile-widget/dsh-watchdog-widget.apk（与 R3 B 时期一致）
+// 不用 Copy 任务类型：目标目录与 .gradle 项目目录重叠，daemon 持锁文件使 Copy 的
+// dest 状态快照（MD5）必然失败 → 用普通任务 + doLast 临时拷贝（零 dest 扫描）。
+// 该任务无声明输出，每次 assemble 后必然执行，行为确定。
+tasks.register('copyFinalApk') {
+	dependsOn 'assembleDebug'
+	doLast {
+		copy {
+			from layout.buildDirectory.file('outputs/apk/debug/app-debug.apk')
+			into rootDir
+			rename { 'dsh-watchdog-widget.apk' }
+		}
+	}
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="130dp"
+    android:resizeMode="horizontal|vertical"
+    android:minResizeWidth="120dp"
+    android:minResizeHeight="130dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_dsh_watchdog"
+    android:configure="com.dsh.watchdog.widget.WatchdogConfigActivity"
+    android:description="@string/widget_desc"
+    android:widgetCategory="home_screen" />

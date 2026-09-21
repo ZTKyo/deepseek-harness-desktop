@@ -1,0 +1,20 @@
+# DSH Watchdog Widget APK — 产物指纹记录（Phase 02.8 PHONE E2E FINAL）
+
+artifact:    dsh-watchdog-widget.apk
+path:        mobile-widget/dsh-watchdog-widget.apk
+size:        2572200 bytes
+sha256:      4d9076377cdaafb279a6a0ea2a6564a65c250c2db952b0038c864d8bbcc9d61c
+built_at:    2026-08-31 23:14:49 (+0800, 本地文件 mtime)
+built_from:  ccb3d55 (feat(02.8): R2 C FCM sender 激活链路 + R3 C Android FCM 客户端真实实现)
+pr79_head:   11ab9be（其后仅 docs 变更，无 mobile-widget 源码/构建变化；工作区 git status clean）
+
+验签（apksigner verify --print-certs, build-tools 36.0.0, Temurin JDK 17.0.20）:
+- Signer #1 DN: CN=DSH Watchdog Widget, OU=Local, O=DSH, C=CN
+- cert SHA-256: 398ec53732abae79beff023e63ded1a759a18ab9d0ce8346422645ab14d81584
+- 与 REPORT_R1.md T8 记录一致（同 debug keystore，签名不变可覆盖升级）→ PASS
+
+dex 内容验证（multidex classes3.dex，ASCII 子串全中）:
+- WatchdogFcmReceiver / WatchdogTopicSubscriber / WatchdogWidgetProvider /
+  WatchdogConfigActivity / FirebaseMessaging / subscribeToTopic → 全部存在 → PASS
+
+记录时间: 2026-09-01（PHONE E2E FINAL 安装前置核验）

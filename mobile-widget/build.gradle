@@ -1,0 +1,6 @@
+// DSH Watchdog Widget — 根 build（R2 C）。版本组合：Gradle 8.10.2 / AGP 8.7.3 /
+// google-services 4.4.2 / Firebase BoM 33.7.0（app/build.gradle）。
+plugins {
+	id 'com.android.application' version '8.7.3' apply false
+	id 'com.google.gms.google-services' version '4.4.2' apply false
+}

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DSH Watchdog Widget — 纯只读消费（audit D-权限模型）：数据源 = adapter /watchdog/status
+     （脱敏投影）。R3 B（External Review B）无常驻连接改造：删除 SSE 前台服务，
+     改为 JobScheduler 15 分钟只读轮询（WatchdogPollReceiver）。
+     R2 C（External Review R3 后续，Firebase 前置就绪后）：新增 FCM data-message 唤醒
+     接收器（WatchdogFcmReceiver，官方 Firebase Messaging SDK）——push 仅作 wake signal，
+     收到后仍走只读 GET /watchdog/status；JobScheduler 15min / Widget 30min / 手动刷新
+     三路 fallback 全部保留。
+     权限最小化：自声明仅 INTERNET（HTTP 拉取）+ RECEIVE_BOOT_COMPLETED（仅为
+     JobScheduler.setPersisted(true) 跨重启保活，无 BOOT receiver 组件）；已移除
+     FOREGROUND_SERVICE / FOREGROUND_SERVICE_DATA_SYNC / POST_NOTIFICATIONS（data-message
+     不需要通知授权）。合并入 Firebase SDK 自身的 c2dm 系权限由官方 SDK manifest 声明，
+     见 REPORT_R2R3 权限审计注记。
+     仍零 mutation：无任何写/恢复调用。
+     注：AGP 8 要求 package/versionCode/uses-sdk 移至 app/build.gradle（namespace/
+     versionCode/defaultConfig），本 manifest 不再声明。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 仅为 JobScheduler.setPersisted(true)：15 分钟轮询任务跨重启保活 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- MIUI/HyperOS 要求：requestPinAppWidget 钉小部件需此「安装快捷方式」权限。
+         无此权限时 MIUI Launcher 的 AddItemActivity 会打日志
+         "AddItemActivity-PinShortcutRequestUtils: add widget failed, <pkg> has no permission"
+         且不弹出确认框。该权限为 normal 级别，安装时自动授予，无需运行时申请。 -->
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@drawable/ic_widget_icon"
+        android:allowBackup="false"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <!-- 占位 launcher 主页：MIUI 小部件选择器不索引无桌面图标的 widget-only 应用，
+             此入口让本应用在小部件选择器中可见可添加；功能仍全部由小部件提供。 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".WatchdogConfigActivity"
+            android:exported="true"
+            android:label="@string/config_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- R5：只读 Detail Activity。点击 widget 主体打开；严格 READ ONLY（无写/恢复调用）。
+             需已配置 baseUrl/token（从 SharedPreferences 读取），才能实时拉取展示。 -->
+        <activity
+            android:name=".WatchdogDetailActivity"
+            android:exported="true"
+            android:label="DSH Watchdog 详情" />
+
+        <receiver
+            android:name=".WatchdogWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.dsh.watchdog.widget.ACTION_FETCH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- R3 B：15 分钟只读轮询 JobService（无常驻连接、无前台通知） -->
+        <service
+            android:name=".WatchdogPollReceiver"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- R2 C：FCM data-message 唤醒接收器（官方 Firebase Messaging SDK；
+             push 仅 wake signal → GET /watchdog/status → updateAppWidget） -->
+        <service
+            android:name=".WatchdogFcmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

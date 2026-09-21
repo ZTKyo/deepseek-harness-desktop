@@ -25,15 +25,37 @@ code, not in prose.
 
 | File | Lines | Role |
 |---|---|---|
-| `plugins/learn-core.mjs` | 619 | Pure algorithm (no DSH runtime): digest, signal detection, store schema, validation, recall, promotion eligibility, redaction, write boundary |
-| `plugins/learn.mjs` | 378 | Cordis plugin shell: hook wiring, 5 tools, persistence, telemetry, kill switch |
-| `tests/learn/test-learn-core.mjs` | 442 | Unit suite — **220 PASS / 0 FAIL** |
-| `tests/learn/run-learn-real-e2e.mjs` | 326 | Real-session E2E E1–E4 — **58 PASS / 0 FAIL** |
+| `plugins/learn-core.mjs` | 674 | Pure algorithm (no DSH runtime): digest, signal detection, store schema, validation, recall, promotion eligibility, redaction, write boundary |
+| `plugins/learn.mjs` | 407 | Cordis plugin shell: hook wiring, 5 tools, persistence, telemetry, kill switch |
+| `tests/learn/test-learn-core.mjs` | 474 | Unit suite — **220 PASS / 0 FAIL** |
+| `tests/learn/run-learn-real-e2e.mjs` | 340 | Real-session E2E E1–E4 — **58 PASS / 0 FAIL** |
 | `tests/learn/run-ac7-regression.ps1` | — | AC7 regression sweep over pre-existing suites |
 | `docs/roadmap/evidence/P4_LEARN_R1_*.txt` | — | Raw unedited test output |
 
 **Modified (1 file):** `docs/roadmap/evidence/cm-r4-log-decoder.mjs` — export-only change so
 the decoder is reusable as a module. Proven byte-identical in behaviour (§5.3).
+
+### 2.1 Objective scope → implementing code (explicit mapping)
+
+The R1 objective named four scoped capabilities. Because the code does **not** use the
+objective's vocabulary verbatim (notably the word *"gap"* appears nowhere in `learn-core.mjs`),
+the mapping is stated here so a reviewer can check each scoped item directly instead of
+grepping for terms that were never used.
+
+| Objective's scoped term | Implementing code (real symbols) | Where |
+|---|---|---|
+| **experience store** | `emptyStore` / `validateStore` / `sanitizeExperience` / `makeExperience`; atomic tmp+rename persistence | `learn-core.mjs:242,277,292,203`; `learn.mjs` `loadStore`/`saveStore` |
+| **deterministic retrieval** | `recall` (stable sort, no randomness, no clock dependency) + `isRecallable` (APPROVED-only) + `tokenize` + `recordRecall` | `learn-core.mjs:412,428,441,481` |
+| **gap qualification** | `learningSignals` — deterministic heuristic qualification of learnable gaps (failure / correction / resolution) over official-extractor turns; `buildLearnDigest` supplies the turns; gated further by `minTurnsForLearning` / `minNewNodes` + per-session watermark | `learn-core.mjs:618,655`; `learn.mjs` config + watermark |
+| **candidate lifecycle** | `propose` → `approve` / `reject` → `retire`, constrained by `canTransition` + `ALLOWED_TRANSITIONS`; plus `promotionEligibility` / `promote` for the separate promotion axis | `learn-core.mjs:332,345,354,376,397,498,515` |
+
+Notes for the reviewer:
+
+- *"Gap qualification"* is a **pure heuristic**, not a model call: it can only ever produce a
+  candidate for human review, never an activation. A false positive costs one rejected
+  proposal, not a behaviour change.
+- The candidate lifecycle and the promotion axis are **deliberately separate**: an experience
+  can be APPROVED and recallable while being promotion-`BLOCKED` (`ELIGIBLE != PROMOTED`).
 
 ---
 

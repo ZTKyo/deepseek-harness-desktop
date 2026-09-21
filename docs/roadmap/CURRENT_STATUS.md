@@ -562,7 +562,7 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   trusted=true；Phase 04 未启动。**Next = Phase 02.8 WATCHDOG / MOBILE MONITOR（仅记录，未启动）**。
 - 2026-09-21：进入 **Phase 04 LEARN / Autonomous Learning R1**（baseline main=`6d0623627c4b38f6b870ef03fe9ed776186c9e09`；分支 `p4-learning-r1` + 隔离工作树 `.worktree-p4-learning-r1`，**不进生产 profile、不重启服务**）。
   只读 Gap Audit + **REUSE_MAP** 见 `GAP_AUDIT_R1.md`（结论：**无新增常驻服务 / DB / Authority**；P4 新增的只是一个派生经验库 + 生命周期状态机）。
-  最小增量 = **2 个新文件 + 1 处仅导出改动**：`plugins/learn-core.mjs`（纯核心 619 行，零 IO 零依赖）、`plugins/learn.mjs`（插件壳 407 行，IO + 钩子 + 5 工具）、`docs/roadmap/evidence/cm-r4-log-decoder.mjs`（**仅加导出**，+25/−8）。
+  最小增量 = **2 个新文件 + 1 处仅导出改动**：`plugins/learn-core.mjs`（纯核心 674 行，零 IO 零依赖）、`plugins/learn.mjs`（插件壳 407 行，IO + 钩子 + 5 工具）、`docs/roadmap/evidence/cm-r4-log-decoder.mjs`（**仅加导出**，+25/−8）。
   **核心不变式**：(a) **提案 ≠ 激活**——召回只认 `APPROVED`，`ALLOWED_TRANSITIONS` 白名单，`REJECTED`/`RETIRED` 为终态不可复活；(b) **AC1 硬保证**——直接 `import` P2.5 官方提取器 `context-memory-core.mjs`（冻结为 `P25_EXTRACTORS`，缺失即 `missing_official_extractors` fail-closed），P4 物理上**不存在第二个 raw-session parser**；(c) R4 解码器仅补导出，实测解码输出**逐字节相同**（32388 帧 / 39827 行 / bad=0）；(d) 经验库 per-session 原子写 `%LOCALAPPDATA%\DSHHarness\state\learn\<sid>.json`，损坏 → `validateStore` 返回 null → **fail-closed 重建**；(e) 写入白名单 `experience-store/telemetry/audit-log` + 启动自检；(f) 密钥持久化前强制脱敏；(g) **ELIGIBLE ≠ PROMOTED**，无自动晋升；(h) 单开关 `LEARN_DISABLED=true`。
   **实测**：单元 **220 PASS / 0 FAIL**；真实会话 E2E **E1–E4 58 PASS / 0 FAIL**（真实 session 3227 节点，非 mock / 非 fixture）；AC7 全量回归 **19/20 绿**——唯一红 `tests/install-plugin/verify-install-plugin.mjs` 经实证为 **PRE-EXISTING**（11 个既有插件生产部署漂移，`git status` 全部未改动，P4 新增文件不在该检查范围）⇒ **只登记不擅修**。
   提交 `ede575e`（12 文件，+2926/−8）；**8 个主机哈希复核里程碑**已入 autonomy 账本。

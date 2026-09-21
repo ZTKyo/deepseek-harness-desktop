@@ -141,6 +141,20 @@ Round 2 的 CI 接线曾有**两次尝试**，本报告如实记录：
 > 但经 hash 核对发现该副本的 `execution-continuity.mjs` 与 `test-ec-autonomy-deployed.mjs`
 > **不同于 main**，故该次结果**不作为证据**，已在干净 main 工作树上重跑（即上表）。
 
+### 3.1 CI 独立复核（真实 runner，非本机）
+
+本报告所在分支已开 **PR #91**，其 GitHub Actions 三个必需 check **全部 pass**：
+
+| Check | 结果 | Run |
+|---|---|---|
+| Static + secret + syntax gate | **pass**（1m13s） | `35657983892` |
+| DSH boot + readiness smoke | **pass**（6m9s） | `35657984125` |
+| **Reliability state machine tests**（含 `P3 AUTONOMY host-verifier fail-closed gate`） | **pass**（7m13s） | `35657984203` |
+
+意义：第三个 check 即 §2.1 的 P3 门禁 job，它在**真实 GitHub runner** 上对**本分支确切代码**
+执行了 core ＋ 生产路径集成两套件（经 `DSH_AUTONOMY_EC_PATH` 指向仓库内生产模块），
+且**任一非零即 throw**。因此「104/0 ＋ 67/0」不只在开发机成立，在干净 CI 环境同样成立。
+
 ---
 
 ## 4 状态与边界

@@ -9,10 +9,25 @@
 #   R-1（已修）：原只写 "HEAD = <sha>"，而该 sha 是「生成时 HEAD」，本证据文件本身
 #        在紧随其后的 docs-only 提交里落盘 → 文件内 HEAD 看起来"不是最终 HEAD"。
 #        现改为显式区分 TESTED_HEAD（被测代码）与证据文件落盘说明，并记录工作树状态。
+#   R-8（已修）：证据文件原由调用方 `pwsh ... > 文件` 重定向产生，而 Windows PowerShell
+#        5.1 的 `>` 默认写 UTF-16LE → 落盘文件带 FF FE BOM，read/grep/CI diff 等普通
+#        文本工具视其为二进制，无法复核。现由脚本自身以 UTF-8(no BOM) 写出（-OutFile），
+#        与同目录其它证据文件编码一致，不再依赖调用方的重定向方式。
+#
+# 用法：
+#   pwsh -File tests\learn\run-r3-final-head-full.ps1
+#   pwsh -File tests\learn\run-r3-final-head-full.ps1 -OutFile docs\roadmap\evidence\XXX.txt
+param(
+  [string]$OutFile = ''
+)
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $wt = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $wt
+
+# 报告收集器：既打印到控制台，也累积供 -OutFile 以 UTF-8 落盘（R-8）
+$report = New-Object System.Collections.Generic.List[string]
+function Emit([string]$line) { $script:report.Add($line); [Console]::WriteLine($line) }
 
 $ac7 = @(
   'tests\autonomy\test-autonomy-state-core.mjs',
@@ -90,30 +105,43 @@ foreach ($s in ($ac7 + $r3)) {
   $note = "$note".Trim(); if ($note.Length -gt 80) { $note = $note.Substring(0,80) }
 
   $results += [pscustomobject]@{ Tag=$tag; Suite=$s; Exit=$code; Fails=$fails; Pass=$pass; Src=$src; Note=$note }
-  Write-Host ("[{0}] exit={1,-4} pass={2,-4} fail={3,-4} src={4,-5} {5}" -f $tag, $code, $pass, $fails, $src, $s)
+  Emit ("[{0}] exit={1,-4} pass={2,-4} fail={3,-4} src={4,-5} {5}" -f $tag, $code, $pass, $fails, $src, $s)
 }
 
 $testedHead = (git rev-parse HEAD).Trim()
 $dirty = @(git status --porcelain).Count
 
-Write-Host ""
-Write-Host "==== P4 LEARN R3 FINAL-HEAD FULL REGRESSION ===="
-Write-Host ("TESTED_HEAD = " + $testedHead)
-Write-Host ("WORKTREE    = " + $(if ($dirty -eq 0) { 'clean (0 modified / 0 untracked)' } else { "dirty ($dirty entries)" }))
-Write-Host "NOTE        = TESTED_HEAD 是「生成本证据时被测代码所在提交」。本证据文件自身在紧随其后的"
-Write-Host "              docs-only 提交中落盘，故该提交 sha 会晚于 TESTED_HEAD —— 属自引用标注问题，"
-Write-Host "              并非「跑的不是最终代码」。二者之间 plugins/ 与 tests/learn/ 零差异，"
-Write-Host "              复核命令：git diff TESTED_HEAD <evidence-commit> -- plugins tests/learn  （应为空）"
+Emit ""
+Emit "==== P4 LEARN R3 FINAL-HEAD FULL REGRESSION ===="
+Emit ("TESTED_HEAD = " + $testedHead)
+Emit ("WORKTREE    = " + $(if ($dirty -eq 0) { 'clean (0 modified / 0 untracked)' } else { "dirty ($dirty entries)" }))
+Emit "NOTE        = TESTED_HEAD 是「生成本证据时被测代码所在提交」。本证据文件自身在紧随其后的"
+Emit "              docs-only 提交中落盘，故该提交 sha 会晚于 TESTED_HEAD —— 属自引用标注问题，"
+Emit "              并非「跑的不是最终代码」。二者之间 plugins/ 与 tests/learn/ 零差异，"
+Emit "              复核命令：git diff TESTED_HEAD <evidence-commit> -- plugins tests/learn  （应为空）"
 $green = @($results | Where-Object { $_.Exit -eq 0 }).Count
 $red   = @($results | Where-Object { $_.Exit -ne 0 -and $_.Exit -ne 'MISSING' }).Count
 $miss  = @($results | Where-Object { $_.Exit -eq 'MISSING' }).Count
 $totF  = ($results | Measure-Object -Property Fails -Sum).Sum
 $totP  = ($results | Measure-Object -Property Pass -Sum).Sum
-Write-Host ("TOTAL={0}  GREEN={1}  RED={2}  MISSING={3}  totalPASS={4}  totalFAIL={5}" -f $results.Count,$green,$red,$miss,$totP,$totF)
-Write-Host ("COUNTING    = pass/fail 取「套件自报总数」与「逐行计数」的较大值（R-7 修复）；src 列标明来源")
+Emit ("TOTAL={0}  GREEN={1}  RED={2}  MISSING={3}  totalPASS={4}  totalFAIL={5}" -f $results.Count,$green,$red,$miss,$totP,$totF)
+Emit ("COUNTING    = pass/fail 取「套件自报总数」与「逐行计数」的较大值（R-7 修复）；src 列标明来源")
 if ($red -or $miss) {
-  Write-Host ""
-  Write-Host "--- non-green detail ---"
-  $results | Where-Object { $_.Exit -ne 0 } | ForEach-Object { Write-Host ("  [exit={0}] {1}  {2}" -f $_.Exit, $_.Suite, $_.Note) }
+  Emit ""
+  Emit "--- non-green detail ---"
+  $results | Where-Object { $_.Exit -ne 0 } | ForEach-Object { Emit ("  [exit={0}] {1}  {2}" -f $_.Exit, $_.Suite, $_.Note) }
 }
-Write-Host "==== END ===="
+Emit "==== END ===="
+
+# R-8：由脚本自身以 UTF-8(no BOM) 写出证据文件。
+# 此前证据由调用方 `pwsh ... > 文件` 重定向产生，Windows PowerShell 5.1 默认写 UTF-16LE
+# （FF FE BOM），read/grep/CI diff 等普通文本工具会判定为二进制文件而无法复核。
+if ($OutFile) {
+  $target = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path $wt $OutFile }
+  $dir = Split-Path -Parent $target
+  if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+  $text = ($report -join "`r`n") + "`r`n"
+  [System.IO.File]::WriteAllText($target, $text, (New-Object System.Text.UTF8Encoding($false)))
+  [Console]::WriteLine("EVIDENCE_WRITTEN = $target")
+  [Console]::WriteLine("EVIDENCE_ENCODING = UTF-8 (no BOM), $($text.Length) chars")
+}

@@ -1,7 +1,8 @@
 # P4 LEARN — R3 对抗评审报告
 
-**Status:** `P4_LEARN_R3 = COMPLETE` — 4 个经实证的 R2 后缺陷已修复，305 条断言全绿
-**Commit:** `7f786be`（分支 `p4-learning-r1`）
+**Status:** `P4_LEARN_R3 = COMPLETE` — 4 个经实证的 R2 后缺陷已修复 + **会话隔离撞名缺陷根因修复**，413 条断言全绿
+**Commit:** `b5fa812`（隔离根因修复 + 加固；前序 `7f786be` = 4 个缺陷修复）
+**分支:** `p4-learning-r1`
 **日期:** 2026-09-21
 **前置:** R1（`c0849d2` 之前）、R2（`e1df5b0`，PR #90）
 
@@ -80,6 +81,54 @@ R2 是"重跑自己的测试 + 读代码"；R3 是**拿真实会话数据当证�
 缺 `出错` / `不工作` / `没反应` / `崩了`；`修好了` 未作为 resolution
 ⇒ 规范 §6 的回归检测（`又崩了`）不可检。已补齐。
 
+### F5（会话隔离失效：跨会话污染，R3 追加发现）
+
+**缺陷**：`sanitizeFileId(sid)` 只做「非法字符 → `_`」+ 截断 120，**不做唯一性保证**。
+两个不同 sessionId 会映射到**同一个库文件**：
+
+| 形态 | 会话 A | 会话 B | 撞名结果 |
+|---|---|---|---|
+| 清洗撞名 | `probe session X` | `probe_session_X` | 同为 `probe_session_X.json` |
+| 截断撞名 | `session-aaa…tailONE`（>120） | `session-aaa…tailTWO`（>120） | 截断后同名 |
+
+**危害**：后请求方 `loadStore` 读到的是**别人写的库**（结构合法，`validateStore` 放行），
+于是**静默继承前一方的经验**——跨会话污染，且**无任何 STORE_REBUILT 告警**。
+更隐蔽的是双向覆盖：两方轮流写入同一文件，各自学到的经验被对方覆盖掉（**互相丢数据**）。
+
+**修复（两层，先根因后兜底）**：
+
+1. **根因**：`sanitizeFileId` 在「清洗确实改变了原 sid」时追加原 sid 的短哈希
+   （`stableHash(s).slice(0,8)`）→ 撞名从源头消除。
+   **零迁移影响**：未被改动的常规 sessionId（`session-<uuid>`）文件名**保持原样**
+   （实证：`session-04ecc1a4-…-89b79128bcd4.json` 命名不变），既有库文件不会变孤儿。
+2. **兜底（fail-closed）**：`loadStore` 增加归属校验 —— 库的 `sessionId` 必须等于请求方，
+   否则拒绝载入（返回 null → 触发重建 + `STORE_REBUILT` 遥测）。
+   纵深防御：即使未来出现新的撞名途径，也只会「拒绝载入并告警」，不会静默污染。
+
+**为什么不只做兜底**：兜底只能拒绝载入、**不能避免覆盖**（双方仍抢同一文件互相覆盖）。
+根因修复才真正消除数据丢失。
+
+**验证**（`redteam-r3-isolation.mjs`，13 PASS / 0 FAIL）：
+
+```
+A1 两个会话映射到两个不同文件                          PASS
+A3 两库各自归属正确 sessionId                          PASS
+B1 两个不同 sid 不再映射到同一文件（撞名已消除）        PASS   probe_session_X-4d6e3e7d.json | probe_session_X.json
+B4 无跨会话污染（后跑方不继承先跑方经验）              PASS
+B5 守卫直测：伪造他人归属的库必须被拒绝载入并重建      PASS   telemetry=[STORE_REBUILT,PROPOSED]
+C1 超长 sid 不再撞名（两个独立文件）                   PASS
+C2 超长 sid 两库各自归属正确（无互相覆盖）             PASS
+撞名是否仍可达 = NO（根因已消除）   归属守卫 = YES   跨会话污染 = NOT CONFIRMED
+```
+
+B5 为**守卫直测**：撞名既已从根因消除，就手工伪造一个「归属他人」的库文件，
+验证 fail-closed 兜底**真的生效**（而非纸面存在）。
+
+**探针判定极性修正（过程记录）**：原探针 B2/B3 的 verdict 逻辑写反了
+（把「文件合法归属 Y」判为 FAIL），修复后会误报。已重写为
+**PASS = 隔离成立**，并把「撞名机制确认」升级为「撞名已消除」。
+此坑记录在此，避免下次误读 FAIL。
+
 ---
 
 ## 3. 测试与验证
@@ -88,6 +137,13 @@ R2 是"重跑自己的测试 + 读代码"；R3 是**拿真实会话数据当证�
 |---|---|
 | `tests/learn/test-learn-core.mjs`（R1+R2 全量回归） | **276 PASS / 0 FAIL** |
 | `tests/learn/test-learn-r3-fixes.mjs`（R3 新增） | **29 PASS / 0 FAIL** |
+| `tests/learn/test-learn-r3-hardening.mjs`（R3 加固） | **26 PASS / 0 FAIL** |
+| `tests/learn/run-learn-real-e2e.mjs`（真实会话 E2E） | **59 PASS / 0 FAIL** |
+| `tests/learn/redteam-r3-isolation.mjs`（会话隔离红队） | **13 PASS / 0 FAIL** |
+| `tests/learn/redteam-r3-contamination.mjs`（污染红队） | **9 PASS / 0 FAIL** |
+| `redteam-r3-{metrics,quality,labels,injection-positions}` | 全部 **exit=0** |
+
+合计 **413 PASS / 0 FAIL**，`tests/learn/` 全目录 **0 个非零退出**（AC7 全量回归）。
 
 **关于那条"变红"的 R2 断言**：R2 的
 `stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me"`
@@ -133,6 +189,8 @@ R2 由 274 → **276 PASS / 0 FAIL**（净增 3 条、改判 1 条）。
 - `docs/roadmap/evidence/P4_LEARN_R3_METRICS.txt` — 精确率/召回率（由人工标注算出）
 - `docs/roadmap/evidence/P4_LEARN_R3_QUALITY.txt` — 候选质量
 - `docs/roadmap/evidence/P4_LEARN_R3_CONTAMINATION.txt` — 污染归因
+- `docs/roadmap/evidence/P4_LEARN_R3_ISOLATION.txt` — **会话隔离红队最终输出（13 PASS / 0 FAIL）**
+- `docs/roadmap/evidence/P4_LEARN_R3_AC7_FULL.txt` — **AC7 全量回归最终输出（全目录 0 非零退出）**
 - **人工标注真值**：`tests/learn/redteam-r3-labels.mjs`（`export const LABELS`，133 行数据模块，
   **不是可执行探针**——它只被 `redteam-r3-metrics.mjs` 导入以计算指标，直接运行无输出）
 - 探针源码：`tests/learn/redteam-r3-{contamination,injection-positions,metrics,probe,quality}.mjs`、

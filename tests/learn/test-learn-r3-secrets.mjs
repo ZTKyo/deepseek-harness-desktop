@@ -158,8 +158,15 @@ check('E11 "the token was rejected by the server"', () => assertUntouched('the t
 check('E12 代码引用：password 变量名讨论', () => assertUntouched('the password variable is read from the env', 'E12'));
 
 console.log('=== F. 既有规范家族零回归（9/9）===');
+// 假密钥一律**拼接组装**（仓库既有约定，见 tests/reliability/secret-scan-check.mjs 的
+// CI_MOCK_LITERALS 注释）：源码里不得出现密钥形态的字面量，否则仓库级扫描闸
+// （CI "Static + secret + syntax gate" 的第二层 node secret-scan-check）会把本测试文件
+// 自身判成泄漏 → 整条 CI 红。**不加路径豁免**：豁免会削弱这道真实安全闸。
+// （R-10：G4 曾把该值写成字面量，导致 PR #90 CI 红，此处为根因修复。）
+const FAKE_NOTION = 'ntn_' + 'A1b2C3d4E5f6G7h8I9j0';
+
 const CANON = [
-  ['notion', 'ntn_' + 'A1b2C3d4E5f6G7h8I9j0'],
+  ['notion', FAKE_NOTION],
   ['openai', 'sk-' + 'B'.repeat(24)],
   ['openrouter', 'sk-or-v1-' + 'a'.repeat(24)],
   ['anthropic', 'sk-ant-' + 'C'.repeat(20)],
@@ -209,9 +216,9 @@ check('G3 非字符串输入不抛异常', () => {
   assert.equal(containsSecret(123), false);
 });
 check('G4 混合文本：所有类别同时出现且全部脱敏', () => {
-  const t = 'dsn postgres://user:s3cr3tP@ss@host/db\npassword: "P@ssw0rd!xyz"\ntoken = "a!b@c#d$e%f^g&h"\nServer=x;Password=Hunter2!Long\nkey ntn_A1b2C3d4E5f6G7h8I9j0';
+  const t = 'dsn postgres://user:s3cr3tP@ss@host/db\npassword: "P@ssw0rd!xyz"\ntoken = "a!b@c#d$e%f^g&h"\nServer=x;Password=Hunter2!Long\nkey ' + FAKE_NOTION;
   const out = redactSecrets(t);
-  for (const v of ['s3cr3tP@ss', 'P@ssw0rd!xyz', 'a!b@c#d$e%f^g&h', 'Hunter2!Long', 'ntn_A1b2C3d4E5f6G7h8I9j0']) {
+  for (const v of ['s3cr3tP@ss', 'P@ssw0rd!xyz', 'a!b@c#d$e%f^g&h', 'Hunter2!Long', FAKE_NOTION]) {
     assert.ok(!out.includes(v), `G4: 混合文本中 ${v} 泄漏 -> ${out}`);
   }
 });

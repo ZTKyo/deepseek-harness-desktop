@@ -211,7 +211,7 @@ P4 is **purely additive** apart from one export-only decoder edit.
 # full rollback (nothing in production was touched)
 cd "C:\Users\Administrator\Desktop\sdeepseek harness\.worktree-p4-learning-r1"
 git checkout -- docs/roadmap/evidence/cm-r4-log-decoder.mjs
-Remove-Item -Recurse -Force plugins\learn-core.mjs, plugins\learn.mjs, tests\learn, docs\roadmap\reports\PHASE_04_LEARN
+Remove-Item -Recurse -Force plugins\learn-core.mjs, plugins\learn.mjs, tests\learn, docs\roadmap\reports\PHASE_04_LEARNING
 ```
 
 No production file, credential, session, or runtime state was modified, so rollback carries no

@@ -1,8 +1,9 @@
 # P4 LEARN — R3 对抗评审报告
 
-**Status:** `P4_LEARN_R3 = COMPLETE` — 4 个经实证的 R2 后缺陷已修复 + **会话隔离撞名缺陷根因修复**，413 条断言全绿
-**Commit:** `b5fa812`（隔离根因修复 + 加固；前序 `7f786be` = 4 个缺陷修复）
-**分支:** `p4-learning-r1`
+**Status:** `P4_LEARN_R3 = COMPLETE` — 5 个经实证的缺陷已修复（F1–F4 + **会话隔离撞名根因 F5**），412 条断言全绿
+**Verdict:** **B — FIXED AND VERIFIED**（见 §7；发现真实缺陷并全部修复复验，故非 A）
+**Commit:** 最终 HEAD `cb64d8b`（文档收口；`b5fa812` = 隔离根因修复 + 加固；`7f786be` = F1–F4 修复）
+**分支:** `p4-learning-r1` ｜ **PR:** #90（OPEN，未 merge）
 **日期:** 2026-09-21
 **前置:** R1（`c0849d2` 之前）、R2（`e1df5b0`，PR #90）
 
@@ -143,7 +144,10 @@ B5 为**守卫直测**：撞名既已从根因消除，就手工伪造一个「�
 | `tests/learn/redteam-r3-contamination.mjs`（污染红队） | **9 PASS / 0 FAIL** |
 | `redteam-r3-{metrics,quality,labels,injection-positions}` | 全部 **exit=0** |
 
-合计 **413 PASS / 0 FAIL**，`tests/learn/` 全目录 **0 个非零退出**（AC7 全量回归）。
+合计 **412 PASS / 0 FAIL**（276 + 29 + 26 + 59 + 13 + 9），`tests/learn/` 全目录 **0 个非零退出**。
+
+**数字更正记录**：本报告早期版本写作「413 PASS」，经最终 HEAD 逐套件复核为**算术错误**
+（六套之和 = 412）。已在最终 HEAD 全量回归中逐条重算并修正，避免把错误数字交给评审。
 
 **关于那条"变红"的 R2 断言**：R2 的
 `stripInjectedContent("keep me<system-reminder>unterminated tail") === "keep me"`
@@ -195,3 +199,64 @@ R2 由 274 → **276 PASS / 0 FAIL**（净增 3 条、改判 1 条）。
   **不是可执行探针**——它只被 `redteam-r3-metrics.mjs` 导入以计算指标，直接运行无输出）
 - 探针源码：`tests/learn/redteam-r3-{contamination,injection-positions,metrics,probe,quality}.mjs`、
   `tests/learn/test-learn-r3-fixes.mjs`
+
+---
+
+## 7. 对抗评审结论（A/B/C/D）
+
+```
+Phase 04 LEARN R3 External Review Result
+Verdict: B — FIXED AND VERIFIED
+Final HEAD: cb64d8b4576eb6bf2aaad303e695b069c5f87306
+Branch: p4-learning-r1   PR: #90 (OPEN, 未 merge)
+```
+
+### 1. What I independently verified（独立复核了什么）
+
+不是重跑实现者自己的测试，而是**用真实会话数据攻击已交付的代码**：
+
+1. **真实注入形态的量化**（2174 次真实出现，2 个真实会话）——`lineStart`=720 / `midLine`=1454 /
+   `lsOnly`=0 / `aloneOnly`=0，两个特征**零歧义**，故「独占一行」是充分判别特征。
+2. **116 条真实信号的人工逐条标注**（26 层分层抽样，覆盖 26/26 层），据此算出精度基线。
+3. **污染源归因**：逐来源分类（user/assistant/transient/temporary-state/secret 形状）。
+4. **隔离对抗**：真实 DSH sessionId 形状 + 清洗撞名 + 超长截断撞名三类，含**守卫直测**。
+5. **最终 HEAD 全量回归**：28 套（AC7 21 套 + R3 红队/加固 7 套），逐套件复核退出码。
+
+### 2. Defects actually found（实际发现的缺陷）
+
+| ID | 缺陷 | 危害 | 状态 |
+|---|---|---|---|
+| **F4** | `INJECTED_OPEN_RE` 任意位置命中即吞到字符串结尾 | **静默删除真人发言**（实测 81% 文本被删） | 已修 + 锁死 |
+| **F3** | 否定语境从未排除（违反规范 §9） | `没有报错` / `not fixed` 全被当正向信号（实测 6/6 误判） | 已修 + 锁死 |
+| **F5** | `sanitizeFileId` 无唯一性保证 | **跨会话污染 + 互相覆盖丢数据**（无告警） | 已修（根因+兜底）|
+| **F1** | latin failure 缺 `failing/fails/fail` | 规范 §4 的 `still failing → failure` **完全不可达** | 已修 + 锁死 |
+| **F2** | CJK 缺 `出错/不工作/没反应/崩了` | 规范 §6 回归检测 `又崩了` 不可检 | 已修 + 锁死 |
+
+五个都是**真实缺陷**（非风格问题），且每个都由「在修复前代码上必失败」的回归测试锁死，
+并配**正反孪生断言**——「过否定把真实信号修没了」与「漏否定把反向表述算成信号」两种错误
+都无法静默通过。
+
+### 3. Final verification（最终验证）
+
+| 套件 | 最终 HEAD 结果 |
+|---|---|
+| `test-learn-core.mjs` | 276 PASS / 0 FAIL |
+| `test-learn-r3-fixes.mjs` | 29 PASS / 0 FAIL |
+| `test-learn-r3-hardening.mjs` | 26 PASS / 0 FAIL |
+| `run-learn-real-e2e.mjs`（真实会话） | 59 PASS / 0 FAIL |
+| `redteam-r3-isolation.mjs` | 13 PASS / 0 FAIL |
+| `redteam-r3-contamination.mjs` | 9 PASS / 0 FAIL |
+| **合计** | **412 PASS / 0 FAIL** |
+| 全量回归（28 套，AC7 + R3） | 27 绿 / 1 红 / 908 PASS / 2 FAIL |
+| 唯一红 `verify-install-plugin.mjs` | **PRE-EXISTING**（pristine HEAD 上同样 13/2，插件同步漂移，与 P4 无关）|
+
+**为什么是 B 而不是 A**：A 要求「未发现缺陷」。R3 **确实发现了 5 个真实缺陷**（含 2 个
+静默级：F4 删真人发言、F5 跨会话污染），故不满足 A。全部在授权范围内修复并重新验证，
+故为 **B — FIXED AND VERIFIED**。
+
+**为什么不是 C/D**：C 指真实设计 blocker（需越权才能正确解决）——不存在，五个缺陷都在
+`learn-core.mjs` 内部可修。D 指环境阻塞——不存在，全部验证在隔离工作树内完成，未触碰生产。
+
+**诚实登记的未修边界**（见 §4）：假设句 / 文档字段名描述 / 引用他人发言三类词形不可区分，
+需句法或语义层，超出最小修复范围；**误报代价有界**（只生成待人工审批候选，绝不激活）。
+

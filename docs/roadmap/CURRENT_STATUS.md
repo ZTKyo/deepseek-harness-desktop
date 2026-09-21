@@ -15,7 +15,7 @@
 | 02.75 | SUPERVISOR / ChatGPT → Harness Control Plane | `VERIFIED`（**外部评审 Round 3 = APPROVED（2026-08-29 Reviewer 裁决）→ VERIFIED AUTHORIZED；Round 4 = NONE；production code 封板**。历史（保留不改写）：R1 实施收口＝零核心修改纯插件层（supervisor-bridge/core/test），T1–T14 14/14 + REAL E2E 26/26，PR #63 merged=f2d94f9。R1.1＝Round 1 verdict（CHANGES_REQUIRED）合同 A/B/C 全落地（零新增功能）：A replay-safe mutations（canonical request hash 幂等＋M1–M12）；B 生命周期/证据面扩展＋stale generation 409；C CI 三层接线（L1 T1–T30／L2 M 套件／L3 isolated real E2E 3-phase）——PR #65 merged=ad3fac4，三步骤级全绿。R1.2＝Round 2 verdict（CHANGES_REQUIRED）唯一 Blocker「DISPATCH IDEMPOTENCY PAYLOAD IDENTITY」闭环：receipt 携带 `dispatchFingerprint`（SHA-256 canonical normalized contract，排除时间戳/runId/sessionId/PID/端口/随机值）；同 key 同指纹→duplicate 零副作用、异指纹→409 idempotency_conflict 零副作用、legacy 无指纹→fail-closed、重启后指纹持久——PR #67 merged=**4fae42f**，CI L1/L2/L3 全绿（run 33243204206/33243204210/33243204229）。事务化部署（先备份 .bak-r12，部署字节==canonical blob 全 MATCH）＋受控重启已加载 **v0.2.2**（health identity sha256==部署字节 bridge a43d4cd6…/core 59e3b5df…；错 token 401/对 token 200；ledger 记账 FAILED 与实际健康终态偏差已如实记录）；重启后回归 mutation 19/0＋supervisor CI E2E ALL PHASES PASS＋P2.6 八套件 136/0＋P2.5 72/0，合计 0 失败 | NONE（Round 3 APPROVED；Round 4 = NONE；**Next = ChatGPT Client Binding → P3 bootstrap**） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/DESIGN_R1.md ＋ REPORT_R1.md ＋ P275_R1_1_ROUND2_CLOSURE.md ＋ P275_R1_2_ROUND3_CLOSURE.md |
 | 02.75-HF1 | SUPERVISOR CORRECTION INJECTION HOTFIX R1 | `VERIFIED`（**External Review = APPROVED**，2026-08-31；Supervisor review_goal PASS 已记录 → sg-15fc877d… = VERIFIED / gen 4 / pendingMutation=null；PR #77 merged=dd7c12d，CI 三 gate 绿 run 33315517720/33315517734/33315517743；真实 E2E 链 pre 15/15 → post CI 16/16 → post full 18/18 → canonical 三阶段 81/81；部署 SHA 三方一致 bridge 057bbc0f… / core 59e3b5df…；3 条 NON-BLOCKING OBSERVATION 在档 REPORT_R1.md §7） | —（APPROVED；Waiting For = NONE；Next = Phase 02.8 仅记录未启动） | docs/roadmap/reports/SUPERVISOR_CORRECTION_HOTFIX/REPORT_R1.md |
 | 02.75-HF2 | SUPERVISOR CORRECTING PERSISTENCE HOTFIX R1 | `FIXED / RUNTIME-VERIFIED`（Hotfix 闭环 2026-09-01；External Review 待下一轮 Supervisor 面审核一并裁决）。缺陷：`deriveControlState` 读时推导把宿主 goal 已 complete 的 CORRECTING（review FAIL 显式监督裁定）压回 AWAITING_REVIEW，重启/新读持续丢失显式监督裁定；修复：读路径持有（CORRECTING+complete 原样返回，显式命令出口不变，+10 行零 schema/路由/账本改动，commit b32852d）。PR #80 merged=2bf4194 CI 三 gate 绿；验证：repro exit 42（squeeze 复现）→ sticky 32/32（含 Leg C 重启零漂移）＋ mutation 19/19 ＋ 三阶段 E2E ALL PASS；事务化部署（备份 .bak-hf2-20260901）＋受控重启三环一致（identity bridge 057bbc0f…/core 5d012c56… == deployed == repo，ledger OK）＋重启后回归 sticky 32/0＋mutation 19/0＋P3 冻结态完好（sg-b734914c… gen=2 AWAITING_REVIEW 未 reconcile）＋HF1 VERIFIED 态完好。治理事件（同日如实记录）：收口文档初版 PR #81 曾误携 02.8 实现面入 main，已 revert 恢复边界；02.8 内容仍由 PR #79 承载（OPEN）待 External Review | —（Hotfix 闭环；02.8 External Review 进行中不受影响） | docs/roadmap/reports/PHASE_02_75_SUPERVISOR/REPORT_HF2.md |
-| 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）→ **R1 Correction 修复（同日）**：file_hash/system_api 两类 PASS 证据强制宿主确定性复核（真实文件 sha256 比对 / 127.0.0.1 回环 API 断言），伪造或不匹配 fail-closed 降级 UNVERIFIED（零里程碑/零 checkpoint），PASS 记录带 HOST-VERIFIED 前缀；core 86/0＋已部署面 52/0（新增 I10-I15 含真实回环 API 三态）＋真实 E2E 四腿 E1/E2/E2B/E3 32/0 全绿；REPORT_R1C.md；R1 部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据；R1C 部署 SHA256==仓库（回滚锚点 _pre-p3r1c-*），随下次受控重启生效；pre-existing 10 插件 profile 部署漂移已登记 KNOWN_ISSUES（专项待办，非本引入）） | External Review（R1 verdict 待裁决；F1 定级与 R2 范围由 Reviewer 判定） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ e2e/ |
+| 03 | AUTONOMY / Task Autonomy | `AWAITING_EXTERNAL_REVIEW`（R1 实现收口 2026-08-30：IntentStore schema v3 autonomy 元数据 + autonomy_report/verify/state 三工具 + 恢复注入 composeResumeMessage + 无人值守决策策略；测试 54+32 断言 + EC 20 套件回归全绿；**三条真实 Runtime E2E 证据齐** E1 8/8 / E2B 7/7 / E3 8/8×2，隔离实例非 mock；期间根因修复重启自动恢复 happy path——CT 内存未命中回退 session.history 持久日志冷读，RESTART_RESUME_REPAIR.md；诚实发现 F1=verify 信任模型自述证据串（R2 候选宿主侧复核）→ **R1 Correction 修复（同日）**：file_hash/system_api 两类 PASS 证据强制宿主确定性复核（真实文件 sha256 比对 / 127.0.0.1 回环 API 断言），伪造或不匹配 fail-closed 降级 UNVERIFIED（零里程碑/零 checkpoint），PASS 记录带 HOST-VERIFIED 前缀；core 86/0＋已部署面 52/0（新增 I10-I15 含真实回环 API 三态）＋真实 E2E 四腿 E1/E2/E2B/E3 32/0 全绿；REPORT_R1C.md；R1 部署面 SHA256==仓库 + 受控重启 + 重启后工具面活体证据；R1C 部署 SHA256==仓库（回滚锚点 _pre-p3r1c-*），随下次受控重启生效；pre-existing 10 插件 profile 部署漂移已登记 KNOWN_ISSUES（专项待办，非本引入）→ **Round 2 收口（2026-09-21）**：F1 已闭环且旧缺陷不可复现——宿主侧 `hostVerifyEvidence()` 对 file_hash/system_api 强制确定性复核（真实文件 sha256 比对 / 127.0.0.1 回环 GET），伪造/错配/缺失/目录/prose 一律 fail-closed 降级 UNVERIFIED（零里程碑/零 checkpoint），PASS 记录带 HOST-VERIFIED 前缀；**负向 verifier 回归已进 CI 必需门禁**（`.github/workflows/ci-level2.yml` step `P3 AUTONOMY host-verifier fail-closed gate`，core ＋ 生产路径集成两套件任一非零即 throw ⇒ Level 2 失败；即线上 PR #90 显示 pass 的 `Reliability state machine tests`）；对 main 确切代码重跑 core **104/0** ＋ 生产路径集成 **67/0**（含 I15–I19：软证据拒收、target_unbound「证据本身有效也不得 PASS」、target_binding_mismatch、api 绑定发请求前预检、绑定 write-once）；被验文件 hash == main blob，生产面与 main 逐字节一致；REPORT_R1_ROUND2_CLOSURE.md；血缘澄清：首次 Round 2 CI 尝试分支 `p3-autonomy-r1-round2-ci-gate`(a6184eb) **从未合并**，已由 **PR #86**(ac50a20 → mergeCommit e16372a) 取代并生效） | **External Review Round 2**（请裁决：① F1 是否接受为已闭环；② P3 是否 `APPROVED` → 若 APPROVED 方可状态 backfill / `VERIFIED` 并解锁 P4） | docs/roadmap/reports/PHASE_03_AUTONOMY/REPORT_R1.md ＋ R1_VERIFICATION.md ＋ RESTART_RESUME_REPAIR.md ＋ **REPORT_R1_ROUND2_CLOSURE.md** ＋ e2e/ |
 | 04 | LEARN / Autonomous Learning | 未开始 | — | — |
 | 05 | RESTORE / Disaster Recovery | 未开始 | — | — |
 | 06 | ALWAYS-ON / VPS Runtime | 未开始 | — | — |
@@ -560,3 +560,31 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
   (5) P3 冻结活体复核（只读）：sg-b734914c… AWAITING_REVIEW / gen 2 / corr 1 / latestReviewVerdict=FAIL /
   nextExpectedAction=reconcile / updatedAt 未变（12:36Z）/ pendingMutation=null；ledger OK receipts=4
   trusted=true；Phase 04 未启动。**Next = Phase 02.8 WATCHDOG / MOBILE MONITOR（仅记录，未启动）**。
+- **2026-09-21：P3 AUTONOMY R1 Round 2 收口 → `AWAITING_EXTERNAL_REVIEW`（Round 2），STOP**：
+  本轮为**治理收口 + 独立复核**，不新增生产代码、不改生产配置、不重启服务。事实链还原：
+  R1（PR #75）→ R1C 修复（PR #76，`5e9d470` → mergeCommit `e19c3e6`）→ **负向 verifier 回归进
+  CI 必需门禁（PR #86，`ac50a20` → mergeCommit `e16372a`，2026-09-12）**；main 的
+  `.github/workflows/ci-level2.yml` 含 step `P3 AUTONOMY host-verifier fail-closed gate`
+  （core ＋ 生产路径集成两套件任一非零即 `throw` ⇒ Level 2 失败；集成套件经
+  `DSH_AUTONOMY_EC_PATH` 指向仓库内生产模块，CI 可移植）。该 job 即线上 PR #90 显示为
+  **pass（7m22s）** 的 `Reliability state machine tests`。
+  **血缘澄清（如实记录）**：Round 2 CI 接线曾有**两次尝试**——首次分支
+  `p3-autonomy-r1-round2-ci-gate`(`a6184eb`, 2026-09-02, 自 `1a03c0b`) 携带收尾报告初版但
+  **从未合并**，已落后 main 25 个提交，被 PR #86 取代；其报告因此**未进入 main**
+  （main 中不存在任何 Round2 报告文件，已核实），本轮补上并按其实际血缘重写。
+  **本轮独立验证（对 main 确切代码重跑）**：core `test-autonomy-state-core.mjs` **104 PASS / 0 FAIL**
+  （exit 0）＋ 生产路径集成 `test-ec-autonomy-deployed.mjs` **67 PASS / 0 FAIL**（exit 0，
+  打真实 `plugins/execution-continuity.mjs`）；证据有效性经 hash 核对（被验文件
+  `git hash-object` == `origin/main` blob `6d8a1746a4e5e9082d1139f79f1eeb8f1ae1c24f`）；
+  生产面 `execution-continuity.mjs` 与 main **逐字节一致**（126860 B，sha256 `041aad8d…`）
+  ⇒ 无部署漂移。**诚实记录**：本轮曾先在非 main 分支的工作副本上跑过同样套件（结果同为
+  104/0、67/0），但 hash 核对发现该副本的 `execution-continuity.mjs` 与
+  `test-ec-autonomy-deployed.mjs` **不同于 main**，故该次结果**不作为证据**，已在干净 main
+  工作树重跑（即上述数字）。
+  F1 闭环机制：`hostVerifyEvidence()` 注入 io、fail-closed；伪造/错配/缺失/目录/prose 一律降级
+  `UNVERIFIED`（零里程碑/零 checkpoint），PASS 记录带 `HOST-VERIFIED` 前缀；I15–I19 覆盖
+  软证据拒收、`target_unbound`（**证据本身有效也不得 PASS**）、`target_binding_mismatch`、
+  api 绑定发请求前预检、绑定 write-once。**边界**：不做 self-VERIFIED、不做状态 backfill
+  （按 P3 合同仅 External Review APPROVED 后才允许）、不进入 Phase 04。
+  **Next = 等待 External Review Round 2 裁决**（① F1 是否接受为已闭环；② P3 是否 `APPROVED`
+  → 若 APPROVED 方可 backfill / `VERIFIED` 并解锁 P4）。

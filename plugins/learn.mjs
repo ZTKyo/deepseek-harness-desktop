@@ -51,6 +51,9 @@ import {
 } from './learn-core.mjs';
 
 export const name = 'learn';
+// The production web host exposes the tool registry through Cordis injection.
+// Without this declaration, the first ctx.tools property access aborts host boot.
+export const inject = ['tools'];
 
 const DEFAULTS = {
   enabled: true,

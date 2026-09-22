@@ -131,6 +131,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'P3 AUTONOMY production-path integration suite failed' }
           Write-Host 'PASS P3 AUTONOMY host-verifier fail-closed gate'
 
+      # P4 LEARN R1 deployability closure: the canonical main copy of
+      # plugins/learn.mjs was missing `export const inject = ['tools']`, so the
+      # first ctx.tools access aborted host boot. This gate locks the plugin
+      # host contract (inject declared, name/apply intact). It FAILS on the
+      # pre-fix file, so the defect cannot silently return.
+      - name: P4 LEARN plugin host-contract gate
+        shell: pwsh
+        run: |
+          node tests\learn\test-learn-plugin-contract.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'P4 LEARN plugin host-contract gate failed' }
+          Write-Host 'PASS P4 LEARN plugin host-contract gate'
+
       # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
       # Per External Review Blocker B: quota-defer / network-error /
       # rollback-switch + commandcode + full-path integration live in the

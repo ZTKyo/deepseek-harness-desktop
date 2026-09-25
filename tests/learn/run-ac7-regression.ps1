@@ -26,9 +26,16 @@ $suites = @(
   'tests\router\test-exact-model-preservation.mjs',
   'tests\supervisor\test-supervisor-mutation-state.mjs',
   'tests\learn\test-learn-core.mjs',
+  'tests\learn\test-learn-candidate.mjs',
+  'tests\learn\test-learn-plugin-contract.mjs',
+  'tests\learn\test-learn-ac5-e2e.mjs',
+  'tests\learn\test-learn-ac5-gap-veto.mjs',
+  'tests\learn\test-learn-stage85-twins.mjs',
+  'tests\learn\test-learn-real-topology-tool-events.mjs',
   'tests\learn\test-learn-r3-fixes.mjs',
   'tests\learn\test-learn-r3-secrets.mjs',
-  'tests\learn\run-learn-real-e2e.mjs'
+  'tests\learn\run-learn-real-e2e.mjs',
+  'tests\learn\run-learn-real-gap-e2e.mjs'
 )
 
 $results = @()

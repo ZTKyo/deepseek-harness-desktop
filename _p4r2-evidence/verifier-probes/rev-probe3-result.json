@@ -1,0 +1,27 @@
+[
+  {
+    "id": "H1-approved-stays-approved-on-pass",
+    "verdict": "PASS",
+    "detail": "verifyOk=true err=undefined method=file_hash state=APPROVED (expect APPROVED)"
+  },
+  {
+    "id": "H2-proposed-promotes-to-verified",
+    "verdict": "PASS",
+    "detail": "verifyOk=true state=VERIFIED_EXPERIENCE (expect VERIFIED_EXPERIENCE)"
+  },
+  {
+    "id": "H3-approved-survives-fail",
+    "verdict": "PASS",
+    "detail": "verifyOk=false err=file_hash_mismatch state=APPROVED vstatus=UNVERIFIED (expect APPROVED / REVALIDATION_REQUIRED)"
+  },
+  {
+    "id": "H4-approval-ledger-bookkeeping",
+    "verdict": "PASS",
+    "detail": "state=APPROVED provenance=true/ok ref=7d26535b-b530-40a5-a08b-4b092aeed8f7 actor=host-approved-human outcome=allowed-once digestBound=true ledger={\"available\":true,\"file\":\"C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\rev3-h4-yRdcAE\\\\_human-approvals.jsonl\",\"records\":2,\"chainOk\":true,\"error\":null,\"hostFactVerification\":\"ctx.sessions\"}"
+  },
+  {
+    "id": "H5-double-consume-invalidates",
+    "verdict": "PASS",
+    "detail": "ok=false reason=approval_ledger_grant_consumed_twice recs=2->3"
+  }
+]

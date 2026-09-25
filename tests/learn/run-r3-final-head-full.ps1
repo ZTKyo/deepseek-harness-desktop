@@ -52,9 +52,21 @@ $ac7 = @(
   'tests\router\test-exact-model-preservation.mjs',
   'tests\supervisor\test-supervisor-mutation-state.mjs',
   'tests\learn\test-learn-core.mjs',
+  'tests\learn\test-learn-candidate.mjs',
+  'tests\learn\test-learn-plugin-contract.mjs',
+  'tests\learn\test-learn-ac5-e2e.mjs',
+  'tests\learn\test-learn-ac5-gap-veto.mjs',
+  'tests\learn\test-learn-stage85-twins.mjs',
+  'tests\learn\test-learn-real-topology-tool-events.mjs',
   'tests\learn\test-learn-r3-fixes.mjs',
   'tests\learn\test-learn-r3-secrets.mjs',
-  'tests\learn\run-learn-real-e2e.mjs'
+  'tests\learn\run-learn-real-e2e.mjs',
+  'tests\learn\run-learn-real-gap-e2e.mjs',
+  # P4 R2 release closure：合同符合性探针（35 条按 Notion 合同原文条款组织、跑真实会话）
+  # 与 Ground Truth Schema 锁（真实字段漂移 / 假缺口负例锁）必须进入官方全量入口，
+  # 否则「全绿」并不覆盖合同条款本身。
+  'tests\learn\run-learn-contract-scenarios.mjs',
+  'tests\learn\test-learn-stage2-schema-and-negative-lock.mjs'
 )
 
 $r3 = @(
@@ -89,7 +101,11 @@ foreach ($s in ($ac7 + $r3)) {
     'RESULT:\s*(\d+)\s*PASS\s*/\s*(\d+)\s*FAIL',
     '(\d+)\s*PASS\s*/\s*(\d+)\s*FAIL',
     'PASS\s*=\s*(\d+)\s+FAIL\s*=\s*(\d+)',
-    '（(\d+)\s*通过[，,]\s*(\d+)\s*失败）'
+    '（(\d+)\s*通过[，,]\s*(\d+)\s*失败）',
+    # R2 补：AC5 系套件（ac5-gap-veto / stage85-twins）自报为小写逗号形如 "44 pass, 0 fail"，
+    # 上面四条大写/斜杠口径匹配不到 ⇒ 会漏计其 PASS 数（不误报失败，但统计失真）。
+    '(\d+)\s*pass\s*,\s*(\d+)\s*fail',
+    '(\d+)\s*PASS\s*,\s*(\d+)\s*FAIL'
   )
   foreach ($p in $pats) {
     foreach ($m in [regex]::Matches($joined, $p)) {

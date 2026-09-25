@@ -1,0 +1,82 @@
+=== R2 BLOCKER-2 回归门：会话派生状态有界 + 清理安全 ===
+  真实会话 = nodes=61 events=23938（只读）
+
+--- 0 组：保留策略取值与上限口径 ---
+  PASS  0.1 磁盘保留策略可读且为正值（maxFiles / ttlDays）
+  PASS  0.2 内存上限口径 = 64（与仓库既有 MAX_TRACKED_SESSIONS 同一数字）
+
+--- 1 组：建立真实夹具（机器验证 + 人工审批，官方链路；不手搓 store）---
+  PASS  1.0 真实会话驱动 → 候选 → 验证 → 审批 → 发表（官方链路）
+  PASS  1.1 夹具具备 VERIFIED + APPROVED + 完整审批来源（真实扁平三字段）
+  PASS  1.2 第二个会话：真实 VERIFIED 但**不审批**（验证淘汰不删已持久化经验，且不污染 Layer B）
+
+--- 2 组：增长压力（真实工具/真实钩子，stateDir 在 tmp）---
+  PASS  2.1 320 个会话走 learn_propose（真实 execute），逐次记录落盘文件数
+  PASS  2.2 80 个会话走 agent/pre-step（水印/观察面/活跃集/缺口水位）
+  PASS  2.3 80 个会话走 agent/request-error（失败分类缓冲有界）
+
+--- A 组：磁盘会话文件数有界（逐次实测）---
+        INFO 320 次真实写入期间：最大文件数=207 末值=206（上限 200 + 节流余量 15 = 215）
+  PASS  A0 ★ 反空断言对照：上限之前文件数确实在增长（否则"有界"可能是"根本没落盘"）
+  PASS  A1 ★ 节流路径下实测最大文件数 ≤ maxFiles + 节流余量（有界，O(1) 而非 O(n)）
+        INFO 平台期判定：末值 206 ≤ 上界 215
+  PASS  A2 ★ 写入数达 1.6× 上限后曲线进入平台期（末值 ≈ 上限，不随会话数增长）
+        INFO prune report: scanned=206 removed=6 kept=200
+  PASS  A3 显式 prune 返回可审计报告且判定为 ok（含 active 会话保护）
+        INFO 清理后文件数=200
+  PASS  A4 ★ 显式 prune 后实测文件数 ≤ maxFiles（实测数字）
+  PASS  A5 清理只发生在 stateDir 内：Global Store 文件被显式排除（不在 scanned 里）
+
+--- M 组：进程内 per-session 结构全部有界（直接读真实结构大小）---
+        INFO footprint = {"limit":64,"stores":64,"watermarks":64,"pendingFailures":64,"sessionCache":8,"activeSessions":64,"gapWatermarks":64,"gapObservedKeys":0,"gapVetoedKeys":0,"candidateStores":0}
+  PASS  M1 ★ stores / watermarks / pendingFailures / activeSessions ≤ 64（真实 Map/Set 尺寸）
+  PASS  M2 ★ 缺口水位 / 观察面缓存有界（gapWatermarks / sessionCache）
+  PASS  M3 同一 evictLRU 调用点覆盖的其余映射不超上限（本组未驱动到上限，见报告"未覆盖范围"）
+  PASS  M4 ★ 压力确实建立了（否则"有界"可能是"根本没长"的假通过）
+
+--- B 组：TTL 过期（伪造 mtime，真实 ttlDays 取值）---
+  PASS  B0 造两个非活跃会话文件：一个 mtime 早于 TTL，一个 mtime 为当前
+  PASS  B1 ★ TTL 过期且非活跃的会话文件被清理（同一次 prune 中确有删除，非空断言）
+  PASS  B2 TTL 未过期的文件不被误清（对照：清理不是"一律删"）
+
+--- C 组：活跃会话保护（TTL 过期 + 数量最小 都必须存活）---
+  PASS  C0 造一对"同条件"文件：活跃(TTL 过期) + 非活跃(TTL 过期)，均为最旧
+  PASS  C1 ★ TTL 规则：活跃者存活，同条件非活跃者被清（成对证明，非空断言）
+        INFO C2: 清理前=206 removed=6 清理后=200 活跃文件存活=true
+  PASS  C2 ★ 数量规则：活跃者仍存活，且本次确有淘汰（最旧的非活跃文件被清）
+
+--- D 组：清理后 Layer B（VERIFIED+APPROVED）完整无缺 ---
+  PASS  D1 ★ Global Store 文件在（多轮 TTL/数量清理后仍存在）
+  PASS  D2 ★ Global Store 条目数不变、仍可发布、审批来源完整
+  PASS  D3 ★ Global Store 逐字节未变（清理没有"顺手重写"全球库）
+  PASS  D4 ★ 清理后跨会话仍可召回该经验（复用能力未被清理破坏）
+
+--- E 组：清理后 Global Experience 溯源不断链 ---
+        INFO 溯源锚点 [10459,10607,10838,11128] 均可解析到官方 event
+  PASS  E1 ★ 溯源锚点 sourceEventSeqs 全部指向官方会话中真实存在的 event
+  PASS  E2 ★ 清理后仍可对 origin 会话做确定性重新验证（从官方原始会话独立复算，PASS）
+  PASS  E3 learn_verify 是会话作用域的（Global 条目不在新会话本地库 ⇒ not_found；设计边界不是断链）
+
+--- V 组：淘汰语义严格性（只丢内存对象，不动磁盘）---
+  PASS  V0 前置：SID_KEEP 的内存态此刻确实存在（建立"淘汰前"对照）
+        INFO 淘汰前 _watermarkFor(b2-verified-local) = 23935
+  PASS  V0b 前置：SID_KEEP 被重新驱动后内存态存在
+        INFO 淘汰后 _watermarkFor(b2-verified-local) = undefined｜watermarks=64
+  PASS  V1 ★ 超过上限的会话把 SID_KEEP 的内存态淘汰掉（内存对象可丢 = 派生投影）
+  PASS  V2 ★ 内存淘汰后磁盘文件仍在，且其中的 VERIFIED 经验无损
+  PASS  V3 ★ 淘汰后 getStore 惰性重载，VERIFIED 经验不丢
+  PASS  V4 ★ 未审批的 VERIFIED 经验始终未进入 Layer B（淘汰/清理都不得让它"顺带上位"）
+
+--- R 组：重载 learn state 后 bound 仍成立 ---
+  PASS  R0 同一 stateDir 上装载全新实例（模拟重启重载）
+        INFO 重载后立即 footprint.stores=0 watermarks=0（磁盘会话文件 200 个）
+  PASS  R1 ★ 重载瞬间内存里没有载入任何会话库（惰性载入，不是"启动即全量灌入"）
+        INFO 驱动 1 会话后 footprint = {"limit":64,"stores":0,"watermarks":1,"pendingFailures":0,"sessionCache":1,"activeSessions":1,"gapWatermarks":1,"gapObservedKeys":0,"gapVetoedKeys":0,"candidateStores":0}
+  PASS  R2 ★ 重载后只驱动 1 个会话 ⇒ 内存仍只有该会话的常数级状态（远小于磁盘文件数）
+  PASS  R3 ★ 重载实例仍复用磁盘上的 Global Store（Layer B 不因重启丢失）
+        INFO 惰性读回 b2-origin-session: 内存=1 磁盘=1
+  PASS  R4 ★ 重载实例对磁盘上**确实存在**的历史会话库可惰性读回，内容与磁盘逐条一致
+
+==========================================================================
+RESULT: 42 PASS / 0 FAIL
+==========================================================================

@@ -14,6 +14,8 @@
 import assert from 'node:assert/strict';
 
 import { learningSignals, stripInjectedContent, isNegated } from '../../plugins/learn-core.mjs';
+// R2 AC5：失败分类的唯一 Authority 是 P2.6；本测试用它交叉验证关键词路径已失去该权威。
+import { evaluateGapVeto } from '../../plugins/learn-gap-veto.mjs';
 
 let pass = 0; let fail = 0;
 const failures = [];
@@ -29,21 +31,45 @@ const kindOf = (text, role = 'user') => {
 };
 
 console.log('=== F1 latin failure 形态补齐（规范 §4）===');
-check('F1+ "still failing" → failure（原实现漏检）', () => assert.equal(kindOf('the build is still failing'), 'failure'));
-check('F1+ "it fails every time" → failure', () => assert.equal(kindOf('it fails every time'), 'failure'));
+// ⛔ R2 AC5 契约变更：failure 关键词已从 SIGNAL_PATTERNS 整体删除（第二 Failure Authority
+//    被移除）。原 F1/F2/F3 中所有 "文本 → failure" 断言断言的正是**已被合同禁止**的那条路径。
+//    这里**不删除断言**，而是逐条改写为断言新契约（更强）：关键词路径永不声称 failure，
+//    且同一输入的失败判定由 P2.6 权威给出（下方 checkP26 逐条直证）。
+const checkP26 = (failure, expectCls, expectReason) => {
+  const v = evaluateGapVeto(failure, { provider: 'p', model: 'm' });
+  assert.equal(v.classification, expectCls, `P2.6 class mismatch for ${JSON.stringify(failure)}: got ${v.classification}`);
+  assert.equal(v.vetoed, true, `P2.6 should veto gap for ${JSON.stringify(failure)}`);
+  assert.equal(v.reason, expectReason, `P2.6 reason mismatch: got ${v.reason}`);
+};
+
+check('F1+ "still failing" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('the build is still failing'), 'failure'));
+check('F1+ "it fails every time" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('it fails every time'), 'failure'));
 check('F1- "the build passed, no failures" → 不是 failure', () => assert.notEqual(kindOf('the build passed, no failures'), 'failure'));
-check('F1孪生 "failed" 仍是 failure（回归）', () => assert.equal(kindOf('the build failed'), 'failure'));
+check('F1孪生 "failed" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('the build failed'), 'failure'));
+check('F1权威 P2.6 对同一批失败文本给出分类并否决', () => {
+  // 实测真值（_probe-classify.mjs）：这三条自由叙述文本 P2.6 归为 UNKNOWN_PROVIDER_FAILURE，
+  // 属条件否决集 ⇒ 无能力证据时一律否决（fail-closed）。
+  checkP26({ message: 'the build is still failing', code: '' }, 'UNKNOWN_PROVIDER_FAILURE', 'CONDITIONAL_VETO_NO_EVIDENCE');
+  checkP26({ message: 'it fails every time', code: '' }, 'UNKNOWN_PROVIDER_FAILURE', 'CONDITIONAL_VETO_NO_EVIDENCE');
+  checkP26({ message: 'the build failed', code: '' }, 'UNKNOWN_PROVIDER_FAILURE', 'CONDITIONAL_VETO_NO_EVIDENCE');
+});
 
 console.log('=== F2 CJK 覆盖补齐（真实缺口 + 回归检测）===');
-check('F2+ "出错" → failure', () => assert.equal(kindOf('这里出错了'), 'failure'));
-check('F2+ "又崩了" → failure（规范 §6 回归检测）', () => assert.equal(kindOf('改完之后又崩了'), 'failure'));
-check('F2+ "不工作" → failure', () => assert.equal(kindOf('这个模块不工作'), 'failure'));
-check('F2+ "没反应" → failure', () => assert.equal(kindOf('点了以后没反应'), 'failure'));
+check('F2+ "出错" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('这里出错了'), 'failure'));
+check('F2+ "又崩了" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('改完之后又崩了'), 'failure'));
+check('F2+ "不工作" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('这个模块不工作'), 'failure'));
+check('F2+ "没反应" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('点了以后没反应'), 'failure'));
 check('F2+ "修好了" → resolution', () => assert.equal(kindOf('这个问题修好了'), 'resolution'));
-check('F2孪生 "报错"/"崩溃"/"已修复" 仍是原语义（回归）', () => {
-  assert.equal(kindOf('这里报错了'), 'failure');
-  assert.equal(kindOf('程序崩溃了'), 'failure');
+check('F2孪生 "报错"/"崩溃" 关键词不再声称 failure；"已修复" 仍是 resolution', () => {
+  assert.notEqual(kindOf('这里报错了'), 'failure');
+  assert.notEqual(kindOf('程序崩溃了'), 'failure');
   assert.equal(kindOf('已经修复了'), 'resolution');
+});
+check('F2权威 环境类中文故障由 P2.6 分类并硬否决', () => {
+  // 实测真值：中文额度/过载文本走 CHINESE_QUOTA_RE / CHINESE_OVERLOAD_RE
+  checkP26({ message: '使用上限' }, 'QUOTA_EXHAUSTED', 'HARD_VETO_CLASS');
+  checkP26({ message: '服务繁忙' }, 'PROVIDER_OVERLOADED', 'HARD_VETO_CLASS');
+  checkP26({ message: '余额不足' }, 'QUOTA_EXHAUSTED', 'HARD_VETO_CLASS');
 });
 
 console.log('=== F3 否定作用域（规范 §9：反向表述不得产生信号）===');
@@ -52,12 +78,16 @@ check('F3+ "not broken" → 无信号', () => assert.equal(kindOf('the module is
 check('F3+ "not fixed" → 不是 resolution（规范 §4）', () => assert.notEqual(kindOf('the bug is not fixed yet'), 'resolution'));
 check('F3+ "no longer failing" → 无信号', () => assert.equal(kindOf('the test is no longer failing'), null));
 check('F3+ "never failed" → 无信号', () => assert.equal(kindOf('this has never failed'), null));
-check('F3- "报错了" 仍是 failure（过否定回归）', () => assert.equal(kindOf('这里报错了'), 'failure'));
-check('F3- "the build failed" 仍是 failure（过否定回归）', () => assert.equal(kindOf('the build failed'), 'failure'));
+// AC5：这几条原本断言"否定边界仍判 failure"，现在断言"关键词路径已彻底退出失败判定"
+check('F3- "报错了" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('这里报错了'), 'failure'));
+check('F3- "the build failed" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('the build failed'), 'failure'));
 check('F3- "已经修复了" 仍是 resolution（过否定回归）', () => assert.equal(kindOf('已经修复了'), 'resolution'));
-check('F3边界 否定作用域遇标点即结束："我不确定，但是报错了" → failure', () => assert.equal(kindOf('我不确定，但是报错了'), 'failure'));
-check('F3边界 "没有报错，但崩溃了" → failure（否定不吞掉整句）', () => assert.equal(kindOf('没有报错，但崩溃了'), 'failure'));
-check('F3边界 "not only failed" → failure（only 例外）', () => assert.equal(kindOf('it not only failed but also crashed'), 'failure'));
+check('F3边界 否定作用域遇标点即结束（resolution 侧仍生效）', () => {
+  // 否定作用域逻辑本身仍必须正确：它现在只服务于 resolution/correction
+  assert.equal(kindOf('我不确定，但是修好了'), 'resolution');
+  assert.notEqual(kindOf('还没修好'), 'resolution');
+});
+check('F3边界 "not only failed" → 关键词不再声称 failure（AC5）', () => assert.notEqual(kindOf('it not only failed but also crashed'), 'failure'));
 check('F3边界 "还没修好" → 不是 resolution', () => assert.notEqual(kindOf('还没修好'), 'resolution'));
 check('F3单元 isNegated 直接行为', () => {
   assert.equal(isNegated('没有报错', 2, true), true);
@@ -88,10 +118,13 @@ check('F4- 引用形态的标签不被吞', () => {
   const out = stripInjectedContent(DISCUSSION_CODE);
   assert.equal(out, DISCUSSION_CODE, '引用文本被吞：' + JSON.stringify(out));
 });
-check('F4 讨论文本里的失败信号仍能被学到', () => {
-  const r = learningSignals({ turns: [{ seq: 1, role: 'user', text: stripInjectedContent(DISCUSSION) }] });
-  assert.equal(r.signals.length, 1);
-  assert.equal(r.signals[0].kind, 'failure');
+check('F4 讨论文本被完整保留，且不再由关键词声称 failure（AC5）', () => {
+  const kept = stripInjectedContent(DISCUSSION);
+  assert.equal(kept, DISCUSSION, '讨论文本被吞：' + JSON.stringify(kept));
+  const r = learningSignals({ turns: [{ seq: 1, role: 'user', text: kept }] });
+  // AC5：关键词路径已退出失败判定 ⇒ 该讨论文本不再产生 failure 关键词信号
+  assert.equal(r.signals.some((s) => s.kind === 'failure'), false,
+    'keyword path must not claim failure (AC5)');
 });
 check('F4 R2 既有锁定用例仍成立（回归）', () => {
   // R2 test-learn-core.mjs 第 533/534 行的两个用例

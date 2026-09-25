@@ -1,0 +1,192 @@
+{
+  "at": "2026-09-25T05:38:08.812Z",
+  "root": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4r2",
+  "baseline": {
+    "tests/learn/test-learn-core.mjs": 0,
+    "tests/learn/test-learn-r3-secrets.mjs": 0,
+    "tests/learn/redteam-r3-contamination.mjs": 0,
+    "tests/learn/redteam-r3-isolation.mjs": 0,
+    "tests/learn/test-learn-ac5-gap-veto.mjs": 0
+  },
+  "results": [
+    {
+      "id": "M3b",
+      "invariant": "AC：未 VERIFIED 的经验不得进全局库（发布闸门 canPublish 整层失效）",
+      "file": "plugins/learn-core.mjs",
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  R2 AC5: keyword path no longer claims failure: 失败了 | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-r3-secrets.mjs",
+          "mutatedExit": 0,
+          "tail": "=== R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  Case A: 系统未因 assistant 声明就把失败判为已解决 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-isolation.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS=13  FAIL=0",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE",
+          "restoredExit": 0
+        }
+      ],
+      "bytesChanged": true,
+      "probeOutput": "canPublish(PROPOSED/UNVERIFIED).ok = true  reason=mutant_layer_defeated",
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "behaviorChanged": true,
+      "verdict": "GAP（行为确实被破坏，但无任何套件发现）"
+    },
+    {
+      "id": "M4b",
+      "invariant": "密钥安全：密钥扫描整层失效（containsSecret 永远返回 false）",
+      "file": "plugins/learn-core.mjs",
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 1,
+          "tail": "PASS  R2 AC5: keyword path no longer claims failure: 失败了 | RESULT: 327 PASS / 11 FAIL",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-r3-secrets.mjs",
+          "mutatedExit": 1,
+          "tail": "=== R-3 通用密钥脱敏加固回归: 53 PASS / 9 FAIL === | 失败明细:",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  Case A: 系统未因 assistant 声明就把失败判为已解决 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-isolation.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS=13  FAIL=0",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE",
+          "restoredExit": 0
+        }
+      ],
+      "bytesChanged": true,
+      "probeOutput": "canPublish(经验体含假密钥).ok = false  reason=method_not_machine_checkable\ncontainsSecret(假密钥) = false",
+      "restoredIdentical": true,
+      "caughtBy": [
+        "tests/learn/test-learn-core.mjs",
+        "tests/learn/test-learn-r3-secrets.mjs"
+      ],
+      "behaviorChanged": true,
+      "verdict": "CAUGHT（门禁真实开火）"
+    },
+    {
+      "id": "M5b",
+      "invariant": "跨会话隔离：全局库校验整层失效（validateGlobalStore 直接放行）",
+      "file": "plugins/learn-core.mjs",
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  R2 AC5: keyword path no longer claims failure: 失败了 | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-r3-secrets.mjs",
+          "mutatedExit": 0,
+          "tail": "=== R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  Case A: 系统未因 assistant 声明就把失败判为已解决 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-isolation.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS=13  FAIL=0",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE",
+          "restoredExit": 0
+        }
+      ],
+      "bytesChanged": true,
+      "probeOutput": "validateGlobalStore(坏库) !== null = true\nvalidateGlobalStore(含未验证条目) !== null = true",
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "behaviorChanged": true,
+      "verdict": "GAP（行为确实被破坏，但无任何套件发现）"
+    },
+    {
+      "id": "M6b",
+      "invariant": "Failure Classification 权威唯一：伪造分类不得进入资格判定（两处防线同时破除）",
+      "file": "plugins/learn-gap-veto.mjs",
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  R2 AC5: keyword path no longer claims failure: 失败了 | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-r3-secrets.mjs",
+          "mutatedExit": 0,
+          "tail": "=== R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS  Case A: 系统未因 assistant 声明就把失败判为已解决 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/redteam-r3-isolation.mjs",
+          "mutatedExit": 0,
+          "tail": "PASS=13  FAIL=0",
+          "restoredExit": 0
+        },
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 1,
+          "tail": "PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE | FAILED: B3 unknown classification → vetoed",
+          "restoredExit": 0
+        }
+      ],
+      "bytesChanged": true,
+      "probeOutput": "伪造分类 vetoed = false  reason=null",
+      "restoredIdentical": true,
+      "caughtBy": [
+        "tests/learn/test-learn-ac5-gap-veto.mjs"
+      ],
+      "behaviorChanged": true,
+      "verdict": "CAUGHT（门禁真实开火）"
+    }
+  ],
+  "allPristine": true,
+  "gitPluginsClean": true
+}

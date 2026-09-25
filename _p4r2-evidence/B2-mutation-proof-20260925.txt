@@ -1,0 +1,37 @@
+B2 变异敏感度证明（独立核对用外部证据）
+被测文件 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\plugins\learn.mjs
+被测套件 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\tests\learn\test-learn-r2-b2-bounds.mjs
+pristine sha256 = ed39accec1b5a67134945b53a2dfb3242141bb70aa2fbc683c43f25603b4c91d
+pristine 还原源 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\_p4r2-evidence\mutations\learn.mjs.pristine
+
+变异前线上文件 sha256 = ed39accec1b5a67134945b53a2dfb3242141bb70aa2fbc683c43f25603b4c91d（应等于 pristine）
+
+──────────────────────────────────────────────────────────────────────────
+MUT-18a 关闭磁盘保留策略（pruneSessionStore 立即返回 no-op）
+  破坏点 : function pruneSessionStore(now = Date.now()) {
+  变异后 sha256 = 0ed8da37010a34d5a691165b99d6881f75753e6a55886240acf2070eb081f83f
+  测试 exit code = 1
+  RESULT: 36 PASS / 6 FAIL
+  期望组(A) 转 RED 的断言数 = 3
+    · FAIL  A1 ★ 节流路径下实测最大文件数 ≤ maxFiles + 节流余量（有界，O(1) 而非 O(n)） — 实测最大=322 > 215
+    · FAIL  A2 ★ 写入数达 1.6× 上限后曲线进入平台期（末值 ≈ 上限，不随会话数增长） — 末值=322 > 215 ⇒ 未收敛
+    · FAIL  A4 ★ 显式 prune 后实测文件数 ≤ maxFiles（实测数字） — 文件数=322 > 200
+  判定 : ✔ 变异被测试捕获（RED，符合预期）
+  还原后 sha256 = ed39accec1b5a67134945b53a2dfb3242141bb70aa2fbc683c43f25603b4c91d  ✔ 逐字节等于 pristine
+
+──────────────────────────────────────────────────────────────────────────
+MUT-18b 关闭内存淘汰（evictLRU 立即返回 0）
+  破坏点 : function evictLRU(map, limit, protect) {
+  变异后 sha256 = 56e0549b9bafe5205dfeb6058f13dc60b7f974b0743440ca0191f9b4ef601910
+  测试 exit code = 1
+  RESULT: 38 PASS / 4 FAIL
+  期望组(M) 转 RED 的断言数 = 2
+    · FAIL  M1 ★ stores / watermarks / pendingFailures / activeSessions ≤ 64（真实 Map/Set 尺寸） — stores=322 > 64
+    · FAIL  M2 ★ 缺口水位 / 观察面缓存有界（gapWatermarks / sessionCache） — gapWatermarks=82 > 64
+  判定 : ✔ 变异被测试捕获（RED，符合预期）
+  还原后 sha256 = ed39accec1b5a67134945b53a2dfb3242141bb70aa2fbc683c43f25603b4c91d  ✔ 逐字节等于 pristine
+
+──────────────────────────────────────────────────────────────────────────
+作业结束：plugins/learn.mjs sha256 = ed39accec1b5a67134945b53a2dfb3242141bb70aa2fbc683c43f25603b4c91d
+字节还原 = YES（未被变异污染）
+总判定：PASS —— 两处单点破坏均被测试捕获，且线下文件已逐字节还原

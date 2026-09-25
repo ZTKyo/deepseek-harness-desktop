@@ -1,0 +1,77 @@
+B1 审批门（R2 外部评审 BLOCKER-1）回归证据 —— 差分证明，2026-09-25
+================================================================================
+
+结论
+--------------------------------------------------------------------------------
+BLOCKER-1 的**仓库内回归门**已落地，并且用「同一套件跑修复前 / 修复后」的差分
+证明它不是空门（vacuous green）：
+
+  修复后 _p4r2                 : 19 PASS / 0 FAIL   exit=0
+  修复前 pristine baseline     :  9 PASS / 10 FAIL  exit=1
+
+即：该套件在**未修复代码上必然变红**，在修复代码上全绿。这排除了"断言写得太软 /
+把闸门焊死也能变绿"的假通过。
+
+被测对象
+--------------------------------------------------------------------------------
+  套件 : _p4r2/tests/learn/test-learn-r2-b1-approval-gate.mjs
+         sha256 = 2b6b576b71204be248e553e809cc4d9f16e955403f5789d5dbaef60658cb88ac (299 行)
+  修复后插件 : _p4r2/plugins/learn.mjs + _p4r2/plugins/learn-core.mjs   (git 3a9f30f 的工作树改动)
+  修复前基线 : _r2fix-evidence/baseline-repo/  (pristine HEAD 副本；learn.mjs 53011B、
+               learn-core.mjs 82519B，均不含 not_human_approved 标记)
+  真实会话   : session-9961b384-2b94-4d82-ad01-99a5ebfd21a7 (nodes=61)，只读取，状态目录在 os.tmpdir()
+
+
+差分失败清单：基线 10 项红、修复后全部转绿
+--------------------------------------------------------------------------------
+  断言                                        基线(修复前)              修复后
+  A2 publication 必须 denied:not_human_approved  publication=published     denied:not_human_approved:VERIFIED_EXPERIENCE
+  A3 全局库不落盘未审批条目                      磁盘条目数=1               磁盘条目数=0
+  A4 另一会话召回不到未审批条目                   召回到了（跨会话泄露）      召回不到
+  A5 被拒必须留痕 GLOBAL_PUBLISH_DENIED          只有 GLOBAL_PUBLISHED      有 GLOBAL_PUBLISH_DENIED
+  B5 审批后再验证授权不被撤销                     state=VERIFIED_EXPERIENCE state=APPROVED（粘性生效）
+  C1 旧格式条目过不了 canPublish                  canPublish.ok=true（闸门坏） canPublish 拒（reason 明确）
+  C2 存量污染库整体判废                          部分信任：仍载入 1 条       整体判废 + GLOBAL_REJECTED 留痕
+  C3 存量污染条目跨会话召回不到                   仍被召回                   召回不到
+  D1 APPROVED --验证PASS--> 仍 APPROVED          降级为 VERIFIED_EXPERIENCE  保持 APPROVED（根因锁）
+  D2 PROPOSED --验证PASS--> VERIFIED_EXPERIENCE  canPublish.ok=true（坏）    canPublish.ok=false（闸门恢复）
+
+基线与修复后**都通过**的 9 项 = 正向对照（证明没有把功能封死）
+--------------------------------------------------------------------------------
+  A0 真实会话 auto-propose 产出候选            A1 learn_verify 本身 PASS（证据是真的，攻击前提成立）
+  A6 本会话 Layer A 仍可召回 VERIFIED_EXPERIENCE（合同"实现原则 3"独立通道未被误杀）
+  B1 人工批准 ⇒ publication=published          B2 落盘条目带完整审批来源(approvedBy/approvalEvidence/approvedAt)
+  B3 另一会话**召回到了**该已审批经验           B4 工具面 learn_recall 结论与 recallFor 一致
+  C0 取到 A 组真实攻击产物作为旧格式夹具         D2 的 fixture 构造成功
+  → A 组（拒绝）与 B 组（放行）同时成立 ⇒ 边界确实画在"人工审批"这一位，而不是焊死。
+
+根因说明（写进本证据，供外部评审复核）
+--------------------------------------------------------------------------------
+  漏洞**不在**闸门函数本身，而在状态机：applyVerification 允许 APPROVED → VERIFIED_EXPERIENCE，
+  使「APPROVED + VERIFIED」在系统里根本无法共存；闸门只能退化为"只看 VERIFIED"，
+  于是"人工审批是唯一途径"在代码上不成立。故修复 = ① canPublish 唯一授权改为 state==='APPROVED'
+  + 审批来源完整；② 审批粘性（重新验证不得撤销人工授权），使合法路径 "APPROVED + VERIFIED" 可共存。
+  D1（粘性）与 D2（晋升路径未被破坏）分别锁住②的两个方向。
+
+外部探针复跑（_p4r2-review-external/probes/attack-AC4-approval-bypass.mjs）
+--------------------------------------------------------------------------------
+  基线 : A1 publication=published、A2 全局库条目数=1、A3/A4 走到并报"未审批条目被跨会话召回"
+  修复后: A1 publication=denied:not_human_approved:VERIFIED_EXPERIENCE、A2 全局库条目数=0
+          → 攻击在 A2 即被截断，A3/A4 因库为空而不再执行（探针只在 gcount>0 时才跑 A3/A4）。
+  注：该探针的 A3 读的是 `g0.approvals ?? []`（见其第 59-61 行），而真实 schema 的审批来源是
+      扁平三字段 approvedBy / approvalEvidence / approvedAt，**不存在 approvals 字段**，
+      故 A3 在修复后**也不可能变绿**（appr 恒为 []）——它是探针自身的字段误判，不是缺陷复发。
+      本套件的 B2 按真实 schema 断言审批来源，避免继承该误判。
+
+全量回归
+--------------------------------------------------------------------------------
+  node tests/learn/run-learn-all-tests.mjs
+  → 套件 22/22 全绿（新套件被 runner 自动发现，由 21 增至 22）；
+    门槛断言 865 PASS / 0 FAIL；门槛套件 17 个 / 观测套件 5 个。
+
+部署影响（重要）
+--------------------------------------------------------------------------------
+  learn 插件**未接入运行中的 dsh 服务**：~/.dsh/profiles/web/cordis.patch.yml 及 ~/.dsh 配置内
+  无任何 learn 引用；本机也不存在生产 _global-verified.json。故：
+    · 本次修复属"上线前"修复，无需重启服务、无中断；
+    · C 组的存量库隔离条款目前**无真实数据影响**（没有存量库可被隔离），属前瞻性防护。

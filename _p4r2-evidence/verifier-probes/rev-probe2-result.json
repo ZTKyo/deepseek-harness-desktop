@@ -1,0 +1,27 @@
+[
+  {
+    "id": "G1-full-forged-chain-cross-session-recall",
+    "verdict": "RESIDUAL-CONFIRMED",
+    "detail": "globalStoreLoadedN=1 recalledIds=[\"exp-a4cbc474\"] validHumanApproval.ok=true(ok)"
+  },
+  {
+    "id": "G2-forged-without-planted-hostlog-blocked",
+    "verdict": "PASS",
+    "detail": "recalledIds=[]"
+  },
+  {
+    "id": "G3-fabricated-provenance-publishable",
+    "verdict": "INFO",
+    "detail": "anchors=[900001,900002](会话实际只有 turn/start) verify={\"ok\":false,\"experienceId\":\"exp-1746875d\",\"state\":\"PROPOSED\",\"verificationStatus\":\"UNVERIFIED\",\"method\":null,\"error\":\"invalid_or_non_machine_checkable_evidence\",\"publication\":\"not_applicable\"} state=APPROVED vstatus=UNVERIFIED publication=denied:not_verified:UNVERIFIED canPublish={\"ok\":false,\"reason\":\"not_verified:UNVERIFIED\"}"
+  },
+  {
+    "id": "G4-session-outcome-anchor-lock",
+    "verdict": "PASS",
+    "detail": "ok=false error=anchors_not_found_in_session"
+  },
+  {
+    "id": "G5-isolation-proposed-not-cross-session",
+    "verdict": "PASS",
+    "detail": "A会话命中=0 B会话命中=0 (设计：PROPOSED 永不召回)"
+  }
+]

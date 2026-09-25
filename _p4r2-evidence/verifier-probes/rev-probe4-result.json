@@ -1,0 +1,32 @@
+[
+  {
+    "id": "I3-control-unchanged-publishable",
+    "verdict": "PASS",
+    "detail": "canPublish={\"ok\":true,\"reason\":\"verified_approvable_experience\"}"
+  },
+  {
+    "id": "I1-anchors-tamper-after-approval",
+    "verdict": "PASS",
+    "detail": "approvalProvenance=approval_content_changed canPublish={\"ok\":false,\"reason\":\"approval_content_changed\"}"
+  },
+  {
+    "id": "I2-body-tamper-after-approval",
+    "verdict": "PASS",
+    "detail": "approvalProvenance=approval_content_changed canPublish={\"ok\":false,\"reason\":\"approval_content_changed\"}"
+  },
+  {
+    "id": "I4-anchor-check-asymmetry",
+    "verdict": "INFO",
+    "detail": "file_hash(带不存在锚点)={\"ok\":true,\"method\":\"file_hash\",\"checked\":{\"path\":\"C:\\\\Users\\\\ADMINI~1\\\\AppData\\\\Local\\\\Temp\\\\_rev-p4r2\\\\anchor-probe.txt\"}}  session_outcome(同样锚点)={\"ok\":false,\"error\":\"invalid_or_non_machine_checkable_evidence\"}"
+  },
+  {
+    "id": "I5-publish-face-anchor-existence",
+    "verdict": "OBSERVED-GAP",
+    "detail": "锚点=[11,22,33] 会话事件数=3 锚点真实存在=false canPublish={\"ok\":true,\"reason\":\"verified_approvable_experience\"}"
+  },
+  {
+    "id": "I5b-nonexistent-anchors-reach-denial-reason",
+    "verdict": "INFO",
+    "detail": "锚点=987654321/987654322（不可能存在）validHumanApproval={\"ok\":false,\"reason\":\"approval_host_fact_approval_ref_not_in_host_log\"} canPublish={\"ok\":false,\"reason\":\"approval_host_fact_approval_ref_not_in_host_log\"}"
+  }
+]

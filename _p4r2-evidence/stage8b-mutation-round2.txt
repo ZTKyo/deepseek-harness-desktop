@@ -1,0 +1,63 @@
+==== P4 LEARN R2 / STAGE 8b 第二轮突变（层破除）====
+ROOT = C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2
+HEAD = f44519714127482b6cd11bfc640673dc542f44e4
+
+--- 基线 ---
+  GREEN exit=0  tests/learn/test-learn-core.mjs
+  GREEN exit=0  tests/learn/test-learn-r3-secrets.mjs
+  GREEN exit=0  tests/learn/redteam-r3-contamination.mjs
+  GREEN exit=0  tests/learn/redteam-r3-isolation.mjs
+  GREEN exit=0  tests/learn/test-learn-ac5-gap-veto.mjs
+
+--- M3b  AC：未 VERIFIED 的经验不得进全局库（发布闸门 canPublish 整层失效）
+    植入（层破除）：字节已变 = true
+    行为探针：canPublish(PROPOSED/UNVERIFIED).ok = true  reason=mutant_layer_defeated
+    [突变后] green  exit=0  test-learn-core.mjs
+    [突变后] green  exit=0  test-learn-r3-secrets.mjs
+    [突变后] green  exit=0  redteam-r3-contamination.mjs
+    [突变后] green  exit=0  redteam-r3-isolation.mjs
+    [突变后] green  exit=0  test-learn-ac5-gap-veto.mjs
+    还原：逐字节一致 = true
+    ⇒ M3b：GAP（行为确实被破坏，但无任何套件发现）
+
+--- M4b  密钥安全：密钥扫描整层失效（containsSecret 永远返回 false）
+    植入（层破除）：字节已变 = true
+    行为探针：canPublish(经验体含假密钥).ok = false  reason=method_not_machine_checkable || containsSecret(假密钥) = false
+    [突变后] RED ✓  exit=1  test-learn-core.mjs
+    [突变后] RED ✓  exit=1  test-learn-r3-secrets.mjs
+    [突变后] green  exit=0  redteam-r3-contamination.mjs
+    [突变后] green  exit=0  redteam-r3-isolation.mjs
+    [突变后] green  exit=0  test-learn-ac5-gap-veto.mjs
+    还原：逐字节一致 = true
+    ⇒ M4b：CAUGHT（门禁真实开火） 被捕获于 test-learn-core.mjs, test-learn-r3-secrets.mjs
+
+--- M5b  跨会话隔离：全局库校验整层失效（validateGlobalStore 直接放行）
+    植入（层破除）：字节已变 = true
+    行为探针：validateGlobalStore(坏库) !== null = true || validateGlobalStore(含未验证条目) !== null = true
+    [突变后] green  exit=0  test-learn-core.mjs
+    [突变后] green  exit=0  test-learn-r3-secrets.mjs
+    [突变后] green  exit=0  redteam-r3-contamination.mjs
+    [突变后] green  exit=0  redteam-r3-isolation.mjs
+    [突变后] green  exit=0  test-learn-ac5-gap-veto.mjs
+    还原：逐字节一致 = true
+    ⇒ M5b：GAP（行为确实被破坏，但无任何套件发现）
+
+--- M6b  Failure Classification 权威唯一：伪造分类不得进入资格判定（两处防线同时破除）
+    植入（层破除）：字节已变 = true
+    行为探针：伪造分类 vetoed = false  reason=null
+    [突变后] green  exit=0  test-learn-core.mjs
+    [突变后] green  exit=0  test-learn-r3-secrets.mjs
+    [突变后] green  exit=0  redteam-r3-contamination.mjs
+    [突变后] green  exit=0  redteam-r3-isolation.mjs
+    [突变后] RED ✓  exit=1  test-learn-ac5-gap-veto.mjs
+    还原：逐字节一致 = true
+    ⇒ M6b：CAUGHT（门禁真实开火） 被捕获于 test-learn-ac5-gap-veto.mjs
+
+==== 第二轮汇总 ====
+  M3b  GAP（行为确实被破坏，但无任何套件发现）
+  M4b  CAUGHT（门禁真实开火）  ← test-learn-core.mjs,test-learn-r3-secrets.mjs
+  M5b  GAP（行为确实被破坏，但无任何套件发现）
+  M6b  CAUGHT（门禁真实开火）  ← test-learn-ac5-gap-veto.mjs
+  源文件字节无损=true  plugins 工作树干净=true
+  结论：2 条为真覆盖缺口，0 条为等价突变（有多层兜底），2 条已被现有门禁捕获
+==== END ====

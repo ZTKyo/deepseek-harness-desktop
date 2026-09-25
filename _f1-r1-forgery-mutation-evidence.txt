@@ -1,0 +1,33 @@
+F1 R1 section-6 forgery gate -- gate + mutation evidence
+date                      = 2026-09-26 00:48:45
+plugin                    = plugins/learn-core.mjs
+pristine sha256           = B5BD39771F4C6195743C6B7272BDDD9A91DF15249939C2F8C6E827800F8C1196
+suite                     = tests/learn/test-learn-r3-approval-forgery.mjs
+
+=== M1 mutation: host-fact re-verification forced to ok (trust anchor removed)
+mutation sha256           = ED92B70881588F83B9DB31AA9828B2CAFEC29BB30C4140C6BE9A64A83B56BFBA
+suite exit code           = 1  (1 = expected RED)
+  FAIL  S2.2 ★★ 差分判定：真锚点放行、伪造锚点 DENY，且原因是宿主事实类 — ★ 伪造台账被当成授权放行了 —— 台账仍是 authority（R1 未落地）
+  FAIL  S2.3 换成更"像真的"伪造锚点（**真实**会话 id + 编造 ref）仍 DENY — 锚到真实会话但 ref 编造的伪造被放行
+  FAIL  S2.4 台账句柄**没挂复验器**时必须判"不可复验"（fail-closed 的最后一层） — 未挂复验器的台账竟然发出了授权
+  FAIL  S3.1 ★ 真 grant 改锚到**不存在**的会话 ⇒ DENY（宿主取不到该会话） — 改锚到不存在会话的复制 grant 被放行
+  FAIL  S3.2 ★ 换成**真实批准会话**仍 DENY（ref 不在那次批准的日志里） — 换会话但 ref 编造的拷贝被放行
+  FAIL  S4.1 ★ 同一份真台账 + 真批准，宿主服务缺失 ⇒ DENY（fail-closed） — ★ 摘掉宿主服务后授权竟然成立 —— 即"删掉检查器就能自铸授权"的漏洞面
+  FAIL  S4.2 "服务对象存在但没有 get"同样 DENY（不是有对象就算在岗） — 形状不对的宿主服务下授权成立
+  FAIL  S5b ★ 攻击：伪造条目即使写进全局库 + 台账，也不得跨会话召回 — 伪造条目在 hydration 实例里被认作已批准
+  RESULT: 19 PASS / 8 FAIL
+restored sha256           = B5BD39771F4C6195743C6B7272BDDD9A91DF15249939C2F8C6E827800F8C1196
+byte-identical to pristine= True
+
+=== M2 mutation: content-binding requirement removed in hostApprovalRecord
+mutation sha256           = 0A39971FCA623A642BFAD9906EEB4FC9E124DB30F264B021F6C568F474C0B0F0
+suite exit code           = 1  (1 = expected RED)
+  FAIL  S7.4 asked.reason 里没有内容摘要 ⇒ DENY（"批的是哪份内容"不可缺） — 没有内容绑定的批准被接受
+  RESULT: 26 PASS / 1 FAIL
+restored sha256           = B5BD39771F4C6195743C6B7272BDDD9A91DF15249939C2F8C6E827800F8C1196
+byte-identical to pristine= True
+
+=== pristine gate run (no mutation) ===
+suite exit code           = 0  (0 = expected GREEN)
+  RESULT: 27 PASS / 0 FAIL
+final sha256              = B5BD39771F4C6195743C6B7272BDDD9A91DF15249939C2F8C6E827800F8C1196

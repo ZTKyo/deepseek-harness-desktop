@@ -1,0 +1,47 @@
+[
+  {
+    "id": "P0-positive-control",
+    "verdict": "FAIL",
+    "detail": "state=APPROVED pub=denied:not_verified:UNVERIFIED vstatus=UNVERIFIED"
+  },
+  {
+    "id": "P1-no-host-service",
+    "verdict": "PASS",
+    "detail": "err=\"learn_review rejected: approval_unavailable:no_host_approval_service\" state=PROPOSED globalN=0 ledgerWritten=false tel={\"total\":4,\"counts\":{\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROMOTED\":0,\"STABLE_OVERWRITE_DENIED\":0,\"RESEARCH_BOUNDED_EXHAUSTED\":0,\"CAPABILITY_GAP_OBSERVED\":0,\"CAPABILITY_GAP_QUALIFIED\":0,\"CAPABILITY_GAP_VETOED\":0,\"CAPABILITY_GAP_RESOLVED\":0,\"VERIFIED\":0,\"VERIFICATION_FAILED\":1,\"REVALIDATED\":0,\"REVALIDATION_REQUIRED\":0,\"APPLICABILITY_BLOCKED\":0,\"GLOBAL_PUBLISHED\":0,\"GLOBAL_PUBLISH_DENIED\":0,\"GLOBAL_REJECTED\":0,\"GLOBAL_RECALLED\":0,\"HUMAN_APPROVAL_REQUESTED\":1,\"HUMAN_APPROVAL_GRANTED\":0,\"HUMAN_APPROVAL_DENIED\":0,\"HUMAN_APPROVAL_UNAVAILABLE\":1,\"APPROVAL_EXPIRED\":0},\"experiences\":1,\"byState\":{\"PROPOSED\":1,\"VERIFIED_EXPERIENCE\":0,\"APPROVED\":0,\"REJECTED\":0,\"RETIRED\":0},\"promoted\":0}"
+  },
+  {
+    "id": "P2-self-planted-events-no-service",
+    "verdict": "PASS",
+    "detail": "err=\"learn_review rejected: approval_unavailable:no_host_approval_service\" state=PROPOSED"
+  },
+  {
+    "id": "P3-planted-events-but-host-says-no",
+    "verdict": "PASS",
+    "detail": "err=\"learn_review rejected: approval_not_granted:unavailable\" state=PROPOSED"
+  },
+  {
+    "id": "P4-handwritten-ledger-no-host-log",
+    "verdict": "PASS",
+    "detail": "chainOk=true verdict.ok=false reason=approval_host_fact_approval_ref_not_in_host_log"
+  },
+  {
+    "id": "P5-handledger-plus-planted-hostlog-RESIDUAL",
+    "verdict": "ACCEPTED",
+    "detail": "verdict.ok=true reason=ok  （ok=true ⇒ 交付声明的\"残余风险\"复现成立）"
+  },
+  {
+    "id": "P6-ledger-integrity-matrix",
+    "verdict": "PASS",
+    "detail": "[[\"baseline(应 ok)\",true],[\"tampered-record\",false],[\"no-consume\",false],[\"double-consume\",false],[\"other-candidate\",false],[\"content-changed\",false],[\"no-verifier\",false]]"
+  },
+  {
+    "id": "P7-approval-stickiness",
+    "verdict": "FAIL",
+    "detail": "before=APPROVED after=undefined provenanceOk=false"
+  },
+  {
+    "id": "P8-fabricated-provenance",
+    "verdict": "INFO",
+    "detail": "proposeErr=null proposeOk=true publish=denied:not_verified:UNVERIFIED vstatus=UNVERIFIED"
+  }
+]

@@ -1,0 +1,62 @@
+﻿=== capture at 2026-09-26 00:08:57 ===
+frozen copy: C:\Users\ADMINI~1\AppData\Local\Temp\_vfy-final-2347
+  learn-core.mjs sha256 = 98A49D4BBB36E32663724FC1089E67F25D57C5DFFEAE117168D47E0BA29C6D8A
+  learn.mjs      sha256 = 72D1D2AE76BFE094757C24B5604BC02FD6EE60D9796E49049191CCC6AE23FE8B
+mutant  copy: C:\Users\ADMINI~1\AppData\Local\Temp\_vfy-mutB2 (MUT-B2: consume enforcement block removed)
+  learn-core.mjs sha256 = 5F24CFD7268D8412102B1734930A222600A580FE15F957685CB7A7088699E0F8
+probe: C:\Users\ADMINI~1\AppData\Local\Temp\_vfy-probes\p9-shell-consume-replay.mjs sha256 = 06952C99374932819D718CF12F721EF731E2A9CD7895EA06080E536D524C15B5
+
+----- BASELINE phase=base -----
+[base] shell_tool_surface: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-base\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)","WARN [learn] tool surface unavailable (defineTool missing or no tools service) — hooks and store unaffected"]}
+[base] T1_shell_publish_1: {"ok":true,"publication":"published","state":"APPROVED","error":null}
+[base] T1_approval_reason: learn_review: approve experience exp-a72cd97d digest=ac61f06a9a4a9a2d6cda72802908d748d3c8a3dc7be72e026ed487120eeff632
+[base] T1_ledger_after_publish: {"records":2,"types":["grant","consume"],"chain":true}
+[base] T2_shell_publish_2_REPLAY: {"ok":null,"publication":null,"error":"learn_review rejected: already_human_approved"}
+[base] T2_ledger_after_replay: {"records":2,"types":["grant","consume"],"consumes":1,"chain":true}
+[base] T3_shell_canPublishFor_after_consume: {"ok":true,"reason":"verified_approvable_experience"}
+[base] T3_shell_validHumanApprovalFor: {"ok":true,"reason":"ok"}
+[base] T4_shell_canPublishFor_CLONE: {"ok":false,"reason":"approval_content_changed"}
+
+----- BASELINE phase=dupgrant -----
+[dupgrant] tamper_ledger: {"count":2,"chain":{"ok":true,"reason":"ok","length":2}}
+[dupgrant] host_fact_seeded: {"events":4,"asked":2}
+[dupgrant] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupgrant\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[dupgrant] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupgrant\\_human-approvals.jsonl","records":2,"chainOk":true,"error":null}
+[dupgrant] SHELL_VERDICTS: {"honest_exp":{"ok":false,"reason":"approval_ledger_record_unknown"},"honest_exp_human":{"ok":false,"reason":"approval_ledger_record_unknown"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+----- BASELINE phase=dupconsume -----
+[dupconsume] tamper_ledger: {"count":3,"chain":{"ok":true,"reason":"ok","length":3}}
+[dupconsume] host_fact_seeded: {"events":4,"asked":2}
+[dupconsume] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupconsume\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[dupconsume] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupconsume\\_human-approvals.jsonl","records":3,"chainOk":true,"error":null}
+[dupconsume] SHELL_VERDICTS: {"honest_exp":{"ok":false,"reason":"approval_ledger_grant_consumed_twice"},"honest_exp_human":{"ok":false,"reason":"approval_ledger_grant_consumed_twice"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+----- BASELINE phase=dropconsume -----
+[dropconsume] tamper_ledger: {"count":1,"chain":{"ok":true,"reason":"ok","length":1}}
+[dropconsume] host_fact_seeded: {"events":4,"asked":2}
+[dropconsume] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dropconsume\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[dropconsume] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dropconsume\\_human-approvals.jsonl","records":1,"chainOk":true,"error":null}
+[dropconsume] SHELL_VERDICTS: {"honest_exp":{"ok":false,"reason":"approval_ledger_grant_not_consumed"},"honest_exp_human":{"ok":false,"reason":"approval_ledger_grant_not_consumed"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+----- BASELINE phase=forge -----
+[forge] tamper_ledger: {"count":2,"chain":{"ok":true,"reason":"ok","length":2}}
+[forge] host_fact_seeded: {"events":4,"asked":2}
+[forge] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-forge\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[forge] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-forge\\_human-approvals.jsonl","records":2,"chainOk":true,"error":null}
+[forge] SHELL_VERDICTS: {"honest_exp":{"ok":false,"reason":"approval_ledger_record_unknown"},"honest_exp_human":{"ok":false,"reason":"approval_ledger_record_unknown"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+----- MUT-B2 phase=dupconsume -----
+[dupconsume] tamper_ledger: {"count":3,"chain":{"ok":true,"reason":"ok","length":3}}
+[dupconsume] host_fact_seeded: {"events":4,"asked":2}
+[dupconsume] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupconsume\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[dupconsume] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dupconsume\\_human-approvals.jsonl","records":3,"chainOk":true,"error":null}
+[dupconsume] SHELL_VERDICTS: {"honest_exp":{"ok":true,"reason":"verified_approvable_experience"},"honest_exp_human":{"ok":true,"reason":"ok"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+----- MUT-B2 phase=dropconsume -----
+[dropconsume] tamper_ledger: {"count":1,"chain":{"ok":true,"reason":"ok","length":1}}
+[dropconsume] host_fact_seeded: {"events":4,"asked":2}
+[dropconsume] shell_applied: {"names":["learn_propose","learn_review","learn_recall","learn_promote","learn_verify","learn_status"],"warn":["INFO [learn] human approval ledger = C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dropconsume\\_human-approvals.jsonl｜host fact re-verification = wired (ctx.sessions)"]}
+[dropconsume] ledgerStatus: {"available":true,"file":"C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\vfy9-dropconsume\\_human-approvals.jsonl","records":1,"chainOk":true,"error":null}
+[dropconsume] SHELL_VERDICTS: {"honest_exp":{"ok":true,"reason":"verified_approvable_experience"},"honest_exp_human":{"ok":true,"reason":"ok"},"attacker_exp":{"ok":false,"reason":"approval_content_changed"},"attacker_exp_human":{"ok":false,"reason":"approval_content_changed"}}
+
+=== EOF ===

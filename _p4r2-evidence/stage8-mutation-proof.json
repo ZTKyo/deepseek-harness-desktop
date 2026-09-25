@@ -1,0 +1,207 @@
+{
+  "at": "2026-09-25T05:14:55.284Z",
+  "root": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4r2",
+  "head": "f44519714127482b6cd11bfc640673dc542f44e4",
+  "baseline": {
+    "tests/learn/test-learn-ac5-gap-veto.mjs": 0,
+    "tests/learn/test-learn-stage85-twins.mjs": 0,
+    "tests/learn/run-learn-contract-scenarios.mjs": 0,
+    "tests/learn/test-learn-candidate.mjs": 0,
+    "tests/learn/test-learn-core.mjs": 0,
+    "tests/learn/redteam-r3-contamination.mjs": 0,
+    "tests/learn/test-learn-r3-secrets.mjs": 0,
+    "tests/learn/redteam-r3-isolation.mjs": 0
+  },
+  "results": [
+    {
+      "id": "M1",
+      "invariant": "AC5 假缺口守卫：Provider/网络/环境类失败不得生成 Candidate",
+      "file": "plugins/learn-gap-veto.mjs",
+      "note": "停用硬否决集 → 网络/限流/额度类失败将不再被否决",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 1,
+          "mutatedTail": "PASS  E3 code-only failure classified & vetoed  cls=PROTOCOL_MISMATCH | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE | FAILED: A1 hard-veto SHORT_WINDOW_RATE_LIMIT | A1 hard-veto NETWORK_TIMEOUT",
+          "restoredExit": 0,
+          "restoredTail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E3 code-only failure classified & vetoed  cls=PROTOCOL_MISMATCH | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO"
+        },
+        {
+          "gate": "tests/learn/test-learn-stage85-twins.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口） |   PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口 |   PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口",
+          "restoredExit": 0,
+          "restoredTail": "PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口） |   PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口 |   PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口"
+        },
+        {
+          "gate": "tests/learn/run-learn-contract-scenarios.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM",
+          "restoredExit": 0,
+          "restoredTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM"
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [
+        "tests/learn/test-learn-ac5-gap-veto.mjs"
+      ],
+      "allGreenAfterRestore": true,
+      "ok": true
+    },
+    {
+      "id": "M2",
+      "invariant": "AC7 Stable 覆盖守卫：Candidate 永远不能直接写 Stable",
+      "file": "plugins/learn-candidate.mjs",
+      "note": "direct 模式改为放行 → 候选可直接覆盖 Stable",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-candidate.mjs",
+          "mutatedExit": 1,
+          "mutatedTail": "- A2 ★ direct 模式覆盖 Stable → 一律拒绝（AC7 主断言） :: AC7 失败：候选可直接覆盖 Stable — got true, want false |     - A3 ★ 即使候选已走完全部阶段 + 有人批准，direct 仍必须拒绝 :: AC7 失败：带批准的 direct 覆盖被放行 — got true, want false |   FAIL",
+          "restoredExit": 0,
+          "restoredTail": "PASS  F9 ★ 候选 store 与 experience store 分层（AC 不混用 authority） |   STAGE 6-7: 39 PASS / 0 FAIL |   PASS STAGE 6-7 candidate lifecycle + bounded research"
+        },
+        {
+          "gate": "tests/learn/run-learn-contract-scenarios.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM",
+          "restoredExit": 0,
+          "restoredTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM"
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [
+        "tests/learn/test-learn-candidate.mjs"
+      ],
+      "allGreenAfterRestore": true,
+      "ok": true
+    },
+    {
+      "id": "M3",
+      "invariant": "Official Core 写保护：未 VERIFIED 的经验不得进入全局库（发布闸门）",
+      "file": "plugins/learn-core.mjs",
+      "note": "停用发布闸门的 VERIFIED 校验 → 未验证经验可发布",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0,
+          "restoredTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL"
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选） |   PASS  用户讨论该标签时其真实发言不被删除 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0,
+          "restoredTail": "PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选） |   PASS  用户讨论该标签时其真实发言不被删除 | === 污染红队: 9 PASS / 0 FAIL ==="
+        },
+        {
+          "gate": "tests/learn/run-learn-contract-scenarios.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM",
+          "restoredExit": 0,
+          "restoredTail": "· session B telemetry counts = {\"PROPOSED\":1,\"APPROVED\":0,\"REJECTED\":0,\"RECALLED\":0,\"PROMOTION_BLOCKED\":0,\"PROMOTION_ELIGIBLE\":0,\"STORE_REBUILT\":0,\"WRITE_DENIED\":0,\"GAP_VETOED\":0,\"CANDIDATE_PROPOSED\":0,\"CANDIDATE_STAGE\":0,\"CANDIDATE_REJECTED\":0,\"CANDIDATE_PROM"
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "allGreenAfterRestore": true,
+      "ok": false
+    },
+    {
+      "id": "M4",
+      "invariant": "密钥安全：含密钥的经验不得入库",
+      "file": "plugins/learn-core.mjs",
+      "note": "停用发布路径的密钥扫描 → 含 sk-/token 的经验可入库",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-r3-secrets.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  I3 规范家族名集合与扫描器完全平价（双向包含，顺序无关） |   PASS  I4 三个通用形态族仍在（脱敏加固不被本次平价重构误删） | === R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ===",
+          "restoredExit": 0,
+          "restoredTail": "PASS  I3 规范家族名集合与扫描器完全平价（双向包含，顺序无关） |   PASS  I4 三个通用形态族仍在（脱敏加固不被本次平价重构误删） | === R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ==="
+        },
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0,
+          "restoredTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL"
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "allGreenAfterRestore": true,
+      "ok": false
+    },
+    {
+      "id": "M5",
+      "invariant": "跨会话隔离：全局库校验必须 fail-closed（坏条目/未验证条目整体判废）",
+      "file": "plugins/learn-core.mjs",
+      "note": "停用全局库逐条校验 → 未验证/外部条目可被接受",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-core.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL",
+          "restoredExit": 0,
+          "restoredTail": "PASS  R2 AC5: latin failure keyword \"rejected\" no longer claims failure |   PASS  every pattern carries both a latin and a cjk regex | RESULT: 338 PASS / 0 FAIL"
+        },
+        {
+          "gate": "tests/learn/redteam-r3-isolation.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "[PASS] C1 超长 sid 不再撞名（两个独立文件） |   [PASS] C2 超长 sid 两库各自归属正确（无互相覆盖） |   PASS=13  FAIL=0",
+          "restoredExit": 0,
+          "restoredTail": "[PASS] C1 超长 sid 不再撞名（两个独立文件） |   [PASS] C2 超长 sid 两库各自归属正确（无互相覆盖） |   PASS=13  FAIL=0"
+        },
+        {
+          "gate": "tests/learn/redteam-r3-contamination.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选） |   PASS  用户讨论该标签时其真实发言不被删除 | === 污染红队: 9 PASS / 0 FAIL ===",
+          "restoredExit": 0,
+          "restoredTail": "PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选） |   PASS  用户讨论该标签时其真实发言不被删除 | === 污染红队: 9 PASS / 0 FAIL ==="
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "allGreenAfterRestore": true,
+      "ok": false
+    },
+    {
+      "id": "M6",
+      "invariant": "Failure Classification 权威唯一：分类值必须属于本 taxonomy，不得被绕过",
+      "file": "plugins/learn-gap-veto.mjs",
+      "note": "停用未知分类否决 → 伪造/漂移的分类值可进入资格判定",
+      "anchorOccurrences": 1,
+      "gates": [
+        {
+          "gate": "tests/learn/test-learn-ac5-gap-veto.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E3 code-only failure classified & vetoed  cls=PROTOCOL_MISMATCH | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO",
+          "restoredExit": 0,
+          "restoredTail": "PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE | PASS  E3 code-only failure classified & vetoed  cls=PROTOCOL_MISMATCH | PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO"
+        },
+        {
+          "gate": "tests/learn/test-learn-stage85-twins.mjs",
+          "mutatedExit": 0,
+          "mutatedTail": "PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口） |   PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口 |   PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口",
+          "restoredExit": 0,
+          "restoredTail": "PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口） |   PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口 |   PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口"
+        }
+      ],
+      "restoredIdentical": true,
+      "caughtBy": [],
+      "allGreenAfterRestore": true,
+      "ok": false
+    }
+  ],
+  "allPristine": true,
+  "gitStatusClean": true,
+  "ok": false
+}

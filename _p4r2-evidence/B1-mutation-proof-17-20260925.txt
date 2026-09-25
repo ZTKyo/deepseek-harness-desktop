@@ -1,0 +1,28 @@
+变异证明 17 —— B1 人工审批授权门（独立核对用外部证据）
+被测文件 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\plugins\learn-core.mjs
+被测套件 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\tests\learn\test-learn-r2-b1-approval-gate.mjs
+pristine sha256 = 06ff37ccc3dc39017e2de939466a8753a8cba1d45ded12275820a31540ea1cfd
+还原源   : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2\_p4r2-evidence\mutations\learn-core.mjs.pristine
+
+变异前线上文件 sha256 = 06ff37ccc3dc39017e2de939466a8753a8cba1d45ded12275820a31540ea1cfd（应等于 pristine）
+
+──────────────────────────────────────────────────────────────────────────
+MUT-17 把 canPublish() 改成恒 true（关掉人工审批授权门）
+  破坏点 : export function canPublish(exp) {
+  变异后 sha256 = 364268d1d2628385ed396cd4fb1f7cd241adb26ccfb95c87d5ea996cdf67e579
+  测试 exit code = 1
+  RESULT: 12 PASS / 7 FAIL
+  RED 断言数 = 7
+    · FAIL  A2 ★ 未审批 ⇒ publication 必须是 denied:not_human_approved（不得是 published） — publication=published（期望 denied:not_human_approved:*）
+    · FAIL  A3 ★ 全局库**不落盘**该条目（跨会话库零污染） — 磁盘全局库条目数=1
+    · FAIL  A4 ★ 另一个会话**召回不到**它（"人工审批是唯一可召回途径"成立） — 会话 B 召回到了未审批条目 exp-cdbf452d（跨会话泄露）
+    · FAIL  A5 被拒必须**留痕**（GLOBAL_PUBLISH_DENIED，不得静默跳过） — telemetry kinds=["GLOBAL_PUBLISHED"]
+    · FAIL  B2 落盘条目带完整人工审批来源 + APPROVED + VERIFIED — Expected values to be strictly equal:
+    · FAIL  C1 该旧格式条目**确实**过不了 canPublish（这就是旧库的病） — 旧格式条目竟仍可发布 ⇒ 闸门未修好
+    · FAIL  D2 PROPOSED --确定性验证 PASS--> VERIFIED_EXPERIENCE（晋升路径未被粘性逻辑破坏） — 未审批却可发布 ⇒ 闸门被破坏
+  含「发布授权被绕过」类断言变红 = true；含「跨会话召回/隔离」类断言变红 = true
+  判定 : ✔ 变异被 B1 门套件捕获（RED，符合预期）
+  还原后 sha256 = 06ff37ccc3dc39017e2de939466a8753a8cba1d45ded12275820a31540ea1cfd  ✔ 逐字节等于 pristine（回到正式哈希）
+──────────────────────────────────────────────────────────────────────────
+作业结束：plugins/learn-core.mjs sha256 = 06ff37ccc3dc39017e2de939466a8753a8cba1d45ded12275820a31540ea1cfd
+总判定：PASS —— 变异被捕获，文件已逐字节还原

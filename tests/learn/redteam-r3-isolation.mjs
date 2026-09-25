@@ -129,8 +129,20 @@ obs('B3 两库各自归属正确 sessionId（无顶替）',
   `X="${dX?.sessionId}"  Y="${dY?.sessionId}"`,
   dX?.sessionId === SID_X && dY?.sessionId === SID_Y ? 'PASS' : 'FAIL');
 
-const ySeesX = rY.store.experiences.some((e) => TEXTS_A.some((t) => e.title.includes(t.slice(0, 3))));
-const xSeesY = rX.store.experiences.some((e) => TEXTS_B.some((t) => e.title.includes(t.slice(0, 3))));
+// ⚠ 指纹长度必须足够长（R2 AC5 后修正）：原实现用 t.slice(0, 3)（**3 字**）当语料指纹，
+//   而两套语料**构造上就重叠** —— A[1]='已经修好了' 与 B[1]='已经修复了' 共享前缀「已经修」，
+//   且 A[3] === B[3] === '现在跑通了'（整串相同）。
+//   实测（直接 dump 两库 title）：A 库=['已经修好了']、B 库=['已经修复了']，
+//   **两库各自只含自己的语料，并无跨会话污染**；但 3 字前缀使 ySeesX / xSeesY 双向恒为 true
+//   ⇒ 本断言恒误报「污染 CONFIRMED」。
+//   旧逻辑下侥幸通过，只是因为 A 的标题取自 failure 轮（「这里报错了」vs「数据库连接超时了」）
+//   前缀不撞；R2 AC5 把 failure 从关键词判定改为只认 P2.6 分类后，信号轮变为 resolution 轮，
+//   两条 resolution 语料前缀相撞，误报才暴露出来。
+//   改用 12 字指纹：长度足以唯一标识一套语料，且**严格强于** 3 字（12 字命中必然蕴含 3 字命中，
+//   只会更少误报）；真发生污染时整段语料会原样出现在对方标题里，仍必然命中。
+const FP_LEN = 12;
+const ySeesX = rY.store.experiences.some((e) => TEXTS_A.some((t) => e.title.includes(t.slice(0, FP_LEN))));
+const xSeesY = rX.store.experiences.some((e) => TEXTS_B.some((t) => e.title.includes(t.slice(0, FP_LEN))));
 obs('B4 无跨会话污染（后跑方不继承先跑方经验）',
   `Y 看到 X 语料=${ySeesX}; X 看到 Y 语料=${xSeesY}; X exps=${rX.store.experiences.length}; Y exps=${rY.store.experiences.length}`,
   !ySeesX && !xSeesY ? 'PASS' : 'FAIL');

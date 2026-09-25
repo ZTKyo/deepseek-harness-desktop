@@ -41,10 +41,23 @@ section("A. Secret 持久化红队（blocker 级）");
   learn.apply(ctx, { stateDir: tmp, autoPropose: true, minNewNodes: 1, minTurnsForLearning: 1, maxDigestTurns: 20 });
 
   // 每条文本都同时携带三种密钥形态 → 无论哪个窗口被学习，三种都会被检验
+  //
+  // ⚠ R2 AC5 契约适配（本段修正的原因，务必保留说明）：
+  //   AC5 把「失败」从**关键词判定**改为**只认 P2.6 分类**——learn-core.mjs 的
+  //   SIGNAL_PATTERNS 中第三个 kind 'failure' 已按合同 §四「强制复用条款」+ 任务书 §20
+  //   **整体删除**（它是第二套 Failure Authority，且方向性错误：环境故障误检为能力缺口）。
+  //   而 P2.6 的 9 个类**全部**是 provider / 传输 / 环境 / 凭据 / 计费 / 路由故障，无一是
+  //   能力缺口；learn.mjs 的 recordFailure 又不传 capabilityEvidence ⇒ **每条失败都被否决**
+  //   ⇒ 失败路径不再产出候选（AC5 刻意 fail-closed：宁可漏学，不可误学）。
+  //   后果：只含失败语义的语料在 AC5 下**不再产生任何信号**，本段的「反空转断言」
+  //   （store 确实落盘）将恒假 —— 那是断言 AC5 已明令禁止的旧行为，不是产品缺陷。
+  //   修法：给每条语料补一个 **resolution 语义**（resolution 仍由模式判定，未被 AC5 改动），
+  //   使承载密钥的那一轮重新成为信号轮；标题仍取自该轮原文（经 buildLearnDigest 脱敏），
+  //   因此「密钥是否持久化」的检验强度**与修正前完全一致**，未做任何放松。
   const texts = [
-    `配置里写了 ${FAKE.openai} 结果服务报错了`,
-    `请求头是 Authorization: ${FAKE.bearer}，配置里还有 ${FAKE.openai}，结果 401 失败了`,
-    `${FAKE.pw} 且 ${FAKE.openai} 之后服务无法启动，程序崩溃了`,
+    `配置里写了 ${FAKE.openai} 结果服务报错了，已经修复了`,
+    `请求头是 Authorization: ${FAKE.bearer}，配置里还有 ${FAKE.openai}，结果 401 失败了，已解决`,
+    `${FAKE.pw} 且 ${FAKE.openai} 之后服务无法启动，程序崩溃了，现在跑通了`,
   ];
   const events = texts.map((t, i) => ({ seq: i, type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: t }] } }));
   // 按真实生长方式：先只给第 1 个节点建水位，再逐节点推进（否则水位机制会吃掉全部节点）

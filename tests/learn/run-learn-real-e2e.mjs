@@ -20,9 +20,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { decodeLines } from '../../docs/roadmap/evidence/cm-r4-log-decoder.mjs';
 import * as learn from '../../plugins/learn.mjs';
 import * as core from '../../plugins/learn-core.mjs';
+// 真实会话驱动器（加载/伪 ctx/钩子推进）统一复用共享模块，避免出现第二套真实会话解析
+import {
+  loadRealSession, listRealSessions, SESSIONS_DIR, mkCtx, mkExec, driveHook, growSession,
+  mkHostApproval,
+} from './_real-session-harness.mjs';
 
 // ─── 断言与计数 ───────────────────────────────────────────────────────────
 let pass = 0, fail = 0;
@@ -35,80 +39,13 @@ function section(t) { console.log(`\n=== ${t} ===`); }
 
 const FAKE_SECRET = 'sk-' + 'a1B2c3D4e5F6g7H8i9J0k1L2';
 
-// ─── 真实会话加载（复用共享解码器）────────────────────────────────────────
-function loadRealSession(file) {
-  const { lines, frames } = decodeLines(file);
-  const events = [];
-  const nodes = [];
-  let parseErrors = 0;
-  for (const line of lines) {
-    let o; try { o = JSON.parse(line); } catch { parseErrors++; continue; }
-    if (!o || o.type === 'session') continue;
-    if (!Number.isInteger(o.seq)) continue;
-    events[o.seq] = o;
-    if (o.type === 'user/message' || o.type === 'assistant/message') nodes.push(o.seq);
-  }
-  nodes.sort((a, b) => a - b);
-  return { file, frames, events, nodes, parseErrors };
-}
+// ─── （真实会话加载/mkCtx/mkExec/driveHook/growSession 已提取至 _real-session-harness.mjs）───
 
-// ─── 伪 ctx（只提供插件真正使用的两个能力）────────────────────────────────
-function mkCtx() {
-  const hooks = new Map();
-  const logs = [];
-  const ctx = {
-    logger: { info: (m) => logs.push(String(m)), warn: (m) => logs.push(String(m)) },
-    on: (ev, fn) => { if (!hooks.has(ev)) hooks.set(ev, []); hooks.get(ev).push(fn); },
-    // repo 直连场景下 defineTool 不可解析 → 插件不得走 ctx.tools.register（这里设成陷阱）
-    tools: { register: () => { throw new Error('ctx.tools.register must not be used in repo E2E (defineTool unresolved)'); } },
-  };
-  return { ctx, hooks, logs };
-}
-function mkExec(sid) { return { agent: { session: { id: sid } } }; }
+// ─── （伪 ctx / 伪 exec / 钩子推进已提取至 _real-session-harness.mjs）───
 
-/** 把一次真实会话推进插件钩子（模拟 pre-step 被调用）。 */
-async function driveHook(hooks, session) {
-  const fns = hooks.get('agent/pre-step') ?? [];
-  if (!fns.length) throw new Error('plugin registered no agent/pre-step hook');
-  for (const fn of fns) await fn({ agent: { session } }, () => {});
-}
+// ─── 真实会话候选清单（listRealSessions / SESSIONS_DIR 已提取至 _real-session-harness.mjs）───
 
-// ─── 真实会话候选清单 ────────────────────────────────────────────────────
-const SESSIONS_DIR = path.join(os.homedir(), '.dsh', 'sessions');
-function listRealSessions() {
-  const out = [];
-  const walk = (d) => {
-    let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of ents) {
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (e.name === 'session.jsonl.zstd') { try { out.push({ p, size: fs.statSync(p).size }); } catch {} }
-    }
-  };
-  walk(SESSIONS_DIR);
-  out.sort((a, b) => a.size - b.size);
-  return out.filter((c) => c.size > 500_000);   // 跳过极短会话
-}
-
-/**
- * 按真实生长方式驱动一次会话：先建立水位，再逐节点推进 pre-step，
- * 直到插件自动产出候选（或节点耗尽）。
- * @returns {{ learned: boolean, store: object, steps: number }}
- */
-async function growSession(api, hooks, real, sid, startAt = 24) {
-  const N = real.nodes.length;
-  const sess = (n) => ({ id: sid, events: real.events, surface: { nodes: real.nodes.slice(0, n) } });
-  // 建立水位（真实会话开始时的第一次 pre-step）
-  await driveHook(hooks, sess(Math.min(startAt, N)));
-  let learned = false;
-  let steps = 0;
-  for (let n = Math.min(startAt, N) + 1; n <= N; n++) {
-    await driveHook(hooks, sess(n));
-    steps++;
-    if (api.getStore(sid).experiences.length > 0) { learned = true; break; }
-  }
-  return { learned, store: api.getStore(sid), steps };
-}
+// ─── （growSession 已提取至 _real-session-harness.mjs）───
 
 // ─── 主流程 ──────────────────────────────────────────────────────────────
 const argFile = process.argv[2];
@@ -136,11 +73,19 @@ check('event shape is official {type,seq,time,data}', (() => {
 // ═══ E1：真实会话 → 自动候选（PROPOSED，永不可召回）═══════════════════════
 section('E1 自动学习：真实会话 → 候选经验（PROPOSED，携带真实出处）');
 const SID = 'real-e2e-' + Date.now();
-const e1 = mkCtx();
+// F1（2026-09-25）：唯一激活通道 = **宿主人类批准**。故本 E2E 起一个真实宿主
+// ApprovalService（cordis + @deepseek-ai/dsh-user-approval），测试只负责"当人类"作答；
+// 人类答案由 `humanVerdict` 驱动，用于分别验证"人类拒绝 ⇒ 不得 APPROVED"与
+// "人类批准 ⇒ APPROVED"。无该通道的实例另行建立，用于证明 fail-closed。
+let humanVerdict = 'rejected';
+const humanAnswers = [];
+const approval = await mkHostApproval({ answerer: (req) => { humanAnswers.push(humanVerdict); return humanVerdict; } });
+const e1 = mkCtx({ approval: approval.svc ?? undefined });
 const api1 = learn.apply(e1.ctx, { stateDir: tmpDir, minNewNodes: 4, minTurnsForLearning: 4, maxDigestTurns: 40 });
-check('plugin exposes real tool specs', api1.toolNames.length === 5, api1.toolNames.join(','));
-check('all 5 tool names correct', JSON.stringify([...api1.toolNames].sort()) === JSON.stringify(
-  ['learn_promote', 'learn_propose', 'learn_recall', 'learn_review', 'learn_status']));
+check('plugin exposes real tool specs', api1.toolNames.length === 6, api1.toolNames.join(','));
+// P4 R2 合同完成：新增 learn_verify（合同【实现原则 3】确定性验证入口）⇒ 精确集合断言 6 项。
+check('all 6 tool names correct', JSON.stringify([...api1.toolNames].sort()) === JSON.stringify(
+  ['learn_promote', 'learn_propose', 'learn_recall', 'learn_review', 'learn_status', 'learn_verify']));
 
 // 阶段 1：首次 pre-step 只建立水位（不回填历史）
 await driveHook(e1.hooks, { id: SID, events: real.events, surface: { nodes: real.nodes.slice(0, 24) } });
@@ -218,22 +163,55 @@ const prop3 = await tool('learn_propose', {
 check('second explicit proposal created', prop3.ok === true && prop3.experienceId !== prop2.experienceId);
 
 let threw = null;
-try { await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', evidence: 'looks right' }); } catch (e) { threw = e.message; }
-check('approve WITHOUT approver rejected', threw !== null && /approver/i.test(threw), threw ?? 'did not throw');
+// F1：唯一授权来源 = 宿主人类批准通道。没有该通道的实例（=部署中没装/没启用该通道）
+// 必须 fail-closed —— 绝不允许"填个 approver 字符串"就换来 APPROVED。
+const e1NoHost = mkCtx();
+const apiNoHost = learn.apply(e1NoHost.ctx, { stateDir: tmpDir, minNewNodes: 4, minTurnsForLearning: 4 });
+threw = null;
+try {
+  await apiNoHost.invokeTool('learn_review', {
+    experienceId: prop2.experienceId, action: 'approve', approver: 'human', evidence: 'looks right',
+  }, mkExec(SID));
+} catch (e) { threw = e.message; }
+check('approve WITHOUT host human channel rejected (fail-closed)', threw !== null && /approval_unavailable/.test(threw),
+  threw ?? 'did not throw');
+check('…and that attempt changed nothing', apiNoHost.getStore(SID).experiences.find((e) => e.id === prop2.experienceId)?.state === 'PROPOSED');
+
+// F1-B/C：人类在真实通道里**拒绝** ⇒ 即使 agent 自填 approver/evidence 也不得 APPROVED
+humanVerdict = 'rejected';
+threw = null;
+try {
+  await tool('learn_review', {
+    experienceId: prop2.experienceId, action: 'approve', approver: 'human:trust-me', evidence: 'agent says it is fine',
+  });
+} catch (e) { threw = e.message; }
+check('approve DENIED when the human answer is a rejection', threw !== null && /approval_not_granted/.test(threw), threw ?? 'did not throw');
+check('…self-declared approver string bought nothing', api1.getStore(SID).experiences.find((e) => e.id === prop2.experienceId)?.state === 'PROPOSED',
+  api1.getStore(SID).experiences.find((e) => e.id === prop2.experienceId)?.state);
+
+// 注意顺序：下面两条都让"人类同意"，以便把失败原因**隔离**到证据校验本身
+// （实测发现：插件是**先问人类、再校验证据**，所以人类答"拒绝"时，证据类用例会被
+//  approval_not_granted 抢先掩盖 —— 这里显式对齐，避免断言虚过）。
+humanVerdict = 'allowed-once';
+threw = null;
+try { await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', evidence: '   ' }); } catch (e) { threw = e.message; }
+check('approve with EMPTY evidence rejected (证据仍是硬要求)', threw !== null && /evidence/i.test(threw), threw ?? 'did not throw');
 
 threw = null;
-try { await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', approver: 'human' }); } catch (e) { threw = e.message; }
-check('approve WITHOUT evidence rejected', threw !== null && /evidence/i.test(threw), threw ?? 'did not throw');
+try { await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', evidence: `verified with ${FAKE_SECRET}` }); } catch (e) { threw = e.message; }
+check('approve with SECRET in evidence rejected', threw !== null && /secret/i.test(threw), threw ?? 'did not throw');
 
-threw = null;
-try { await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', approver: 'human', evidence: `verified with ${FAKE_SECRET}` }); } catch (e) { threw = e.message; }
-check('approve with SECRET in evidence rejected', threw !== null, threw ?? 'did not throw');
-
+// F1-H：真实人类批准（宿主通道作答 allowed-once）⇒ APPROVED，且记录的是宿主 actor 而非调用方字符串
 const appr = await tool('learn_review', { experienceId: prop2.experienceId, action: 'approve', approver: 'human:e2e', evidence: 'confirmed reusable against real session data' });
-check('approve WITH approver+evidence succeeds', appr.state === 'APPROVED', JSON.stringify(appr));
+check('approve WITH real host human approval succeeds', appr.state === 'APPROVED', JSON.stringify(appr));
+check('host human channel really was the path', approval.seen.length >= 1 && humanAnswers.length >= 1,
+  `seen=${approval.seen.length} answers=${JSON.stringify(humanAnswers)}`);
 const stored2 = api1.getStore(SID).experiences.find((e) => e.id === prop2.experienceId);
-check('approver identity recorded', stored2?.approvedBy === 'human:e2e');
+check('approver identity = TRUSTED HOST ACTOR (not the caller string)', stored2?.approvedBy === core.HUMAN_APPROVAL_ACTOR,
+  `approvedBy=${JSON.stringify(stored2?.approvedBy)}`);
+check('caller-supplied approver string was NOT what got recorded', stored2?.approvedBy !== 'human:e2e');
 check('approval evidence recorded', !!stored2?.approvalEvidence);
+check('live human approval validates', core.validHumanApproval(stored2).ok === true, core.validHumanApproval(stored2).reason);
 
 const rej = await tool('learn_review', { experienceId: prop3.experienceId, action: 'reject', approver: 'human:e2e', reason: 'too generic to be reusable' });
 check('reject succeeds', rej.state === 'REJECTED', JSON.stringify(rej));

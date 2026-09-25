@@ -417,7 +417,11 @@ await check('H3.2 跨会话召回不成立：B 的库召回不到 A 的经验', 
   // 把 A 的经验激活，再确认 B 的库召回不到
   const aExp = rA.store.experiences[0];
   assert.ok(aExp, '前置条件：A 应有候选');
-  const storeA = { ...rA.store, experiences: rA.store.experiences.map((e) => ({ ...e, state: 'APPROVED' })) };
+  // ★ F1（2026-09-25）：在内存里手写 `state:'APPROVED'` **不再**等于"已激活"——
+  //   APPROVED 的召回资格必须由 live 人类授权（宿主通道事实 + 绑定 + 进程内签章）判定，
+  //   伪造痕迹一律不可召回（这正是 BLOCKER-1 的修复语义）。本用例只考察**会话隔离**，
+  //   因此走机器验证通道 VERIFIED_EXPERIENCE（Layer A 内合法可召回，不需要人类审批）。
+  const storeA = { ...rA.store, experiences: rA.store.experiences.map((e) => ({ ...e, state: 'VERIFIED_EXPERIENCE' })) };
   const hitInA = recall(storeA, aExp.title, { limit: MAX_RECALL_LIMIT });
   assert.ok(hitInA.items.length >= 1, '前置条件：A 自己应能召回');
   const hitInB = recall(rB.store, aExp.title, { limit: MAX_RECALL_LIMIT });

@@ -142,6 +142,39 @@ jobs:
           node tests\learn\test-learn-plugin-contract.mjs
           if ($LASTEXITCODE -ne 0) { throw 'P4 LEARN plugin host-contract gate failed' }
           Write-Host 'PASS P4 LEARN plugin host-contract gate'
+      # ── P4 LEARN R2 contract closure (Notion canonical contract AC1-AC10) ────
+      # CI-SAFE subset only, established empirically rather than by reading: every
+      # suite below was executed on Windows with USERPROFILE / HOME / LOCALAPPDATA
+      # redirected to an empty directory (no ~/.dsh/sessions, no live profile) and
+      # still exited 0. Deliberately NOT here are the real-data release gates:
+      # run-learn-contract-scenarios.mjs, run-learn-real-e2e.mjs,
+      # run-learn-real-gap-e2e.mjs, test-learn-stage2-schema-and-negative-lock.mjs,
+      # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs. Those consume real
+      # session logs / P2.6 failure telemetry, so on a bare runner they fail for
+      # lack of data rather than for a defect; they run locally as pre-release gates.
+      - name: P4 LEARN R2 contract-closure gates (CI-safe subset)
+        shell: pwsh
+        run: |
+          $suites = @(
+            'tests\learn\test-learn-core.mjs',
+            'tests\learn\test-learn-candidate.mjs',
+            'tests\learn\test-learn-ac5-e2e.mjs',
+            'tests\learn\test-learn-stage85-twins.mjs',
+            'tests\learn\test-learn-real-topology-tool-events.mjs',
+            'tests\learn\test-learn-r3-fixes.mjs',
+            'tests\learn\test-learn-r3-hardening.mjs',
+            'tests\learn\test-learn-r3-secrets.mjs',
+            'tests\learn\redteam-r3-contamination.mjs',
+            'tests\learn\redteam-r3-isolation.mjs',
+            'tests\learn\redteam-r3-labels.mjs',
+            'tests\learn\redteam-r3-probe.mjs'
+          )
+          foreach ($s in $suites) {
+            Write-Host "--- $s"
+            node $s
+            if ($LASTEXITCODE -ne 0) { throw "P4 LEARN R2 contract gate failed: $s" }
+          }
+          Write-Host 'PASS P4 LEARN R2 contract-closure gates (12 suites)'
 
       # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
       # Per External Review Blocker B: quota-defer / network-error /

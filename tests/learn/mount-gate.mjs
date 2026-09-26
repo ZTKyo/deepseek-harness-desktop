@@ -209,6 +209,15 @@ say(`  signal      : ${signal}`);
 
 // ---- 3) 判定 ----
 const has = (re) => re.test(text);
+// ⚠️ 覆盖边界（阴性对照实测结论，勿误读）：A1/A2 证明"能不能挂载/注册"，A3 只证明
+// "宿主 sessions 服务在本 profile 上下文里可解析（装载级前置条件）"，**不**证明 learn 自身
+// 的 sessions 接线正确——实测：把 learn 的 `ctx.get('sessions')` 改坏成 `'sessionsX'`，
+// 本门禁仍全绿（A3 是探针自己查 ctx.get，与 learn 内部无关；A2 只数工具个数）。
+// 该类"内部接线语义回归"属合同测试层职责（如 test-learn-r2-b1-approval-gate.mjs）；本次**未**
+// 验证该测试对 sessionsX 变体的敏感性——在裸 shell 跑它会因缺真实宿主会话而失败
+// （approval_host_fact_session_unavailable，即 learn 对"宿主事实不可复验"的 fail-closed 行为，
+// 两个版本都一样），必须在 harness 内运行才有效。
+// 本门禁负责的缺陷类是**装载/boot 失败**（A1/A2 对该类敏感：事故版本与语法坏版本均被抓）。
 const seen = probe?.seen ?? [];
 const learnTools = seen.filter((n) => typeof n === 'string' && n.startsWith('learn_'));
 const dupes = learnTools.filter((n, i) => learnTools.indexOf(n) !== i);
@@ -216,7 +225,7 @@ const checks = [
   { id: 'A1', desc: 'no loader failure signature', pass: !FAIL_SIG.test(text) },
   { id: 'A2', desc: `probe captured exactly ${EXPECTED_TOOLS.length} learn_* tools, no duplicates (got ${learnTools.length})`,
     pass: learnTools.length === EXPECTED_TOOLS.length && dupes.length === 0 && EXPECTED_TOOLS.every((n) => learnTools.includes(n)) },
-  { id: 'A3', desc: `sessions resolvable via ctx.get in same-shape ctx (got ${probe?.sessionsViaGet ?? 'n/a'})`, pass: probe?.sessionsViaGet === 'resolved' },
+  { id: 'A3', desc: `host sessions service resolvable via ctx.get in this profile ctx (got ${probe?.sessionsViaGet ?? 'n/a'})`, pass: probe?.sessionsViaGet === 'resolved' },
   { id: 'A4', desc: 'no tool-surface warnings in log', pass: !has(/tool surface unavailable/) && !has(/expected 6 tool specs, collected/) },
 ];
 const injectSignature = has(/cannot get property "sessions" without inject/);

@@ -123,6 +123,46 @@ A3 同形上下文 `ctx.get('sessions')` 可解析；A4 无工具面告警；A5 
 `approval_attestation_selfcheck_failed:approval_host_fact_session_unavailable`
 ⇒ "取不到宿主事实 ⇒ 不可复验 ⇒ 拒绝授权"的设计没有被本次修复改变。
 
+## 独立复核与处置（第二复核人 + 修复后复验）
+
+由**独立复核者**（另一 agent 实例，只读复核、不改 worktree 文件）出具
+`REVIEW_R2_INDEPENDENT.md`：**结论 PASS（有保留）**——修复真实有效（事故版可复现 FAIL、
+修复版 A1–A4 全 PASS、diff 仅 +24/−2、`node --check` exit=0、未发现第二个 apply 期同类致命裸访问）。
+它同时指出三处偏差，处置如下：
+
+| 复核意见 | 判定 | 处置 |
+|---|---|---|
+| ① 门禁对"learn 内部 sessions 接线"不敏感（阴性对照 `sessionsX` 得全绿 PASS 而非 FAIL） | **成立** | 已在 `d9ee4f5` 的「覆盖边界」小节如实降级，与复核者独立复跑结论一致 |
+| ② 门禁里的"生产 3080 PID"抓到的是 **tailscaled**(5648) 而非 dsh 本体 ⇒ "PID 不变"是**空检查** | **成立**（实测确认：3080 上另有 tailscaled 在 Tailscale 地址上代理监听） | 已修：只取 `127.0.0.1` 监听者并带进程名（`pid:proc`）；复验证据见下表 |
+| ③ 生产 `learn.mjs` 仍是事故内容、profile 已无 learn 引用 ⇒ 生产**当前未挂载 learn**、修复尚未上线 | **成立**（生产件 sha256=`36642349a4ab0efa`，本次未改动生产任何文件） | 属预期：修复在 PR 分支，合并/上线是独立步骤；"未挂载 ⇒ 无活动故障"如实记录 |
+
+**意见②的修复与复验证据**（修复后重跑，隔离端口 3110/3111）：
+
+| 运行 | 候选件 sha256 | verdict | 关键字段 | 生产侧 |
+|---|---|---|---|---|
+| 修复件 | `a5fae28281014ede…` | PASS | A1–A4 全 PASS；6 个 learn_* 无重复；`injectSignature=false` | `3780:node → 3780:node` untouched=true |
+| 忠实事故件（`git show 63f27b8:plugins/learn.mjs`） | `c37b9280ca9cfe84…` | PASS(expect=fail) | 抓到 `cannot get property "sessions" without inject`；0 工具；`injectSignature=true` | `3780:node → 3780:node` untouched=true |
+
+⇒ **被审产品件 `plugins/learn.mjs` 自复核定稿后逐字节未变**（sha256 仍 `a5fae28281014ede…`）；
+本轮改动仅限**测试与文档**（门禁证据字段、依赖预检、A5 文档降级为"记录项"）。
+
+**顺带修掉的一个门禁假阳性风险**：候选目录若缺兄弟插件，boot 会因"别的文件缺失"失败，而
+`--expect fail` 仍判"抓到了"。已加**相对依赖闭包预检**（实测：候选只放 `learn*` 时报
+`learn-core.mjs -> ./context-memory-core.mjs`、`learn-gap-veto.mjs -> ./failure-classifier-core.mjs`
+并以 ENV_ERROR(exit 2) 退出，不再假阳性）。
+
+产物留存：`docs/roadmap/reports/PHASE_04_LEARNING/R2/evidence/`（脱敏后入库）——
+`gate-fixed-pass-result.json`、`gate-accident-caught-result.json`、`gate-incomplete-dir-enverror.txt`、
+`reviewer-rv-{pfx,fix,neg}-result.json`。
+
+**CI 说明（既存失败，与本次改动无关）**：PR 的 `DSH boot + readiness smoke` 失败，但属**既存失败**——
+最后一次成功是 2026-09-21（`p3-autonomy-r1-round2-closure`），其后自 09-22 `main` 起连续 6 个分支
+同一作业全失败；且本次改的 `learn.mjs` **不在该作业的插件清单**（清单仅含 completion-notify /
+keepalive-patch / model-selection-guard / execution-continuity / context-memory / supervisor-bridge）。
+分支保护的必需检查为 `Static + secret + syntax gate` 与 `Reliability state machine tests`，**两项均 PASS**，
+故不阻塞合并。另：22:55:37 生产 3080 上的一次重启由 guardian/运维事务触发，与本门禁运行**无因果**
+（门禁只跑隔离端口，且 kill-guard 只杀命令行含本门禁 profile 名者）。
+
 ## 遗留建议（**未执行**，需用户决定）
 
 把本门禁接入 `DSH-Client/restart-dsh-server-delayed.ps1` 的 preflight 作为 **可选项**

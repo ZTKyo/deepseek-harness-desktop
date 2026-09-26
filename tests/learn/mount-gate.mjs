@@ -28,7 +28,10 @@
  *   A3 同形上下文里 `ctx.get('sessions')` 解析到服务（= 修复后 sessions 真能在岗，
  *      不是把"起不来"换成"F1 人类批准信任锚静默失效"）
  *   A4 日志无 `tool surface unavailable` / `expected 6 tool specs, collected` 告警
- *   A5 全程未触碰生产：3080 监听者 PID 前后一致
+ *   A5 【记录项，**不是**判定项】全程未触碰生产：127.0.0.1:3080 的监听者（`pid:proc`）前后一致。
+ *      为何不算进 verdict：生产服务可能因 guardian 自愈重启等**无关原因**变化，硬判定会抖动；
+ *      真正"不碰生产"的保证是下面的 kill-guard：只杀命令行含本门禁 profile 名且不含 3080 的进程。
+ *      另注：3080 上可能同时有 tailscaled 在 Tailscale 地址上代理监听，故只取 loopback 行。
  *
  * 用法：node tests/learn/mount-gate.mjs --plugin <learn.mjs 绝对路径> [--expect pass|fail]
  *        [--port 3099] [--timeout 90] [--slug name] [--keep]
@@ -72,10 +75,14 @@ if (!fs.existsSync(DSH_BIN)) failEnv('找不到 dsh bin: ' + DSH_BIN);
 if (PORT === 3080) failEnv('禁止使用生产端口 3080（本门禁只跑隔离端口）');
 if (!['pass', 'fail'].includes(EXPECT)) failEnv('--expect 只能是 pass|fail');
 
-function prodPid() {
+// ⚠️ 只认 127.0.0.1 上的监听者：Windows 上 3080 可能**同时**被 tailscaled 在 Tailscale 地址
+// （fd7a:…、100.x）上代理监听；旧实现用 `| Select-Object -First 1` 会随机抓到 tailscaled，
+// 于是"生产 PID 前后一致"变成了**空检查**（由独立复核 REVIEW_R2_INDEPENDENT §5-② 发现）。
+// 现在只取 loopback 行并带上进程名（形如 "3780:node"）；无监听时返回空串（= 本机无生产服务）。
+function prodListener() {
   try {
     return execFileSync('powershell', ['-NoProfile', '-Command',
-      "(Get-NetTCPConnection -LocalPort 3080 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)"],
+      "$c = Get-NetTCPConnection -LocalPort 3080 -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -eq '127.0.0.1' } | Select-Object -First 1; if ($c) { $p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue; \"$($c.OwningProcess):$($p.ProcessName)\" }"],
       { encoding: 'utf8' }).trim();
   } catch { return ''; }
 }
@@ -98,12 +105,12 @@ const profileName = `_mountgate-${SLUG}`;
 const profileDir = path.join(PROFILES, profileName);
 fs.mkdirSync(stateDir, { recursive: true });
 
-const prodBefore = prodPid();
+const prodBefore = prodListener();
 say('=== mount gate (isolated profile) ===');
 say(`  plugin      : ${PLUGIN}`);
 say(`  sha256      : ${sha256(PLUGIN)}`);
 say(`  expect      : ${EXPECT}`);
-say(`  port        : ${PORT}   (production 3080 PID before = ${prodBefore || 'n/a'})`);
+say(`  port        : ${PORT}   (production 127.0.0.1:3080 listener before = ${prodBefore || 'n/a'})`);
 say(`  scratch     : ${scratch}`);
 
 // ---- 1) 临时 profile ----
@@ -134,6 +141,24 @@ for (const ent of fs.readdirSync(pluginDir, { withFileTypes: true })) {
   copied.push({ name: dstName, sha256: sha256(src) });
 }
 if (!fs.existsSync(path.join(pluginDir, 'learn-core.mjs'))) failEnv(`候选目录缺少必要依赖: ${path.join(pluginDir, 'learn-core.mjs')}`);
+
+// 相对依赖闭包预检（实测踩过）：候选目录必须自带其 .mjs 相对 import 的**全部兄弟文件**。
+// 否则 boot 会因「别的文件缺失」而失败，而 `--expect fail` 仍判"抓到了"⇒ **假阳性**
+// （本次实测：候选目录只放 learn* 时，根因变成缺 context-memory-core.mjs，与事故本身无关）。
+{
+  const missing = new Set();
+  for (const f of fs.readdirSync(pluginDir).filter((n) => n.endsWith('.mjs'))) {
+    const src = fs.readFileSync(path.join(pluginDir, f), 'utf8');
+    for (const m of src.matchAll(/(?:from|import)\s*\(?\s*['"]\.\/([\w.\-]+)['"]/g)) {
+      const dep = m[1];
+      const ok = [dep, `${dep}.mjs`, `${dep}/index.mjs`].some((c) => fs.existsSync(path.join(pluginDir, c)));
+      if (!ok) missing.add(`${f} -> ./${dep}`);
+    }
+  }
+  if (missing.size) {
+    failEnv(`候选目录相对依赖闭包不完整（会以**错误原因**失败 ⇒ 假阳性）:\n    ` + [...missing].join('\n    '));
+  }
+}
 
 // 探针插件（只 inject tools，与 learn 同形上下文）
 fs.writeFileSync(path.join(profileDir, '_mountgate-probe.mjs'), `
@@ -236,7 +261,7 @@ const safeToKill = cl.includes(`--profile ${profileName}`) && !cl.includes('3080
 say(`  kill guard  : pid=${childPid} safeToKill=${safeToKill}${cl ? '' : ' (进程已自行退出)'}`);
 if (safeToKill) killTree(childPid);
 try { fs.closeSync(fd); } catch {}
-const prodAfter = prodPid();
+const prodAfter = prodListener();
 
 const allPass = checks.every((c) => c.pass);
 const verdict = EXPECT === 'pass'
@@ -248,6 +273,7 @@ const result = {
   port: PORT, ready, childExited: exited, signal, injectSignature, checks, probe, learnTools, dupes,
   copiedCount: copied.length, copied,
   prodPidBefore: prodBefore, prodPidAfter: prodAfter, prodUntouched: prodBefore === prodAfter,
+  prodListenerAddr: '127.0.0.1:3080', prodPresent: Boolean(prodBefore),
   logPath, probeOut, resultPath, scratch, at: new Date().toISOString(),
 };
 fs.writeFileSync(resultPath, JSON.stringify(result, null, 2), 'utf8');
@@ -256,7 +282,7 @@ say('--- checks ---');
 for (const c of checks) say(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.id}  ${c.desc}`);
 say(`  probe.wrapped=${probe?.wrapped} sessionsViaGet=${probe?.sessionsViaGet} seen=[${seen.join(', ')}]`);
 say(`  injectSignature(事故签名) = ${injectSignature}`);
-say(`  production 3080 PID: before=${prodBefore} after=${prodAfter} untouched=${prodBefore === prodAfter}`);
+say(`  production 127.0.0.1:3080 listener: before=${prodBefore || 'n/a'} after=${prodAfter || 'n/a'} untouched=${prodBefore === prodAfter} (pid:proc 形式；勿用 tailscaled 的 5648 误判)`);
 if (!allPass) {
   const tail = text.split(/\r?\n/).filter((l) => /error|failed/i.test(l)).slice(-5);
   for (const l of tail) say('  | ' + l.slice(0, 170));

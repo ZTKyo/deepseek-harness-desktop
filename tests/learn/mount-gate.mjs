@@ -272,7 +272,10 @@ const result = {
   slug: SLUG, plugin: PLUGIN, pluginSha256: sha256(PLUGIN), expect: EXPECT, verdict,
   port: PORT, ready, childExited: exited, signal, injectSignature, checks, probe, learnTools, dupes,
   copiedCount: copied.length, copied,
-  prodPidBefore: prodBefore, prodPidAfter: prodAfter, prodUntouched: prodBefore === prodAfter,
+  // prodUntouched 只有"运行前确实存在生产监听者"时才有意义：全程都无监听者 ⇒ null，不谎报 true
+  // （第二复核人 §6 指出：'' === '' 会空洞为真，与它抓到的"空检查"②同类）
+  prodPidBefore: prodBefore, prodPidAfter: prodAfter,
+  prodUntouched: prodBefore ? prodBefore === prodAfter : null,
   prodListenerAddr: '127.0.0.1:3080', prodPresent: Boolean(prodBefore),
   logPath, probeOut, resultPath, scratch, at: new Date().toISOString(),
 };
@@ -282,7 +285,7 @@ say('--- checks ---');
 for (const c of checks) say(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.id}  ${c.desc}`);
 say(`  probe.wrapped=${probe?.wrapped} sessionsViaGet=${probe?.sessionsViaGet} seen=[${seen.join(', ')}]`);
 say(`  injectSignature(事故签名) = ${injectSignature}`);
-say(`  production 127.0.0.1:3080 listener: before=${prodBefore || 'n/a'} after=${prodAfter || 'n/a'} untouched=${prodBefore === prodAfter} (pid:proc 形式；勿用 tailscaled 的 5648 误判)`);
+say(`  production 127.0.0.1:3080 listener: before=${prodBefore || 'n/a'} after=${prodAfter || 'n/a'} untouched=${prodBefore ? (prodBefore === prodAfter) : 'null(无生产监听者)'} (pid:proc 形式；勿用 tailscaled 的 5648 误判)`);
 if (!allPass) {
   const tail = text.split(/\r?\n/).filter((l) => /error|failed/i.test(l)).slice(-5);
   for (const l of tail) say('  | ' + l.slice(0, 170));

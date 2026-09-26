@@ -20,6 +20,9 @@
 failed to apply loader entry learn (./learn.mjs): cannot get property "sessions" without inject
 ```
 - 服务日志中该签名出现 **270 次**；重启事务连续 **83 次 FAILED**；期间服务始终起不来。
+  （口径说明：270/83 是**本报告统计窗口**内的日志计数；独立复核者在其自己的窗口按不同判据实测为
+  "归因失败 90 次 / `failed to apply loader entry` 282 行"，另有 4 次 `webserver=EADDRINUSE`（既存无关类）。
+  两组数字口径不同、都指向"长时间反复失败"，不矛盾。）
 
 ### 2) 独立复现（真实加载器 + 真实 profile，挂载级门禁）
 事故版本（`git cat-file blob HEAD:plugins/learn.mjs`，blob `f0d10bf7…`，sha256 `c37b9280…`）在

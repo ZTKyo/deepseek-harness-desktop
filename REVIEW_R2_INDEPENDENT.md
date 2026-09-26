@@ -26,3 +26,10 @@
 - **不一致② 生产 PID 取错进程**：门禁比较的 "3080 生产 PID"=5648，实测 5648 是 **tailscaled**（监听 Tailscale 地址），不是 dsh 服务；dsh loopback 监听者在本窗口由 26980→3780（22:55:37，guardian health-recovery 重启 + 运维重启事务，与我的门禁运行无因果关系）⇒ "PID 不变"这项证据实际是空检查。
 - **状态修正**：生产 `~/.dsh/profiles/web/learn.mjs` 仍是事故内容（git blob f0d10bf，仅换行 CRLF 变体 sha256=36642349…），且 profile 内所有 yml 已无 learn 引用 ⇒ 当前生产未挂载 learn，修复尚未上线。
 - **未验证**：① learn 在真实宿主里的 sessions 接线语义（门禁观察不到，属合同测试层职责）；② 合同测试对 sessionsX 变体的敏感性（本次未跑，门禁注释称须在 harness 内运行才有效）；③ 实现方 270/83 数字的原始口径（我实测：learn 归因失败 90 次、`failed to apply loader entry` 282 行；另有 4 次 webserver=EADDRINUSE，属既存无关类）。
+
+## 6 收尾复核（第二复核人）
+1. **偏差②已解决**：新 evidence 中 `prodPidBefore/After="3780:node"`、`prodListenerAddr="127.0.0.1:3080"`、`prodPresent=true` —— 与我独立观测到的真实 dsh loopback 监听者（PID 3780=node）一致；`prodListener()` 已按 `LocalAddress -eq '127.0.0.1'` 过滤，tailscaled 干扰消除。残余仅命名滞后（字段仍叫 `prodPid*`）与边缘语义：运行前就无监听时 `'' === ''` 会给出 untouched=true（A5 已非判定项，影响可忽略）。
+2. **相对依赖闭包预检：同意**。它把"以错误原因失败却判抓到"的假阳性从根上堵住，并用 ENV_ERROR(exit 2) 与 verdict FAIL 分流，语义正确；实测原文两条边（`learn-core.mjs -> ./context-memory-core.mjs`、`learn-gap-veto.mjs -> ./failure-classifier-core.mjs`）确为真实缺失。边界提示（不影响本次）：正则只覆盖静态 `'./x'` 形式，且只扫候选目录平铺文件，动态拼接 import 或子目录内依赖不会被抓。
+3. **A5 降级为记录项：同意**。"不碰生产"的真正保证是 kill-guard（命令行含本门禁 profile 名且不含 3080）；硬判定会随无关的 guardian 自愈重启抖动——本窗口 26980→3780 即是实例，降级后不再产生假红。
+4. **剩余保留意见**：§5 的"门禁对 learn 内部接线不敏感（A3 只证宿主可解析）"仍未解决，属合同测试层职责、本 PR 未涉及，不构成合并障碍；另生产仍**未挂载** learn（profile 内 yml 无引用），合并插件不会自动恢复，需运维单独重新挂载并验证 boot。
+5. **产品改动可合并**：`plugins/learn.mjs` sha256=A5FAE282…（与我会话中受检并过门禁的版本逐字节一致，未再改动），相对事故版是严格改进且事故属生产致命 ⇒ 建议合并（生产恢复挂载为独立步骤）。

@@ -325,10 +325,32 @@ export function apply(ctx, config = {}) {
   //   approval/asked+decided 事件对（含"人类当时被问的是哪份内容"的摘要）。
   //   读取口径与 execution-continuity 的 WAIT-GATE 完全一致：ctx.sessions.get(sid)，
   //   服务不可用 / 会话取不到 ⇒ 复验器判不可复验 ⇒ 授权 fail-closed 拒绝。
-  const sessionsServiceAvailable = !!(ctx.sessions && typeof ctx.sessions.get === 'function');
+  //
+  //   ★ R2 修复（2026-09-26 生产事故，根因）：`sessions` **不在本插件的 inject 声明里**
+  //   （只 inject `tools`），而 Cordis 在按 inject 装载插件时会安装"服务访问守卫"——
+  //   对**未注入服务的裸属性访问**直接抛 `cannot get property "sessions" without inject`
+  //   （不是返回 undefined）。原写法 `!!(ctx.sessions && ...)` 里那个"防御式判空"
+  //   **本身就抛错**，且发生在 apply 期 ⇒ **整棵 profile boot 失败、服务起不来**
+  //   （生产实测：每次带本插件的启动都失败，日志 270 次，重启事务连续 83 次 FAILED）。
+  //
+  //   修法：与下方 `ctx.get?.('approval')` 完全同一惯例，改为**不抛错**的可选服务取值
+  //   （`ctx.get(name)` 在无该服务时返回 undefined，已是本项目测试内的既有口径）。
+  //   语义不变：取不到服务 ⇒ sessionsServiceAvailable=false ⇒ 复验器不可用 ⇒ 授权 fail-closed。
+  //   刻意**不**把 `sessions` 写进 inject：本插件按设计容许宿主没有该服务（fail-closed 降级），
+  //   写进 inject 会把"可选降级"升级为 boot 期硬依赖（对照 execution-continuity 曾因把
+  //   compaction 写进 inject 造成 boot 硬依赖而被回退的历史处置）。
+  const lookupSessionsService = () => {
+    try {
+      return (typeof ctx.get === 'function' ? ctx.get('sessions') : null) ?? null;
+    } catch { return null; }
+  };
+  const sessionsServiceAvailable = (() => {
+    const svc = lookupSessionsService();
+    return !!(svc && typeof svc.get === 'function');
+  })();
   const hostSessionById = (sid) => {
     try {
-      const svc = ctx.sessions;
+      const svc = lookupSessionsService();
       if (!svc || typeof svc.get !== 'function') return null;
       return svc.get(sid) ?? null;
     } catch { return null; }

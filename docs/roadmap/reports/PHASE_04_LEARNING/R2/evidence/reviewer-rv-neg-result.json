@@ -1,0 +1,238 @@
+{
+  "slug": "rv-neg",
+  "plugin": "%USERPROFILE%\\AppData\\Local\\Temp\\rv-neg-20260926-234337\\learn.mjs",
+  "pluginSha256": "4c96e1608e1279db0f64f3c486869f337d9cf168a8eac3b20884c0eb5e4a77e0",
+  "expect": "pass",
+  "verdict": "PASS",
+  "port": 3112,
+  "ready": true,
+  "childExited": null,
+  "signal": "probe-recorded",
+  "injectSignature": false,
+  "checks": [
+    {
+      "id": "A1",
+      "desc": "no loader failure signature",
+      "pass": true
+    },
+    {
+      "id": "A2",
+      "desc": "probe captured exactly 6 learn_* tools, no duplicates (got 6)",
+      "pass": true
+    },
+    {
+      "id": "A3",
+      "desc": "sessions resolvable via ctx.get in same-shape ctx (got resolved)",
+      "pass": true
+    },
+    {
+      "id": "A4",
+      "desc": "no tool-surface warnings in log",
+      "pass": true
+    }
+  ],
+  "probe": {
+    "wrapped": true,
+    "wrapError": null,
+    "seen": [
+      "learn_propose",
+      "learn_review",
+      "learn_recall",
+      "learn_promote",
+      "learn_verify",
+      "learn_status"
+    ],
+    "sessionsViaGet": "resolved",
+    "toolsKeys": [
+      "ctx",
+      "name",
+      "deferredContexts",
+      "concludingExecutions",
+      "cancellationStates",
+      "contentFinalizers",
+      "layers",
+      "defaultMode",
+      "maxParallelSubCalls",
+      "codeTransport",
+      "canonicalResults",
+      "register"
+    ],
+    "at": 1790437464913
+  },
+  "learnTools": [
+    "learn_propose",
+    "learn_review",
+    "learn_recall",
+    "learn_promote",
+    "learn_verify",
+    "learn_status"
+  ],
+  "dupes": [],
+  "copiedCount": 39,
+  "copied": [
+    {
+      "name": "agent-inspector.mjs",
+      "sha256": "724a96dc95611fa128f28af9ff3af4e5dd8070fd3a6e2f1fa5b9726e449e9392"
+    },
+    {
+      "name": "agentrouter-wire.mjs",
+      "sha256": "debf1ea09e2f93c5cbad3136f2b4778d940966bd31b1eafecf123d2e81e50fe4"
+    },
+    {
+      "name": "ask-telegram.mjs",
+      "sha256": "c0dd380993eb1a1d0682efa07cac9225ce7f8ce5dd4e0c5f79f7135c356a6ac4"
+    },
+    {
+      "name": "autonomy-state-core.mjs",
+      "sha256": "bce4f0d7d81ca6014ae843731ccfdd49aafd6eb71c3ee48bf2923547f84110f5"
+    },
+    {
+      "name": "capacity-resolver.mjs",
+      "sha256": "dba855e1093ac86dc1a39239f3c56f7060ccd4f7819f00e18af8cc1752c511a3"
+    },
+    {
+      "name": "commandcode-router-core.mjs",
+      "sha256": "9bd18c82a0d6f3e5e870278af780195dd68f5d06343c8781778e8b5b3050120d"
+    },
+    {
+      "name": "commandcode-router-test.mjs",
+      "sha256": "44c373c49c2dac5f9274ca2d9422ad223ab3a9b3e6495d89fad9e8770f41f468"
+    },
+    {
+      "name": "commandcode-router.mjs",
+      "sha256": "f0b814a7973ab458ef79bc1d71b74674ec7321d19b3a2f564c3a0923b8517659"
+    },
+    {
+      "name": "completion-notify.mjs",
+      "sha256": "80288706716d42433749c59238747ea3711070a101f2914d679356fa058e6359"
+    },
+    {
+      "name": "completion-truth-core.mjs",
+      "sha256": "cd5772a643701dc72e8e43981eeeae216c3610cf32e83d2b6d4e7de768f475d8"
+    },
+    {
+      "name": "computer-use.mjs",
+      "sha256": "30af2b4ab03cdd6172112ff3f5183c8cbe01b7237e2ebb43ad36737c47951b56"
+    },
+    {
+      "name": "context-memory-core.mjs",
+      "sha256": "e68fbd173340d0083a68ed6592a5fe76b8e6ced78a1ae7a757dfb66880068dab"
+    },
+    {
+      "name": "context-memory.mjs",
+      "sha256": "5fcd2ec401730fcd91db00c36dfebb35f6bc58cca2369f8ceca4c2a9ad750063"
+    },
+    {
+      "name": "execution-continuity-core.mjs",
+      "sha256": "acbc4381c7e8be0436203dac05de7fda31b766b4bedd5ea7743ebe318f1c28f7"
+    },
+    {
+      "name": "execution-continuity-crashsafe-test.mjs",
+      "sha256": "dc5324f4c6902568d2050e1f9e6337e19a9bb800bbeb279957efccea41aef18c"
+    },
+    {
+      "name": "execution-continuity-f2-test.mjs",
+      "sha256": "21f0c4d4bbcefb4f44d88b17699fdfa90a5d8fa4c306ec59f0b6b8baaaa88737"
+    },
+    {
+      "name": "execution-continuity-faultinjection-test.mjs",
+      "sha256": "845852c86d46f2d6dfed4c1872dffaf1542820487093107b3deaaf688a78764e"
+    },
+    {
+      "name": "execution-continuity.mjs",
+      "sha256": "1c370359fadae5c5f8478c572b1a66a3dd881a35a75d9dc377122e657a67fd88"
+    },
+    {
+      "name": "failure-classifier-core.mjs",
+      "sha256": "f780150783a1d6e523d148add569b6cbbb287741315515689f0ea4fe3016f686"
+    },
+    {
+      "name": "failure-classifier.mjs",
+      "sha256": "a6e7cb9239ec62d05d71dc1fcf5bbf069364dd25f6ddda4bc5a2df872d90ad4d"
+    },
+    {
+      "name": "keepalive-patch.mjs",
+      "sha256": "016266463f15c631c5ced552ddde163113cc467edeee4862ffccb8262b8732e4"
+    },
+    {
+      "name": "learn-candidate.mjs",
+      "sha256": "f218514751c57ca5e42b0ed1ec6fe91f4182628554f5bb563b73bc4f69a5421a"
+    },
+    {
+      "name": "learn-core.mjs",
+      "sha256": "b5bd39771f4c6195743c6b7272bddd9a91df15249939c2f8c6e827800f8c1196"
+    },
+    {
+      "name": "learn-gap-veto.mjs",
+      "sha256": "b7623cedf87e13f49500b368e27bbf9dc358b9b400d7a0b7a064e1c27a090b36"
+    },
+    {
+      "name": "learn.mjs",
+      "sha256": "4c96e1608e1279db0f64f3c486869f337d9cf168a8eac3b20884c0eb5e4a77e0"
+    },
+    {
+      "name": "model-registry.mjs",
+      "sha256": "3e0ad2d8633f21dd46bc8f23cec62d6ea1767778a74d283c4f1b4ce264577400"
+    },
+    {
+      "name": "model-selection-guard-core.mjs",
+      "sha256": "1ce17038d8996695a5b10afe41f9743fe44f590329fe8beedb4e6d365739d0f7"
+    },
+    {
+      "name": "model-selection-guard-test.mjs",
+      "sha256": "3b7fc7e82f3b372ce4b14447aefb2c5eae3de67c7e3df716a594fe1d0bfa07dd"
+    },
+    {
+      "name": "model-selection-guard.mjs",
+      "sha256": "5ca01a27d664cecca301fea82e652bc90ad4f901aaa9c49deeeff3db8cb1f96a"
+    },
+    {
+      "name": "openrouter-router-core.mjs",
+      "sha256": "afb4df851685d03b6af3b3953d03d6f340e64e38ff8c09969b6462e705dbfc18"
+    },
+    {
+      "name": "openrouter-router.mjs",
+      "sha256": "fe5510c1df57f60f2e09110ad41385f3b19f2fcf7222e2532c54eb29e42712e4"
+    },
+    {
+      "name": "provider-registry-core.mjs",
+      "sha256": "ff2decb50fe2127f07ca9beee9d355c834f4835dd3e1af2aef3c3d91a700c979"
+    },
+    {
+      "name": "runtime-capacity-adapter.mjs",
+      "sha256": "5ecc1af1ec3c92bd0179abac7e62453ce6c100f74f9f438a4ed0c515623e14bf"
+    },
+    {
+      "name": "secret-gate.mjs",
+      "sha256": "7972c833d728487948dcf1139e6957d55e6652e7e204bacacc6db9dfc5487b8d"
+    },
+    {
+      "name": "supervisor-bridge-core.mjs",
+      "sha256": "5d012c56e0606b8c99a41bf1c636ec4d11818fd427482bc36f533194f5bd28ec"
+    },
+    {
+      "name": "supervisor-bridge-test.mjs",
+      "sha256": "220c621d98a400c3c656b8a5cad592266d2ab95947d31f0d1319b044db871611"
+    },
+    {
+      "name": "supervisor-bridge.mjs",
+      "sha256": "057bbc0f27354496df9783ebbb174552c1ec39ace1b752296e51e60463a492c3"
+    },
+    {
+      "name": "tool-output-offload.mjs",
+      "sha256": "8321a4815d887247521b4d7733026a81ac5b234996bbd0f8b60e36bf344b979a"
+    },
+    {
+      "name": "vision-bridge.mjs",
+      "sha256": "54e69def95bc7a863a57a300e1b619dbfc0209c34f9c5a441cdb0fbdc1b14a73"
+    }
+  ],
+  "prodPidBefore": "5648",
+  "prodPidAfter": "5648",
+  "prodUntouched": true,
+  "logPath": "%USERPROFILE%\\AppData\\Local\\Temp\\dsh-mountgate-rv-neg-2026-09-26T15-44-12-799Z\\boot.log",
+  "probeOut": "%USERPROFILE%\\AppData\\Local\\Temp\\dsh-mountgate-rv-neg-2026-09-26T15-44-12-799Z\\probe.json",
+  "resultPath": "%USERPROFILE%\\AppData\\Local\\Temp\\dsh-mountgate-rv-neg-2026-09-26T15-44-12-799Z\\result.json",
+  "scratch": "%USERPROFILE%\\AppData\\Local\\Temp\\dsh-mountgate-rv-neg-2026-09-26T15-44-12-799Z",
+  "at": "2026-09-26T15:44:33.214Z"
+}

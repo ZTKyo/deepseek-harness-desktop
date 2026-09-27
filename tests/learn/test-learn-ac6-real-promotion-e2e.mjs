@@ -55,10 +55,24 @@ function git(args, cwd) {
   return (r.stdout || '').trim();
 }
 function gitMaybe(args, cwd) { try { return git(args, cwd); } catch { return null; } }
+// 本机没有 pwsh（只有 Windows PowerShell 5.1）——硬编码 'pwsh' 会 ENOENT，故先解析真实可执行文件。
+const PS_EXE = (() => {
+  for (const exe of ['pwsh', 'powershell']) {
+    const r = spawnSync(exe, ['-NoProfile', '-Command', 'exit 0']);
+    if (r.status === 0) return exe;
+  }
+  return null;
+})();
 function ps(script) {
-  const exe = spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).status === 0 ? 'pwsh' : 'powershell';
-  const r = spawnSync(exe, ['-NoProfile', '-Command', script], { encoding: 'utf8' });
+  assert(PS_EXE, 'no PowerShell executable found (pwsh / powershell)');
+  const r = spawnSync(PS_EXE, ['-NoProfile', '-Command', script], { encoding: 'utf8' });
   return (r.stdout || '').trim();
+}
+// 路径归一（Windows: 短名 8.3 / 斜杠 / 大小写差异都会让朴素字符串比较误判）
+function normPath(p) {
+  let real = String(p);
+  try { real = fs.realpathSync.native(String(p)); } catch { /* keep as-is */ }
+  return real.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 const listenPid = (port) => ps(`$c=Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if($c){"$($c.OwningProcess)"}else{''}`);
 
@@ -134,6 +148,10 @@ if (dirtyBefore) {
 }
 const baseHead = git(['rev-parse', 'HEAD'], REPO);
 check('前置：工作区干净且有 HEAD', () => assertEq(dirtyBefore, '', 'dirty'), baseHead.slice(0, 12));
+check('前置：找到 PowerShell（本机为 Windows PowerShell 5.1，无 pwsh）', () => {
+  assert(PS_EXE, 'pwsh / powershell 都不可用');
+  return PS_EXE;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== 1. 状态机：propose 候选（id 决定分支名与事务 label）===');
@@ -185,7 +203,9 @@ check('分支名 / 40 位对象名 / 隔离性均经真值核验', () => {
   assertEq(git(['rev-parse', '--abbrev-ref', 'HEAD'], WT), BRANCH, 'worktree branch');
   assert(/^[0-9a-f]{40}$/.test(commitSha), 'not a 40-hex object name');
   const list = git(['worktree', 'list', '--porcelain'], REPO);
-  assert(list.includes(WT.replace(/\\/g, '/')) || list.includes(WT), 'worktree not registered');
+  const registered = list.split(/\r?\n/).filter((l) => l.startsWith('worktree '))
+    .map((l) => normPath(l.slice('worktree '.length).trim()));
+  assert(registered.includes(normPath(WT)), `worktree not registered (have: ${registered.join(' ; ')})`);
   assert(gitMaybe(['ls-files', 'AC6_E2E_PROOF.md'], WT), 'proof file not tracked');
   assertEq(git(['rev-parse', 'HEAD'], REPO), baseHead, 'main worktree HEAD moved');
   return 'ok';
@@ -287,8 +307,8 @@ if (hold) {
     '-TxRoot', TX_CKPT, '-StateRoot', STATE_ROOT, '-EmptyProfile', EMPTY_PROFILE,
     '-ReceiptPath', TX_RECEIPT,
   ];
-  const r = spawnSync('pwsh', args, { cwd: REPO, encoding: 'utf8', timeout: 300_000 });
-  console.log('  runner exit=' + r.status);
+  const r = spawnSync(PS_EXE, args, { cwd: REPO, encoding: 'utf8', timeout: 300_000 });
+  console.log(`  runner: exe=${PS_EXE} exit=${r.status} signal=${r.signal || 'none'}${r.error ? ' error=' + r.error.code + ':' + r.error.message : ''}`);
   if (r.stdout) console.log(r.stdout.trim().split(/\r?\n/).map((l) => '  | ' + l).join('\n'));
   if (r.stderr && r.stderr.trim()) console.log('  [stderr] ' + r.stderr.trim().slice(0, 1500));
   const receipt = fs.existsSync(TX_RECEIPT) ? JSON.parse(fs.readFileSync(TX_RECEIPT, 'utf8')) : null;

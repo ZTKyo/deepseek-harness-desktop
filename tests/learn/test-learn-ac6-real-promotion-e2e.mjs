@@ -74,7 +74,20 @@ function normPath(p) {
   try { real = fs.realpathSync.native(String(p)); } catch { /* keep as-is */ }
   return real.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
-const listenPid = (port) => ps(`$c=Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if($c){"$($c.OwningProcess)"}else{''}`);
+// 端口可能被**多个进程在不同地址上共享**（本机 3080：node 监听 127.0.0.1 + tailscaled 在 Tailscale
+// 地址上转发）⇒ 旧实现 `Select-Object -First 1` 会**静默选错进程**，使「生产未被扰动」退化成弱断言
+// （实测选到 tailscaled，node 真重启也发现不了）。改为：列出全部监听者，生产固定取 127.0.0.1 那条，
+// 并用**整个监听者集合**做前后对比。
+const listenAll = (port) => {
+  const out = ps(`Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { "$($_.LocalAddress)|$($_.OwningProcess)" }`);
+  return out ? out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean) : [];
+};
+const listenPid = (port) => {
+  const all = listenAll(port);
+  if (!all.length) return '';
+  const loopback = all.find((l) => l.startsWith('127.0.0.1|'));
+  return ((loopback || all[0]).split('|')[1] || '').trim();
+};
 
 // ── 事务腿 runner：dot-source 既有引擎（不重写、不复制引擎逻辑）─────────────
 const TX_RUNNER_PS1 = String.raw`
@@ -217,8 +230,10 @@ evidence.git = { system: 'git', branch: BRANCH, commitSha, worktreePath: WT, iso
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== 3. 启动隔离宿主（mount-gate --hold，端口 3099，非生产 3080）===');
+const prodListenersBefore = listenAll(3080);
 const prodBefore = listenPid(3080);
-console.log(`  生产 3080 监听者（前）: pid=${prodBefore || '(无)'}`);
+console.log(`  生产 3080（127.0.0.1，node 服务）监听者（前）: pid=${prodBefore || '(无)'}`);
+console.log(`  生产 3080 全部监听者（前，含 Tailscale 转发）: ${prodListenersBefore.join('  ') || '(无)'}`);
 const pluginPath = path.join(REPO, 'plugins', 'learn.mjs');
 const gateLogFd = fs.openSync(GATE_LOG, 'a');
 const gate = spawn(process.execPath, [
@@ -367,10 +382,13 @@ if (hold) {
 }
 const portFree = listenPid(HOST_PORT);
 const prodAfter = listenPid(3080);
+const prodListenersAfter = listenAll(3080);
 check('隔离宿主已关停、端口释放、生产 3080 未被扰动', () => {
   assertEq(portFree, '', '3099 still listening');
-  assertEq(prodAfter, prodBefore, 'production 3080 listener changed');
-  return `3099=FREE, 3080 pid=${prodAfter || '(无)'} 前后一致`;
+  assert(prodBefore !== '', '生产 3080 在 127.0.0.1 上无监听者（服务未运行 ⇒ 无法断言"未扰动"）');
+  assertEq(prodAfter, prodBefore, 'production loopback 3080 owner pid changed');
+  assertEq(prodListenersAfter.join(';'), prodListenersBefore.join(';'), 'production 3080 full listener set changed');
+  return `3099=FREE, 3080(127.0.0.1 node) pid=${prodAfter} 前后一致，且 3080 全部监听者 ${prodListenersAfter.length} 项不变`;
 });
 const gateTail = fs.existsSync(GATE_LOG) ? fs.readFileSync(GATE_LOG, 'utf8') : '';
 check('mount-gate 自身判定 PASS（A1–A5 全过）', () => {

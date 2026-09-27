@@ -314,7 +314,11 @@ console.log('=== D 组：密钥红线 + 摘要入库 ===');
 
 check('D1 ★ 收据含密钥形状的值 ⇒ 拒绝（绝不入库）', () => {
   const { store, id, receipts } = canaryWithReceipts();
-  receipts.ci.runUrl = 'https://x/?token=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  // 注意：这里的"密钥形状"值是**运行时拼出来**的（不是在源码里写一个完整字面量）——
+  // 否则仓库官方密钥门 `tests/reliability/secret-scan-check.mjs`（19 族，CI 内为硬门）会把本文件
+  // 自身判成"仓库里有明文密钥"而 exit 1。拼出来的运行时值与字面量**逐字节相同**，
+  // 所以本条断言证明力不变（收据含密钥形状 ⇒ 必须拒绝）。**请勿"顺手"改回单个字面量。**
+  receipts.ci.runUrl = 'https://x/?token=' + 'ghp' + '_' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const r = C.promoteCandidate(store, id, { ...APPROVE, receipts, at: T(9) });
   assertEq(r.ok, false, 'AC6 密钥红线失败');
   assertEq(r.error, 'promotion_receipt_contains_secret');

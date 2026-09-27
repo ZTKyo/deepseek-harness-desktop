@@ -325,7 +325,14 @@ if (hold) {
     assert(receipt, 'no receipt');
     assertEq(receipt.JournalPath, TX_JOURNAL, 'journal path');
     assert(fs.existsSync(TX_JOURNAL), 'journal file missing: ' + TX_JOURNAL);
-    const j = JSON.parse(fs.readFileSync(TX_JOURNAL, 'utf8'));
+    // 显式 BOM 门（真事故：PS 5.1 Set-Content -Encoding UTF8 写 BOM ⇒ Node JSON.parse 抛
+    // "Unexpected token ''" ⇒ 收据腿被门拒（promotion_receipts_missing））。JSON 必须无 BOM。
+    const raw = fs.readFileSync(TX_JOURNAL);
+    assert(
+      !(raw.length >= 3 && raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf),
+      'journal 带 UTF-8 BOM：跨语言 JSON 解析器（Node JSON.parse）会直接失败，引擎必须写无 BOM JSON',
+    );
+    const j = JSON.parse(raw.toString('utf8'));
     const rec = (j.transactions || []).find((x) => x && x.transactionId === receipt.TransactionId) || receipt.JournalRecord;
     assert(rec, 'transaction record not found in journal');
     assertEq(rec.finalState, 'COMMITTED', 'journal finalState');

@@ -64,7 +64,10 @@ function Write-DshTxJournal($Journal) {
     $dir = Split-Path -Parent $script:DshTxJournal
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $tmp = "$($script:DshTxJournal).tmp-$PID"
-    $Journal | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $tmp -Encoding UTF8
+    # JSON 必须**无 BOM**：PowerShell 5.1 的 Set-Content/-Encoding UTF8 会写 UTF-8 BOM，
+    # 任何 Node/其它语言的 JSON.parse 遇到 BOM 直接抛错（真事故：AC6 三腿收据回读）。
+    $json = $Journal | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding($false)))
     try { Move-Item -LiteralPath $tmp -Destination $script:DshTxJournal -Force -ErrorAction Stop }
     catch {
         Remove-Item -LiteralPath $script:DshTxJournal -Force -ErrorAction SilentlyContinue
@@ -120,7 +123,8 @@ function New-DshTransactionCheckpoint {
         }
     } catch {}
     try { $manifest.dshVersionBefore = ((& dsh --version 2>$null) -join '').Trim() } catch {}
-    ($manifest | ConvertTo-Json -Depth 5) | Out-File (Join-Path $Dir 'manifest.json') -Encoding utf8
+    # 同上：manifest.json 也必须无 BOM（跨语言可解析）。Out-File -Encoding utf8 在 PS 5.1 下会加 BOM。
+    [System.IO.File]::WriteAllText((Join-Path $Dir 'manifest.json'), ($manifest | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
     return $manifest
 }
 

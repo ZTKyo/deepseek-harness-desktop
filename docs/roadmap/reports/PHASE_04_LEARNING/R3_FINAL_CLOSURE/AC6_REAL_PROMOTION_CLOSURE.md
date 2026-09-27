@@ -46,7 +46,7 @@
 | 2 **git 腿** | **真** `git worktree add` + 真分支 + 真 commit | branch `candidate/cand_d9b6ae32`，commit **`74fd41c9594aee04ab12ba60fd4b51bc42cece4a`**，worktree 隔离 |
 | 3 **CI 腿** | 在**该 commit 的 worktree 内**执行 `ci-level2.yml` 作业命令（`HOME`/`USERPROFILE`/`LOCALAPPDATA` 重定向到空目录 = 与 CI 相同判据） | **14 条命令全 exit 0**，13 个套件 PASS，日志 `ci-run.log` |
 | 4 **Transaction 腿** | 真 `dsh-transaction.ps1`（经真 runner） | `FinalState=COMMITTED`、`Verify=COMMIT_READY`、`faultClass=none`、journal 回读一致（**独立真值，不是引擎自述**），label/transactionId 三腿互证 `candidate-cand_d9b6ae32-20260928-014049-bf91cb` |
-| 5 canary | 真 `mount-gate.mjs --hold host` 在 `127.0.0.1:3099`（隔离 profile） | verdict PASS、A1–A5 全过；释放后端口 FREE；**生产 3080 PID 前后一致（7176）** |
+| 5 canary | 真 `mount-gate.mjs --hold host` 在 `127.0.0.1:3099`（隔离 profile） | verdict PASS、A1–A5 全过；释放后端口 FREE；**生产 3080（`127.0.0.1` 上的 node 服务）PID 前后一致 = 20580**，且 3080 全部监听者集合（3 项）不变（见 §4.2 的测量缺陷更正） |
 | 6 晋升（正向） | 门自检 → `promoteCandidate` | `verifyPromotionReceipts(真收据)=ok`；`state=PROMOTED`；**只存 1859 字节有界摘要**（原始收据路径未落入 store） |
 | 7 负向对照（3 组） | 篡改其中一腿 | `ci.headSha` → `promotion_receipt_invalid leg=ci ci_headSha_mismatch_git_commitSha`；`transaction.faultClass` → `leg=transaction`；`git.branch` → `leg=git`。**三组全部拒绝 + `CANDIDATE_PROMOTION_DENIED` 留痕 + 状态不动** |
 | 8 不变量 | 晋升**没有**改动生产插件文件 | `plugins/learn.mjs` `bf5cfa6d…`、`plugins/learn-candidate.mjs` `f732806a…` 四哈希一致；晋升后工作区仍干净 |
@@ -69,14 +69,29 @@
 > PowerShell **脚本**必须带 BOM（否则 PS 5.1 把中文读成乱码、直接语法错误，见工作区 `AGENTS.md` 红线），
 > 而给 **Node 解析的 JSON 产物**必须不带 BOM。二者不能一刀切，按**消费方**定。
 
-### 4.2 提交后复核运行（同一 HEAD，防"文档改动扰动"与"一次性偶绿"）
+### 4.2 提交后复核运行（防"文档改动扰动"与"一次性偶绿"）+ 一处测量缺陷的自查更正
 
-- 在**本报告与证据所在提交 `ecec589`** 上**再独立运行一次** ⇒ **24 PASS / 0 FAIL**，`exit=0`。
-- 断言要点与 §4 完全一致：CI 腿 14 条命令全 `exit 0`／**真 journal 回读**一致（`COMMITTED` / `none` / `COMMIT_READY`）／
-  3 组篡改全拒 + 留痕 + 状态不动／隔离宿主端口释放／**生产 3080 PID 前后一致（7176）**／插件 4 项哈希不变。
-- 说明（避免复核者误判为不一致）：**每次运行的隔离 commit 是新建的**（隔离 worktree 内新提交，内容相同、对象名不同），
-  故留档的首次报告为 `74fd41c9…`、本次复核为 `ab764b9fb70a…`；两次均 24 PASS / 0 FAIL。
-- 证据：`e2e-run-final-verify-24PASS.txt`、`ac6-real-e2e-report-final-verify.json`（两文件密钥扫描 **0 命中**）。
+- 在**本报告与证据所在提交 `ecec589`** 上再独立运行一次 ⇒ **24 PASS / 0 FAIL**，`exit=0`。
+- 随后**自查发现"生产未被扰动"这条断言的测量方式有缺陷**（见下），修复后于提交 `a92dd7d` 上**第三次运行**
+  ⇒ 仍 **24 PASS / 0 FAIL**，`exit=0`。三次运行的断言要点一致：CI 腿 14 条命令全 `exit 0`／
+  **真 journal 回读**一致（`COMMITTED` / `none` / `COMMIT_READY`）／3 组篡改全拒 + 留痕 + 状态不动／
+  隔离宿主端口释放／插件 4 项哈希字节不变。
+- **自查发现的测量缺陷（测试自身缺陷，已修复；不影响 §4 关于被测代码的结论）**：
+  旧实现用 `Get-NetTCPConnection -LocalPort 3080 -State Listen | Select-Object -First 1` 取"生产进程"，
+  而本机 3080 实际有**三个监听者**——node 服务在 `127.0.0.1`（PID **20580**）、`tailscaled` 在 Tailscale 地址
+  与 IPv6 上做转发（PID **7176**）。First-1 拿到的是 **tailscaled**，于是「生产未被扰动」**退化为弱断言**：
+  即使生产 node 服务真的重启了，这条断言也照样通过。
+  修复：列出全部监听者 `地址|PID` → 生产**按地址**固定取 `127.0.0.1` 那条 → 用**整个监听者集合**做前后对比 →
+  生产在回环上无监听者时 **fail-closed**（不许在"根本无法断言"的情况下给 PASS）。
+  修复后实测输出：`3080(127.0.0.1 node) pid=20580 前后一致，且 3080 全部监听者 3 项不变`。
+  **⇒ §4 表格此行早期版本的 `7176` 是 tailscaled（转发进程），不是生产服务；生产服务正确 PID 为 `20580`。**
+- 说明（避免复核者误判为不一致）：**每次运行的隔离 commit 都是新建的**（隔离 worktree 内新提交，
+  内容相同、对象名不同），故留档的首次报告为 `74fd41c9…`、复核运行为 `ab764b9fb70a…`、
+  修复测量后的运行为 `d77cfa2b7b31…`；**三次均 24 PASS / 0 FAIL**。
+- 证据（均密钥扫描 **0 命中**）：
+  - `e2e-run-final-verify-24PASS.txt` + `ac6-real-e2e-report-final-verify.json` —— 提交 `ecec589` 上的复核运行（**弱测量版**留档，保留缺陷本身的原始输出）
+  - `e2e-run-measurement-fixed-24PASS.txt` + `ac6-real-e2e-report-measurement-fixed.json` —— 提交 `a92dd7d` 上修复测量后的运行（**以这一份为准**）
+  - `e2e-run-before-5FAIL.txt` / `e2e-run-after-24PASS.txt` —— 4 个必经缺陷修复前后的对照（§4 末尾）
 
 ---
 

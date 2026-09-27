@@ -197,11 +197,16 @@ export const PROTECTED_TARGETS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. 密钥脱敏（AC3）：运行时脱敏，覆盖 Security-Hardening 的 9 个规范家族
-//    （notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws）
-//    外加通用 "KEY=值" / Bearer 形态。families 名称与 tests/reliability/
+// 1. 密钥脱敏（**合同 AC1「Experience 无 Secret」**）：运行时脱敏，覆盖 16 个规范家族
+//    （notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws
+//     + google/stripe/gitlab/huggingface/npm/pem-private-key/slack-webhook —— 后 7 类
+//     由 P4 FINAL CLOSURE A10 审计按 R1 独立评审的反证补齐，2026-09-27）
+//    外加通用 "KEY=值" / Bearer / URI 凭据形态。families 名称与 tests/reliability/
 //    secret-scan-check.mjs 保持一致，并由 tests/learn/test-learn-r3-secrets.mjs
-//    做覆盖平价校验（§A 家族名平价 + §B~§H 通用形态与真实落盘脱敏）。
+//    做覆盖平价校验（§I 家族名平价 + §A~§H 通用形态与真实落盘脱敏）。
+//    ⚠ 口径更正：本段此前写作「AC3」——那是 R2/R3 的自定编号，与合同 AC1–AC10 不同号
+//      （合同 AC1 = 无 Secret；合同 AC3 = 只有已验证经验进 verified）。两套编号对照见
+//      docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 运行时脱敏模式表。name 与仓库规范扫描器 secret-scan-check.mjs 的家族名对齐。 */
@@ -215,6 +220,17 @@ export const SECRET_PATTERNS = [
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g },
   { name: 'telegram', re: /\b\d{8,10}:[A-Za-z0-9_-]{30,}\b/g },
   { name: 'aws', re: /\bAKIA[A-Z0-9]{16}\b/g },
+  // ── AC1 补齐（2026-09-27，P4 FINAL CLOSURE A10 审计）：R1 独立评审反证的 7 类家族 ──
+  //   此前运行时脱敏表与 tests/reliability/secret-scan-check.mjs **同时缺失**这 7 类，
+  //   导致 R1 的 7 个反证样本"值原样存活 + containsSecret 返回 false"（双层同时漏，
+  //   不是单纯漏打码）。族名必须与扫描器**双向完全平价**（test-learn-r3-secrets.mjs §I3）。
+  { name: 'google', re: /\bAIza[0-9A-Za-z_-]{35}\b/g },                      // Google API key / Firebase
+  { name: 'stripe', re: /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}\b/g },    // Stripe secret / restricted key
+  { name: 'gitlab', re: /\bglpat-[0-9A-Za-z_-]{20,}\b/g },                    // GitLab personal access token
+  { name: 'huggingface', re: /\bhf_[0-9A-Za-z]{30,}\b/g },                    // HuggingFace token
+  { name: 'npm', re: /\bnpm_[0-9A-Za-z]{36}\b/g },                            // npm automation token
+  { name: 'pem-private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g },
+  { name: 'slack-webhook', re: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\/-]{20,}/g },
   // 通用形态 1：URI userinfo（DB / broker / 服务的连接串）
   //   PRE-MERGE R-3：此前完全缺失。口令内的 "@" 与 userinfo/host 分隔符的 "@" 同形，
   //   故从 "://" 之后**贪婪**取到 authority 内最后一个 "@"（authority 不含 "/"），

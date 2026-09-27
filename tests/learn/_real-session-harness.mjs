@@ -62,15 +62,28 @@ export function listRealSessions(minBytes = 500_000) {
 export function mkCtx(opts = {}) {
   const hooks = new Map();
   const logs = [];
+  // 宿主会话服务（F1 R1 授权判定的信任锚）：缺它 ⇒ 插件 fail-closed 拒绝一切授权。
+  // opts.sessions 可显式覆盖（例如测"宿主服务缺失时的降级行为"）。
+  const sessionsService = 'sessions' in opts ? opts.sessions : hostSessionsService();
   const ctx = {
     logger: { info: (m) => logs.push(String(m)), warn: (m) => logs.push(String(m)) },
     on: (ev, fn) => { if (!hooks.has(ev)) hooks.set(ev, []); hooks.get(ev).push(fn); },
     // repo 直连场景下 defineTool 不可解析 → 插件不得走 ctx.tools.register（这里设成陷阱）
     tools: { register: () => { throw new Error('ctx.tools.register must not be used in repo E2E (defineTool unresolved)'); } },
-    get: (name) => (name === 'approval' ? opts.approval : undefined),
-    // 宿主会话服务（F1 R1 授权判定的信任锚）：缺它 ⇒ 插件 fail-closed 拒绝一切授权。
-    // opts.sessions 可显式覆盖（例如测"宿主服务缺失时的降级行为"）。
-    sessions: 'sessions' in opts ? opts.sessions : hostSessionsService(),
+    // ★ 保真修复（2026-09-27，P4 FINAL CLOSURE B1 真因）：真实宿主的 `ctx.get(name)` 是
+    //   **通用服务解析器**，不是"只认 approval 的白名单" —— DSH 宿主自身 20+ 处就是
+    //   `ctx.get('sessions')`（dsh-workspace / dsh-session-persistence / dsh-headless /
+    //   dsh-subagent / dsh-host-apiproxy…），`dsh-session` 以 `super(ctx,'sessions')` 注册为服务；
+    //   `mount-gate.mjs` 的 A3 探针也实测过**同形上下文里 `ctx.get('sessions')` 可解析**。
+    //   旧写法 `name === 'approval' ? opts.approval : undefined` 让插件走 `ctx.get('sessions')`
+    //   的正路径在夹具体里永远取不到服务 ⇒ 假的 `approval_host_fact_session_unavailable`
+    //   （B1 的真实来源），而不是插件接线缺陷。
+    //   注意：直取属性 `ctx.sessions` 仍然保留（= "宿主把服务注入进本上下文"形状，供
+    //   execution-continuity 同口径用例使用）；两种形状取到的是**同一个**服务对象，
+    //   且 `opts.sessions` 显式覆盖（含 null / 形状不对）在两条路径上语义一致 ⇒
+    //   "服务缺失/形状不对 ⇒ service_absent + fail-closed"的负例锁不受影响。
+    get: (name) => (name === 'approval' ? opts.approval : (name === 'sessions' ? sessionsService : undefined)),
+    sessions: sessionsService,
   };
   return { ctx, hooks, logs };
 }

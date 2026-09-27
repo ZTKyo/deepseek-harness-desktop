@@ -335,19 +335,34 @@ export function apply(ctx, config = {}) {
   //
   //   修法：与下方 `ctx.get?.('approval')` 完全同一惯例，改为**不抛错**的可选服务取值
   //   （`ctx.get(name)` 在无该服务时返回 undefined，已是本项目测试内的既有口径）。
-  //   语义不变：取不到服务 ⇒ sessionsServiceAvailable=false ⇒ 复验器不可用 ⇒ 授权 fail-closed。
+  //   语义不变：取不到服务 ⇒ sessionsServiceAvailable()=false ⇒ 复验器不可用 ⇒ 授权 fail-closed。
   //   刻意**不**把 `sessions` 写进 inject：本插件按设计容许宿主没有该服务（fail-closed 降级），
   //   写进 inject 会把"可选降级"升级为 boot 期硬依赖（对照 execution-continuity 曾因把
   //   compaction 写进 inject 造成 boot 硬依赖而被回退的历史处置）。
+  //
+  //   ★ P4 FINAL CLOSURE A1（2026-09-27）：**保留唯一的受守卫取值器**，不改成"直取优先 + 全吞异常"。
+  //   依据（均取自真实宿主源码，不是猜测）：
+  //     ① 宿主对**未注入服务**的裸属性访问是**抛错**（Cordis 服务访问守卫；生产曾因此 boot-fatal 83 次），
+  //        所以 `ctx.sessions` 对本插件**并非 genuinely available**，不满足"safe direct access"前提；
+  //     ② 宿主自己是**全程**用 `ctx.get(name)` 取服务的（官方 dsh lib 内的服务取值一律走 get），
+  //        `ctx.get` 在无该服务时返回 undefined 且**不抛错** ⇒ 它就是规范里那个"guarded host getter"；
+  //     ③ 规范 A1.1 明令"不能通过 try/catch everything 把真正错误吞掉"——"先裸取再吞掉崩溃"正是该禁止形态。
+  //   历史误判记录：曾把"测试夹具只提供 ctx.sessions 不提供 ctx.get"当成产品缺陷（D 版根因判断），
+  //   实际是**夹具与真实宿主不同形**；本次已改为按真实宿主口径修夹具（tests/learn/_real-session-harness.mjs）。
   const lookupSessionsService = () => {
     try {
       return (typeof ctx.get === 'function' ? ctx.get('sessions') : null) ?? null;
     } catch { return null; }
   };
-  const sessionsServiceAvailable = (() => {
+  //   姿态**查询时**取值，而不是 apply 期冻结一次：宿主 `sessions` 服务在 boot 期的可见时刻不保证
+  //   早于本插件的 apply 期（"apply 期取不到、稍后可用"是正常时序）。若把结论冻结在 apply 期，
+  //   姿态就会长期谎报 service_absent —— 那会让"信任锚在岗"这一可观测信号失去意义（A5 复证要用它）。
+  //   判定路径（hostSessionById / validHumanApproval）本来就**实时**取值，故本改动不触及任何安全语义：
+  //   它只影响一个诊断字符串；实时取不到 ⇒ 仍判 service_absent ⇒ 仍 fail-closed。
+  const sessionsServiceAvailable = () => {
     const svc = lookupSessionsService();
     return !!(svc && typeof svc.get === 'function');
-  })();
+  };
   const hostSessionById = (sid) => {
     try {
       const svc = lookupSessionsService();
@@ -1629,15 +1644,35 @@ export function apply(ctx, config = {}) {
           const pub = publishExperience(sid, after);
           publication = pub.ok ? (pub.idempotent ? 'idempotent' : pub.deduplicated ? 'deduplicated' : 'published') : `denied:${pub.reason}`;
         }
-        return {
+        // ★ P4 FINAL CLOSURE A2（B2 最小修复·**双路径**）：宿主 dsh-tools 会在返回出口整体校验
+        //   工具输出，而旧写法让**两条路径各产出一个非 JSON 值**，两次都导致整次工具结果被判非法，
+        //   调用方连 ok/真实原因都拿不到（两侧均已生产实证，2026-09-27，本会话）：
+        //   ① 成功路径：`error: res.ok ? undefined : …` ⇒ 返回值里存在**值为 undefined 的键** ⇒
+        //      不再是 lossless JSON ⇒ 宿主抛 `tool "learn_verify" returned invalid output:
+        //      value is not lossless JSON`（实证 exp-8a2fd284：验证其实**已成功**，结果却被整条丢弃）。
+        //   ② 失败路径：`method: res.method ?? null` ⇒ schema 已声明 method 为 string，null 属
+        //      "存在但类型不符" ⇒ 宿主抛 `… returned invalid output: "value.method" must be a string`
+        //      （实证 exp-01ce61ab：ok:false 与失败原因完全丢失，失败路径不可用）。
+        //   修复形态 = **只输出真实存在的字段**，不制造 null/undefined 占位：
+        //   · 成功才带 method，且**只**取自确定性验证器 applyVerification 的真实返回
+        //     （'file_hash' / 'system_api' / 'session_outcome'），绝不硬编码伪造方法名；
+        //   · 失败才带 error。
+        //   合法性依据（真实宿主校验器 dsh-tools/lib/index.js）：L457
+        //   `if (!Object.hasOwn(frame.value, key) || frame.value[key] === undefined) continue;`
+        //   ——"schema 已声明但键缺省"直接跳过；L465-466 的 additionalProperties 扫描只遍历
+        //   实际存在的键。故**省略字段是合法形态**，而 null / undefined 都是非法值。
+        const result = {
           ok: res.ok === true,
           experienceId: args.experienceId,
           state: after.state,
           verificationStatus: after.verification?.status ?? 'UNVERIFIED',
-          method: res.method ?? null,
-          error: res.ok ? undefined : (res.error ?? 'verification_failed'),
           publication,
         };
+        if (typeof res.method === 'string' && res.method !== '') result.method = res.method;
+        if (res.ok !== true) {
+          result.error = (typeof res.error === 'string' && res.error !== '') ? res.error : 'verification_failed';
+        }
+        return result;
       },
     });
 
@@ -1784,7 +1819,7 @@ export function apply(ctx, config = {}) {
       //   只会表现为"合法批准突然发不出去"（或更糟：被判成 flaky 而放宽闸门）。
       const hostFactVerification = !approvalLedger
         ? 'unavailable'
-        : (!sessionsServiceAvailable
+        : (!sessionsServiceAvailable()
           ? 'service_absent'
           : (typeof approvalLedger.verifyHostFact === 'function' ? 'ctx.sessions' : 'absent'));
       if (!approvalLedger) {

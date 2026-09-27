@@ -5,7 +5,11 @@
 //
 // Patterns covered: Notion ntn_, OpenAI sk-, OpenRouter sk-or-v1-, Slack xox*,
 // GitHub ghp_/gho_/ghu_/ghs_/ghr_, JWT eyJ..., Anthropic sk-ant-, Telegram bot
-// token (digits:AA...), AWS AKIA... (length-guarded to avoid noise).
+// token (digits:AA...), AWS AKIA... (length-guarded to avoid noise),
+// plus (P4 FINAL CLOSURE A10, 2026-09-27) Google AIza, Stripe sk_live_/rk_live_,
+// GitLab glpat-, HuggingFace hf_, npm npm_, PEM private-key blocks and
+// Slack incoming-webhook URLs — family names must stay exactly in parity with
+// learn-core.mjs SECRET_PATTERNS (tests/learn/test-learn-r3-secrets.mjs section I3).
 //
 // Usage: node tests/reliability/secret-scan-check.mjs [repoDir]
 // exit 0 = clean, exit 1 = secrets found (list paths + line numbers)
@@ -24,6 +28,17 @@ const PATTERNS = [
   { name: 'anthropic', re: /\bsk-ant-[A-Za-z0-9_-]{16,}\b/ },
   { name: 'telegram', re: /\b\d{8,10}:[A-Za-z0-9_-]{30,}\b/ },
   { name: 'aws', re: /\bAKIA[A-Z0-9]{16}\b/ },
+  // P4 FINAL CLOSURE A10 (2026-09-27): 7 families proven missing by the R1 independent
+  // review's counter-examples (samples survived redaction untouched). Names MUST stay
+  // exactly bidirectionally equal to learn-core.mjs SECRET_PATTERNS minus the 3 generic
+  // families — enforced by tests/learn/test-learn-r3-secrets.mjs section I3.
+  { name: 'google', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { name: 'stripe', re: /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}\b/ },
+  { name: 'gitlab', re: /\bglpat-[0-9A-Za-z_-]{20,}\b/ },
+  { name: 'huggingface', re: /\bhf_[0-9A-Za-z]{30,}\b/ },
+  { name: 'npm', re: /\bnpm_[0-9A-Za-z]{36}\b/ },
+  { name: 'pem-private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/ },
+  { name: 'slack-webhook', re: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\/-]{20,}/ },
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '_research', '_checkpoint']);

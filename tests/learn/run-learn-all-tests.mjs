@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '..', '..');
+// ★ 2026-09-27 修复：个别套件需要显式参数。此前一刀切不带参数 ⇒ mount-gate 报
+//   "ENV_ERROR: 缺少 --plugin"，被汇总判成**产品失败**（假警报，掩盖真实门槛）。
+const extraArgsFor = (f) => (f === 'mount-gate.mjs' ? ['--plugin', path.join(REPO, 'plugins', 'learn.mjs')] : []);
 const args = process.argv.slice(2);
 const filter = (args.find((a) => a.startsWith('--filter=')) ?? '').split('=')[1] ?? '';
 const timeoutMs = Number((args.find((a) => a.startsWith('--timeout=')) ?? '').split('=')[1] ?? 900_000);
@@ -60,7 +64,7 @@ console.log('='.repeat(78));
 const results = [];
 for (const f of files) {
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, [path.join(HERE, f)], {
+  const r = spawnSync(process.execPath, [path.join(HERE, f), ...extraArgsFor(f)], {
     encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env },
   });
@@ -76,22 +80,32 @@ for (const f of files) {
   //     · 观测模式套件（redteam-r3-*）：本身无 pass/fail 门槛（探针/度量/打标导出），
   //       只以退出码判定，标记 OBS，不参与断言计数
   //   exit code 始终是权威信号。
-  //   本仓库实测存在**三种**摘要格式（全部都要认，否则全绿套件被判 NO-SUMMARY）：
+  //   本仓库实测存在**四种**摘要格式（全部都要认，否则全绿套件被判 NO-SUMMARY）：
   //     ① "59 PASS / 0 FAIL"            （run-learn-real-e2e、test-learn-core…）
   //     ② "44 pass, 0 fail"             （test-learn-ac5-gap-veto、stage85-twins…）
   //     ③ "PASS = 8  FAIL = 0"          （test-learn-plugin-contract）
+  //     ④ "结果：PASS 22 / FAIL 0"       （test-learn-b1-session-access —— 2026-09-27 补，
+  //        此前该套件本体 exit 0 且 22P/0F，却因格式未识别被判 NO-SUMMARY，属**回归器假警报**）
   //   统一用一条交替正则，取**最后一条**摘要（多套件会在中途打印阶段性摘要）。
-  const sumRe = /(?:(\d+)\s*PASS\s*\/\s*(\d+)\s*FAIL)|(?:(\d+)\s*pass\s*,\s*(\d+)\s*fail)|(?:PASS\s*=\s*(\d+)\s+FAIL\s*=\s*(\d+))/gi;
+  const sumRe = /(?:(\d+)\s*PASS\s*\/\s*(\d+)\s*FAIL)|(?:(\d+)\s*pass\s*,\s*(\d+)\s*fail)|(?:PASS\s*=\s*(\d+)\s+FAIL\s*=\s*(\d+))|(?:结果[：:]\s*PASS\s*(\d+)\s*\/\s*FAIL\s*(\d+))/gi;
   let m2, last = null;
   while ((m2 = sumRe.exec(out)) !== null) last = m2;
   const isObs = /^redteam-/.test(f);
   let p = 0, fl = 0, kind = 'gated', summary = '';
   if (last) {
-    p = Number(last[1] ?? last[3] ?? last[5]);
-    fl = Number(last[2] ?? last[4] ?? last[6]);
+    p = Number(last[1] ?? last[3] ?? last[5] ?? last[7]);
+    fl = Number(last[2] ?? last[4] ?? last[6] ?? last[8]);
     summary = last[0].trim();
   } else if (isObs) {
     kind = 'OBS';
+  } else if (/verdict:\s*(PASS|FAIL)/i.test(out)) {
+    // ⑤ 门套件以**文本裁决行**收尾（mount-gate：`--- verdict: PASS (expect=pass) ---`，
+    //   无数字摘要）→ 用裁决词折算 1/0。仅在无数字摘要时启用（数字摘要是更强的口径），
+    //   否则会把"某子项 verdict: PASS"误当整套件结论。
+    const vm = out.match(/verdict:\s*(PASS|FAIL)/i);
+    const passed = /^pass$/i.test(vm[1]);
+    p = passed ? 1 : 0; fl = passed ? 0 : 1;
+    kind = 'gated'; summary = `verdict=${vm[1].toUpperCase()}`;
   } else {
     kind = 'NO-SUMMARY';
     summary = 'no PASS/FAIL summary found in any known format';

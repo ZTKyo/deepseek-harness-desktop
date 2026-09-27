@@ -172,7 +172,10 @@ const BRANCH = C.candidateBranchName(ID);
 const LABEL = C.candidateTransactionLabel(ID);
 check('候选已 propose 且派生名一致（分支名/事务 label 都由 id 派生）', () => {
   assertEq(BRANCH, 'candidate/' + ID, 'branch name');
-  assertEq(LABEL, 'candidate:' + ID, 'tx label');
+  assertEq(LABEL, 'candidate-' + ID, 'tx label');
+  // 真实缺陷回归锁：引擎把 label 拼进 transactionId，而 transactionId 是 checkpoint 的目录名，
+  // 故 label 必须文件系统安全（曾经用 'candidate:<id>'，真跑必炸 New-Item 路径格式不支持）。
+  assert(/^[A-Za-z0-9._-]+$/.test(LABEL), `tx label 必须文件系统安全: ${LABEL}`);
   return `id=${ID}`;
 });
 

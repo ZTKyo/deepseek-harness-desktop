@@ -178,16 +178,31 @@ export const CANDIDATE_BRANCH_PREFIX = 'candidate/';
 /** git 对象名（40 位小写十六进制 sha1 / sha256 截断口径同一校验）。 */
 const GIT_OBJECT_RE = /^[0-9a-f]{40}$/;
 
+/**
+ * 事务 label 必须**文件系统安全**：dsh-transaction.ps1 把 label 拼进 transactionId，
+ * 而 transactionId 是 checkpoint 的目录名（Windows 目录名禁用 `: * ? " < > |`）。
+ * 不安全 = 真实事务永远 checkpoint 失败 = 真实晋升不可能，故在门口就拒。
+ */
+const TX_LABEL_SAFE_RE = /^[A-Za-z0-9._-]{1,96}$/;
+
 /** 确定性分支名：candidate/<candidateId>。 */
 export function candidateBranchName(candidateId) {
   const id = cleanStr(candidateId, 64);
   return id ? `${CANDIDATE_BRANCH_PREFIX}${id}` : '';
 }
 
-/** 确定性事务 label：candidate:<candidateId>（与既有 dsh-transaction.ps1 的 -Label 同一口径）。 */
+/**
+ * 确定性事务 label：candidate-<candidateId>（喂给既有 dsh-transaction.ps1 的 -Label）。
+ *
+ * 为什么不是 `candidate:<id>`：引擎把 label 直接拼进 transactionId，而 transactionId 又是
+ * checkpoint 的**目录名**（New-DshTransactionCheckpoint → Get-DshTxCheckpointDir）。
+ * Windows 目录名不允许 `:`，真实端到端跑出来就是
+ * "New-Item : The given path's format is not supported"——即带 `:` 的 label 永远无法 checkpoint，
+ * 真实晋升根本走不通。故本口径必须**文件系统安全**（[A-Za-z0-9._-]）。
+ */
 export function candidateTransactionLabel(candidateId) {
   const id = cleanStr(candidateId, 64);
-  return id ? `candidate:${id}` : '';
+  return id ? `candidate-${id}` : '';
 }
 
 /**
@@ -263,6 +278,11 @@ export function verifyPromotionReceipts(candidate, receipts) {
   const expectBranch = candidateBranchName(candidate.id);
   const expectLabel = candidateTransactionLabel(candidate.id);
   const s = receiptSummaryOf(receipts);
+
+  // ③ 事务 label 必须文件系统安全（否则真实事务在 checkpoint 阶段必炸）
+  if (!TX_LABEL_SAFE_RE.test(expectLabel)) {
+    return { ok: false, error: 'promotion_label_not_filesystem_safe', leg: 'transaction', detail: `label=${expectLabel || '(empty)'}` };
+  }
 
   // ③ git 腿：既有 git 的隔离分支 + 40 位对象名（证明有真实隔离分支/工作树）
   if (!PROMOTION_RECEIPT_SYSTEMS.git.includes(s.git.system)) {

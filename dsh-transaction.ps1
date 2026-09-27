@@ -32,10 +32,27 @@ if (-not (Get-Command Get-DshLoopbackOwner -ErrorAction SilentlyContinue)) {
     try { . (Join-Path $PSScriptRoot 'dsh-process-identity.ps1') } catch {}
 }
 
+# 事务 id 会成为 checkpoint 的**目录名**，故必须是合法文件系统名。
+# 历史缺陷：调用方传 label='candidate:cand_xxx'（带 `:`）时，transactionId 带着 `:` 去 New-Item，
+# 报 "The given path's format is not supported"，事务在 checkpoint 阶段就崩、且错误信息毫无指向性。
+# 现在：只在**目录名/id** 上把非法字符换成 '-'，journal 里的 label 字段仍保留调用方原值（可读性不变）。
+function ConvertTo-DshTxSafeToken([string]$Text) {
+    if (-not $Text) { return 'tx' }
+    $safe = [regex]::Replace($Text, '[\\/:*?"<>|\x00-\x1f]', '-')
+    $safe = $safe.Trim('.', '-', ' ')
+    if (-not $safe) { return 'tx' }
+    if ($safe.Length -gt 64) { $safe = $safe.Substring(0, 64) }
+    return $safe
+}
+
 function New-DshTransactionId([string]$Label) {
     $ts = Get-Date -Format 'yyyyMMdd-HHmmss'
     $rand = [guid]::NewGuid().ToString('N').Substring(0, 6)
-    return ("{0}-{1}-{2}" -f $Label, $ts, $rand)
+    $token = ConvertTo-DshTxSafeToken $Label
+    if ($token -ne $Label) {
+        Write-Warning ("New-DshTransactionId: label '{0}' 含文件名非法字符，id 目录名使用 '{1}'（journal 中 label 仍为原值）" -f $Label, $token)
+    }
+    return ("{0}-{1}-{2}" -f $token, $ts, $rand)
 }
 
 function Get-DshTxJournal {

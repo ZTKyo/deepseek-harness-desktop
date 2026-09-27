@@ -102,7 +102,15 @@ import {
 
 // R2 STAGE 8.5：合格能力缺口 → 候选。**复用** R2 STAGE 6-7 的候选生命周期，
 // 不新建第二套候选/自主研究机制（合同禁止重复系统）。
-import { proposeCandidate, rejectCandidate, emptyCandidateStore } from './learn-candidate.mjs';
+import {
+  proposeCandidate, rejectCandidate, emptyCandidateStore,
+  // P4 FINAL GAP CLOSURE R3 · **AC2（自主研究腿）**：一律**复用**候选面既有的唯一来源——
+  // 有界上限（MAX_RESEARCH_ATTEMPTS）/ 计划生成（researchPlan）/ 尝试记账（recordResearchAttempt）/
+  // 阶梯选择（chooseCandidateKind）/ 风险分级（classifyResearchRisk）/ 确定性 id 派生（candidateIdOf）/
+  // 委托去处（STAGE_DELEGATION）。**不自建第二套研究机制，也不起常驻进程**（AC8）。
+  MAX_RESEARCH_ATTEMPTS, researchPlan, recordResearchAttempt, chooseCandidateKind,
+  classifyResearchRisk, candidateIdOf, STAGE_DELEGATION,
+} from './learn-candidate.mjs';
 
 export const name = 'learn';
 // The production web host exposes the tool registry through Cordis injection.
@@ -519,6 +527,8 @@ export function apply(ctx, config = {}) {
       gapObservedKeys: gapObservedKeys.size,
       gapVetoedKeys: gapVetoedKeys.size,
       candidateStores: candidateStores.size,
+      // R3 AC2：研究腿账本（per-session，随会话 LRU 淘汰；同样必须 bounded）
+      researchLegs: researchLegs.size,
     };
   }
 
@@ -750,6 +760,149 @@ export function apply(ctx, config = {}) {
     const ev = telemetryEvent(kind, payload, Date.now());
     if (!ev.ok) return stores.get(sid);
     return commit(sid, appendTelemetry(getStore(sid), ev.value));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // P4 FINAL GAP CLOSURE R3 · **AC2 自主研究腿**（有界 · 留痕 · 可闭环）
+  // 合同依据：AC2「**无经验覆盖**的低风险陌生任务 ⇒ 自主研究，而不是第一时间失败」；
+  //           AC8「研究**有界**（禁无限重试）、跑在**隔离测试腿**、**不新增常驻 daemon**」。
+  // 复用而非新建（合同【复用规则】）：上限 / 计划 / 尝试记账 / 阶梯选择 / 委托去处一律取自
+  //   learn-candidate 的既有唯一来源；遥测追加到同一权威 TELEMETRY_KINDS；
+  //   **不建第二套研究系统，也不起任何常驻进程**。
+  // 两个真实触发点（都是**事实**，不是启发式猜测）：
+  //   ① 任务级：`learn_recall` **无命中** = 无经验覆盖 ⇒ 打开研究腿（AC2 的主场景）。
+  //   ② 缺口级：能力缺口合格、要建立候选时 ⇒ 用 `researchPlan(gap)` 生成有界计划并留痕
+  //     （此前 `researchPlan` 无任何调用者 = A10 药丸 2 所指的纸面缺陷）。
+  // 闭环：研究腿产出的经验通过**确定性验证** ⇒ 记 RESEARCH_FULFILLED 并关闭该腿。
+  // 有界：每条腿上限 MAX_RESEARCH_ATTEMPTS 次尝试；每会话上限 MAX_RESEARCH_LEGS_PER_SESSION 条；
+  //       结构随会话 LRU 淘汰（与 stores/watermarks 同一口径）。
+  // ═══════════════════════════════════════════════════════════════════════════
+  const researchLegs = new Map();   // sid -> Map<subjectKey, leg>（仅内存、有界、不落盘）
+  const MAX_RESEARCH_LEGS_PER_SESSION = 32;   // per-session 防刷（与 gapObservedKeys 同一惯用法）
+
+  function researchLedgerFor(sid) {
+    let m = researchLegs.get(sid);
+    if (!m) {
+      // 与 stores/watermarks 同一 per-session 口径：LRU 淘汰并保留活跃会话；绝不整表 clear()
+      evictLRU(researchLegs, MAX_TRACKED_SESSIONS, activeSessions);
+      m = new Map();
+      researchLegs.set(sid, m);
+    }
+    return m;
+  }
+
+  /** 研究腿的**只读**快照（测试/诊断用；不外泄内部 Map 句柄）。 */
+  function researchLegView(sid) {
+    const m = researchLegs.get(sid);
+    if (!m) return [];
+    return [...m.values()].map((l) => ({ ...l }));
+  }
+
+  /**
+   * 打开（或续用）一条**有界**研究腿。
+   *
+   * 纪律：本函数**只生成有界计划与留痕**，绝不执行任何研究动作、不起后台任务/常驻进程（AC8）。
+   * 达上限 ⇒ 拒绝再打开（`research_bounded_exhausted`，与 AC8「禁无限重试」同一判据）。
+   *
+   * @returns {{ok:true, leg:object, directive:object}|{ok:false, error:string, exhausted?:boolean, ...}}
+   */
+  function openResearchLeg(sid, { subject, source, at } = {}) {
+    const text = typeof subject === 'string' ? subject : '';
+    const key = candidateIdOf(text);   // 确定性 subjectKey（与候选 id 同一派生，绝不随机/不随时间漂移）
+    if (!key) return { ok: false, error: 'missing_subject' };
+    const ledger = researchLedgerFor(sid);
+    const prior = ledger.get(key);
+    if (!prior && ledger.size >= MAX_RESEARCH_LEGS_PER_SESSION) {
+      return { ok: false, error: 'research_leg_capacity_exhausted', attemptsUsed: 0, maxAttempts: MAX_RESEARCH_ATTEMPTS };
+    }
+    const attemptsUsed = prior ? prior.attemptsUsed : 0;
+    // 有界记账：**复用**候选面唯一的有界权威（含"达上限即拒绝"语义），不在此处自算上限
+    const rec = recordResearchAttempt(
+      { attemptsUsed, maxAttempts: MAX_RESEARCH_ATTEMPTS },
+      { at: Number.isSafeInteger(at) ? at : Date.now(), outcome: 'PROGRESS', detail: `research leg opened via ${source ?? 'unknown'}` },
+    );
+    if (!rec.ok) {
+      if (prior) { prior.exhausted = true; }
+      return { ok: false, error: rec.error, exhausted: true, attemptsUsed, maxAttempts: MAX_RESEARCH_ATTEMPTS, legId: prior ? prior.legId : null };
+    }
+    const nextUsed = rec.candidate && Number.isInteger(rec.candidate.attemptsUsed) ? rec.candidate.attemptsUsed : attemptsUsed + 1;
+    // 风险分级（确定性、纯函数）：LOW ⇒ 可自主研究；HIGH ⇒ 仍可研究，但**动作**必须走人工门
+    const risk = classifyResearchRisk(text);
+    // 阶梯选择：**复用**候选面的唯一阶梯（RULE → EXTEND_SKILL → NEW_SKILL → NEW_PLUGIN）
+    const choice = chooseCandidateKind({ ruleExpressible: false, existingSkill: '', requiresRuntimeCapability: false });
+    const leg = {
+      legId: `leg_${String(key).replace(/^cand_/, '')}`,
+      subjectKey: key,
+      subject: oneLine(text, 200),
+      source: source ?? 'unknown',
+      riskClass: risk.riskClass,
+      riskMatched: risk.matched,
+      candidateKind: choice.kind,
+      attemptsUsed: nextUsed,
+      maxAttempts: MAX_RESEARCH_ATTEMPTS,
+      openedAt: prior ? prior.openedAt : (Number.isSafeInteger(at) ? at : Date.now()),
+      lastAt: Number.isSafeInteger(at) ? at : Date.now(),
+      exhausted: nextUsed >= MAX_RESEARCH_ATTEMPTS,
+      fulfilledAt: null,
+      fulfilledBy: null,
+    };
+    ledger.set(key, leg);
+    return { ok: true, leg, directive: researchDirectiveFor(leg) };
+  }
+
+  /**
+   * 面向**调用方（agent）**的研究腿指令：可执行、可审计、有界，且是**纯数据**（JSON 可序列化）。
+   * 这是 AC2「自主研究」从条款变成**可执行事实**的地方：调用方拿到的不是一句"应该研究"，
+   * 而是带 legId / 上限 / 风险分级 / 隔离腿去处 / 验证要求 / 闭环条件的具体指令。
+   */
+  function researchDirectiveFor(leg) {
+    return {
+      legId: leg.legId,
+      state: leg.exhausted ? 'EXHAUSTED' : 'OPEN',
+      trigger: leg.source,
+      riskClass: leg.riskClass,
+      // AC2 的前置条件"低风险"在此落地：HIGH 只允许研究并产出提案，动作必须人工门。
+      autonomy: leg.riskClass === 'HIGH' ? 'research_only_actions_human_gated' : 'autonomous_research_apply_low_risk',
+      bounded: true,
+      maxAttempts: leg.maxAttempts,
+      attemptsUsed: leg.attemptsUsed,
+      remaining: Math.max(0, leg.maxAttempts - leg.attemptsUsed),
+      daemon: false,                                        // 显式：不新增常驻进程（AC8）
+      candidateKind: leg.candidateKind,                     // 合同 §七 阶梯
+      delegatesTo: STAGE_DELEGATION.ISOLATED_TESTS.system,   // 隔离测试腿（AC8）
+      noExperienceCoverage: true,
+      steps: [
+        '① 先查证：用只读研究工具（web_search / web_fetch / read）核对该任务的标准做法或官方 API，禁止凭记忆臆断。',
+        '② 分动作：把"要验证的假设"与"要执行的动作"分开；删除/权限/凭据/付费/生产环境类动作一律先经人类批准。',
+        '③ 隔离验证：在临时目录、只读探针或隔离测试腿里做最小实验，绝不直接改生产状态或用户数据。',
+        '④ 记账：每次尝试都算一次有界尝试；达到上限即停止（禁无限重试）。',
+        '⑤ 沉淀：把结论写成 learn_propose 的 body（带真实 sourceEventSeqs 与可机校验证据），再用 learn_verify 取证闭环。',
+      ],
+      verificationRequirement: '结论必须带**机器可校验**证据：file_hash(sha256) / system_api(本机 GET 期望状态码) / session_outcome(官方原始会话事实)；仅文字描述不算验证通过。',
+      closure: '本条研究腿由**通过确定性验证**的经验闭环（遥测 RESEARCH_FULFILLED）；达上限则记 RESEARCH_BOUNDED_EXHAUSTED 并停止，不影响经验库其余功能。',
+    };
+  }
+
+  /**
+   * 研究腿**闭环**：由通过**确定性验证**的经验关闭本会话的研究腿。
+   * 只关闭"开启时间不晚于该经验创建时间"的腿（时间序是硬约束：腿之后才产出的经验才可能是它的产物）。
+   *
+   * @returns {string[]} 被关闭的 legId 列表（空数组 = 本会话当前没有可闭环的研究腿）
+   */
+  function fulfillResearchLegs(sid, { at, experienceId, experienceCreatedAt } = {}) {
+    const m = researchLegs.get(sid);
+    if (!m || m.size === 0) return [];
+    const now = Number.isSafeInteger(at) ? at : Date.now();
+    const created = Number.isSafeInteger(experienceCreatedAt) ? experienceCreatedAt : now;
+    const closed = [];
+    for (const leg of m.values()) {
+      if (leg.fulfilledAt) continue;
+      if (Number.isSafeInteger(leg.openedAt) && leg.openedAt > created) continue;   // 早于研究腿的经验不是它的产物
+      leg.fulfilledAt = now;
+      leg.fulfilledBy = typeof experienceId === 'string' ? experienceId : null;
+      closed.push(leg.legId);
+    }
+    return closed;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1159,6 +1312,10 @@ export function apply(ctx, config = {}) {
     //    真正新建时记录 ⇒ 这里每步都安全执行（解除逻辑 ⑤ 需要每步都算，不能加 early-return）。
     const produced = [];
     const underThreshold = [];
+    // ★ AC2（P4 FINAL GAP CLOSURE R3）：本步为**合格缺口**产出的有界研究计划（合同 §七）。
+    //   此前 `researchPlan` 是**死代码**（实现里存在、却无任何调用者）——这正是 A10 药丸 2
+    //   指出的"AC2 没有字面依据"。这里给它**唯一调用者**，走既有遥测面留痕，不新建第二套研究系统。
+    const researchPlans = [];
     for (const [dedupKey, g] of groups) {
       if (g.seqs.length < REPEAT_THRESHOLD) { underThreshold.push({ dedupKey, count: g.seqs.length }); continue; }
       const observations = g.seqs.map((seq) => ({
@@ -1216,6 +1373,27 @@ export function apply(ctx, config = {}) {
         reason: `adapter=v${gap.adapterVersion}`,
       });
       diag(`CAPABILITY-GAP-QUALIFIED sid=${sid} id=${res.candidate.id} origin=${gap.origin} taskType=${gap.taskType} observations=${gap.count} (state=PROPOSED, not promoted)`);
+
+      // ★ AC2（P4 FINAL GAP CLOSURE R3）：**合格缺口 ⇒ 有界研究计划**。
+      //   与无经验覆盖的召回未命中（learn_recall）互补：这里是"重复失败暴露的能力缺口"路径。
+      //   计划内容（上限/风险分级/隔离腿去处/验证要求/闭环条件）全部来自 learn-candidate 的
+      //   **唯一**研究计划生成器 `researchPlan`，本插件不复制、不另立阈值。
+      const planRes = researchPlan(gap);
+      if (planRes.ok) {
+        const plan = planRes.plan;
+        researchPlans.push({ candidateId: res.candidate.id, ...plan });
+        tel(sid, 'RESEARCH_REQUESTED', {
+          experienceId: res.candidate.id,
+          // 只引用 `researchPlan` **实际存在**的字段（normalizedSignature/kind/maxAttempts/daemon/
+          // delegatesTo），绝不杜撰字段名（A2 宿主校验教训：不存在=undefined 会污染留痕）。
+          detail: `bounded research plan: kind=${plan.kind} taskType=${plan.taskType} maxAttempts=${plan.maxAttempts} daemon=${plan.daemon} delegatesTo=${plan.delegatesTo} subject=${oneLine(plan.normalizedSignature, 120)}`,
+          count: plan.maxAttempts,
+          reason: `source=capability_gap_qualified kindReason=${plan.kindReason} closure=deterministic_verification_required`,
+        });
+        diag(`RESEARCH-PLAN sid=${sid} id=${res.candidate.id} kind=${planRes.plan.kind} maxAttempts=${planRes.plan.maxAttempts} delegatesTo=${planRes.plan.delegatesTo} (bounded, daemon=false)`);
+      } else {
+        warn(`research plan unavailable for gap id=${res.candidate.id}: ${planRes.error}`);
+      }
     }
 
     // ④ 仅作为**证据**的观测（未达阈值）：记遥测，使运维能回答"为什么还没建立候选"。
@@ -1269,6 +1447,10 @@ export function apply(ctx, config = {}) {
           warn(`candidate withdraw failed id=${c.id}: ${rr.error}`);
         }
       }
+    }
+    // ★ AC2：本步为**合格缺口**产出的研究计划汇总留痕（计划本身已逐条记 RESEARCH_REQUESTED 遥测）。
+    if (researchPlans.length > 0) {
+      diag(`RESEARCH-PLAN-SUMMARY sid=${sid} plans=${researchPlans.map((p) => `${p.candidateId}:${p.kind}/max${p.maxAttempts}`).join(',')} (bounded, daemon=false)`);
     }
     return produced;
   }
@@ -1531,6 +1713,9 @@ export function apply(ctx, config = {}) {
             considered: { type: 'number' },
             excluded: { type: 'number' },
             blocked: { type: 'array' },
+            // R3 AC2：**无经验覆盖**时给出的有界研究腿指令（纯数据；无研究腿时该键**完全省略**，
+            // 绝不制造 null/undefined 占位 —— 见 A2 宿主校验教训）。
+            researchDirective: { type: 'object', additionalProperties: true },
           },
         },
         render: (_a, v) => [{ type: 'text', text: JSON.stringify(v) }],
@@ -1548,6 +1733,8 @@ export function apply(ctx, config = {}) {
           now: Date.now(),
           ledger: approvalLedger,
         });
+        // R3 AC2：研究腿结果（仅**无命中**时才有值；有命中时保持 null，不产生任何副作用）
+        let legRes = null;
         if (res.items.length > 0) {
           const fromGlobal = res.items.filter((i) => i.scope === 'global').length;
           commit(sid, recordRecall(store, res.items.map((i) => i.id), Date.now()));
@@ -1555,15 +1742,77 @@ export function apply(ctx, config = {}) {
             count: res.items.length,
             detail: `${oneLine(args.query, 100)} (global=${fromGlobal}, blocked=${Array.isArray(res.blocked) ? res.blocked.length : 0})`,
           });
+        } else {
+          // ★ AC2（P4 FINAL GAP CLOSURE R3）：**检索无命中 = 无经验覆盖**（真事实，不是启发式猜测）
+          //   ⇒ 打开一条**有界**研究腿，使"陌生任务不第一时间失败"成为**可执行事实**：
+          //   调用方拿到的是带 legId / 上限 / 风险分级 / 隔离腿去处 / 验证要求 / 闭环条件的具体指令。
+          //   注意：经验库其余功能**不受影响**（研究腿只在内存、有界、LRU 淘汰），这是额外能力而非闸门。
+          const at = Date.now();
+          tel(sid, 'EXPERIENCE_LOOKUP_MISS', {
+            detail: `no experience coverage for: ${oneLine(args.query, 100)}`,
+            count: res.considered,
+            reason: `excluded=${res.excluded} blocked=${Array.isArray(res.blocked) ? res.blocked.length : 0}`,
+          });
+          legRes = openResearchLeg(sid, { subject: args.query, source: 'task_no_experience_coverage', at });
+          if (legRes.ok) {
+            tel(sid, 'RESEARCH_REQUESTED', {
+              detail: `bounded research leg opened: ${legRes.leg.legId} risk=${legRes.leg.riskClass} kind=${legRes.leg.candidateKind} maxAttempts=${legRes.leg.maxAttempts} subject=${oneLine(args.query, 120)}`,
+              count: legRes.leg.attemptsUsed,
+              reason: `source=${legRes.leg.source} delegatesTo=${legRes.directive.delegatesTo}`,
+            });
+          } else if (legRes.exhausted) {
+            // AC8「禁无限重试」在同一条腿上的落地：达上限即停止，只留痕、不再打开。
+            tel(sid, 'RESEARCH_BOUNDED_EXHAUSTED', {
+              detail: `research leg bounded-out: ${legRes.legId ?? 'new-subject'} attempts=${legRes.attemptsUsed}/${legRes.maxAttempts} subject=${oneLine(args.query, 120)}`,
+              count: legRes.attemptsUsed,
+              reason: legRes.error,
+            });
+          } else if (legRes.error === 'research_leg_capacity_exhausted') {
+            // 会话级有界（防刷）：腿数已达上限 ⇒ 不再开新腿。同样**留痕**，
+            // 否则"有界"只存在于代码里、事后无法从遥测回答"为什么没开腿"。
+            tel(sid, 'RESEARCH_BOUNDED_EXHAUSTED', {
+              detail: `session research-leg capacity reached: ${MAX_RESEARCH_LEGS_PER_SESSION} legs; no new leg opened for subject=${oneLine(args.query, 120)}`,
+              count: MAX_RESEARCH_LEGS_PER_SESSION,
+              reason: legRes.error,
+            });
+          }
         }
-        diag(`RECALL sid=${sid} q="${oneLine(args.query, 40)}" hits=${res.items.length} excluded=${res.excluded} blocked=${Array.isArray(res.blocked) ? res.blocked.length : 0}`);
-        return {
+        diag(`RECALL sid=${sid} q="${oneLine(args.query, 40)}" hits=${res.items.length} excluded=${res.excluded} blocked=${Array.isArray(res.blocked) ? res.blocked.length : 0}${legRes && legRes.ok ? ` researchLeg=${legRes.leg.legId}(${legRes.leg.riskClass})` : legRes && legRes.exhausted ? ' researchLeg=EXHAUSTED' : ''}`);
+        const out = {
           ok: true,
           items: res.items,
           considered: res.considered,
           excluded: res.excluded,
           blocked: res.blocked ?? [],
         };
+        // 只在**真的有**研究腿时带上该键（成功 = 完整指令；达上限 = 停止说明）。
+        // 绝不制造 null / undefined 占位：宿主校验器（dsh-tools/lib/index.js L457/L465）会因此整条拒绝。
+        if (legRes && legRes.ok) {
+          out.researchDirective = legRes.directive;
+        } else if (legRes && legRes.exhausted) {
+          out.researchDirective = {
+            state: 'EXHAUSTED',
+            trigger: 'task_no_experience_coverage',
+            bounded: true,
+            maxAttempts: legRes.maxAttempts,
+            attemptsUsed: legRes.attemptsUsed,
+            daemon: false,
+            error: legRes.error,
+            note: '研究腿已达有界上限 ⇒ 停止继续研究（禁无限重试）；经验库其余功能不受影响。',
+          };
+          if (typeof legRes.legId === 'string') out.researchDirective.legId = legRes.legId;
+        } else if (legRes && legRes.error === 'research_leg_capacity_exhausted') {
+          out.researchDirective = {
+            state: 'CAPACITY_EXHAUSTED',
+            trigger: 'task_no_experience_coverage',
+            bounded: true,
+            maxLegsPerSession: MAX_RESEARCH_LEGS_PER_SESSION,
+            daemon: false,
+            error: legRes.error,
+            note: '本会话研究腿数量已达上限 ⇒ 不再开新腿（有界/防刷）；经验库其余功能不受影响。',
+          };
+        }
+        return out;
       },
     });
 
@@ -1637,6 +1886,21 @@ export function apply(ctx, config = {}) {
             detail: `deterministic verification PASS (method=${res.method})`,
           });
           diag(`VERIFY sid=${sid} id=${args.experienceId} PASS method=${res.method}`);
+          // ★ AC2（P4 FINAL GAP CLOSURE R3）：**研究腿闭环**。
+          //   研究腿产出的经验通过**确定性验证** ⇒ 记 RESEARCH_FULFILLED 并关闭该腿
+          //   （这是 `RESEARCH_BOUNDED_EXHAUSTED` 的对偶：一个"有界研究成功闭环"的可审计事实）。
+          //   时间序是硬约束：只关闭"开启于该经验创建之前"的腿。
+          const fulfilledLegs = fulfillResearchLegs(sid, {
+            at: Date.now(), experienceId: args.experienceId, experienceCreatedAt: after.createdAt,
+          });
+          if (fulfilledLegs.length > 0) {
+            tel(sid, 'RESEARCH_FULFILLED', {
+              experienceId: args.experienceId,
+              count: fulfilledLegs.length,
+              detail: `research leg(s) closed by verified experience: ${fulfilledLegs.join(',')} (method=${res.method})`,
+            });
+            diag(`RESEARCH FULFILLED sid=${sid} legs=${fulfilledLegs.join(',')} by=${args.experienceId}`);
+          }
         } else {
           tel(sid, 'VERIFICATION_FAILED', {
             experienceId: args.experienceId, reason: res.error,
@@ -1708,7 +1972,20 @@ export function apply(ctx, config = {}) {
         const sid = sidOf(exec);
         if (!sid) throw new Error('learn_status: no session context (exec.agent missing)');
         const store = getStore(sid);
-        const summary = telemetrySummary(store);
+        // ★ AC2（P4 FINAL GAP CLOSURE R3）：`researchLegView` 的**唯一消费者**。
+        //   把研究腿（有界、只读、内存态）纳入只读状态面，使这些问题可事后回答：
+        //   "为什么开了研究腿 / 风险分级是什么 / 用了几次、还剩几次 / 是否已达上限"。
+        //   summary 在 schema 里是 additionalProperties:true（自由形状）⇒ 纯增量，不破坏任何契约。
+        const summary = {
+          ...telemetrySummary(store),
+          researchLegs: researchLegView(sid),
+          researchBounded: {
+            maxLegsPerSession: MAX_RESEARCH_LEGS_PER_SESSION,
+            maxAttemptsPerLeg: MAX_RESEARCH_ATTEMPTS,
+            daemon: false,
+            persistence: 'in_memory_only',
+          },
+        };
         const experiences = store.experiences.map((e) => ({
           id: e.id, state: e.state, promotion: e.promotion, title: e.title,
           recallCount: e.recallCount, sourceEventSeqs: e.sourceEventSeqs,

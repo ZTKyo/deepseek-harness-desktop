@@ -35,6 +35,9 @@
  *
  * 用法：node tests/learn/mount-gate.mjs --plugin <learn.mjs 绝对路径> [--expect pass|fail]
  *        [--port 3099] [--timeout 90] [--slug name] [--keep]
+ *        [--hold <ms>] [--release <file>]   ← 可选：boot 成功后**保持宿主存活**这段时间
+ *            （释放文件优先于超时），供 AC6 真实 E2E 在活的隔离宿主上跑真实 transaction 腿。
+ *            不传时行为与原来完全一致。
  *   --expect fail = 反例自证：要求出现失败签名 + inject 事故签名
  * 退出码：0 符合预期；1 不符合；2 参数/环境错误
  */
@@ -101,6 +104,7 @@ const stateDir = path.join(scratch, 'state');
 const probeOut = path.join(scratch, 'probe.json');
 const logPath = path.join(scratch, 'boot.log');
 const resultPath = path.join(scratch, 'result.json');
+const holdStatePath = path.join(scratch, 'hold-state.json');
 const profileName = `_mountgate-${SLUG}`;
 const profileDir = path.join(PROFILES, profileName);
 fs.mkdirSync(stateDir, { recursive: true });
@@ -254,6 +258,26 @@ const checks = [
   { id: 'A4', desc: 'no tool-surface warnings in log', pass: !has(/tool surface unavailable/) && !has(/expected 6 tool specs, collected/) },
 ];
 const injectSignature = has(/cannot get property "sessions" without inject/);
+
+// ---- 3.5) 可选：HOLD（AC6 真实 E2E 用）----
+// 目的：让**真实** git worktree / CI / transaction 在"这个已 boot 的隔离宿主还活着"的时间窗内跑完，
+// 从而给 AC6 收据三腿产出**非伪造**的产物（transaction 腿必须真跑 commit gate）。
+// 不传 --hold 时行为与原来**逐字一致**（0 次等待、立即进收尾）。释放条件二选一：释放文件出现（优先）或超时。
+const HOLD_MS = Number(opt('hold', '0')) || 0;
+const RELEASE = opt('release', null);
+if (HOLD_MS > 0 && ready) {
+  const holdState = { port: PORT, childPid, profileName, plugin: PLUGIN, pluginSha256: sha256(PLUGIN), ready, holdMs: HOLD_MS, releaseFile: RELEASE, at: new Date().toISOString() };
+  fs.writeFileSync(holdStatePath, JSON.stringify(holdState, null, 2), 'utf8');
+  say(`HOLD_HOST_READY port=${PORT} pid=${childPid} profile=${profileName} holdMs=${HOLD_MS} releaseFile=${RELEASE || 'none'} state=${holdStatePath}`);
+  const holdDeadline = Date.now() + HOLD_MS;
+  while (Date.now() < holdDeadline) {
+    if (RELEASE && fs.existsSync(RELEASE)) { say('  hold released by file: ' + RELEASE); break; }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  say(`  hold done (elapsed=${HOLD_MS - Math.max(0, holdDeadline - Date.now())}ms) host still up=${exited === null}`);
+} else if (HOLD_MS > 0) {
+  say(`  hold skipped: host not ready (ready=${ready}, exited=${exited})`);
+}
 
 // ---- 4) 收尾（先证明要杀的是本门禁自己拉起的进程）----
 const cl = cmdlineOf(childPid);

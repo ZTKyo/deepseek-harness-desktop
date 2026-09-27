@@ -64,6 +64,24 @@ function driveToCanary(store, id) {
   return r.value;
 }
 
+/**
+ * AC6 收据：晋升必须交出既有 Git / CI / Transaction 三腿收据，形状逐字对齐三个既有系统的真实产物。
+ * （本文件只测管线状态机；收据门本身的逐腿 mutation 验收见 test-learn-candidate-receipts.mjs。）
+ */
+function realReceipts(id) {
+  const commitSha = 'c'.repeat(40);
+  return {
+    git: { system: 'git', branch: C.candidateBranchName(id), commitSha, worktreePath: 'C:\\tmp\\wt\\' + id, isolated: true },
+    ci: { system: 'ci-level2.yml', job: 'Reliability state machine tests', headSha: commitSha, conclusion: 'success', runUrl: 'https://github.com/ZTKyo/DeepSeek-Harness/actions/runs/1' },
+    transaction: {
+      system: 'dsh-transaction.ps1', label: C.candidateTransactionLabel(id),
+      transactionId: C.candidateTransactionLabel(id) + '-20260101-000000-abc123',
+      finalState: 'COMMITTED', verifyResult: 'COMMIT_READY(shallow)', faultClass: 'none', rollbackResult: 'none',
+      journalPath: 'C:\\tmp\\wt\\' + id + '\\tx-journal.json',
+    },
+  };
+}
+
 console.log('=== STAGE 6-7 验收：Candidate Lifecycle + Autonomous Research ===');
 console.log('');
 
@@ -319,6 +337,7 @@ check('E6 ★ 走完管线 + 人工批准 → 晋升成功（对照组）', () =
   const store = driveToCanary(p.value, p.candidate.id);
   const r = C.promoteCandidate(store, p.candidate.id, {
     at: T(4), approvedBy: 'operator', approvalEvidence: 'canary metrics reviewed', evidence: 'promote to rule',
+    receipts: realReceipts(p.candidate.id),
   });
   assert(r.ok, '正规晋升失败: ' + r.error);
   assertEq(r.candidate.state, 'PROMOTED');

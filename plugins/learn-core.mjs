@@ -183,6 +183,19 @@ export const TELEMETRY_KINDS = [
   'HUMAN_APPROVAL_DENIED',     // 通道拒绝/取消/不可用，或**无宿主事实**（自述审批）⇒ 绝不 mint APPROVED
   'HUMAN_APPROVAL_UNAVAILABLE',// 部署中不存在宿主批准通道（ctx.get('approval') 缺席）⇒ fail-closed 拒绝
   'APPROVAL_EXPIRED',          // 持久化审批的进程内签章不可验证（跨进程重启）⇒ 需人类重新批准
+  // ── AC2 自主研究腿面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
+  // A10 药丸 2 的缺陷：AC2 的"研究腿"在实现上**无字面痕迹**（`RESEARCH_BOUNDED_EXHAUSTED` 有，
+  // 却没有任何"打开研究腿 / 研究成功闭环"的可审计事实）⇒ 纸面条款。
+  // 下面三个 kind 让研究腿的**触发 / 打开 / 闭环**全部成为可审计事实，且全部走同一遥测权威：
+  'EXPERIENCE_LOOKUP_MISS',    // 检索**无命中** = 无经验覆盖（与 RECALLED 对偶；AC2 的触发事实，不是启发式猜测）
+  'RESEARCH_REQUESTED',        // AC2：无经验覆盖的低风险陌生任务 ⇒ 打开**有界**研究腿（计划/风险分级/委托去处留痕）
+  'RESEARCH_FULFILLED',        // AC2：研究腿由**通过确定性验证**的经验闭环（`RESEARCH_BOUNDED_EXHAUSTED` 的对偶）
+  // ── AC6 候选晋升收据面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
+  // A10 的 AC6 缺口：候选生命周期"有对象、有测试"，但 Transaction/CI 腿**调用数 = 0** ⇒
+  // 晋升路径上没有任何真实系统的收据。下面两个 kind 让"凭现有 Git/CI/Transaction 收据才能晋升"
+  // 从条款变成**可审计事实**（拒绝也留痕，不留静默死路径）：
+  'CANDIDATE_PROMOTION_DENIED',// AC6：晋升被**收据门**拒绝（缺/伪/不一致收据）⇒ 状态不变、Stable 不变
+  'CANDIDATE_RECEIPTS_ACCEPTED',// AC6：三腿收据（git/ci/transaction）全部来自**现有系统**且互相一致
 ];
 
 /** 学习允许写入的目标（白名单）；其余一律拒绝。 */

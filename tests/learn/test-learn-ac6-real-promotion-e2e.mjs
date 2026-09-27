@@ -282,8 +282,9 @@ const CI_SUITES = (() => {
 })();
 const PLUGIN_CONTRACT_GATE = 'tests/learn/test-learn-plugin-contract.mjs';
 check('从 ci-level2.yml 解析出 CLI 实际跑的套件清单（真"同一个 job"）', () => {
-  assert(CI_SUITES.length >= 13, `expected >=13 suites, got ${CI_SUITES.length}`);
+  assert(CI_SUITES.length >= 14, `expected >=14 suites, got ${CI_SUITES.length}`);
   assert(CI_SUITES.includes('tests/learn/test-learn-candidate-receipts.mjs'), 'AC6 suite not wired into CI');
+  assert(CI_SUITES.includes('tests/learn/test-learn-ac2-research-leg.mjs'), 'AC2 research-leg suite not wired into CI');
   return `${CI_SUITES.length} 套件 + plugin-contract gate`;
 });
 const ciLogLines = [];

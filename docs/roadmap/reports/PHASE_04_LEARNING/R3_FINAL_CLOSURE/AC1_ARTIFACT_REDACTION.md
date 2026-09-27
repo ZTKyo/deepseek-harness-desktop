@@ -30,8 +30,8 @@
 
 | 文件 | 家族 | 判定 |
 |---|---|---|
-| `deploy-backup-*/learn-core.mjs`、`_p4r2-evidence/pristine/learn-core.mjs`、`checkpoint/*/learn-core.mjs.*.before` | uri-credential×2 | 源码**注释里的文档示例**（形如 `postgres://user@host` 的连接串，中段口令为占位名）——脱敏会污染源码/pristine 基线 |
-| `ac1-fix/watchdog.mjs` + 其 `.backup-*` | generic-assignment×3 | **源码表达式**：`let token = …`、`token` 由 `randomBytes(32).toString('hex')` 产生、`fcmCache.accessToken = …` |
+| `deploy-backup-*/learn-core.mjs`、`_p4r2-evidence/pristine/learn-core.mjs`、`checkpoint/*/learn-core.mjs.*.before` | uri-credential×2 | 源码**注释里的文档示例**（一个 postgres 连接串示意，用户名与主机之间仅有占位名）——脱敏会污染源码/pristine 基线 |
+| `ac1-fix/watchdog.mjs` + 其 `.backup-*` | generic-assignment×3 | **源码表达式**：`token` 的初始化赋值、`randomBytes(32).toString('hex')` 调用、`fcmCache.accessToken` 赋值——皆为代码而非凭据 |
 | `_this-session.jsonl` | uri-credential×4, generic-assignment×3 | **本任务报告正文中的示例文本**（postgres 连接串示例、password 赋值示例——均不含真实口令，故不再复现字面形态） |
 | `repro/a6/test-learn-r3-secrets.mjs.txt`、`_ac1-secret-families.mjs` | 多族 | **负控合成夹具**（`'X'.repeat(24)` 一类构造样本），是测试证据本身 |
 

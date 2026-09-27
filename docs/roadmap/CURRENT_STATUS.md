@@ -644,3 +644,25 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
     （`OFFICIAL_DSH_UPGRADE = NO`、`UPSTREAM_SYNC = BLOCKED` 保持）、未进入 P5（`PHASE_05_STARTED = NO`）、
     **未**修任何旁支缺陷（six pre-existing defects / restart 缺陷 / P4 合同缺口一律 `NOT FIXED / OUT OF SCOPE`）、
     **未**重新实现 P4、**未**补 P4 AC、**未**在 Reviewer 99 生成新 verdict（只记执行结果）。
+
+  - **2026-09-28 00:25 P4 FINAL CLOSURE（R3 收尾回合，终局判定落地）**：
+    - **判定：`P4 ≠ VERIFIED`**（两条独立阻塞，均**非**本轮修复引入）：
+      ① **真人审批门结构上不可达**——本会话 approval policy=`never`，`dsh-user-approval` 在交互式
+         分发**之前**直接返回 rejected；实测 `learn_review(approve)` → `approval_not_granted:rejected`、
+         台账 `HUMAN_APPROVAL_REQUESTED → HUMAN_APPROVAL_DENIED`、全局库 `GLOBAL_PUBLISH_DENIED×2 / count=0`。
+         ⇒ 代理**只能请求、不能授予**；需**真人在 policy=ask 的新会话**批准 `exp-2ed0f0c9`。
+      ② **A10 独立复核确认 3 处合同缺口**（属既有范畴，本轮**只登记不修**）：AC2 运行时研究腿
+         `researchPlan` 零调用（mandatory 场景①未达成）、AC6 Transaction/canary/deploy 腿零调用
+         （`tests/learn` 中 `Transaction` 引用=0）、AC10 CI 内无真实 E2E 门（`ci-level2.yml:149-154` 自述排除 6 个真实门）。
+    - **已完成并生产生效**：B1/B2 修复（分支 `p4-final-b1b2-fix` @ `0d3adf7`，PR #97 merge=`171f1b4`）；
+      AC1 密钥族 **19** + 存量**自愈迁移生产生效**（重启后 `LEAK_AUDIT=CLEAN`，重启前 google=1/stripe=1 → **0**）；
+      全量回归 **29/29 套件全绿、1129 PASS / 0 FAIL**；生产健康 **200**、learn 工具**恰好 6 个**、
+      四插件 `source == deployed` 且 mtime < 服务启动时间、无重复注册 / 无崩溃签名 / 无未捕获异常。
+    - **真实服务级重启（非推断）**：PID **15540 → 20580**（00:17:59 绑定；00:18:45 `COMMIT_READY: True` → committed）。
+    - **本任务产物安全**：产物内 3 个文件含真实凭据副本（2 份配置备份含**与现行生产配置同值**的 Notion PAT、
+      1 份生产 store 快照含 google/stripe 形态）→ **就地脱敏 + 逐文件复验 0 命中**；
+      其余命中经无泄漏细看定性为源码表达式/文档示例/合成夹具（保留原样）。
+    - **未做（边界）**：未冻结 `POST_P4_VERIFIED_GOLDEN`（判定不是 VERIFIED）、未进 STAGE B（`NO`）、
+      未代外部评审出 verdict、未修任何旁支缺陷、未触碰生产配置与凭据库。
+    - 报告：`docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/`
+      （`P4_FINAL_VERDICT.md` + `A10_CONTRACT_MATRIX.md` + `AC1_ARTIFACT_REDACTION.md`）。

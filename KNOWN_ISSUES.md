@@ -147,3 +147,50 @@ copy 到 profile。建议后续把它加进挂载清单（属配置变更，需�
 **修复路径（供后续专项）**：排查 session.list 投影 updatedAt 的刷新时机（goal phase 变更
 后是否不再刷新），确认语义后二选一：修复刷新链路，或文档化"updatedAt=goal 状态变更时刻"
 以免误读为会话活动时间。
+
+---
+
+## 2026-09-28 P4 合同缺口 3 处（A10 独立复核确认；本轮**只登记不修**，属既有范畴）
+
+判定 P4 时发现，与 B1/B2 修复无关、也非本轮引入。修复会改 CI 工作流与插件架构 ⇒ 超出本轮授权
+（"最小修复 + 终局判定"），故一律 `NOT FIXED / OUT OF SCOPE`，仅登记证据：
+
+1. **AC2 运行时研究腿未接线**：`plugins/learn-candidate.mjs:181` 定义了 `researchPlan`，但 plugins
+   全量 grep **仅 1 处命中（=定义本身）**，`learn.mjs` 未 import、无调用者 ⇒ mandatory 场景①
+   （陌生低风险任务：自主研究→解决→保存经验）**无插件级证据、未达成**。
+   修复方向：决定"研究由 agent 工具链承担并在插件层留痕"或"插件层真接线研究腿"，二选一后补证据。
+2. **AC6 Candidate 复用/晋升的 Transaction/canary/deploy 腿零调用**：`learn-candidate.mjs:85-110`
+   `STAGE_DELEGATION` 声明了 `dsh-transaction.ps1` / reliability-lab / plugin-transaction，但
+   `tests/learn` 中 `Transaction` 引用 **= 0**；且 `ci-level1.yml:191` 把 `dsh-plugin-transaction.ps1`
+   列入 `$skip`。CI 腿是真的，其余三条腿**只有声明**。
+3. **AC10 CI 内无真实 E2E 门**：本地真实门全绿（`run-learn-real-e2e` 65P、`run-learn-real-gap-e2e` 20P、
+   `mount-gate` 1P、`test-learn-real-topology-tool-events` 22P），但 `ci-level2.yml:149-154` **自述刻意
+   把 6 个真实数据门排除出 CI** ⇒ 真实 E2E 依赖本地执行，CI 绿不能代表 AC10。
+
+---
+
+## 2026-09-28 任务产物会携带真实凭据副本（实测踩坑 + 处置规则）
+
+**现象**：做"密钥零泄漏"审计时发现，**任务自己的产物**才是真正的泄漏面——`_p4r2-final-closure/checkpoint/.../
+cordis.patch.yml.prod.before` 与 `_p4r2-evidence/prod-rollback-*/cordis.patch.yml` 各含 1 个
+**与现行生产配置同值**的 Notion PAT（哈希比对确认）；另有 1 份生产 store 快照含 google/stripe 形态的值。
+
+**规则（今后照做）**：任何"改前快照 / 回滚备份 / 会话转储 / 证据副本"在创建时就要**同步脱敏或明确标注**，
+不要等事后审计；审计时用"哈希比对"判定是否真值（只输出 true/false，绝不打印值）。
+
+**处置工具（可复用，留在 `_p4r2-final-closure/`）**：`_ac1-workspace-leak-scan.mjs`（19 族扫描）、
+`_ac1-hit-classify.mjs`（上下文分类）、`_ac1-peek.mjs`（无泄漏细看：只打前 45 字+占位符）、
+`_ac1-redact-artifacts.mjs`（就地脱敏 + 逐文件复验 0）。
+
+**配套坑（判据）**：源码**注释里的示例**（`postgres://user:s3cr3tP@ss@host`）、**源码表达式**
+（`token = randomBytes(32).toString('hex')`）、**测试夹具** 都会被密钥模式命中 —— 这三类**不许脱敏**
+（会把源码/基线/夹具改坏），要看上下文判定后保留。
+
+## 2026-09-28 PowerShell 5.1 `Out-File -Encoding UTF8` 带 BOM 连环坑（本回合踩两次）
+
+1. 用它写 JSON 供 node `JSON.parse` 读 → `SyntaxError: Unexpected token ''`；
+2. 用它写文件再整份 `git commit -F <file>` → 提交标题首字节是 BOM（`git log --format=%s` 显示 `fix(...)`）。
+
+**规则**：给工具/程序消费的文本一律用
+`[System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))`（**无 BOM**）；
+读取侧对不可控输入统一 `.replace(/^\uFEFF/,'')` 兜底。（注意与既有铁律区分：`.ps1/.cmd` **必须** UTF-8 **带** BOM。）

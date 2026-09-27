@@ -46,7 +46,7 @@
 
 | AC | 缺口 | 证据 |
 |---|---|---|
-| **AC2** | 运行时**研究腿未接线**：`researchPlan` 在插件内只有定义、无调用者 | `learn-candidate.mjs:181`；plugins 全量 grep 仅 1 处命中（=定义）⇒ mandatory 场景① **未达成** |
+| **AC2** | 运行时**研究腿未接线**：`researchPlan` 在插件内只有定义、无调用者 | `learn-candidate.mjs:181`；plugins 全量 grep 仅 1 处命中（=定义）⇒ mandatory 场景① **未达成**<br>**→ 2026-09-28 已修复并加锁，见下方「补记二」** |
 | **AC6** | Candidate 的 **Transaction/canary/deploy 腿仅声明、零调用** | `tests/learn` 中 `Transaction` 引用 = **0**；`ci-level1.yml:191` 把 `dsh-plugin-transaction.ps1` 列入 `$skip` |
 | **AC10** | **CI 内无真实 E2E 门**（本地真门全绿，但 CI 自述刻意排除 6 个真实数据门） | `ci-level2.yml:149-154` |
 
@@ -58,8 +58,22 @@
 > 含 3 组篡改负向对照全拒 ⇒ AC6 **PARTIAL → PASS**。
 > 报告：`AC6_REAL_PROMOTION_CLOSURE.md`；原始证据：`docs/roadmap/evidence/AC6_REAL_E2E_R3_CLOSURE/`；
 > 矩阵同步：`A10_CONTRACT_MATRIX.md` AC6 行。
-> **本文档的总判定不变：P4 仍 ≠ VERIFIED** —— 理由 A（真人审批门）**未变**，理由 B 中 **AC2 与 AC10 仍未关闭**
+> **本文档的总判定不变：P4 仍 ≠ VERIFIED** —— 理由 A（真人审批门）**未变**，理由 B 中 **AC10 仍未关闭**
 > （AC10 需 GitHub 托管运行 = 动 main/reliability-v1，属需人类裁决的范围扩权）。
+
+> **补记二（2026-09-28，不修改上文历史判定）**：上表 **AC2 一行已关闭（代码层）**。
+> 经用户明确授权后，研究腿从"零调用"改为真接线（**不新建第二套研究系统**：`researchDirective` 交回既有 agent
+> 研究工具链执行，有界失败落 `EXPERIENCE_LOOKUP_MISS`）：
+> ① 接线锁 `test-learn-ac2-research-leg` **25 PASS / 0 FAIL**（真跑插件 execute 路径）；
+> ② 负控 7 种突变**全部被抓住**（**7 PASS / 0** ⇒ 锁不恒真）；
+> ③ CI 内真跑 `test-learn-ac2-research-leg.mjs (exit 0)`（隔离 commit `8211c184…`）；
+> ④ 批准后发布链路 `test-learn-b1-session-access` **22 PASS / 0**（真真人批准 → 发布 → 重启后跨会话召回）；
+> ⑤ AC6 回归复跑 **24 PASS / 0 FAIL**。
+> 报告：`AC2_RESEARCH_LEG_CLOSURE.md`；证据：`R3_FINAL_CLOSURE/evidence/`。
+> **⇒ 剩余阻塞收敛为三项**：**A8 真人审批门**（结构性，需用户）+ **AC10**（CI 内真实 E2E 门，需裁决扩权）
+> + **AC2 生产部署**（代码已绿；生产 profile 仍是旧副本 `6bdd3fe5…`，需把 3 个源插件覆盖到生产挂载位。
+> 本仓实测该 profile 有 watcher 热挂载 ⇒ **通常无需重启**；需用户同意后执行，配方见 `RUNBOOK.md`）。
+> **故 P4 总判定仍为 ≠ VERIFIED**，但**理由 B 中只剩 AC10 属"未修的合同缺口"**。
 
 **为什么不在本轮顺手修**：本轮授权范围是"B1/B2 最小修复 + 终局判定"，AC2/AC6/AC10 的修复属于**扩范围**
 （会改 CI 工作流与插件架构）。按纪律：**只定位、只登记，不动手**（已写入 `KNOWN_ISSUES.md`）。

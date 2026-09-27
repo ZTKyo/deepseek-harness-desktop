@@ -1,0 +1,32 @@
+# AC2/B1 APPROVAL-CHAIN EVIDENCE (real host ApprovalService + real human 'allow once')
+# date=2026-09-28 06:31:21 HEAD=b5f198fc4aa50d221a964bfa383819443b4d6294
+# command: node tests/learn/test-learn-b1-session-access.mjs
+# exit=0
+
+=== P4 FINAL CLOSURE A1（B1）：宿主会话访问与审批信任锚 ===
+  插件 = file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4r2-inject-fix/plugins/learn.mjs
+  PASS  T1.0 未注入 sessions 的部署形态下，apply 必须不抛（旧实现在此崩）
+  PASS  T1.1 修复后：挂载期对 ctx.sessions 的**裸读次数 = 0**（B1 根因锁）
+  PASS  T1.2 夹具自证：裸读 ctx.sessions 确实抛宿主 guard 错并计数 +1
+  PASS  T1.3 sessions 缺失时必须判为 service_absent（而不是"已验证"）
+  PASS  T1.4 sessions 缺失时插件仍可服务（learn_status 可调用，未变砖）
+  PASS  T2.0 真实宿主 ApprovalService 可用（否则本门无意义 ⇒ 明确失败而非静默跳过）
+  PASS  T2.1 真实验证：file_hash 证据 PASS ⇒ VERIFIED_EXPERIENCE
+  PASS  T2.2 人类在宿主通道答"允许一次" ⇒ 批准 + 发表成功（宿主事实为唯一依据）
+  PASS  T2.3 台账落账 + 信任锚在岗 + 全局库真的收到这条（跨会话通道打开）
+  PASS  T2.4 留痕可审计：APPROVED + HUMAN_APPROVAL_GRANTED 都在会话遥测里
+  PASS  T2− 负控：人类答"拒绝" ⇒ 不批准、不发表（T2.2 非恒真）
+  PASS  T3.0 以 T2 的 stateDir / 全局库起"第二个部署形态"（sessions 未注入）
+  PASS  T3.1 该实例确实看得到那条已批准经验（前置：不是"看不见所以拒绝"）
+  PASS  T3.2 判定点 DENY，且原因指向**宿主事实不可复验**（绝不降级放行）
+  PASS  T3.3 全局库未被这条写入/污染，且留下 GLOBAL_PUBLISH_DENIED 取证
+  PASS  T4.0 起实例（sessions 正常可用 ⇒ 拒绝只能来自"事实不足"，不能归因于服务缺失）
+  PASS  T4a 自述审批（无宿主 attestation）⇒ live 授权为假 + 发表判定点被拒
+  PASS  T4b 批准后篡改内容 ⇒ live 授权失效（判定点重算摘要，不信任缓存字段）
+  PASS  T4c 伪造台账（链式完全自洽）+ 宿主无事件对 ⇒ DENY 且原因只能是 approval_host_fact_*
+  PASS  T5.0 同一 stateDir / 全局库起第三个实例（= 进程重启；sessions 正常可用）
+  PASS  T5.1 重启后：已批准经验的 live 授权与可发布性保持不变（A/C 条款）
+  PASS  T5.2 重启后**另一个会话**仍能召回到该条目（跨会话复用未被重启打断）
+
+=== 结果：PASS 22 / FAIL 0 ===
+B1 门：部署安全（不裸读 + 可挂载）与授权安全（信任锚每次复验 + fail-closed）同时成立。

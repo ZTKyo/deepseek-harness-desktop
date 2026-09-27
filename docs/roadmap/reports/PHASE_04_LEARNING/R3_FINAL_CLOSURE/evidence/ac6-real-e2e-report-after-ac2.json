@@ -1,0 +1,97 @@
+{
+  "startedAt": "2026-09-27T22:28:11.897Z",
+  "repo": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4r2-inject-fix",
+  "tempRoot": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811",
+  "git": {
+    "system": "git",
+    "branch": "candidate/cand_d9b6ae32",
+    "commitSha": "8211c1842579351f9df38eaca887f81d9c030a7e",
+    "worktreePath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811\\wt",
+    "isolated": true
+  },
+  "ci": {
+    "system": "ci-level2.yml",
+    "job": "state-machine-tests / P4 LEARN R2 contract-closure gates (14 suites) — local run of the workflow job commands at this commit",
+    "headSha": "8211c1842579351f9df38eaca887f81d9c030a7e",
+    "conclusion": "success",
+    "runUrl": "",
+    "logPath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811\\ci-run.log",
+    "note": "executed locally in the candidate worktree at headSha, USERPROFILE/HOME/LOCALAPPDATA redirected to an empty dir (same CI-SAFE criterion as ci-level2.yml)"
+  },
+  "transaction": {
+    "system": "dsh-transaction.ps1",
+    "label": "candidate-cand_d9b6ae32",
+    "transactionId": "candidate-cand_d9b6ae32-20260928-062834-6de6c0",
+    "finalState": "COMMITTED",
+    "verifyResult": "COMMIT_READY",
+    "faultClass": "none",
+    "rollbackResult": "none",
+    "journalPath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811\\tx\\tx-journal.json"
+  },
+  "promotion": {
+    "state": "PROMOTED",
+    "receiptsSummary": {
+      "git": {
+        "system": "git",
+        "branch": "candidate/cand_d9b6ae32",
+        "commitSha": "8211c1842579351f9df38eaca887f81d9c030a7e",
+        "worktreePath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811\\wt",
+        "isolated": true
+      },
+      "ci": {
+        "system": "ci-level2.yml",
+        "job": "state-machine-tests / P4 LEARN R2 contract-closure gates (14 suites) — local run of the workflow job commands at this co",
+        "headSha": "8211c1842579351f9df38eaca887f81d9c030a7e",
+        "conclusion": "success",
+        "runUrl": ""
+      },
+      "transaction": {
+        "system": "dsh-transaction.ps1",
+        "label": "candidate-cand_d9b6ae32",
+        "transactionId": "candidate-cand_d9b6ae32-20260928-062834-6de6c0",
+        "finalState": "COMMITTED",
+        "verifyResult": "COMMIT_READY",
+        "faultClass": "none",
+        "rollbackResult": "none",
+        "journalPath": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927222811\\tx\\tx-journal.json"
+      }
+    }
+  },
+  "negativeControl": [
+    {
+      "name": "ci.headSha 改成别的 commit",
+      "error": "promotion_receipt_invalid",
+      "leg": "ci",
+      "detail": "ci_headSha_mismatch_git_commitSha"
+    },
+    {
+      "name": "transaction.faultClass 改成 verify_failed",
+      "error": "promotion_receipt_invalid",
+      "leg": "transaction",
+      "detail": "faultClass=verify_failed"
+    },
+    {
+      "name": "git.branch 改成别人的分支",
+      "error": "promotion_receipt_invalid",
+      "leg": "git",
+      "detail": "branch=candidate/somebody-else expected=candidate/cand_d9b6ae32"
+    }
+  ],
+  "invariants": {
+    "pluginHashes": {
+      "plugins/learn.mjs": "bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc",
+      "plugins/learn-candidate.mjs": "f732806aa5f9d868febd07d597f78c4fb65858e51f5cbf1c9de9a3b831514e97"
+    },
+    "repoCleanAfter": true
+  },
+  "cleanup": {
+    "worktreeRemoved": true,
+    "branchDeleted": true,
+    "portFree": true,
+    "headUnchanged": true
+  },
+  "finishedAt": "2026-09-27T22:28:55.442Z",
+  "pass": 24,
+  "fail": 0,
+  "failures": []
+}

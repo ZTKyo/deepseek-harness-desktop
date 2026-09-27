@@ -15,6 +15,16 @@
 | `ci-run-after-ac2.txt` | 上面那次 E2E 的**CI 腿原始日志**（397 行级） | 逐条命令 + exit code | 同上一行 |
 | `AC6_E2E_AFTER_AC2_FIX.txt` | **最终提交 `e739009` 上的复跑**（夹具修复后的树） | `24 PASS / 0 FAIL`，exit 0；CI 腿 `15 条命令全 exit 0`（含 `test-learn-candidate-receipts.mjs`、`test-learn-ac2-research-leg.mjs`） | `node tests/learn/test-learn-ac6-real-promotion-e2e.mjs` |
 | `ac6-real-e2e-report-after-ac2-fix.json` | 上面那份复跑的**结构化报告** | 逐腿 verdict + 隔离 commit id | 同上一行 |
+| `PRE_DEPLOY_PREFLIGHT_FORWARD.txt` | **部署前预检·正向**（候选=生产铺底+3 文件仓库版，真实 loader 挂载） | `verdict: PASS`，hashCheck PASS，`A1..A4` 全 PASS，6 个 `learn_*`，生产监听者 `20580:node` 前后一致 `untouched=true` | `node tests/learn/deploy-preflight.mjs --deploy learn.mjs,learn-core.mjs,learn-candidate.mjs --port 3098 --slug dplpf` |
+| `pre-deploy-preflight-forward.json` | 上面那次预检的**结构化报告** | `verdict=PASS / hashCheck=PASS / mountGateExitCode=0` | 同上一行（`--json <out>`） |
+| `PRE_DEPLOY_PREFLIGHT_NC1_PARTIAL.txt` | **负控 1**：只部署 `learn.mjs`（半新半旧） | `verdict: FAIL`：`FAIL A1`(失败签名) + `FAIL A2`(got 0)，根因 `./learn-candidate.mjs does not provide an export named 'classifyResearchRisk…'` ⇒ **3 文件集是最小必要集** | `node tests/learn/deploy-preflight.mjs --deploy learn.mjs --port 3096 --slug nc1` |
+| `PRE_DEPLOY_PREFLIGHT_NC2_MUTANT.txt` | **负控 2**：内容坏但能加载（突变 `learn_status`→`learn_statusX`） | `verdict: FAIL`：`A1 PASS` 但 `FAIL A2 ... (got 6)`（**名称锁抓住**） | 见文件头命令（`--repo-plugins <突变插件副本>`） |
+
+**部署前预检为什么必须跑**：`learn.mjs` 的相对导入闭包是 6 个文件，其中 4 个与生产不同——第 4 个
+`failure-classifier-core.mjs` 的差异来自 **P2.6**（`f44e822`），**不在本轮部署范围**。若按"闭包全量同步"
+部署会顺带推 P2.6；若只推 `learn.mjs` 则会崩（负控 1 实证）。⇒ 用 **`tests/learn/deploy-preflight.mjs`**
+（薄封装既有 `mount-gate.mjs`）先做"生产同形候选 + 真实 loader 挂载判定"，`PASS` 才动手。
+结论与边界见 `../PRE_DEPLOY_PREFLIGHT.md`。
 
 **为什么要再跑一次（`*_FIX` 两份）**：入库过程中发现本会话早前引入的**真缺陷**——
 `tests/learn/test-learn-candidate-receipts.mjs` 把"密钥形状"夹具写成了源码字面量，导致仓库官方

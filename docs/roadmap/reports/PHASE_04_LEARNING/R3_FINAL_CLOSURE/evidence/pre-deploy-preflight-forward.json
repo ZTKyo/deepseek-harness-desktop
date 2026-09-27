@@ -1,0 +1,55 @@
+{
+  "tool": "deploy-preflight",
+  "at": "2026-09-27T22:44:02.964Z",
+  "repoPlugins": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4r2-inject-fix\\plugins",
+  "production": "C:\\Users\\Administrator\\.dsh\\profiles\\web",
+  "entry": "learn.mjs",
+  "deploySet": [
+    "learn.mjs",
+    "learn-core.mjs",
+    "learn-candidate.mjs"
+  ],
+  "closure": [
+    {
+      "file": "learn.mjs",
+      "klass": "DEPLOY(计划部署)",
+      "repo": "bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc",
+      "prod": "6bdd3fe5b68bbde1663a8157253c640526072157c5e13e50b2bc33ae4437415d"
+    },
+    {
+      "file": "learn-core.mjs",
+      "klass": "DEPLOY(计划部署)",
+      "repo": "38c1d09296aa4bc1c8144603698434292f8455a2139a66a10fd4a6721be5700c",
+      "prod": "4fb40331b607faa08e5221fd309f9c75f122b697e6a5e8e5cd0488f8e7916e2e"
+    },
+    {
+      "file": "context-memory-core.mjs",
+      "klass": "SAME",
+      "repo": "e68fbd173340d0083a68ed6592a5fe76b8e6ced78a1ae7a757dfb66880068dab",
+      "prod": "e68fbd173340d0083a68ed6592a5fe76b8e6ced78a1ae7a757dfb66880068dab"
+    },
+    {
+      "file": "learn-gap-veto.mjs",
+      "klass": "SAME",
+      "repo": "b7623cedf87e13f49500b368e27bbf9dc358b9b400d7a0b7a064e1c27a090b36",
+      "prod": "b7623cedf87e13f49500b368e27bbf9dc358b9b400d7a0b7a064e1c27a090b36"
+    },
+    {
+      "file": "failure-classifier-core.mjs",
+      "klass": "STALE_BY_DESIGN(有差异但范围外，不部署)",
+      "repo": "f780150783a1d6e523d148add569b6cbbb287741315515689f0ea4fe3016f686",
+      "prod": "2a00a17f463a941fcbd05578b41e61f4768066609008b04a349fc8189281f958"
+    },
+    {
+      "file": "learn-candidate.mjs",
+      "klass": "DEPLOY(计划部署)",
+      "repo": "f732806aa5f9d868febd07d597f78c4fb65858e51f5cbf1c9de9a3b831514e97",
+      "prod": "f218514751c57ca5e42b0ed1ec6fe91f4182628554f5bb563b73bc4f69a5421a"
+    }
+  ],
+  "candidateDir": "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dsh-deploypf-dplpf-2026-09-27T22-43-49-355Z-VZKPHc\\candidate",
+  "hashCheck": "PASS",
+  "mountGateExitCode": 0,
+  "verdict": "PASS",
+  "mountGateStdout": "=== mount gate (isolated profile) ===\n  plugin      : C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dsh-deploypf-dplpf-2026-09-27T22-43-49-355Z-VZKPHc\\candidate\\learn.mjs\n  sha256      : bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc\n  expect      : pass\n  port        : 3098   (production 127.0.0.1:3080 listener before = 20580:node)\n  scratch     : C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dsh-mountgate-dplpf-pf-2026-09-27T22-43-49-461Z\n  DSH_HOME    : C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dsh-mountgate-dplpf-pf-2026-09-27T22-43-49-461Z\\home   (隔离：宿主只读写这个临时 home)\n  deps        : junction -> real web/node_modules (只借依赖，不 boot 生产 profile)\n  launch      : node.exe bin.js --profile web --port 3098 --no-open  (6 个插件文件已就位；DSH_HOME=临时 home)\n  child pid   : 25872\n  readiness   : HTTP 200\n  signal      : probe-recorded\n  kill guard  : pid=25872 safeToKill=true\n--- checks ---\n  PASS  A1  no loader failure signature\n  PASS  A2  probe captured exactly 6 learn_* tools, no duplicates (got 6)\n  PASS  A3  host sessions service resolvable via ctx.get in this profile ctx (got resolved)\n  PASS  A4  no tool-surface warnings in log\n  probe.wrapped=true sessionsViaGet=resolved seen=[learn_propose, learn_review, learn_recall, learn_promote, learn_verify, learn_status]\n  injectSignature(事故签名) = false\n  production 127.0.0.1:3080 listener: before=20580:node after=20580:node untouched=true (pid:proc 形式；勿用 tailscaled 的 5648 误判)\n--- verdict: PASS (expect=pass) ---\n  result json : C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\dsh-mountgate-dplpf-pf-2026-09-27T22-43-49-461Z\\result.json\n"
+}

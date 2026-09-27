@@ -1,0 +1,32 @@
+{
+    "transactions":  [
+                         {
+                             "startedAt":  "2026-09-28T01:40:50.6229839+08:00",
+                             "finishedAt":  "2026-09-28T01:41:00.9270002+08:00",
+                             "generationAfter":  "639261564346507377_22236",
+                             "rollbackResult":  "none",
+                             "checkpointDir":  "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927174028\\tx\\ckpts\\candidate-cand_d9b6ae32-20260928-014049-bf91cb",
+                             "generationBefore":  "639261514555153163_20580",
+                             "faultClass":  "none",
+                             "lastGood":  {
+                                              "Reason":  "missing_required_files: settings.yaml,cordis.patch.yml,cordis.yml",
+                                              "Saved":  false
+                                          },
+                             "transactionId":  "candidate-cand_d9b6ae32-20260928-014049-bf91cb",
+                             "label":  "candidate-cand_d9b6ae32",
+                             "finalState":  "COMMITTED",
+                             "files":  [
+
+                                       ],
+                             "hashAfter":  [
+
+                                           ],
+                             "dshVersionBefore":  "0.1.1-rc.2",
+                             "dshVersionAfter":  "0.1.1-rc.2",
+                             "hashBefore":  [
+
+                                            ],
+                             "verifyResult":  "COMMIT_READY"
+                         }
+                     ]
+}

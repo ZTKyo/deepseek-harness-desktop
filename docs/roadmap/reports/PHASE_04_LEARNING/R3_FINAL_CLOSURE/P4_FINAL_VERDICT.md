@@ -52,6 +52,15 @@
 
 ⇒ 完整对照（AC1–AC10 逐条 + 4 个 mandatory 场景）见 `A10_CONTRACT_MATRIX.md`。
 
+> **补记（2026-09-28，不修改上文历史判定）**：上表 **AC6 一行已关闭**。
+> 经真实三腿端到端（真 git worktree/commit `74fd41c9…` + 在该 commit 真跑 `ci-level2.yml` 作业命令 +
+> 真 `dsh-transaction.ps1` 到 `COMMITTED/COMMIT_READY` + 真隔离宿主 canary）**24 PASS / 0 FAIL**，
+> 含 3 组篡改负向对照全拒 ⇒ AC6 **PARTIAL → PASS**。
+> 报告：`AC6_REAL_PROMOTION_CLOSURE.md`；原始证据：`docs/roadmap/evidence/AC6_REAL_E2E_R3_CLOSURE/`；
+> 矩阵同步：`A10_CONTRACT_MATRIX.md` AC6 行。
+> **本文档的总判定不变：P4 仍 ≠ VERIFIED** —— 理由 A（真人审批门）**未变**，理由 B 中 **AC2 与 AC10 仍未关闭**
+> （AC10 需 GitHub 托管运行 = 动 main/reliability-v1，属需人类裁决的范围扩权）。
+
 **为什么不在本轮顺手修**：本轮授权范围是"B1/B2 最小修复 + 终局判定"，AC2/AC6/AC10 的修复属于**扩范围**
 （会改 CI 工作流与插件架构）。按纪律：**只定位、只登记，不动手**（已写入 `KNOWN_ISSUES.md`）。
 

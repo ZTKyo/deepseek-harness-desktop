@@ -1,0 +1,72 @@
+=== AC6 真实端到端：候选晋升必须真走既有 Git / CI / Transaction ===
+仓库   : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2-inject-fix
+临时根 : C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028
+
+=== 0. 前置检查（仓库必须干净：worktree 里跑的就是"当前代码"）===
+  PASS  前置：工作区干净且有 HEAD
+  PASS  前置：找到 PowerShell（本机为 Windows PowerShell 5.1，无 pwsh） — powershell
+
+=== 1. 状态机：propose 候选（id 决定分支名与事务 label）===
+  PASS  候选已 propose 且派生名一致（分支名/事务 label 都由 id 派生） — id=cand_d9b6ae32
+
+=== 2. Git 腿（真 git worktree / 真隔离分支 / 真 commit）===
+  PASS  git worktree add 建隔离工作树 — C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028\wt
+  PASS  worktree 内真提交（得到真 40 位对象名） — 74fd41c9594a
+  PASS  分支名 / 40 位对象名 / 隔离性均经真值核验 — ok
+
+=== 3. 启动隔离宿主（mount-gate --hold，端口 3099，非生产 3080）===
+  生产 3080 监听者（前）: pid=7176
+  PASS  隔离宿主保活就绪（port/pid/hold-state.json 且插件哈希一致） — port=3099 pid=22236 pluginSha=bf5cfa6d7f03
+
+=== 4. CI 腿（真跑 ci-level2.yml 的 job 命令，cwd=隔离 worktree@commit）===
+  PASS  从 ci-level2.yml 解析出 CLI 实际跑的套件清单（真"同一个 job"） — 13 套件 + plugin-contract gate
+  PASS  tests/learn/test-learn-plugin-contract.mjs  (exit 0)
+  PASS  tests/learn/test-learn-core.mjs  (exit 0)
+  PASS  tests/learn/test-learn-candidate.mjs  (exit 0)
+  PASS  tests/learn/test-learn-ac5-e2e.mjs  (exit 0)
+  PASS  tests/learn/test-learn-stage85-twins.mjs  (exit 0)
+  PASS  tests/learn/test-learn-real-topology-tool-events.mjs  (exit 0)
+  PASS  tests/learn/test-learn-candidate-receipts.mjs  (exit 0)
+  PASS  tests/learn/test-learn-r3-fixes.mjs  (exit 0)
+  PASS  tests/learn/test-learn-r3-hardening.mjs  (exit 0)
+  PASS  tests/learn/test-learn-r3-secrets.mjs  (exit 0)
+  PASS  tests/learn/redteam-r3-contamination.mjs  (exit 0)
+  PASS  tests/learn/redteam-r3-isolation.mjs  (exit 0)
+  PASS  tests/learn/redteam-r3-labels.mjs  (exit 0)
+  PASS  tests/learn/redteam-r3-probe.mjs  (exit 0)
+  PASS  CI 腿：worktree@commit 上全部命令 exit 0（=同一 commit 的绿报告） — 14 条命令全 exit 0，日志 ci-run.log
+
+=== 5. Transaction 腿（真 dsh-transaction.ps1，隔离宿主 + 隔离 profile 根）===
+  runner: exe=powershell exit=0 signal=none
+  | TX_RESULT FinalState=COMMITTED Verify=COMMIT_READY Journal=C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028\tx\tx-journal.json
+  PASS  真事务跑到 COMMITTED（引擎自报 FinalState + 真 APPLY 生效） — candidate-cand_d9b6ae32-20260928-014049-bf91cb verify=COMMIT_READY
+  PASS  真 journal 回读一致（真值，不是引擎自述） — journal COMMITTED/none/none verify=COMMIT_READY
+  PASS  事务 label / transactionId 与候选派生 label 一致（三腿可互证） — candidate-cand_d9b6ae32-20260928-014049-bf91cb
+
+=== 6. 释放并关停隔离宿主（并确认生产 3080 未被扰动）===
+  mount-gate exit=0（释放耗时 5s）
+  PASS  隔离宿主已关停、端口释放、生产 3080 未被扰动 — 3099=FREE, 3080 pid=7176 前后一致
+  PASS  mount-gate 自身判定 PASS（A1–A5 全过） — verdict PASS
+
+=== 7. 真实晋升（三阶段证据引用真产物 + 真收据 + 人工批准）===
+  PASS  三阶段推进（证据引用真实产物：CI 日志 / 事务 journal / 活宿主 canary） — ISOLATED_TESTS → REGRESSION_HOLDOUT → CANARY
+  PASS  门先行自检：verifyPromotionReceipts(真实收据) = ok — candidate/cand_d9b6ae32@74fd41c9594a | ci-level2.yml | COMMITTED
+  PASS  promoteCandidate(真实收据) → PROMOTED 且只存有界摘要 — state=PROMOTED, stored bytes=1859
+  PASS  留痕：CANDIDATE_RECEIPTS_ACCEPTED + CANDIDATE_PROMOTED 均在遥测 — ok
+
+=== 8. 负向对照（同一真实三腿，篡改一腿 ⇒ 必拒 + 留痕）===
+  PASS  拒绝：ci.headSha 改成别的 commit — rejected(promotion_receipt_invalid leg=ci ci_headSha_mismatch_git_commitSha) + telemetry + state unchanged
+  PASS  拒绝：transaction.faultClass 改成 verify_failed — rejected(promotion_receipt_invalid leg=transaction faultClass=verify_failed) + telemetry + state unchanged
+  PASS  拒绝：git.branch 改成别人的分支 — rejected(promotion_receipt_invalid leg=git branch=candidate/somebody-else expected=candidate/cand_d9b6ae32) + telemetry + state unchanged
+
+=== 9. 不变量：真晋升**没有**改动生产插件文件 ===
+  PASS  plugins/learn.mjs 与 plugins/learn-candidate.mjs 字节不变（晋升只走候选通道） — 4 项哈希一致 + 工作区仍干净
+
+=== 10. 清理 ===
+  PASS  清理干净：worktree/分支已删、HEAD 未变、临时宿主已退 — ok
+  PASS  临时 checkpoint 目录不含生产 profile 拷贝（隔离生效） — 无生产配置拷贝
+
+=== 汇总 ===
+  AC6 真实端到端: 24 PASS / 0 FAIL
+  PASS AC6 real promotion e2e (real git worktree/commit + real ci-level2 job run + real transaction journal)
+  report: C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028\ac6-real-e2e-report.json

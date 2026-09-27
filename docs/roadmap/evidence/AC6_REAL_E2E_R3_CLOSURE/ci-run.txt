@@ -1,0 +1,480 @@
+--- tests/learn/test-learn-plugin-contract.mjs (exit 0)
+=== 1. 源码静态检查：宿主契约 inject 声明 ===
+  PASS  C1 inject 以模块顶层 export const 声明（修复前必 FAIL）
+  PASS  C2 inject 声明出现在 apply 之前（顺序契约）
+  PASS  C3 name / apply 仍在（防止修 inject 时误删导出）
+  PASS  C4 apply() 确实使用 ctx.tools（证明 inject 是必需而非装饰）
+=== 2. 动态 import：运行时导出形状 ===
+  PASS  C5 运行时 inject 存在且含 tools（修复前必 FAIL）
+  PASS  C6 运行时 name === 'learn'
+  PASS  C7 运行时 apply 是函数且 arity >= 1
+  PASS  C8 运行时导出集合与静态检查一致（无隐藏导出面变化）
+
+=== 汇总 ===
+  PASS = 8  FAIL = 0
+  PASS LEARN plugin host-contract gate
+
+
+--- tests/learn/test-learn-core.mjs (exit 0)
+ASS  C16: 去重后条目数不变
+  PASS  C16: 未验证经验发布被拒且原因可解释
+  PASS  C16: 被拒发布不改动全局库
+  PASS  C16: 提案发布被拒（提案 ≠ 激活）
+  PASS  C16: 畸形全局库入参 ⇒ 重建空库而非崩溃
+  PASS  C16: 重建的是合法全局库
+  PASS  C16 fixture(publishable): draft created
+  PASS  C16 fixture(publishable): approved
+  PASS  C16 fixture(publishable): machine verification passed
+  PASS  C16: 全局库按 lastVerifiedAt 降序（最新在前）
+  PASS  C16: 全局库有界（满库拒绝新条目）
+  PASS  C16: 发布签名确定性
+  PASS  C16: 标题不同 ⇒ 签名不同
+  PASS  C16: 非对象签名空串
+  PASS  C16: 合法全局库通过校验
+  PASS  C16: 校验通过时原样返回（不静默改写）
+  PASS  C16: 全局库校验 fail-closed —— null
+  PASS  C16: 全局库校验 fail-closed —— 数组
+  PASS  C16: 全局库校验 fail-closed —— 字符串
+  PASS  C16: 全局库校验 fail-closed —— 空对象
+  PASS  C16: 全局库校验 fail-closed —— schemaVersion 不符
+  PASS  C16: 全局库校验 fail-closed —— kind 不符
+  PASS  C16: 全局库校验 fail-closed —— version 非法
+  PASS  C16: 全局库校验 fail-closed —— experiences 非数组
+  PASS  C16: 全局库校验 fail-closed —— telemetry 非数组
+  PASS  C16: 全局库校验 fail-closed —— experiences 超界
+  PASS  C16: ★ 含未验证/提案条目的全局库整体判废（跨会话污染防线）
+  PASS  C16: 含结构坏条目的全局库整体判废
+  PASS  C16: 重复 id 的全局库整体判废
+  PASS  C16: 含超界条目的全局库整体判废
+  PASS  C16: 含密钥条目的全局库整体判废（密钥红线在全局库同样成立）
+  PASS  C16: 遥测类型不在白名单 ⇒ 整库判废
+  PASS  C16: 合法遥测类型通过
+  PASS  C16: 函数等非对象入参 fail-closed
+  PASS  C16: 无全局库时召回仍可用
+  PASS  C16: 空查询 ⇒ empty_query（不噪声召回）
+  PASS  C16: 全局召回返回结构化结果
+  PASS  C16: 全局条目要么进入可复用结果、要么被适用性检查留痕（绝不静默消失）
+  PASS  C16: 召回条目自带 id/scope/回源锚点
+  PASS  C16: ★ 跨会话（global）召回条目必然处于已验证状态（Layer B 只含已验证经验）
+
+============================================================
+RESULT: 504 PASS / 0 FAIL
+
+
+--- tests/learn/test-learn-candidate.mjs (exit 0)
+ C1 ★ 静态锁：模块内无定时器 / 无事件循环（AC8 无常驻 daemon）
+  PASS  C2 ★ 研究次数达上限后拒绝继续（禁无限重试）
+  PASS  C3 ★ 对照组：未达上限时研究**必须**被允许（证明 C2 不是焊死）
+  PASS  C4 研究计划显式声明 daemon=false 且带上限
+  PASS  C5 未合格 gap 不得生成研究计划（AC5 闸门不可绕过）
+
+=== D 组：候选形态阶梯（Rule > Extend Skill > New Skill > New Plugin）===
+  PASS  D1 ★ 可规则化 → RULE（最优先，绝不跳到 Plugin）
+  PASS  D2 ★ 已有 skill 覆盖 → EXTEND_SKILL（不新建）
+  PASS  D3 ★ 无既有 skill 且无需新运行时能力 → NEW_SKILL
+  PASS  D4 ★ 确实需要新运行时能力 → NEW_PLUGIN（最后手段）
+  PASS  D5 ★ 阶梯单调性：逐级放宽条件，形态只能变重不能变轻
+
+=== E 组：生命周期状态机（isolated tests → regression/holdout → canary）===
+  PASS  E1 ★ 不得跳阶段（PROPOSED → CANARY 非法）
+  PASS  E2 ★ 每个阶段都必须有证据（无证据不得前进）
+  PASS  E3 ★ 完整正路径：三段推进全部成功且证据留档
+  PASS  E4 ★ 未走完管线不得晋升（PROMOTED 必须经 CANARY）
+  PASS  E5 ★ 走完管线但无人工批准 → 不得晋升
+  PASS  E6 ★ 走完管线 + 人工批准 → 晋升成功（对照组）
+  PASS  E7 ★ advanceCandidate 不得用于 PROMOTED（必须走带批准的 promoteCandidate）
+  PASS  E8 ★ 终态不可复活（PROMOTED / REJECTED 无出边）
+  PASS  E9 ★ 拒绝候选只保留**最小失败记录**（不含候选正文，不挂载 Runtime）
+
+=== F 组：与 AC5 闸门集成 + 确定性 / 幂等 / fail-closed ===
+  PASS  F1 ★ 未合格 gap 不得建候选（AC5 闸门不可绕过）
+  PASS  F2 ★ 对照组：合格 gap 必须能建候选（证明 F1 不是焊死）
+  PASS  F3 ★ 被硬否决的失败观测**不可能**通过 qualifyGap（AC5 → AC7 链路闭合）
+  PASS  F4 ★ 确定性：同一 dedupKey 永远得到同一 candidate id；重复提案幂等
+  PASS  F5 ★ fail-closed：损坏 store 必须判废（绝不部分信任）
+  PASS  F6 ★ 含 secret 的阶段证据必须被拒（AC1 同纪律）
+  PASS  F7 ★ AC9 有界：候选数超上限时**保留刚写入的这条**（不静默丢失）
+  PASS  F8 遥测：候选事件真实记录且可观察（AC8）
+  PASS  F9 ★ 候选 store 与 experience store 分层（AC 不混用 authority）
+
+=== 汇总 ===
+  STAGE 6-7: 39 PASS / 0 FAIL
+  PASS STAGE 6-7 candidate lifecycle + bounded research
+
+
+--- tests/learn/test-learn-ac5-e2e.mjs (exit 0)
+=== 装载真实插件 plugins/learn.mjs ===
+  stateDir = C:\Users\ADMINI~1\AppData\Local\Temp\learn-ac5-e2e-HVkVnP
+  PASS  E0 插件暴露真实工具面（合同闭环 6 个）且钩子已注册
+
+=== A 组：硬否决失败必须阻止候选产出（AC5 核心）===
+  PASS  E1 首次进入只记录水位、不学习（基线）
+  PASS  E2 ★ 硬否决失败后**没有**产出任何候选（AC5 主断言）
+  PASS  E3 ★ 必须记录 GAP_VETOED 遥测（可观测，不是静默丢弃）
+  PASS  E4 否决后**不得**出现 PROPOSED 遥测（证明真的没学）
+
+=== B 组：无分类失败时**必须**正常学习（防闸门焊死）===
+  PASS  E5 ★ 对照组：无 P2.6 失败证据时正常产出候选（闸门非焊死）
+  PASS  E6 对照组候选仍带真实出处（AC6 未被本次改动破坏）
+  PASS  E7 对照组不得出现 GAP_VETOED（否决必须只由真实失败触发）
+
+=== C 组：失败对象缺失时 fail-closed ===
+  PASS  E8 ★ 失败对象缺失 → fail-closed 否决（宁可漏学不可误学）
+
+=== D 组：决策来自 P2.6 Authority（非第二套分类逻辑）===
+  PASS  E9 ★ 插件记录的分类 == P2.6 权威对同一 failure 的分类（单源一致）
+  PASS  E12 telemetryEvent 字段白名单事实被锁（防再有人加字段被静默丢弃）
+  PASS  E10 ★ learn-core 中不存在任何 failure 关键词（单一 Failure Authority 静态锁）
+  PASS  E11 learn.mjs 的失败观测与 P2.6 使用同一事件名
+
+=== 汇总 ===
+  AC5 E2E: 13 PASS / 0 FAIL
+  PASS AC5 end-to-end gate (wrong learning is actually blocked)
+
+
+--- tests/learn/test-learn-stage85-twins.mjs (exit 0)
+
+=== U 组：能力缺口适配器单元语义 ===
+  PASS  U1 失败起源域**全覆盖**：8 个已知 origin 被 LEARNABLE ∪ NON_LEARNABLE 穷尽划分
+  PASS  U2 ★ 零关键词：结构化事实里的**自由文本**不得影响起源判定
+  PASS  U3 ★ 变体免疫：同 (tool, code) 在文案/参数/长度剧烈变化下签名恒定
+  PASS  U4 fail-closed：空/畸形观测一律不可学，且给出可读原因
+  PASS  U5 非失败事实（isError!==true）永不成为缺口证据
+  PASS  U6 ★ 回归：工具失败**不得**因为"不是 provider 分类失败的第九类"而被否决
+
+=== T1 POSITIVE 1：真实能力缺口（首次仅证据 → 重复达阈值 → 候选） ===
+  PASS  T1-a 首见会话只记水位，不产出候选（基线）
+  PASS  T1-b ★ 首次失败只记录**证据**，候选 = NONE（未达重复阈值）
+  PASS  T1-c ★★ 重复达阈值 → 建立候选（真能力缺口可被表达）
+  PASS  T1-d 候选**绝不**自动晋升（合同：PROMOTED 必须人工批准）
+  PASS  T1-e Stable 性：同一缺口重复观测**不**产生新候选（签名稳定、幂等）
+
+=== T2 POSITIVE 2：失败后被**成功解决** ⇒ 失败必须解除、不得成为缺口/经验 ===
+  PASS  T2-a 前置：两次未解决失败本已达到阈值（对照组条件成立）
+  PASS  T2-b ★★ 成功解除了能力缺口：不得留有**活跃**候选（终态候选必须被撤销）
+  PASS  T2-c ★ 失败本身不得成为可召回经验：所有经验必须停在 PROPOSED
+  PASS  T2-d 两条管道不串味：能力缺口候选 ≠ 经验（字段面与存储各自独立）
+
+=== T3 NEGATIVE 1：伪能力缺口 ⇒ 永不成为能力缺口 ===
+  PASS  T3-a ★★ provider/网络/环境失败**永不**成为能力缺口
+  PASS  T3-b ★ 这些失败必须仍被 P2.6 硬否决（AC5 既有语义未被削弱）
+  PASS  T3-c ★ fail-closed：起源不可判定时宁可漏学，不可误学
+  PASS  T3-d 环境类事实即使显式声明为 capability 观测也必须被拒
+
+=== T4 NEGATIVE 2：噪声/瞬时失败 ⇒ 不得产出永久伪缺口 ===
+  PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口）
+  PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口
+  PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口
+
+=== 汇总 ===
+THRESHOLD: REPEAT_THRESHOLD=2  ADAPTER_VERSION=2
+22 pass, 0 fail
+
+
+--- tests/learn/test-learn-real-topology-tool-events.mjs (exit 0)
+l event seqs ∩ node seqs = ∅ (真实拓扑)
+
+=== RT1 真实拓扑下抽取结构化失败事实（旧实现恒为空 = 死代码） ===
+  PASS  calls extracted from real topology
+  PASS  ★ failures extracted from real topology (2)
+  PASS  failures carry toolName
+  PASS  failures carry structured errorCode
+  PASS  failures carry official isError=true
+  PASS  capability observation is directly consumable
+  PASS  no success recorded (both failed)
+
+=== RT2 真实拓扑下的"已解决"判定（后续成功 ⇒ 不再是缺口） ===
+  PASS  one failure + one success extracted
+  PASS  ★ later success on same tool ⇒ failure is RESOLVED (not a gap)
+
+=== RT3 观察上界：surface 尚未覆盖到的工具事件不得被计入 ===
+  PASS  observation horizon bounds the scan (0 failures before any tool ran)
+  PASS  horizon up to turn-1 assistant message sees exactly 1 failure
+
+=== RT4 端到端活性：真实拓扑驱动插件 ⇒ 重复真实缺口产出候选（证明非死代码） ===
+  PASS  telemetry proves the gap path is LIVE (saw a capability-gap diag)
+  PASS  no tool-name-missing veto (toolName present in real topology)
+  PASS  ★ candidate produced from REAL topology repeated gap
+  PASS  candidate state is PROPOSED (never auto-active)
+  PASS  candidate taskType is tool-origin
+  PASS  stable experience store NOT overwritten
+
+=== RT5 真实拓扑下的否决：无 toolName 的工具失败不得产出候选（fail-closed） ===
+  PASS  orphan failures have empty toolName
+  PASS  ★ unresolvedToolFailures drops tool-name-missing facts (fail-closed)
+
+================================================================
+P4 LEARN R2 REAL-TOPOLOGY REGRESSION: 22 PASS / 0 FAIL
+================================================================
+
+
+--- tests/learn/test-learn-candidate-receipts.mjs (exit 0)
+  B4 git 腿：worktreePath 为空 ⇒ 拒绝（无法证明有真实隔离工作树）
+  PASS  B5 ci 腿：结论非 success ⇒ 拒绝（失败候选不得晋升 = AC6.3）
+  PASS  B6 ci 腿：headSha 与 git commit 不一致（旧绿报告顶新代码）⇒ 拒绝
+  PASS  B7 ci 腿：job 为空 ⇒ 拒绝
+  PASS  B8 transaction 腿：终态非 COMMITTED（如 ROLLED_BACK）⇒ 拒绝
+  PASS  B8b ★ dry-run 收据无法冒充真实事务（既有引擎 -DryRun ⇒ FAILED(dry)）
+  PASS  B8c transaction 腿：faultClass 非 none（如 verify_failed）⇒ 拒绝
+  PASS  B8d transaction 腿：rollbackResult 非 none（回滚过的事务）⇒ 拒绝
+  PASS  B8e transaction 腿：VERIFY 不来自引擎自己的 COMMIT_READY gate ⇒ 拒绝
+  PASS  B8f transaction 腿：journalPath 为空（无真实 journal 证据）⇒ 拒绝
+  PASS  B9 transaction 腿：label 与候选不一致 ⇒ 拒绝
+  PASS  B10 transaction 腿：transactionId 为空（无法回溯到 journal 记录）⇒ 拒绝
+  PASS  B11 transaction 腿：journalPath 为空（无真实 journal 证据）⇒ 拒绝
+=== C 组：AC6.1 —— 禁第二套 CI / Transaction / Git（来源白名单）===
+  PASS  C1 ★ 自造 CI runner ⇒ 拒绝
+  PASS  C2 ★ 自造 Transaction ⇒ 拒绝
+  PASS  C3 ★ 自造 Git 状态机 ⇒ 拒绝
+  PASS  C4 既有四层 CI 的其它层也放行（对照组：白名单不是只认一层）
+=== D 组：密钥红线 + 摘要入库 ===
+  PASS  D1 ★ 收据含密钥形状的值 ⇒ 拒绝（绝不入库）
+  PASS  D2 ★ 晋升成功 ⇒ 只存**有界摘要**，且不含收据原文/密钥
+  PASS  D3 ★ 晋升成功留双痕：CANDIDATE_RECEIPTS_ACCEPTED + CANDIDATE_PROMOTED
+  PASS  D4 sanitizeCandidate 对畸形 promotionReceipts fail-closed
+=== E 组：AC6「Stable 必须保持不变」+ 复用纪律（静态锁）===
+  PASS  E1 ★ 晋升动作**不写任何文件**：Stable 产物字节不变
+  PASS  E2 ★ 复用纪律静态锁：learn-candidate 零子进程 / 零网络 / 零定时器
+  PASS  E3 gate 是纯函数：同输入两次结果一致（可确定性复算）
+  PASS  E4 verifyPromotionReceipts 对垃圾输入不抛异常（fail-closed）
+
+=== 汇总 ===
+  AC6 receipts gate: 32 PASS / 0 FAIL
+  PASS AC6 candidate reuses existing Git/CI/Transaction via receipt gate
+
+
+--- tests/learn/test-learn-r3-fixes.mjs (exit 0)
+=== F1 latin failure 形态补齐（规范 §4）===
+  PASS  F1+ "still failing" → 关键词不再声称 failure（AC5）
+  PASS  F1+ "it fails every time" → 关键词不再声称 failure（AC5）
+  PASS  F1- "the build passed, no failures" → 不是 failure
+  PASS  F1孪生 "failed" → 关键词不再声称 failure（AC5）
+  PASS  F1权威 P2.6 对同一批失败文本给出分类并否决
+=== F2 CJK 覆盖补齐（真实缺口 + 回归检测）===
+  PASS  F2+ "出错" → 关键词不再声称 failure（AC5）
+  PASS  F2+ "又崩了" → 关键词不再声称 failure（AC5）
+  PASS  F2+ "不工作" → 关键词不再声称 failure（AC5）
+  PASS  F2+ "没反应" → 关键词不再声称 failure（AC5）
+  PASS  F2+ "修好了" → resolution
+  PASS  F2孪生 "报错"/"崩溃" 关键词不再声称 failure；"已修复" 仍是 resolution
+  PASS  F2权威 环境类中文故障由 P2.6 分类并硬否决
+=== F3 否定作用域（规范 §9：反向表述不得产生信号）===
+  PASS  F3+ "没有报错" → 无信号
+  PASS  F3+ "not broken" → 无信号
+  PASS  F3+ "not fixed" → 不是 resolution（规范 §4）
+  PASS  F3+ "no longer failing" → 无信号
+  PASS  F3+ "never failed" → 无信号
+  PASS  F3- "报错了" → 关键词不再声称 failure（AC5）
+  PASS  F3- "the build failed" → 关键词不再声称 failure（AC5）
+  PASS  F3- "已经修复了" 仍是 resolution（过否定回归）
+  PASS  F3边界 否定作用域遇标点即结束（resolution 侧仍生效）
+  PASS  F3边界 "not only failed" → 关键词不再声称 failure（AC5）
+  PASS  F3边界 "还没修好" → 不是 resolution
+  PASS  F3单元 isNegated 直接行为
+=== F4 注入剥离：区分"真注入"与"讨论标签"（规范 §4）===
+  PASS  F4 真注入（闭合）被剥掉，真人发言保留
+  PASS  F4 真注入（未闭合，行首+独占行）被剥掉，真人发言保留
+  PASS  F4- 用户讨论该标签时其真实发言不被删除（原实现丢失 81%）
+  PASS  F4- 引用形态的标签不被吞
+  PASS  F4 讨论文本被完整保留，且不再由关键词声称 failure（AC5）
+  PASS  F4 R2 既有锁定用例仍成立（回归）
+
+=== R3 最小修复回归: 30 PASS / 0 FAIL ===
+
+
+--- tests/learn/test-learn-r3-hardening.mjs (exit 0)
+稳定
+  PASS  H1.2 重复提案标记 deduped=true（不产生新条目）
+  PASS  H1.3 sourceEventSeqs 乱序/重复不影响 id（规范化幂等）
+  PASS  H1.4 提案顺序不影响最终库内容（顺序无关）
+  PASS  H1.5 stableHash 确定性（1000 次同输入同输出）
+  PASS  H1.6 recordRecall 同一批 id 应用两次 → recallCount 精确为 2
+  PASS  H1.7 真实插件：同一会话重复驱动不重复学习（水位防抖）
+  PASS  H1.8 确定性：两个独立 stateDir 同场景 → 除时间字段外逐字节一致
+
+=== H2 畸形输入（malformed input，绝不抛出） ===
+  PASS  H2.1 buildLearnDigest 对任意畸形参数不抛异常
+  PASS  H2.2 learningSignals 对任意畸形 digest 不抛异常
+  PASS  H2.3 propose / makeExperience 对畸形 draft 返回结构化错误
+  PASS  H2.4 propose 对畸形 store 不抛异常（返回 ok:false 或安全结果）
+  PASS  H2.13 approve/reject/retire 对畸形 store 返回结构化错误，绝不抛 TypeError
+  PASS  H2.14 approve/reject/retire 对合法 store 但 id 不存在 → experience_not_found（非抛错）
+  PASS  H2.15 库满 + createdAt 缺失时，新提案必须仍在库中（淘汰最旧而非丢弃最新）
+  PASS  H2.16 R-6 修复后仍保持确定性（同输入 → 同输出，逐字节一致）
+  PASS  H2.5 sanitizeExperience / validateStore 拒绝畸形且不抛
+  PASS  H2.6 recall / tokenize 对畸形查询不抛异常
+  PASS  H2.7 脱敏函数对畸形输入不抛异常
+  PASS  H2.8 超限输入被安全钳制（不产生超长/超量字段）
+  PASS  H2.9 normalizeSourceSeqs 只接受非负整数（拒绝 NaN/负数/小数/字符串）
+  PASS  H2.10 原型污染尝试不污染全局原型
+  PASS  H2.12 recordRecall 对畸形 store/ids 不抛异常（且正常路径仍递增）
+  PASS  H2.11 validateStore 拒绝超过 MAX_EXPERIENCES 的库
+
+=== H3 会话隔离（session isolation） ===
+  PASS  H3.1 两个真实形状 sessionId → 两个独立库文件、各自归属正确
+  PASS  H3.2 跨会话召回不成立：B 的库召回不到 A 的经验
+  PASS  H3.3 撞名已消除：清洗会改变 sid 时文件名不再相撞，各自归属正确
+  PASS  H3.4 超长 sessionId 截断不再撞名：两个独立文件、无互相覆盖
+  PASS  H3.5 归属守卫兜底直测：伪造他人归属的库必须被拒绝载入并记 STORE_REBUILT
+  PASS  H3.6 会话隔离不受 store 版本号/遥测影响（重载后仍归属正确）
+
+=== R3 加固回归: 30 PASS / 0 FAIL ===
+
+
+--- tests/learn/test-learn-r3-secrets.mjs (exit 0)
+是必填项
+  PASS  E6 文档标题：Secret Management Overview
+  PASS  E7 普通 URL 无 userinfo 不得被改写
+  PASS  E8 普通 URL 带路径 @（非 userinfo）不得被改写
+  PASS  E9 空值/短值不得触发
+  PASS  E10 纯说明句：token 由服务端签发
+  PASS  E11 "the token was rejected by the server"
+  PASS  E12 代码引用：password 变量名讨论
+=== F. 既有规范家族零回归（9/9）===
+  PASS  F notion: 规范家族仍被脱敏且 token 正确
+  PASS  F openai: 规范家族仍被脱敏且 token 正确
+  PASS  F openrouter: 规范家族仍被脱敏且 token 正确
+  PASS  F anthropic: 规范家族仍被脱敏且 token 正确
+  PASS  F slack: 规范家族仍被脱敏且 token 正确
+  PASS  F github: 规范家族仍被脱敏且 token 正确
+  PASS  F jwt: 规范家族仍被脱敏且 token 正确
+  PASS  F telegram: 规范家族仍被脱敏且 token 正确
+  PASS  F aws: 规范家族仍被脱敏且 token 正确
+  PASS  F10 纯字母数字口令（原有能力）仍被脱敏
+  PASS  F11 Bearer token 仍被脱敏
+  PASS  F12 旧 token 名（[REDACTED:xxx]）不得被二次脱敏
+=== G. 确定性与非字符串安全 ===
+  PASS  G1 确定性：同一输入 5 次结果完全一致
+  PASS  G2 连续调用不因 /g lastIndex 污染（交替调用 3 轮）
+  PASS  G3 非字符串输入不抛异常
+  PASS  G4 混合文本：所有类别同时出现且全部脱敏
+=== H. 真实 learning pipeline 持久化：假密钥不得落盘（AC3）===
+  PASS  H0 真实插件壳产出候选且已落盘（后续断言的前提）
+  PASS  H2 假密钥不得出现在 signal/candidate/title/evidence/落盘 JSON 中：password
+  PASS  H2 假密钥不得出现在 signal/candidate/title/evidence/落盘 JSON 中：token
+  PASS  H2 假密钥不得出现在 signal/candidate/title/evidence/落盘 JSON 中：URI 口令
+  PASS  H3 持久化产物中确实出现了脱敏占位符（证明是脱敏而非整段丢弃）
+  PASS  H4 非敏感上下文仍保留（未整段删掉用户发言）
+  PASS  H5 candidate 的 title/body/evidence 中同样不含原始密钥
+
+=== I. 家族名平价（secret-scan-check.mjs）===
+  PASS  I1 仓库规范扫描器存在且可读
+  PASS  I2 扫描器家族名解析成功（解析出 16 个）
+  PASS  I3 规范家族名集合与扫描器完全平价（双向包含，顺序无关）
+  PASS  I4 三个通用形态族仍在（脱敏加固不被本次平价重构误删）
+
+=== R-3 通用密钥脱敏加固回归: 62 PASS / 0 FAIL ===
+
+
+--- tests/learn/redteam-r3-contamination.mjs (exit 0)
+
+=== A. Secret 持久化红队（blocker 级） ===
+  落盘文件数: 1, 总字节: 3823
+  经验条目数: 2
+  PASS  store 确实落盘（非空转测试）
+  条目 title 预览: ["\"title\":\"请求头是 Authorization: [REDACTED:generic-bearer]，配置里还有 [REDACTED:openai]，结果 401 失败了，已解决","\"title\":\"[REDACTED:generic-assignment] 且 [REDACTED:openai] 之后服务无法启动，程序崩溃了，现在跑通了"]
+  PASS  store 中不含原始 openai 密钥
+  PASS  store 中不含原始 bearer 密钥
+  PASS  store 中不含原始 pw 密钥
+  store 中出现脱敏标记: true
+
+=== B. Assistant 自污染 Case A/B/C ===
+  Case A kinds=["1:assistant:resolution"]
+         resolved=false  unresolvedFailureSeqs=[]
+  PASS  Case A: 用户的纠正未被误判为 resolution
+  PASS  Case A: assistant 的错误'已解决'声明仍被判为 resolution（可学）
+  PASS  Case A: 系统未因 assistant 声明就把失败判为已解决
+  Case B kinds=["1:assistant:correction"]
+  PASS  Case B: assistant 幻觉根因会被判为 correction（可进入候选）
+  Case C kinds=[]
+         resolved=false
+
+=== C. 161 → 769 增长归因（R2 使用的同一真实会话） ===
+  R2 session 不存在，跳过
+
+=== D. 注入边界：讨论 vs 真注入 ===
+  真注入(闭合,行首): kept=6/57 (丢失 89%)
+      kept 文本: "帮我看看这个"
+  真注入(未闭合,行首): kept=6/38 (丢失 84%)
+      kept 文本: "帮我看看这个"
+  用户讨论(未闭合,句中): kept=43/43 (丢失 0%)
+      kept 文本: "我注意到日志里有 <system-reminder> 这个标签，它后面的报错都没被记录"
+  PASS  用户讨论该标签时其真实发言不被删除
+
+=== 污染红队: 9 PASS / 0 FAIL ===
+
+
+--- tests/learn/redteam-r3-isolation.mjs (exit 0)
+正常会话隔离（真实 DSH 形状 sessionId） ===
+  [PASS] A0 真实插件确实产出了候选（前置条件）
+         A=1 B=1 logs=4
+  [PASS] A1 两个会话映射到两个不同文件
+         storePath(A)=session-04ecc1a4-fae9-4eb9-9a08-89b79128bcd4.json  storePath(B)=session-11112222-3333-4444-5555-666677778888.json
+  [PASS] A2 磁盘上确实两个库文件
+         files=[session-04ecc1a4-fae9-4eb9-9a08-89b79128bcd4.json, session-11112222-3333-4444-5555-666677778888.json]
+  [PASS] A3 两库各自归属正确 sessionId
+         A=session-04ecc1a4-fae9-4eb9-9a0  B=session-11112222-3333-4444-555
+  [PASS] A4 A/B 候选标题无交集
+         A=1 B=1 交集=0
+  [PASS] A5 B 库无 A 的语料痕迹
+         B=[已经修复了]
+
+=== B. sanitizeFileId 撞名（R3 根因修复验证：撞名应已消除） ===
+  [PASS] B1 两个不同 sid 不再映射到同一文件（撞名已消除）
+         storePath(X)=probe_session_X-4d6e3e7d.json  storePath(Y)=probe_session_X.json
+  [PASS] B2 磁盘上两个独立库文件
+         files=[probe_session_X-4d6e3e7d.json, probe_session_X.json]
+  [PASS] B3 两库各自归属正确 sessionId（无顶替）
+         X="probe session X"  Y="probe_session_X"
+  [PASS] B4 无跨会话污染（后跑方不继承先跑方经验）
+         Y 看到 X 语料=false; X 看到 Y 语料=false; X exps=1; Y exps=1
+  [PASS] B5 守卫直测：伪造他人归属的库必须被拒绝载入并重建
+         伪造后 sessionId="some-other-session" → 再驱动后 sessionId="probe session X" telemetry=[STORE_REBUILT,PROPOSED]
+
+=== C. 超长 sessionId（>120 字符）截断撞名应已消除 ===
+  [PASS] C1 超长 sid 不再撞名（两个独立文件）
+         storePath 相同=false  文件数=2
+  [PASS] C2 超长 sid 两库各自归属正确（无互相覆盖）
+         A 归属正确=true  B 归属正确=true
+
+=== D. 结论 ===
+
+  PASS=13  FAIL=0
+  正常 DSH sessionId 形状下隔离 = HOLDS
+  撞名是否仍可达 = NO（根因已消除）
+  归属守卫（fail-closed 兜底）= YES
+  跨会话污染 = NOT CONFIRMED
+
+
+--- tests/learn/redteam-r3-labels.mjs (exit 0)
+
+
+--- tests/learn/redteam-r3-probe.mjs (exit 0)
+                               -> none   [MISSED]
+  FN-EN        "the result is wrong"                                        -> none   [MISSED]
+  --> 无关键词失败表达漏检: 13/13
+
+=== L. Source trust / role 是否被区分 ===
+  ROLE         "user: assistant 声称：问题已经解决了"                                 -> resolution   [assistant 断言是否与 user 同等对待]
+  ROLE         "assistant: 问题已经解决了"                                         -> resolution   [assistant 断言是否与 user 同等对待]
+
+=== M. Secret / transient / temporary-state 是否进入信号文本 ===
+  NOISE        "[transient] 请求失败：ETIMEDOUT 连接超时"                            -> none
+  NOISE        "[rate-limit] API 返回 429 rate limit exceeded"                -> none
+  NOISE        "[5xx] 服务端 503 Service Unavailable"                          -> none
+  NOISE        "[temporary-state] 端口 54321 上的进程挂了，PID 98765"                -> none
+  NOISE        "[sha] commit c0849d2 之后测试失败"                                -> none
+  SECRET       "假密钥+报错"                                                     -> none   [信号本身是否携带原文]
+  SECRET       "redactSecrets"                                              -> redacted   [containsSecret=true]
+
+=== N. SIGNAL_PATTERNS 真相表 ===
+  kind=resolution
+    latin: /\b(fixed|resolved|works now|passing|solved|green)\b/i
+    cjk  : /(已修复|修复了|修复完成|修好了|修好|解决了|已解决|测试通过|全部通过|通过测试|跑通|搞定|成功)/
+  kind=correction
+    latin: /\b(instead|rather than|should be|actually|correction|corrected)\b/i
+    cjk  : /(改为|应该|纠正|更正|不是.{0,12}而是)/
+
+=== 探针完成（观测模式，无 pass/fail 门槛）===
+总观测条数: 75
+

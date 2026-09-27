@@ -1,0 +1,11 @@
+{
+    "timestamp":  "2026-09-28T01:40:49.1821025+08:00",
+    "dir":  "C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\ac6-real-e2e-20260927174028\\tx\\ckpts\\candidate-cand_d9b6ae32-20260928-014049-bf91cb",
+    "generationBefore":  "639261514555153163_20580",
+    "label":  "candidate-cand_d9b6ae32",
+    "files":  [
+
+              ],
+    "transactionId":  "candidate-cand_d9b6ae32-20260928-014049-bf91cb",
+    "dshVersionBefore":  "0.1.1-rc.2"
+}

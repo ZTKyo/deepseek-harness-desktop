@@ -666,3 +666,30 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       未代外部评审出 verdict、未修任何旁支缺陷、未触碰生产配置与凭据库。
     - 报告：`docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/`
       （`P4_FINAL_VERDICT.md` + `A10_CONTRACT_MATRIX.md` + `AC1_ARTIFACT_REDACTION.md`）。
+
+  - **2026-09-28 01:41 AC6 合同缺口关闭（真实三腿晋升 E2E，范围扩权后）**：
+    - **判定增量：AC6 `PARTIAL → PASS`**（真实 E2E **24 PASS / 0 FAIL**）。**总判定不变：`P4 ≠ VERIFIED`**
+      —— A8 真人审批门、AC2 研究腿、AC10 CI 内真实门**均未触碰/未关闭**。
+    - **三腿全真**：真 `git worktree` + 真分支/commit `74fd41c9…`；**在该 commit 的 worktree 内真跑
+      `ci-level2.yml` 作业命令**（14 命令全 exit 0、13 套件 PASS、环境隔离判据与 CI 相同）；
+      真 `dsh-transaction.ps1` → `FinalState=COMMITTED` + `Verify=COMMIT_READY` + **journal 独立回读**；
+      真 `mount-gate --hold host` 隔离宿主 canary（`127.0.0.1:3099`，生产 3080 PID 全程一致）。
+    - **门有承载力（双向）**：正向真收据 ⇒ `PROMOTED` 且**只存 1859 B 有界摘要**；
+      反向 3 组篡改（`ci.headSha`／`transaction.faultClass`／`git.branch`）⇒ **全拒 + `CANDIDATE_PROMOTION_DENIED` 留痕 + 状态不动**。
+      不变量：晋升未改插件（`learn.mjs` `bf5cfa6d…`、`learn-candidate.mjs` `f732806a…`），工作区仍干净。
+    - **修复前 19P/5F → 修复后 24P/0F**（两份原始日志均留档）。本轮在 AC6 路径上修掉 **4 个必经缺陷**：
+      ① 候选 label 含 `:`（Windows 路径非法）→ 改 `candidate-<id>` + 引擎防御性清洗 + 门拒绝不安全 label；
+      ② mount-gate 隔离未复现生产 profile 形态 → 临时 `DSH_HOME` + `--profile web`；
+      ③ **PS 5.1 给 JSON 产物写入 BOM** ⇒ Node `JSON.parse` 报 `Unexpected token ''` ⇒ 收据门判事务腿无效
+      （= 5 FAIL 的**总根因**）→ 引擎写 journal/manifest 改**无 BOM UTF-8**；
+      ④ E2E 自身两处误判（本机无 `pwsh`、worktree 路径比较）→ 修 harness，非产品缺陷。
+      **方法学**：`UTF-8 带 BOM` 与 `UTF-8 不带 BOM` 是**按消费方**定的两套要求——PS 脚本（给 PS 5.1 读）必须带 BOM，
+      给 Node 解析的 JSON 必须不带。
+    - **证据留档**：`docs/roadmap/evidence/AC6_REAL_E2E_R3_CLOSURE/`（8 文件，密钥扫描 **0 命中**）；
+      报告 `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md`（含 §6 诚实的范围边界）。
+    - **未做（边界）**：**未动 `main`**（只在特性分支 `p4-final-b1b2-fix`）、未重启服务、未改 `cordis.patch.yml`、
+      未把插件部署到生产挂载位、**未放宽真人审批门**（本 E2E 的「晋升」用的是纯状态函数 + 自报审批字段，
+      **不构成真人审批**）、未改 `tests/learn` 之外的生产代码。
+    - **AC10 结构性说明（实测）**：`ci-level2.yml` 触发仅 `pull_request → main` 与 `push → reliability-v1`
+      ⇒ 本特性分支**不可能**产生 GitHub 托管运行（证据 `ci.runUrl` 为空），关闭 AC10 需动 main / reliability-v1
+      = **需人类裁决的范围扩权**；AC2（研究腿接线）同理。

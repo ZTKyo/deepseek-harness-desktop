@@ -92,6 +92,55 @@ for (const t of BENIGN) {
   check(`§4 benign.unchanged`, red === t, `普通文本被改写: "${t}" -> "${red}"`);
 }
 
+// ── §5 载入边界自愈（历史明文清除；补齐家族所不能覆盖的"存量"部分）──────────
+// 背景实证：家族表补齐后，生产库 session-76de1ca9 的 experiences[78].body 仍带明文，
+// 且运行中进程持续把内存副本回写 → 只改 makeExperience 无法让存量变干净。
+const redactStore = mod.redactStore;
+const sanitizeExperience = mod.sanitizeExperience;
+check('§5.0 redactStore 已导出', typeof redactStore === 'function', '载入边界自愈入口缺失（存量明文无法清除）');
+
+const STRIPE = 'sk_live_' + 'a1B2c3D4e5F6g7H8i9J0k1L2';
+const GOOGLE = 'AIza' + 'A'.repeat(35);
+const mkExp = (over = {}) => ({
+  id: 'exp-test', state: 'PROPOSED', title: 'title', body: 'body', tags: [], sourceEventSeqs: [1],
+  originSessionId: 'sess', createdAt: 1, approvedAt: null, approvedBy: null, approvalEvidence: null,
+  rejectedAt: null, rejectedBy: null, rejectionReason: null, retiredAt: null,
+  promotion: 'NONE', promotionEvidence: null, recallCount: 0, lastRecalledAt: null, ...over,
+});
+const leaked = mkExp({ title: `leak ${STRIPE}`, body: `note ${GOOGLE} tail`, tags: [`tag-${STRIPE}`] });
+const clean = mkExp({ id: 'exp-clean', title: 'clean title', body: 'benign body text' });
+const store = {
+  schemaVersion: 2, sessionId: 'sess', version: 3,
+  experiences: [leaked, clean],
+  telemetry: [{ kind: 'PROPOSED', payload: { note: `leaked ${GOOGLE}` }, at: 1 }],
+  updatedAt: 0,
+};
+
+const healed = redactStore(store);
+check('§5.1 命中被清除', !JSON.stringify(healed.store.experiences[0]).includes(STRIPE)
+  && !JSON.stringify(healed.store.experiences[0]).includes(GOOGLE), '脱敏后仍有家族值存活');
+check('§5.1 占位符保留家族名', JSON.stringify(healed.store.experiences[0]).includes('[REDACTED:stripe]')
+  && JSON.stringify(healed.store.experiences[0]).includes('[REDACTED:google]'), '未写入 [REDACTED:<family>] 占位符');
+check('§5.1 计数覆盖条目+遥测', healed.count >= 3 && healed.entries === 1, `count=${healed.count} entries=${healed.entries}`);
+check('§5.1 无命中条目零漂移（引用相同）', healed.store.experiences[1] === clean,
+  '未命中条目被改写（过度改写）');
+check('§5.1 结构键不变', healed.store.experiences[0].id === 'exp-test'
+  && healed.store.experiences[0].state === 'PROPOSED'
+  && healed.store.experiences[0].createdAt === 1
+  && JSON.stringify(healed.store.experiences[0].sourceEventSeqs) === '[1]', '结构键被改写（引用/状态机被破坏）');
+check('§5.1 遥测命中被清除', !JSON.stringify(healed.store.telemetry).includes(GOOGLE)
+  && healed.store.telemetry[0].kind === 'PROPOSED', '遥测 payload 未脱敏或 kind 被破坏');
+
+const healed2 = redactStore(healed.store);
+check('§5.2 幂等（二次零命中且库不变）', healed2.count === 0
+  && JSON.stringify(healed2.store) === JSON.stringify(healed.store),
+  `二次调用 count=${healed2.count}（幂等被破坏）`);
+
+check('§5.3 改写后仍通过 sanitizeExperience', healed.store.experiences.every((e) => !sanitizeExperience(e).error),
+  '自愈产出了校验不过的记录（会让整库在下次载入被判废）');
+check('§5.4 缺字段入参不抛错', redactStore({ experiences: [], telemetry: [] }).count === 0
+  && redactStore(null).count === 0, '边界入参抛错');
+
 console.log(`\nPASS=${pass} FAIL=${fail}`);
 if (failures.length) {
   console.log('--- 失败明细 ---');

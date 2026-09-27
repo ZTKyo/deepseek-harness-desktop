@@ -451,6 +451,105 @@ export function sanitizeExperience(raw) {
   return { value: raw };
 }
 
+/**
+ * 自愈迁移时不参与改写的**结构键**：身份/状态/版本/枚举。
+ * 改写它们会破坏引用一致性（id 被别处引用）或状态机语义（state/promotion 是枚举）。
+ */
+const NON_REDACTABLE_KEYS = new Set([
+  'id', 'originSessionId', 'sessionId', 'state', 'promotion',
+  'schemaVersion', 'version', 'kind', 'method', 'status',
+]);
+
+/**
+ * 对一棵 JSON 子树做传播式重新脱敏（内部实现）。
+ * 纪律：**只在字符串确实命中密钥家族时才替换**；未命中 ⇒ 原引用原样返回
+ * （保证"无命中即字节不变"，既是幂等的基础，也把内容漂移压到最小）。
+ * hits 为共享累加器，元素形如 `experiences[78].body(stripe+google)` —— 只含字段路径与
+ * 家族名，**绝不含密钥值**（审计可用、日志安全）。
+ */
+function redactTree(node, pathStr, hits) {
+  if (typeof node === 'string') {
+    if (!containsSecret(node)) return { value: node };
+    hits.push(`${pathStr}(${secretFamiliesIn(node).join('+')})`);
+    return { value: redactSecrets(node) };
+  }
+  if (Array.isArray(node)) {
+    let changed = false;
+    const out = node.map((v, i) => {
+      const r = redactTree(v, `${pathStr}[${i}]`, hits);
+      if (r.value !== v) changed = true;
+      return r.value;
+    });
+    return { value: changed ? out : node };
+  }
+  if (isPlainObject(node)) {
+    let changed = false;
+    const out = {};
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (NON_REDACTABLE_KEYS.has(k)) { out[k] = v; continue; }
+      const r = redactTree(v, pathStr ? `${pathStr}.${k}` : k, hits);
+      if (r.value !== v) changed = true;
+      out[k] = r.value;
+    }
+    return { value: changed ? out : node };
+  }
+  return { value: node };
+}
+
+/**
+ * ★ 载入边界自愈（P4-R2 / AC1 补齐，2026-09-28）：
+ * 补齐家族表只能拦住**新增**泄漏；修复前（家族表缺 7 族时）已经落盘的条目仍带着明文存活，
+ * 且运行中进程会一直把内存副本回写落盘（实证：session-76de1ca9 库 mtime 在文件级清理后
+ * 仍被刷新，命中数回到 2）。因此历史明文**必须由载入边界清除**。
+ *
+ * 三条硬约束（不满足则**该条原样保留**，绝不写坏数据）：
+ *   ① 只替换命中家族的值（未命中 ⇒ 引用与字节都不变）；
+ *   ② 结构键（id/state/promotion/…）永不改写 → 不破坏引用与状态机；
+ *   ③ 改写后的条目必须**仍通过 sanitizeExperience**（含 APPROVED 的宿主 attestation 校验）——
+ *      否则回退该条原值并计入 skipped。理由：validateStore 是"一条坏则整库判废"，
+ *      写入一条校验不过的记录会在下次载入时导致**整库被重建为空**（静默数据丢失），
+ *      比"该条暂留明文"严重得多；故此处选择保守回退并把该条上报给人。
+ * 幂等：占位符 [REDACTED:<family>] 不再命中任何家族 ⇒ 二次调用 count=0 且库完全不变。
+ * 纯函数：返回新 store（未改动部分保持原引用），不改动入参。
+ */
+export function redactStore(store) {
+  if (!isPlainObject(store)) return { store, count: 0, entries: 0, fields: [], skipped: [] };
+  const hits = [];
+  const skipped = [];
+  let entries = 0;
+  const out = { ...store };
+  const exp = Array.isArray(store.experiences) ? store.experiences : null;
+  if (exp) {
+    out.experiences = exp.map((e, i) => {
+      if (!isPlainObject(e)) return e;
+      const mark = hits.length;
+      const r = redactTree(e, `experiences[${i}]`, hits);
+      if (r.value === e) return e;                       // 未命中：引用不变
+      const revalidated = sanitizeExperience(r.value);
+      if (revalidated.error) {                           // fail-closed：宁可暂留该条，也不写坏整库
+        hits.length = mark;                              // 该条命中不计入（因为它并未被改写）
+        skipped.push(`experiences[${i}]:${revalidated.error}`);
+        return e;
+      }
+      entries += 1;
+      return r.value;
+    });
+  }
+  const tel = Array.isArray(store.telemetry) ? store.telemetry : null;
+  if (tel) {
+    // 遥测只校验 kind（不在家族表内），故无需 revalidate；同样只在命中时替换。
+    out.telemetry = tel.map((t, i) => redactTree(t, `telemetry[${i}]`, hits).value);
+  }
+  return {
+    store: out,
+    count: hits.length,
+    entries,
+    fields: hits,
+    skipped,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. 经验库 store：空骨架 / 校验（fail-closed）
 // ─────────────────────────────────────────────────────────────────────────────

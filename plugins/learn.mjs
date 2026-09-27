@@ -30,6 +30,7 @@ import {
   LEARN_SCHEMA_VERSION,
   emptyStore,
   validateStore,
+  redactStore,
   propose,
   approve,
   reject,
@@ -575,7 +576,18 @@ export function apply(ctx, config = {}) {
       // 'probe_session_X' 映射到同一文件，超长 sid 截断到 120 后同样撞名；若无此守卫，
       // 后请求方会静默继承前一方的经验（跨会话污染），且不产生任何 STORE_REBUILT 告警。
       if (ok.sessionId !== sid) return null;
-      return ok;
+      // ★ 载入边界自愈（P4-R2 / AC1 补齐）：补齐家族表只拦得住"新增"泄漏，修复前已落盘的
+      // 历史明文必须在这里清除；命中即刻落盘，避免"内存已清、磁盘仍旧"的半修复状态。
+      // 日志只含家族名与字段路径（绝不含密钥值）。
+      const heal = redactStore(ok);
+      if (heal.count > 0) {
+        diag(`STORE_REDACTED sid=${sid} fields=${heal.count} entries=${heal.entries} [${heal.fields.join(', ')}]`);
+        saveStore(heal.store);
+      }
+      if (heal.skipped.length) {
+        diag(`STORE_REDACT_SKIPPED sid=${sid} ${heal.skipped.join(', ')} (改写会使该条校验失败 → 保守保留原值，需人工复核)`);
+      }
+      return heal.store;
     } catch {
       return null;
     }

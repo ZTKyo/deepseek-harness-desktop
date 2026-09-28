@@ -209,7 +209,29 @@ let commitSha = null;
 //    这里只清"本次运行本来就要创建/占用"的对象：同名隔离分支（且提交信息确为本门所写）、
 //    同名 worktree、3099 的占用者。清不掉就 ENV 失败（exit 2），不进入级联失败——
 //    假红比红灯更危险：它会把真问题埋在一堆噪声里，也会训练人忽略红灯。
+//
+//    ⚠️ 并发红线（实测事故 2026-09-29 01:26）：分支名由候选 id **确定性派生**，而所有 worktree
+//    共享同一个 refs 命名空间 ⇒ 两个 AC6 运行**时间重叠**必然互撞。当时本机 _wt-ac6 的run
+//    （01:25:59 起，持锁）与本 run（01:26:03 起，无锁）重叠：本 run 拿到
+//    `branch already exists` + 3099 被别人的隔离宿主（pid 12688）占用 → 级联 8~19 条假失败。
+//    更危险的是"清理"：删掉别人正在用的分支会把**对方**搞红（历史事故里另一次看着自己的分支
+//    "not found"就是被并行的 run 删了）。⇒ 未持跨 worktree 锁的副本一律：**只拒绝、不抢占**。
 {
+  // 先判定分支是否被任一 worktree 占用（= 另一个 run 正在进行中）。
+  const holders = [];
+  let cur = null;
+  for (const raw of git(['worktree', 'list', '--porcelain'], REPO).split(/\r?\n/)) {
+    const l = raw.trim();
+    if (l.startsWith('worktree ')) { cur = { path: l.slice('worktree '.length).trim(), branch: null }; holders.push(cur); }
+    else if (l.startsWith('branch refs/heads/') && cur) cur.branch = l.slice('branch refs/heads/'.length).trim();
+  }
+  const liveHolder = holders.find((h) => h.branch === BRANCH);
+  if (liveHolder) {
+    console.log(`  前置失败：隔离分支 ${BRANCH} 正被另一个 AC6 运行占用（worktree ${liveHolder.path}）。`);
+    console.log('            分支名由候选 id 确定性派生、所有 worktree 共享同一 refs 命名空间 ⇒ 重叠必撞。');
+    console.log('            本门在别人持有时既不抢占也不删除（删了会把对方搞红），直接 ENV 失败（exit 2）。');
+    process.exit(2);
+  }
   const stale = gitMaybe(['rev-parse', '--verify', BRANCH], REPO);
   if (stale) {
     const subj = gitMaybe(['log', '-1', '--format=%s', BRANCH], REPO) ?? '';
@@ -218,9 +240,7 @@ let commitSha = null;
     console.log(`  前置：清理上次中断运行残留的隔离分支 ${BRANCH}（${subj}）`);
     git(['branch', '-D', BRANCH], REPO);
   }
-  const wts = git(['worktree', 'list', '--porcelain'], REPO).split(/\r?\n/)
-    .filter((l) => l.startsWith('worktree ')).map((l) => l.slice('worktree '.length).trim());
-  for (const p of wts) {
+  for (const p of holders.map((h) => h.path)) {
     if (/[\\/]ac6-real-e2e-[^\\/]+[\\/]wt$/i.test(p)) {
       console.log(`  前置：清理上次中断运行残留的隔离工作树 ${p}`);
       try { git(['worktree', 'remove', '--force', p], REPO); } catch { /* prune 兜底 */ }

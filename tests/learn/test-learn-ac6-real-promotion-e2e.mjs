@@ -22,6 +22,9 @@ import { fileURLToPath } from 'node:url';
 
 import * as C from '../../plugins/learn-candidate.mjs';
 import { qualifyGap } from '../../plugins/learn-gap-veto.mjs';
+// ★ 跨 worktree 互斥（真缺陷回归修复 2026-09-29）：锁放在**共享 git 目录**下，
+//   所有 worktree（_wt-ac6 / _wt-ci / _p4r2-inject-fix）都看得见；实现与理由见同目录 ac6-e2e-lock.mjs。
+import { acquireAc6Lock, releaseAc6Lock } from './ac6-e2e-lock.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -39,6 +42,11 @@ const TX_JOURNAL = path.join(TX_BASE, 'tx-journal.json');
 const STATE_ROOT = path.join(ROOT, 'state');
 const EMPTY_PROFILE = path.join(ROOT, 'empty-profile');
 const HOST_PORT = 3099;
+// 报告归档：本次运行结束后临时根目录会被删除（修「%TEMP% 里 18 个残骸」），
+// 故报告必须**归档到临时根之外**，否则证据随清理一起消失。
+const REPORT_ARCHIVE = path.join(os.tmpdir(), 'ac6-real-e2e-reports');
+const ARCHIVED_REPORT = path.join(REPORT_ARCHIVE, `${STAMP}-report.json`);
+const BLOCKED_REPORT = path.join(REPORT_ARCHIVE, `blocked-${STAMP}-${process.pid}.json`);
 
 let pass = 0; let fail = 0; const failures = [];
 function check(name, fn) {
@@ -141,6 +149,29 @@ console.log(`仓库   : ${REPO}`);
 console.log(`临时根 : ${ROOT}`);
 console.log('');
 
+// ★ 并发互斥：必须在**任何 git 写操作之前**取锁（真缺陷回归修复 2026-09-29）
+//   `candidate/<candidateId>` 是确定性分支名，而所有 worktree 共享同一 refs 命名空间
+//   （实测 _wt-ac6/_wt-ci/_p4r2-inject-fix 的 --git-common-dir 相同）⇒ 并发运行必然撞车，
+//   实测产生 8 条级联假失败。锁不可得 ⇒ 明确报"另一个 AC6 运行持有锁"并**快速失败 exit 3**，
+//   既不产生级联假失败，也绝不动 git（零副作用）。
+const LOCK = acquireAc6Lock({ repo: REPO });
+if (!LOCK.ok) {
+  fs.mkdirSync(REPORT_ARCHIVE, { recursive: true });
+  const blocked = {
+    blocked: true, reason: 'another_ac6_run_holds_lock', repo: REPO,
+    lockDir: LOCK.lockDir, lockOwner: LOCK.owner ?? null, lockAgeMs: Math.round(LOCK.ageMs ?? -1),
+    pid: process.pid, at: new Date().toISOString(),
+    note: '确定性分支名 candidate/<id> 在共享 refs 下并发必撞车（实测 8 条级联假失败）；本运行未触碰 git，零副作用。',
+  };
+  fs.writeFileSync(BLOCKED_REPORT, JSON.stringify(blocked, null, 2), 'utf8');
+  console.log('BLOCKED 另一个 AC6 运行持有锁 → 快速失败；未触碰 git / 未建 worktree / 未建分支');
+  console.log(`  锁目录 : ${LOCK.lockDir}`);
+  console.log(`  持有者 : pid=${LOCK.owner?.pid ?? '?'} started=${LOCK.owner?.startedAt ?? '?'} age=${Math.round((LOCK.ageMs ?? 0) / 1000)}s`);
+  console.log(`  报告   : ${BLOCKED_REPORT}`);
+  process.exit(3);
+}
+console.log(`锁      : ${LOCK.lockDir}${LOCK.staleTakenOver ? `（抢占陈旧锁：前 pid=${LOCK.previousOwner?.pid ?? '?'} age=${Math.round((LOCK.previousAgeMs || 0) / 1000)}s alive=${LOCK.previousHolderAlive}）` : ''}`);
+
 fs.mkdirSync(ROOT, { recursive: true });
 fs.mkdirSync(TX_BASE, { recursive: true });
 fs.mkdirSync(STATE_ROOT, { recursive: true });
@@ -152,6 +183,70 @@ const evidence = {
   invariants: null, cleanup: null,
 };
 
+// ── 收尾（worktree / 分支 / 临时根 / 锁）＋崩溃兜底 ────────────────────────────
+// 修「%TEMP% 里 18 个 ac6-real-e2e-* 残骸」：只要动过 git，无论正常结束、断言抛出还是
+// 提前 exit，都必须移除 worktree、删除分支、删掉临时根、释放跨 worktree 锁。
+const SNAP = { evidence, baseHead: null, wt: null, branch: null };
+const CLEAN = {
+  state: {
+    worktreeRemoved: null, branchDeleted: null, portFree: null, headUnchanged: null,
+    tempRootRemoved: null, errors: [],
+  },
+  finished: false, finalized: false, archiveResult: null,
+  lockDir: LOCK.ok ? LOCK.lockDir : null,
+};
+function finishCleanup() {
+  if (CLEAN.finished) return CLEAN.state;
+  CLEAN.finished = true;
+  const st = CLEAN.state;
+  st.ranAt = new Date().toISOString();
+  if (SNAP.wt && fs.existsSync(SNAP.wt)) {
+    try { git(['worktree', 'remove', '--force', SNAP.wt], REPO); } catch (e) { st.errors.push('worktree remove: ' + e.message); }
+    if (fs.existsSync(SNAP.wt)) { try { fs.rmSync(SNAP.wt, { recursive: true, force: true }); } catch (e) { st.errors.push('worktree rmdir: ' + e.message); } }
+    try { git(['worktree', 'prune'], REPO); } catch (e) { st.errors.push('worktree prune: ' + e.message); }
+  }
+  st.worktreeRemoved = !SNAP.wt || !fs.existsSync(SNAP.wt);
+  if (SNAP.branch) {
+    try { git(['branch', '-D', SNAP.branch], REPO); } catch (e) { st.errors.push('branch -D: ' + e.message); }
+    st.branchDeleted = gitMaybe(['rev-parse', '--verify', SNAP.branch], REPO) === null;
+  }
+  try { st.portFree = listenPid(HOST_PORT) === ''; } catch (e) { st.errors.push('port check: ' + e.message); }
+  st.headUnchanged = SNAP.baseHead == null ? null : gitMaybe(['rev-parse', 'HEAD'], REPO) === SNAP.baseHead;
+  return st;
+}
+function finalize() {
+  if (CLEAN.finalized) return CLEAN.archiveResult;
+  CLEAN.finalized = true;
+  const out = { tempRootRemoved: false, lockDir: CLEAN.lockDir, lockReleased: false, archivedReport: null, errors: [] };
+  try {
+    finishCleanup();
+    fs.mkdirSync(REPORT_ARCHIVE, { recursive: true });
+    if (!fs.existsSync(REPORT)) {
+      // 崩在收尾之前（含提前 exit 2）：也要留下证据，而不是留下一个没有报告的残骸目录。
+      fs.mkdirSync(ROOT, { recursive: true });
+      fs.writeFileSync(REPORT, JSON.stringify({
+        aborted: true, repo: REPO, tempRoot: ROOT, at: new Date().toISOString(),
+        startedAt: SNAP.evidence?.startedAt ?? null, evidence: SNAP.evidence ?? null, cleanup: CLEAN.state,
+        note: '主流程未走到报告落盘（崩溃或提前 exit）；本报告由收尾兜底写出。',
+      }, null, 2), 'utf8');
+    }
+    fs.copyFileSync(REPORT, ARCHIVED_REPORT);      // 先归档再删根：证据不能随清理消失
+    out.archivedReport = ARCHIVED_REPORT;
+    try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { out.errors.push('temp root rm: ' + e.message); }
+    out.tempRootRemoved = !fs.existsSync(ROOT);
+  } catch (e) { out.errors.push('finalize: ' + e.message); }
+  try {
+    out.lockReleaseDetail = releaseAc6Lock(CLEAN.lockDir);
+    out.lockReleased = CLEAN.lockDir ? out.lockReleaseDetail.released === true : true;
+  } catch (e) { out.errors.push('unlock: ' + e.message); }
+  CLEAN.archiveResult = out;
+  return out;
+}
+// exit 钩子兜底：全部实现是同步的，故在钩子里可用；任何未捕获异常/提前 exit 都会走到这里。
+process.on('exit', () => {
+  try { finishCleanup(); finalize(); } catch { /* exit 钩子不得抛 */ }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('=== 0. 前置检查（仓库必须干净：worktree 里跑的就是"当前代码"）===');
 const dirtyBefore = git(['status', '--porcelain'], REPO);
@@ -160,6 +255,7 @@ if (dirtyBefore) {
   process.exit(2);
 }
 const baseHead = git(['rev-parse', 'HEAD'], REPO);
+SNAP.baseHead = baseHead;
 check('前置：工作区干净且有 HEAD', () => assertEq(dirtyBefore, '', 'dirty'), baseHead.slice(0, 12));
 check('前置：找到 PowerShell（本机为 Windows PowerShell 5.1，无 pwsh）', () => {
   assert(PS_EXE, 'pwsh / powershell 都不可用');
@@ -183,6 +279,7 @@ if (!proposed.ok) { console.log('  propose 失败：' + proposed.error); process
 const ID = proposed.candidate.id;
 const BRANCH = C.candidateBranchName(ID);
 const LABEL = C.candidateTransactionLabel(ID);
+SNAP.branch = BRANCH;   // 收尾兜底用：即使后面崩了也按真分支名删除
 check('候选已 propose 且派生名一致（分支名/事务 label 都由 id 派生）', () => {
   assertEq(BRANCH, 'candidate/' + ID, 'branch name');
   assertEq(LABEL, 'candidate-' + ID, 'tx label');
@@ -201,6 +298,7 @@ const PLUGIN_SHA = {
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== 2. Git 腿（真 git worktree / 真隔离分支 / 真 commit）===');
 const WT = path.join(ROOT, 'wt');
+SNAP.wt = WT;
 let commitSha = null;
 check('git worktree add 建隔离工作树', () => {
   git(['worktree', 'add', '-b', BRANCH, WT, baseHead], REPO);
@@ -498,15 +596,14 @@ evidence.invariants = { pluginHashes: PLUGIN_SHA, repoCleanAfter: true };
 
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== 10. 清理 ===');
-const cleanup = { worktreeRemoved: false, branchDeleted: false, portFree: portFree === '' };
-try { git(['worktree', 'remove', '--force', WT], REPO); cleanup.worktreeRemoved = !fs.existsSync(WT); } catch (e) { cleanup.worktreeRemoveError = e.message; }
-try { git(['branch', '-D', BRANCH], REPO); cleanup.branchDeleted = gitMaybe(['rev-parse', '--verify', BRANCH], REPO) === null; } catch (e) { cleanup.branchDeleteError = e.message; }
-cleanup.headUnchanged = git(['rev-parse', 'HEAD'], REPO) === baseHead;
+const cleanup = finishCleanup();               // worktree + 分支 + 宿主端口 + HEAD（幂等；exit 钩子也调它）
+cleanup.portFreeAtHostExit = portFree === '';  // §8 里的更早快照，两个证据都留
 check('清理干净：worktree/分支已删、HEAD 未变、临时宿主已退', () => {
-  assert(cleanup.worktreeRemoved, 'worktree still present');
-  assert(cleanup.branchDeleted, 'branch still present');
-  assert(cleanup.headUnchanged, 'repo HEAD changed');
-  assert(cleanup.portFree, '3099 not free');
+  assert(cleanup.worktreeRemoved !== false, 'worktree still present');
+  assert(cleanup.branchDeleted !== false, 'branch still present');
+  assert(cleanup.headUnchanged !== false, 'repo HEAD changed');
+  assert(cleanup.portFree !== false, '3099 not free');
+  assert(cleanup.portFreeAtHostExit !== false, '3099 not free (§8 快照)');
   return 'ok';
 });
 evidence.cleanup = cleanup;
@@ -525,11 +622,33 @@ check('临时 checkpoint 目录不含生产 profile 拷贝（隔离生效）', (
 // ─────────────────────────────────────────────────────────────────────────────
 evidence.finishedAt = new Date().toISOString();
 evidence.pass = pass; evidence.fail = fail; evidence.failures = failures;
+evidence.lock = { dir: LOCK.lockDir, staleTakenOver: LOCK.staleTakenOver === true };
+evidence.reportArchived = ARCHIVED_REPORT;
 fs.writeFileSync(REPORT, JSON.stringify(evidence, null, 2), 'utf8');
+
+// 收尾最后一跳：归档报告 → 删临时根 → 释放跨 worktree 锁；并把「只有收尾后才知道的真值」
+// （临时根真删否、锁真释放否、锁目录在哪）补写进归档副本。
+const fin = finalize();
+try {
+  const rep = JSON.parse(fs.readFileSync(ARCHIVED_REPORT, 'utf8'));
+  rep.cleanup = {
+    ...(rep.cleanup || {}),
+    tempRootRemoved: fin.tempRootRemoved, tempRoot: ROOT,
+    lockDir: fin.lockDir, lockReleased: fin.lockReleased, lockReleaseDetail: fin.lockReleaseDetail ?? null,
+    archivedReport: ARCHIVED_REPORT, archivedAt: new Date().toISOString(), finalizeErrors: fin.errors,
+  };
+  check('清理干净：临时根目录已删 + 跨 worktree 锁已释放（并发安全）', () => {
+    assert(fin.tempRootRemoved, `temp root still present: ${ROOT}`);
+    assert(fin.lockReleased, `lock not released: ${JSON.stringify(fin.lockReleaseDetail ?? null)}`);
+    return `root removed=${ROOT}；lock released=${fin.lockDir}`;
+  });
+  rep.pass = pass; rep.fail = fail; rep.failures = failures; rep.finishedAt = new Date().toISOString();
+  fs.writeFileSync(ARCHIVED_REPORT, JSON.stringify(rep, null, 2), 'utf8');
+} catch (e) { console.log('  WARN  归档补写失败：' + e.message); }
 
 console.log('\n=== 汇总 ===');
 console.log(`  AC6 真实端到端: ${pass} PASS / ${fail} FAIL`);
 if (fail === 0) console.log('  PASS AC6 real promotion e2e (real git worktree/commit + real ci-level2 job run + real transaction journal)');
 else console.log('  FAIL AC6 real promotion e2e — ' + failures.join(' ; '));
-console.log(`  report: ${REPORT}`);
+console.log(`  report（归档；临时根已清理）: ${ARCHIVED_REPORT}`);
 process.exit(fail === 0 ? 0 : 1);

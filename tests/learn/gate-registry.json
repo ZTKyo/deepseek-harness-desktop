@@ -359,6 +359,37 @@
       "exclusionReason": "夹具模块（loadRealSession / mkCtx / mkHostApproval / growSession …），不是可执行门；被上面各门 import 使用，本身无独立断言。",
       "localCommand": "（无需运行：被各门 import）",
       "lastVerified": "2026-09-29"
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-candidate-durability.mjs",
+      "kind": "gate",
+      "ci": {
+        "workflow": ".github/workflows/ci-level2.yml",
+        "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)"
+      },
+      "requires": [],
+      "localCommand": "node tests\\learn\\test-learn-ac6-candidate-durability.mjs（含负控：逐字复刻旧实现，必须被抓住；回退即红）",
+      "lastVerified": "2026-09-29"
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-e2e-mutex.mjs",
+      "kind": "gate",
+      "ci": null,
+      "requires": [
+        "独占运行：该门自身会取 AC6 跨 worktree 互斥锁并驱动真实 E2E（真 worktree + 隔离宿主 3099）"
+      ],
+      "exclusionReason": "**故意**不进 ci-level2 的 CI-safe 套件清单（理由见提交 ffead48）：它自身要取 AC6 跨 worktree 锁；在同一个 job 内与已持锁的真实 E2E 嵌套运行会因『持锁时再取锁』而假红——属测试编排冲突，不是门缺陷。CI 里真正的隔离真实门是 ci-level3.yml 的 test-learn-ac6-real-promotion-e2e.mjs。",
+      "localCommand": "node tests\\learn\\test-learn-ac6-e2e-mutex.mjs（须在无其它 AC6 运行中进行；本机 11 PASS / 0 FAIL）",
+      "lastVerified": "2026-09-29"
+    },
+    {
+      "suite": "tests/learn/ac6-e2e-lock.mjs",
+      "kind": "helper",
+      "ci": null,
+      "requires": [],
+      "exclusionReason": "夹具/工具模块（跨 worktree 互斥 acquireAc6Lock/releaseAc6Lock + 归档与收尾），不是可执行门；被 test-learn-ac6-real-promotion-e2e.mjs 与 test-learn-ac6-e2e-mutex.mjs 真实 import 使用，本身无独立断言。",
+      "localCommand": "（无需运行：被上述两门 import）",
+      "lastVerified": "2026-09-29"
     }
   ]
 }

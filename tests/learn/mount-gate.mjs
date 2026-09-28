@@ -17,9 +17,18 @@
  *   ③ 改为在同一 patch 里先挂一个**探针插件**（只 inject tools，与 learn 同形上下文），
  *      它包裹 `ctx.tools.register` 记录注册名，并把结果写 JSON 文件交给门禁读 ⇒ 客观、可重复。
  *
- * 隔离设计：不 boot 生产 web profile（会连带第二个 telegram 轮询/守护），而是新建临时 profile
- *   `~/.dsh/profiles/_mountgate-<slug>/`（只声明 dsh-base + dsh-web-app 基座；cordis.patch.yml
- *   只挂 探针 + learn；候选插件**整个插件目录**拷入；learn 的 stateDir 指向临时目录）；
+ * 隔离设计（v2，2026-09-27 AC6 实测修正）：**临时 DSH_HOME** + **生产同形 profile 名 `web`**——
+ *   ① `DSH_HOME=<scratch>/home`，宿主只在 `<scratch>/home/profiles/web/` 下建 profile
+ *      （只声明 dsh-base + dsh-web-app 基座；cordis.patch.yml 只挂 探针 + learn；候选插件
+ *      **整个插件目录**拷入；learn 的 stateDir 指向临时目录）⇒ profiles/state/sessions 全在
+ *      scratch 内，真实 `~/.dsh` 的 profile 永远不会被 boot（不会连带第二个 telegram 轮询/守护）。
+ *   ② 启动形态 = `bin.js --profile web --port <n> --no-open`，与生产 launcher 同形。
+ *      为什么必须这样：旧实现用 `~/.dsh/profiles/_mountgate-<slug>/`（真实 home 里的临时 profile 名），
+ *      命令行里**没有** `web` 形，而事务引擎的进程身份判据（dsh-process-identity.ps1）要求命令行含
+ *      `web`（= `--profile web` 别名，见 dsh/lib/bin.js:19）⇒ 引擎在隔离宿主上**永远**判
+ *      identity_mismatch ⇒ commit-readiness 永远 NOT_COMMIT_READY ⇒ AC6 真事务腿无法跑到 COMMITTED。
+ *      （`--profile X web` 这种"别名 + --profile 并存"是**非法**组合：bin.js rejectParentOptions。
+ *      所以要同时满足身份判据与隔离，唯一正确形态就是「临时 DSH_HOME + profile 名 web」。）
  *   结束删除临时 profile（--keep 保留）。
  *
  * 断言：
@@ -35,6 +44,9 @@
  *
  * 用法：node tests/learn/mount-gate.mjs --plugin <learn.mjs 绝对路径> [--expect pass|fail]
  *        [--port 3099] [--timeout 90] [--slug name] [--keep]
+ *        [--hold <ms>] [--release <file>]   ← 可选：boot 成功后**保持宿主存活**这段时间
+ *            （释放文件优先于超时），供 AC6 真实 E2E 在活的隔离宿主上跑真实 transaction 腿。
+ *            不传时行为与原来完全一致。
  *   --expect fail = 反例自证：要求出现失败签名 + inject 事故签名
  * 退出码：0 符合预期；1 不符合；2 参数/环境错误
  */
@@ -48,9 +60,38 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const HOME = os.homedir();
-const PROFILES = path.join(HOME, '.dsh', 'profiles');
-const WEB_PROFILE = path.join(PROFILES, 'web');
-const DSH_BIN = path.join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+// 真实 home 只作为**依赖来源**（junction 到 web profile 的 node_modules）；绝不作为 DSH_HOME boot。
+const REAL_PROFILES = path.join(HOME, '.dsh', 'profiles');
+const WEB_PROFILE = path.join(REAL_PROFILES, 'web');
+// DSH_BIN 解析（2026-09-29 AC10：本门必须能在**裸 runner** 上跑，不能假设开发者机器布局）。
+// 顺序：--dsh-bin / $env:DSH_BIN（CI 用 `npm root -g` 算出）→ %APPDATA%\npm（Windows 全局）
+// → npm 全局根（npm root -g；Linux/macOS runner 与自定义 prefix 靠它）→ 真实 web profile 内自带。
+// 注意：这里只定义函数；真正的解析在 argv 定义之后调用（否则 `--dsh-bin` 读不到，且会踩 TDZ）。
+function npmGlobalRoot() {
+  try {
+    return String(execFileSync('npm', ['root', '-g'], { encoding: 'utf8', shell: process.platform === 'win32' })).trim();
+  } catch { return ''; }   // npm 不可用时跳过该候选
+}
+function resolveDshBin() {
+  const cands = [];
+  const i = argv.indexOf('--dsh-bin');
+  if (i >= 0 && argv[i + 1]) cands.push(argv[i + 1]);
+  if (process.env.DSH_BIN) cands.push(process.env.DSH_BIN);
+  if (process.env.APPDATA) cands.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  const root = npmGlobalRoot();
+  if (root) cands.push(path.join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  cands.push(path.join(WEB_PROFILE, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  return cands;
+}
+// 依赖来源（junction 目标）：真实 web profile 的 node_modules 优先；裸 runner 上没有 ~/.dsh 时退到
+// npm 全局根——CI 里 `npm install -g @deepseek-ai/dsh@…` 装出来的那棵树就是可用依赖源。
+function resolveDepsSource() {
+  const cands = [path.join(WEB_PROFILE, 'node_modules')];
+  if (process.env.APPDATA) cands.push(path.join(process.env.APPDATA, 'npm', 'node_modules'));
+  const root = npmGlobalRoot();
+  if (root) cands.push(root);
+  return cands.find((p) => { try { return fs.existsSync(path.join(p, 'undici')); } catch { return false; } }) ?? null;
+}
 const NODE_RUNTIME = path.join(REPO, 'DSH-Client', 'node-runtime', 'node.exe');
 const BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
 const EXPECTED_TOOLS = ['learn_propose', 'learn_review', 'learn_recall', 'learn_promote', 'learn_verify', 'learn_status'];
@@ -64,6 +105,10 @@ const PORT = Number(opt('port', '3099'));
 const TIMEOUT = Number(opt('timeout', '90'));
 const SLUG = opt('slug', 'candidate').replace(/[^a-zA-Z0-9_-]/g, '');
 const KEEP = flag('keep');
+
+// DSH_BIN 真实解析（必须在 argv 之后；--dsh-bin 优先，其次 $env:DSH_BIN，最后本机默认布局）。
+const DSH_BIN_CANDIDATES = resolveDshBin();
+const DSH_BIN = DSH_BIN_CANDIDATES.find((p) => { try { return p && fs.existsSync(p); } catch { return false; } }) ?? DSH_BIN_CANDIDATES[0];
 
 const say = (...a) => console.log(...a);
 const sha256 = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
@@ -101,7 +146,11 @@ const stateDir = path.join(scratch, 'state');
 const probeOut = path.join(scratch, 'probe.json');
 const logPath = path.join(scratch, 'boot.log');
 const resultPath = path.join(scratch, 'result.json');
-const profileName = `_mountgate-${SLUG}`;
+const holdStatePath = path.join(scratch, 'hold-state.json');
+// 隔离核心：宿主的 DSH_HOME 指向 scratch（profiles/state/sessions 全在 scratch 内）。
+const dshHome = path.join(scratch, 'home');
+const PROFILES = path.join(dshHome, 'profiles');
+const profileName = 'web';                    // 生产同形（身份判据要求命令行含 web 形）
 const profileDir = path.join(PROFILES, profileName);
 fs.mkdirSync(stateDir, { recursive: true });
 
@@ -113,18 +162,22 @@ say(`  expect      : ${EXPECT}`);
 say(`  port        : ${PORT}   (production 127.0.0.1:3080 listener before = ${prodBefore || 'n/a'})`);
 say(`  scratch     : ${scratch}`);
 
-// ---- 1) 临时 profile ----
-fs.rmSync(profileDir, { recursive: true, force: true });
+// ---- 1) 隔离 home 下的临时 profile（生产同形名 web）----
+// 只清 scratch 内的目录；真实 ~/.dsh 一概不动（旧实现在真实 profiles 下建临时 profile，已废弃）。
+fs.rmSync(path.join(dshHome, 'profiles'), { recursive: true, force: true });
 fs.mkdirSync(profileDir, { recursive: true });
+say(`  DSH_HOME    : ${dshHome}   (隔离：宿主只读写这个临时 home)`);
 fs.writeFileSync(path.join(profileDir, 'package.json'), JSON.stringify({
-  name: `dsh-profile-${profileName.replace(/^_/, '')}`, private: true,
+  name: 'dsh-profile-web-isolated', private: true,
   dependencies: { undici: '^8.10.0' },
   dsh: { profile: { bundles: BUNDLES } },
 }, null, 2) + '\n', 'utf8');
-if (!fs.existsSync(path.join(PROFILES, 'node_modules', 'undici'))) {
-  const src = path.join(WEB_PROFILE, 'node_modules');
-  if (fs.existsSync(path.join(src, 'undici'))) {
-    try { fs.symlinkSync(src, path.join(profileDir, 'node_modules'), 'junction'); say('  deps        : junction -> web/node_modules'); } catch (e) { say('  deps        : junction 失败 ' + e.message); }
+{
+  const src = resolveDepsSource();
+  if (src) {
+    try { fs.symlinkSync(src, path.join(profileDir, 'node_modules'), 'junction'); say(`  deps        : junction -> ${src} (只借依赖，不 boot 生产 profile)`); } catch (e) { say('  deps        : junction 失败 ' + e.message); }
+  } else {
+    say('  deps        : 未找到含 undici 的依赖源（真实 web profile / npm 全局根都没有）');
   }
 }
 
@@ -204,9 +257,13 @@ fs.writeFileSync(path.join(profileDir, 'cordis.patch.yml'), yml, 'utf8');
 
 // ---- 2) 真实启动 ----
 const nodeExe = fs.existsSync(NODE_RUNTIME) ? NODE_RUNTIME : process.execPath;
-say(`  launch      : ${path.basename(nodeExe)} bin.js --profile ${profileName} --port ${PORT} --no-open  (${pluginCount} 个插件文件已就位)`);
+say(`  launch      : ${path.basename(nodeExe)} bin.js --profile ${profileName} --port ${PORT} --no-open  (${pluginCount} 个插件文件已就位；DSH_HOME=临时 home)`);
 const fd = fs.openSync(logPath, 'a');
-const child = spawn(nodeExe, [DSH_BIN, '--profile', profileName, '--port', String(PORT), '--no-open'], { stdio: ['ignore', fd, fd], windowsHide: true });
+const child = spawn(nodeExe, [DSH_BIN, '--profile', profileName, '--port', String(PORT), '--no-open'], {
+  stdio: ['ignore', fd, fd], windowsHide: true,
+  // 隔离的关键：临时 DSH_HOME ⇒ 宿主的 profiles/state/sessions 全在 scratch 内，真实 ~/.dsh 不被触碰。
+  env: { ...process.env, DSH_HOME: dshHome },
+});
 const childPid = child.pid;
 say(`  child pid   : ${childPid}`);
 
@@ -255,9 +312,30 @@ const checks = [
 ];
 const injectSignature = has(/cannot get property "sessions" without inject/);
 
+// ---- 3.5) 可选：HOLD（AC6 真实 E2E 用）----
+// 目的：让**真实** git worktree / CI / transaction 在"这个已 boot 的隔离宿主还活着"的时间窗内跑完，
+// 从而给 AC6 收据三腿产出**非伪造**的产物（transaction 腿必须真跑 commit gate）。
+// 不传 --hold 时行为与原来**逐字一致**（0 次等待、立即进收尾）。释放条件二选一：释放文件出现（优先）或超时。
+const HOLD_MS = Number(opt('hold', '0')) || 0;
+const RELEASE = opt('release', null);
+if (HOLD_MS > 0 && ready) {
+  const holdState = { port: PORT, childPid, profileName, plugin: PLUGIN, pluginSha256: sha256(PLUGIN), ready, holdMs: HOLD_MS, releaseFile: RELEASE, at: new Date().toISOString() };
+  fs.writeFileSync(holdStatePath, JSON.stringify(holdState, null, 2), 'utf8');
+  say(`HOLD_HOST_READY port=${PORT} pid=${childPid} profile=${profileName} holdMs=${HOLD_MS} releaseFile=${RELEASE || 'none'} state=${holdStatePath}`);
+  const holdDeadline = Date.now() + HOLD_MS;
+  while (Date.now() < holdDeadline) {
+    if (RELEASE && fs.existsSync(RELEASE)) { say('  hold released by file: ' + RELEASE); break; }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  say(`  hold done (elapsed=${HOLD_MS - Math.max(0, holdDeadline - Date.now())}ms) host still up=${exited === null}`);
+} else if (HOLD_MS > 0) {
+  say(`  hold skipped: host not ready (ready=${ready}, exited=${exited})`);
+}
+
 // ---- 4) 收尾（先证明要杀的是本门禁自己拉起的进程）----
+// 收紧（v2）：profile 名现在是生产同形 `web`，故必须再校验**本门禁自己的端口**，且绝不含 3080。
 const cl = cmdlineOf(childPid);
-const safeToKill = cl.includes(`--profile ${profileName}`) && !cl.includes('3080');
+const safeToKill = cl.includes(`--profile ${profileName}`) && cl.includes(`--port ${PORT}`) && !cl.includes('3080');
 say(`  kill guard  : pid=${childPid} safeToKill=${safeToKill}${cl ? '' : ' (进程已自行退出)'}`);
 if (safeToKill) killTree(childPid);
 try { fs.closeSync(fd); } catch {}
@@ -272,6 +350,8 @@ const result = {
   slug: SLUG, plugin: PLUGIN, pluginSha256: sha256(PLUGIN), expect: EXPECT, verdict,
   port: PORT, ready, childExited: exited, signal, injectSignature, checks, probe, learnTools, dupes,
   copiedCount: copied.length, copied,
+  // 隔离证据（v2）：宿主跑在临时 DSH_HOME 下、profile 名与生产同形
+  dshHome, profileName, isolatedHome: true, launchArgs: `--profile ${profileName} --port ${PORT} --no-open`,
   // prodUntouched 只有"运行前确实存在生产监听者"时才有意义：全程都无监听者 ⇒ null，不谎报 true
   // （第二复核人 §6 指出：'' === '' 会空洞为真，与它抓到的"空检查"②同类）
   prodPidBefore: prodBefore, prodPidAfter: prodAfter,

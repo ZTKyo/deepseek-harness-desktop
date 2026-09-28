@@ -1,0 +1,26 @@
+=== mount gate (isolated profile) ===
+  plugin      : C:\Users\Administrator\Desktop\sdeepseek harness\_p4r2-inject-fix\plugins\learn.mjs
+  sha256      : bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc
+  expect      : pass
+  port        : 3099   (production 127.0.0.1:3080 listener before = 20580:node)
+  scratch     : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-ac6e2e174028-2026-09-27T17-40-32-661Z
+  DSH_HOME    : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-ac6e2e174028-2026-09-27T17-40-32-661Z\home   (隔离：宿主只读写这个临时 home)
+  deps        : junction -> real web/node_modules (只借依赖，不 boot 生产 profile)
+  launch      : node.exe bin.js --profile web --port 3099 --no-open  (39 个插件文件已就位；DSH_HOME=临时 home)
+  child pid   : 22236
+  readiness   : HTTP 200
+  signal      : probe-recorded
+HOLD_HOST_READY port=3099 pid=22236 profile=web holdMs=600000 releaseFile=C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028\release.flag state=C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-ac6e2e174028-2026-09-27T17-40-32-661Z\hold-state.json
+  hold released by file: C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-20260927174028\release.flag
+  hold done (elapsed=18429ms) host still up=true
+  kill guard  : pid=22236 safeToKill=true
+--- checks ---
+  PASS  A1  no loader failure signature
+  PASS  A2  probe captured exactly 6 learn_* tools, no duplicates (got 6)
+  PASS  A3  host sessions service resolvable via ctx.get in this profile ctx (got resolved)
+  PASS  A4  no tool-surface warnings in log
+  probe.wrapped=true sessionsViaGet=resolved seen=[learn_propose, learn_review, learn_recall, learn_promote, learn_verify, learn_status]
+  injectSignature(事故签名) = false
+  production 127.0.0.1:3080 listener: before=20580:node after=20580:node untouched=true (pid:proc 形式；勿用 tailscaled 的 5648 误判)
+--- verdict: PASS (expect=pass) ---
+  result json : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-ac6e2e174028-2026-09-27T17-40-32-661Z\result.json

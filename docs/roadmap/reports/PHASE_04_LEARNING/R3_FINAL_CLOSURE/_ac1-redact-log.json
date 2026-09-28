@@ -1,0 +1,20 @@
+[
+  {
+    "file": "C:/Users/Administrator/Desktop/sdeepseek harness/_p4r2-final-closure/ac1-leak-pre-remediation-20260927155415..json",
+    "fams": "google×1, stripe×1",
+    "fixtureMatches": 0,
+    "unknownMatches": 2
+  },
+  {
+    "file": "C:/Users/Administrator/Desktop/sdeepseek harness/_p4r2-final-closure/checkpoint/PRE_P4_FINAL_POSITIVE_PATH_FIX/cordis.patch.yml.prod.before",
+    "fams": "notion×1",
+    "fixtureMatches": 0,
+    "unknownMatches": 1
+  },
+  {
+    "file": "C:/Users/Administrator/Desktop/sdeepseek harness/_p4r2-evidence/prod-rollback-20260927-230301/cordis.patch.yml",
+    "fams": "notion×1",
+    "fixtureMatches": 0,
+    "unknownMatches": 1
+  }
+]

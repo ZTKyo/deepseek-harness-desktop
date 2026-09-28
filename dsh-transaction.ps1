@@ -32,10 +32,27 @@ if (-not (Get-Command Get-DshLoopbackOwner -ErrorAction SilentlyContinue)) {
     try { . (Join-Path $PSScriptRoot 'dsh-process-identity.ps1') } catch {}
 }
 
+# 事务 id 会成为 checkpoint 的**目录名**，故必须是合法文件系统名。
+# 历史缺陷：调用方传 label='candidate:cand_xxx'（带 `:`）时，transactionId 带着 `:` 去 New-Item，
+# 报 "The given path's format is not supported"，事务在 checkpoint 阶段就崩、且错误信息毫无指向性。
+# 现在：只在**目录名/id** 上把非法字符换成 '-'，journal 里的 label 字段仍保留调用方原值（可读性不变）。
+function ConvertTo-DshTxSafeToken([string]$Text) {
+    if (-not $Text) { return 'tx' }
+    $safe = [regex]::Replace($Text, '[\\/:*?"<>|\x00-\x1f]', '-')
+    $safe = $safe.Trim('.', '-', ' ')
+    if (-not $safe) { return 'tx' }
+    if ($safe.Length -gt 64) { $safe = $safe.Substring(0, 64) }
+    return $safe
+}
+
 function New-DshTransactionId([string]$Label) {
     $ts = Get-Date -Format 'yyyyMMdd-HHmmss'
     $rand = [guid]::NewGuid().ToString('N').Substring(0, 6)
-    return ("{0}-{1}-{2}" -f $Label, $ts, $rand)
+    $token = ConvertTo-DshTxSafeToken $Label
+    if ($token -ne $Label) {
+        Write-Warning ("New-DshTransactionId: label '{0}' 含文件名非法字符，id 目录名使用 '{1}'（journal 中 label 仍为原值）" -f $Label, $token)
+    }
+    return ("{0}-{1}-{2}" -f $token, $ts, $rand)
 }
 
 function Get-DshTxJournal {
@@ -47,7 +64,10 @@ function Write-DshTxJournal($Journal) {
     $dir = Split-Path -Parent $script:DshTxJournal
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $tmp = "$($script:DshTxJournal).tmp-$PID"
-    $Journal | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $tmp -Encoding UTF8
+    # JSON 必须**无 BOM**：PowerShell 5.1 的 Set-Content/-Encoding UTF8 会写 UTF-8 BOM，
+    # 任何 Node/其它语言的 JSON.parse 遇到 BOM 直接抛错（真事故：AC6 三腿收据回读）。
+    $json = $Journal | ConvertTo-Json -Depth 8
+    [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding($false)))
     try { Move-Item -LiteralPath $tmp -Destination $script:DshTxJournal -Force -ErrorAction Stop }
     catch {
         Remove-Item -LiteralPath $script:DshTxJournal -Force -ErrorAction SilentlyContinue
@@ -103,7 +123,8 @@ function New-DshTransactionCheckpoint {
         }
     } catch {}
     try { $manifest.dshVersionBefore = ((& dsh --version 2>$null) -join '').Trim() } catch {}
-    ($manifest | ConvertTo-Json -Depth 5) | Out-File (Join-Path $Dir 'manifest.json') -Encoding utf8
+    # 同上：manifest.json 也必须无 BOM（跨语言可解析）。Out-File -Encoding utf8 在 PS 5.1 下会加 BOM。
+    [System.IO.File]::WriteAllText((Join-Path $Dir 'manifest.json'), ($manifest | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
     return $manifest
 }
 

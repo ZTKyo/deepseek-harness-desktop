@@ -1,0 +1,291 @@
+{
+  "storePath": "<USER_HOME>\\AppData\\Local\\DSHHarness\\state\\learn\\session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8.json",
+  "storeBytes": 776844,
+  "readAt": "2026-09-28T17:26:16.190Z",
+  "schemaVersion": 2,
+  "updatedAt": 1790616368810,
+  "evidence": {
+    "researchLegs": [],
+    "telemetry": [
+      {
+        "kind": "RESEARCH_REQUESTED",
+        "at": 1790551562009,
+        "experienceId": "cand_bdfc3d93",
+        "detail": "bounded research plan: kind=NEW_SKILL taskType=tool:learn_verify maxAttempts=3 daemon=false delegatesTo=CI 四层（既有） subject=tool|learn_verify|INVALID_TOOL_OUTPUT|v2"
+      },
+      {
+        "kind": "VERIFICATION_FAILED",
+        "at": 1790604330003,
+        "experienceId": "exp-bc3668f1",
+        "detail": "deterministic verification FAILED: no_success_evidence"
+      },
+      {
+        "kind": "RESEARCH_REQUESTED",
+        "at": 1790606466368,
+        "experienceId": "cand_bdfc3d93",
+        "detail": "bounded research plan: kind=NEW_SKILL taskType=tool:learn_verify maxAttempts=3 daemon=false delegatesTo=CI 四层（既有） subject=tool|learn_verify|INVALID_TOOL_OUTPUT|v2"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790606665834,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790606702754,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic re-derivation from official session PASS (method=session_outcome) before approval"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790608963695,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790608974912,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic re-derivation from official session PASS (method=session_outcome) before approval"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790609974166,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790609983069,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic re-derivation from official session PASS (method=session_outcome) before approval"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790610011520,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790610018702,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic re-derivation from official session PASS (method=session_outcome) before approval"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790610364064,
+        "experienceId": "exp-6648303f",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790610382031,
+        "experienceId": "exp-ddf011b3",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "RESEARCH_REQUESTED",
+        "at": 1790612762350,
+        "experienceId": "cand_bdfc3d93",
+        "detail": "bounded research plan: kind=NEW_SKILL taskType=tool:learn_verify maxAttempts=3 daemon=false delegatesTo=CI 四层（既有） subject=tool|learn_verify|INVALID_TOOL_OUTPUT|v2"
+      },
+      {
+        "kind": "EXPERIENCE_LOOKUP_MISS",
+        "at": 1790615617362,
+        "experienceId": null,
+        "detail": "no experience coverage for: GitHub 分支保护 required_status_checks 与 enforce_admins：如何让 CI 质量门不被管理员绕过（API 字段与坑）"
+      },
+      {
+        "kind": "RESEARCH_REQUESTED",
+        "at": 1790615617383,
+        "experienceId": null,
+        "detail": "bounded research leg opened: leg_f8ed41e3 risk=LOW kind=NEW_SKILL maxAttempts=3 subject=GitHub 分支保护 required_status_checks 与 enforce_admins：如何让 CI 质量门不被管理员绕过（API 字段与坑）"
+      },
+      {
+        "kind": "VERIFICATION_FAILED",
+        "at": 1790616141869,
+        "experienceId": "exp-a35e8739",
+        "detail": "deterministic verification FAILED: invalid_or_non_machine_checkable_evidence"
+      },
+      {
+        "kind": "VERIFIED",
+        "at": 1790616289949,
+        "experienceId": "exp-e84b6350",
+        "detail": "deterministic verification PASS (method=session_outcome)"
+      },
+      {
+        "kind": "RESEARCH_FULFILLED",
+        "at": 1790616289963,
+        "experienceId": "exp-e84b6350",
+        "detail": "research leg(s) closed by verified experience: leg_f8ed41e3 (method=session_outcome)"
+      }
+    ],
+    "contrast": {
+      "autoPath_verified": {
+        "id": "exp-e84b6350",
+        "state": "VERIFIED_EXPERIENCE",
+        "createdAt": 1790616226292,
+        "taskType": "correction",
+        "title": "`maybeLearn(session)` — triggered by session events (probably a hook capturing session updates). It requires fresh nodes",
+        "verification": {
+          "status": "VERIFIED",
+          "method": "session_outcome",
+          "evidence": {
+            "class": "session_outcome",
+            "sessionId": "session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8",
+            "sessionName": "session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8",
+            "window": [
+              1090082,
+              1090217
+            ],
+            "anchors": [
+              1090082,
+              1090084,
+              1090215,
+              1090217
+            ],
+            "toolCalls": 2,
+            "toolSuccesses": 2,
+            "toolFailures": 0,
+            "factsDigest": "96ce1634",
+            "observedAt": 1790616226292
+          },
+          "verifiedAt": 1790616289910,
+          "reverifyCount": 1,
+          "lastReverifiedAt": 1790616289910,
+          "lastReverifyResult": "PASS",
+          "lastReverifyError": null
+        },
+        "evidenceClass": "session_outcome",
+        "evidenceWindow": [
+          1090082,
+          1090217
+        ],
+        "evidenceSessionId": "session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8",
+        "sourceEventSeqs": [
+          1090082,
+          1090084,
+          1090215,
+          1090217
+        ],
+        "originSessionId": "session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8"
+      },
+      "hostToolPropose_unverified": {
+        "id": "exp-a35e8739",
+        "state": "PROPOSED",
+        "createdAt": 1790616125503,
+        "taskType": null,
+        "title": "判断 CI 发布门是否真能拦住：只看 required checks 会得出假安全结论——必须同时核对 enforce_admins、rulesets、workflow 触发条件与历史合并记录",
+        "verification": {
+          "status": "UNVERIFIED",
+          "method": null,
+          "evidence": null,
+          "verifiedAt": null,
+          "reverifyCount": 0,
+          "lastReverifiedAt": 1790616141858,
+          "lastReverifyResult": "FAIL",
+          "lastReverifyError": "invalid_or_non_machine_checkable_evidence"
+        },
+        "evidenceClass": null,
+        "evidenceWindow": null,
+        "evidenceSessionId": null,
+        "sourceEventSeqs": [
+          1041631,
+          1049371,
+          1050154,
+          1067914,
+          1074143,
+          1074505
+        ],
+        "originSessionId": "session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8"
+      }
+    },
+    "globalStore": {
+      "path": "<USER_HOME>\\AppData\\Local\\DSHHarness\\state\\learn\\_global-verified.json",
+      "version": 14,
+      "updatedAt": 1790616289979,
+      "count": 1,
+      "ids": [
+        {
+          "id": "exp-6648303f",
+          "state": "APPROVED",
+          "verificationMethod": null
+        }
+      ],
+      "telemetry": [
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790521419924,
+          "experienceId": "exp-8a2fd284",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790523529802,
+          "experienceId": "exp-2ed0f0c9",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790606665848,
+          "experienceId": "exp-6648303f",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790608963710,
+          "experienceId": "exp-6648303f",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790609974185,
+          "experienceId": "exp-6648303f",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790610011534,
+          "experienceId": "exp-6648303f",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISHED",
+          "at": 1790610108972,
+          "experienceId": "exp-6648303f",
+          "reason": null,
+          "detail": "published from session session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8"
+        },
+        {
+          "kind": "GLOBAL_PUBLISHED",
+          "at": 1790610364144,
+          "experienceId": "exp-6648303f",
+          "reason": null,
+          "detail": "published from session session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790610382052,
+          "experienceId": "exp-ddf011b3",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        },
+        {
+          "kind": "GLOBAL_PUBLISH_DENIED",
+          "at": 1790616289978,
+          "experienceId": "exp-e84b6350",
+          "reason": "not_human_approved:VERIFIED_EXPERIENCE",
+          "detail": "refused publish: not_human_approved:VERIFIED_EXPERIENCE"
+        }
+      ]
+    }
+  }
+}

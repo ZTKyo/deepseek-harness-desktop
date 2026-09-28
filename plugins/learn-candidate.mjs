@@ -84,9 +84,15 @@ export const EVIDENCE_REQUIRED_STATES = Object.freeze([
  */
 export const STAGE_DELEGATION = Object.freeze({
   ISOLATED_TESTS: Object.freeze({
-    file: '.github/workflows/ci-level1.yml',
+    // 指针必须指向**真的跑隔离面**的那条航道（2026-09-29 AC10 修正）：
+    // 隔离测试腿 = 真 git worktree@commit + 真隔离宿主挂载（mount-gate，端口 3099 而非生产 3080）
+    // + 真 dsh-transaction.ps1 跑到 COMMITTED，三者互证的那条端到端门 —— 它现在真实运行在
+    // ci-level3.yml（该航道已安装 dsh 包，L1/L2 没有 dsh 包跑不了隔离真实实例）。
+    // 历史缺陷：这里曾写 ci-level1.yml（一个只做静态 YAML 检查、根本不运行隔离面的 workflow）=
+    // 假绿灯指针；tests/learn/validate-gate-registry.mjs 现在会把它与登记表逐字核对并变红。
+    file: '.github/workflows/ci-level3.yml',
     system: 'CI 四层（既有）',
-    entry: 'ci-level1.yml … ci-level4.yml',
+    entry: 'ci-level1.yml … ci-level4.yml（隔离真实面 = ci-level3.yml：真 worktree@commit + 隔离宿主 3099 + 真事务 COMMITTED；learn 契约套件 = ci-level2.yml「P4 LEARN R2 contract-closure gates」步骤）',
     note: 'isolated tests 走既有四层 CI；禁建第二套 CI',
   }),
   REGRESSION_HOLDOUT: Object.freeze({
@@ -124,6 +130,237 @@ export const STABLE_MARKERS = Object.freeze([
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 0.6 AC6：候选晋升的**真实收据门**（Git / CI / Transaction 三腿）
+//
+// A10 的 AC6 缺口原话："Candidate 生命周期有对象和测试，但未证明真正走 existing Git /
+// existing CI / existing Transaction"。根因是**晋升路径上没有真实系统的收据**：
+// `promoteCandidate` 只检查阶段证据字符串 + 人工批准，任何字符串都能自证。
+//
+// 本节把"真走既有系统"从条款变成**可机校事实**：
+//   - 三腿收据必须来自**既有**系统（PROMOTION_RECEIPT_SYSTEMS 是白名单，
+//     不在白名单 = 第二套 CI / 第二套 Transaction ⇒ 一律拒绝）；
+//   - 三腿必须**互相一致**（同一条候选分支、同一个 commit、同一个 label）；
+//   - 收据缺一腿即拒绝（fail-closed），且**拒绝也留痕**（CANDIDATE_PROMOTION_DENIED）。
+//
+// 纪律：本模块**只读收据文本、绝不执行任何命令**（无子进程、无网络、无 IO、无定时器）——
+// 收据由既有系统自己产出（CI 运行结果 / git 对象 / dsh-transaction.ps1 的 journal），
+// 本模块只做**校验与门禁**。这既满足 AC6「复用」，也不违反 AC8「不新增引擎/常驻进程」。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 晋升所需的**全部**三腿（缺一不可）。 */
+export const PROMOTION_RECEIPT_LEGS = Object.freeze(['git', 'ci', 'transaction']);
+
+/**
+ * 收据的**唯一**合法来源（白名单）。写死既有系统标识符：
+ * 任何其它来源名（自造 CI runner / 自造 promotion DB / 自造 transaction）都会被拒。
+ */
+export const PROMOTION_RECEIPT_SYSTEMS = Object.freeze({
+  git: Object.freeze(['git']),
+  ci: Object.freeze(['ci-level1.yml', 'ci-level2.yml', 'ci-level3.yml', 'ci-level4.yml']),
+  transaction: Object.freeze(['dsh-transaction.ps1']),
+});
+
+/**
+ * 既有变更事务的「成功终态」（复用其语义，不另造状态机）。
+ *
+ * 逐字对齐 `dsh-transaction.ps1` 的真实口径（读源码核实，非猜测）：
+ *   - 状态机 PREPARE→CHECKPOINT→APPLY→BOOT→VERIFY→STABILIZE→COMMIT；
+ *   - 只有 `Test-DshTransactionCommitReady` 通过（full COMMIT_READY）才 `$finalState = 'COMMITTED'`；
+ *   - 其它终态 `ROLLED_BACK` / `BOOT_FAILED` / `SAFE_MODE` / `FAILED` / `FAILED(dry)` **一律不合格**；
+ *   - `-DryRun` 走的是 `FAILED(dry)` 分支 ⇒ **dry-run 收据永远无法冒充真实事务**（天然 fail-closed）。
+ * 这正是契约「api_ready alone is NOT a commit signal」的现有实现，本模块只**消费**它。
+ */
+export const PROMOTION_TRANSACTION_FINAL_STATE = 'COMMITTED';
+
+/** 真实提交事务在该引擎 journal 里必须同时满足的伴随字段（faultClass/rollbackResult 见 COMMIT 记录）。 */
+export const PROMOTION_TRANSACTION_FAULT_CLASS = 'none';
+export const PROMOTION_TRANSACTION_ROLLBACK_RESULT = 'none';
+/** VERIFY 阶段必须来自该引擎自己的 commit gate（`COMMIT_READY` / `COMMIT_READY(shallow)`）。 */
+export const PROMOTION_TRANSACTION_VERIFY_PREFIX = 'COMMIT_READY';
+
+/** 候选隔离分支的确定性前缀（candidate/<id>）：同一条候选永远同一个分支名。 */
+export const CANDIDATE_BRANCH_PREFIX = 'candidate/';
+
+/** git 对象名（40 位小写十六进制 sha1 / sha256 截断口径同一校验）。 */
+const GIT_OBJECT_RE = /^[0-9a-f]{40}$/;
+
+/**
+ * 事务 label 必须**文件系统安全**：dsh-transaction.ps1 把 label 拼进 transactionId，
+ * 而 transactionId 是 checkpoint 的目录名（Windows 目录名禁用 `: * ? " < > |`）。
+ * 不安全 = 真实事务永远 checkpoint 失败 = 真实晋升不可能，故在门口就拒。
+ */
+const TX_LABEL_SAFE_RE = /^[A-Za-z0-9._-]{1,96}$/;
+
+/** 确定性分支名：candidate/<candidateId>。 */
+export function candidateBranchName(candidateId) {
+  const id = cleanStr(candidateId, 64);
+  return id ? `${CANDIDATE_BRANCH_PREFIX}${id}` : '';
+}
+
+/**
+ * 确定性事务 label：candidate-<candidateId>（喂给既有 dsh-transaction.ps1 的 -Label）。
+ *
+ * 为什么不是 `candidate:<id>`：引擎把 label 直接拼进 transactionId，而 transactionId 又是
+ * checkpoint 的**目录名**（New-DshTransactionCheckpoint → Get-DshTxCheckpointDir）。
+ * Windows 目录名不允许 `:`，真实端到端跑出来就是
+ * "New-Item : The given path's format is not supported"——即带 `:` 的 label 永远无法 checkpoint，
+ * 真实晋升根本走不通。故本口径必须**文件系统安全**（[A-Za-z0-9._-]）。
+ */
+export function candidateTransactionLabel(candidateId) {
+  const id = cleanStr(candidateId, 64);
+  return id ? `candidate-${id}` : '';
+}
+
+/**
+ * 把三腿收据压成**有界、脱敏、可审计**的摘要（只留机校标量，绝不入库存原文）。
+ * @returns {{git:object, ci:object, transaction:object}|null}
+ */
+export function receiptSummaryOf(receipts) {
+  if (!isPlainObject(receipts)) return null;
+  const g = isPlainObject(receipts.git) ? receipts.git : null;
+  const c = isPlainObject(receipts.ci) ? receipts.ci : null;
+  const t = isPlainObject(receipts.transaction) ? receipts.transaction : null;
+  if (!g || !c || !t) return null;
+  return {
+    git: {
+      system: cleanStr(g.system, 40),
+      branch: cleanStr(g.branch, 120),
+      commitSha: cleanStr(g.commitSha, 64),
+      worktreePath: redactSecrets(cleanStr(g.worktreePath, 300)),
+      isolated: g.isolated === true,
+    },
+    ci: {
+      system: cleanStr(c.system, 60),
+      job: cleanStr(c.job, 120),
+      headSha: cleanStr(c.headSha, 64),
+      conclusion: cleanStr(c.conclusion, 40),
+      runUrl: redactSecrets(cleanStr(c.runUrl, 300)),
+    },
+    transaction: {
+      system: cleanStr(t.system, 60),
+      label: cleanStr(t.label, 120),
+      transactionId: cleanStr(t.transactionId, 160),
+      finalState: cleanStr(t.finalState, 40),
+      verifyResult: cleanStr(t.verifyResult, 60),
+      faultClass: cleanStr(t.faultClass, 40),
+      rollbackResult: cleanStr(t.rollbackResult, 40),
+      journalPath: redactSecrets(cleanStr(t.journalPath, 300)),
+    },
+  };
+}
+
+/**
+ * AC6 收据门：校验候选晋升所交的收据**形状合法、来源在三腿白名单内、且三腿互相自洽**。
+ *
+ * ★ P0-4 精确化（2026-09-29 对抗式评审）：本门的**实际强度**必须说清，否则遥测措辞会夸大它：
+ *   ✅ 它能挡住：缺收据 / 结构不对 / 来源不在白名单 / 三腿互相矛盾（commitSha 与 ci.headSha 不一致、
+ *      事务 label 与候选派生 label 不符、非隔离分支、含密钥）。
+ *   ❌ 它**挡不住**"形状完全正确但整组伪造"——本函数是纯函数（无 IO / 无子进程 / 无网络），
+ *      不会去问真实仓库"这个 sha 存在吗"、CI 是否真跑过、journal 是否真有那条事务。
+ *  ⇒ 本门证明的是「**自洽**」，不是「**来源真实**」；来源真实性由**产出收据的既有系统**（CI/事务侧
+ *     在产出时附来源指纹）与实际执行过程（E2E 真跑一遍）保证。禁止在本模块内新增任何校验引擎
+ *     或 git/CI 调用（那正是 AC6"不造第二套 promotion engine"与 B3 静态锁所禁止的）。
+ *
+ * fail-closed：结构缺失、来源白名单外、三腿不一致、含密钥、非隔离分支 —— 任一即拒绝。
+ * 纯函数（无 IO / 无子进程 / 无网络），可在任何环境确定性复算。
+ *
+ * @param {object} candidate - 候选对象（只用到 id）
+ * @param {object} receipts  - 三腿收据（**由调用方提供**，本模块不产出、不核验其来源真实性）
+ * @returns {{ok:true, receipts:object, summary:object}
+ *          |{ok:false, error:string, leg?:string, missing?:string[], detail?:string}}
+ */
+export function verifyPromotionReceipts(candidate, receipts) {
+  if (!isPlainObject(candidate) || typeof candidate.id !== 'string' || !candidate.id) {
+    return { ok: false, error: 'invalid_candidate' };
+  }
+  if (!isPlainObject(receipts)) {
+    return { ok: false, error: 'promotion_receipts_missing', missing: [...PROMOTION_RECEIPT_LEGS] };
+  }
+  // ① 密钥红线：收据里出现任何密钥形状的值 ⇒ 一律拒绝（绝不入库/入库即脱敏）
+  for (const leg of PROMOTION_RECEIPT_LEGS) {
+    const r = receipts[leg];
+    if (!isPlainObject(r)) continue;
+    for (const v of Object.values(r)) {
+      if (typeof v === 'string' && containsSecret(v)) {
+        return { ok: false, error: 'promotion_receipt_contains_secret', leg };
+      }
+    }
+  }
+  // ② 三腿齐备
+  const missing = PROMOTION_RECEIPT_LEGS.filter((leg) => !isPlainObject(receipts[leg]));
+  if (missing.length > 0) return { ok: false, error: 'promotion_receipts_missing', missing };
+
+  const expectBranch = candidateBranchName(candidate.id);
+  const expectLabel = candidateTransactionLabel(candidate.id);
+  const s = receiptSummaryOf(receipts);
+
+  // ③ 事务 label 必须文件系统安全（否则真实事务在 checkpoint 阶段必炸）
+  if (!TX_LABEL_SAFE_RE.test(expectLabel)) {
+    return { ok: false, error: 'promotion_label_not_filesystem_safe', leg: 'transaction', detail: `label=${expectLabel || '(empty)'}` };
+  }
+
+  // ③ git 腿：既有 git 的隔离分支 + 40 位对象名（证明有真实隔离分支/工作树）
+  if (!PROMOTION_RECEIPT_SYSTEMS.git.includes(s.git.system)) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'git', detail: `system=${s.git.system || '(empty)'}` };
+  }
+  if (s.git.branch !== expectBranch) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'git', detail: `branch=${s.git.branch || '(empty)'} expected=${expectBranch}` };
+  }
+  if (!GIT_OBJECT_RE.test(s.git.commitSha)) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'git', detail: 'commitSha_not_a_git_object' };
+  }
+  if (!s.git.worktreePath) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'git', detail: 'worktreePath_empty' };
+  }
+  if (s.git.isolated !== true) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'git', detail: 'worktree_not_isolated' };
+  }
+
+  // ④ CI 腿：既有四层 CI 之一、成功、且跑的就是**同一个 commit**（防"旧绿报告顶新代码"）
+  if (!PROMOTION_RECEIPT_SYSTEMS.ci.includes(s.ci.system)) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'ci', detail: `system=${s.ci.system || '(empty)'}` };
+  }
+  if (s.ci.conclusion !== 'success') {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'ci', detail: `conclusion=${s.ci.conclusion || '(empty)'}` };
+  }
+  if (!s.ci.job) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'ci', detail: 'job_empty' };
+  }
+  if (s.ci.headSha !== s.git.commitSha) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'ci', detail: 'ci_headSha_mismatch_git_commitSha' };
+  }
+
+  // ⑤ transaction 腿：既有 dsh-transaction.ps1 的**真实提交**记录
+  //    （COMMITTED + faultClass/rollbackResult=none + VERIFY 来自它自己的 COMMIT_READY gate）
+  if (!PROMOTION_RECEIPT_SYSTEMS.transaction.includes(s.transaction.system)) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `system=${s.transaction.system || '(empty)'}` };
+  }
+  if (s.transaction.label !== expectLabel) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `label=${s.transaction.label || '(empty)'} expected=${expectLabel}` };
+  }
+  if (s.transaction.finalState !== PROMOTION_TRANSACTION_FINAL_STATE) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `finalState=${s.transaction.finalState || '(empty)'} expected=${PROMOTION_TRANSACTION_FINAL_STATE}` };
+  }
+  if (s.transaction.faultClass !== PROMOTION_TRANSACTION_FAULT_CLASS) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `faultClass=${s.transaction.faultClass || '(empty)'}` };
+  }
+  if (s.transaction.rollbackResult !== PROMOTION_TRANSACTION_ROLLBACK_RESULT) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `rollbackResult=${s.transaction.rollbackResult || '(empty)'}` };
+  }
+  if (!String(s.transaction.verifyResult).startsWith(PROMOTION_TRANSACTION_VERIFY_PREFIX)) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: `verifyResult=${s.transaction.verifyResult || '(empty)'}` };
+  }
+  if (!s.transaction.transactionId) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: 'transactionId_empty' };
+  }
+  if (!s.transaction.journalPath) {
+    return { ok: false, error: 'promotion_receipt_invalid', leg: 'transaction', detail: 'journalPath_empty' };
+  }
+
+  return { ok: true, receipts, summary: s };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 1. 纯工具（无副作用）
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -146,14 +383,29 @@ export function candidateIdOf(dedupKey) {
 /**
  * 选候选形态（合同 §七阶梯）。**永远选代价最低且够用的形态。**
  *
+ * ★ P0-2 修复（2026-09-29，对抗式评审）：本函数返回的 `reason` 是**可审计的事实陈述**，
+ *   因此必须区分"调用方真的给了判断依据"与"调用方什么依据都没给"：
+ *     · 给了依据（哪怕三个输入都被判为 false）⇒ 走原阶梯理由，陈述"已评估过、落到这一级"；
+ *     · **一个依据键都没给** ⇒ 只能保守取 NEW_SKILL，理由必须如实写成"**无依据 ⇒ 保守取 NEW_SKILL**"，
+ *       绝不能声称 'no_existing_skill_capability_is_procedural'（那是对"不存在既有 skill"的**肯定断言**，
+ *       而调用方根本没查过）。
+ *   动机（实测）：生产两个调用点此前都以"填死值"的方式调用（研究腿传三个 false、缺口级传 `{}`），
+ *   于是契约 §七的四级阶梯在生产路径上**恒为分支③**，`reason` 还凭空断言了一个未经验证的前提。
+ *   本修复**不改变形态选择结果**（kind 一字不变，两个调用点仍取 NEW_SKILL），只让"有没有依据"如实可见——
+ *   附带收益：日后调用方真的补上 `qualifyGap` 的依据时，理由会自动切回原措辞，无需再改本函数。
+ *
  * @param {object} ctx
  * @param {boolean} [ctx.ruleExpressible]        - 该缺口能否用声明式规则表达
  * @param {string}  [ctx.existingSkill]          - 已有的、覆盖该领域的 skill 标识
  * @param {boolean} [ctx.requiresRuntimeCapability] - 是否必须新增运行时能力（超出 skill 能表达的范围）
- * @returns {{kind:string, reason:string}}
+ * @returns {{kind:string, reason:string}} kind ∈ CANDIDATE_KINDS；reason **如实**描述依据有无
  */
 export function chooseCandidateKind(ctx = {}) {
   const c = isPlainObject(ctx) ? ctx : {};
+  // 依据是否被真的提供过（键存在即视为已评估——传 false / '' 也是"评估过的结论"，不是"没依据"）
+  const hasBasis = Object.hasOwn(c, 'ruleExpressible')
+    || Object.hasOwn(c, 'existingSkill')
+    || Object.hasOwn(c, 'requiresRuntimeCapability');
   // ① 能用规则表达 → RULE（最轻，优先）
   if (c.ruleExpressible === true) {
     return { kind: 'RULE', reason: 'rule_expressible' };
@@ -165,7 +417,11 @@ export function chooseCandidateKind(ctx = {}) {
   }
   // ③ 需要的是"做法"而非"新运行时能力" → 新 Skill
   if (c.requiresRuntimeCapability !== true) {
-    return { kind: 'NEW_SKILL', reason: 'no_existing_skill_capability_is_procedural' };
+    return {
+      kind: 'NEW_SKILL',
+      // 无依据时**不得**断言"不存在既有 skill"——只能声明"保守取最轻的可用形态"
+      reason: hasBasis ? 'no_existing_skill_capability_is_procedural' : 'no_qualification_basis_conservative_new_skill',
+    };
   }
   // ④ 兜底：确实需要新运行时能力 → 新 Plugin（最重，最后手段）
   return { kind: 'NEW_PLUGIN', reason: 'requires_new_runtime_capability' };
@@ -202,6 +458,48 @@ export function researchPlan(gap, opts = {}) {
       delegatesTo: STAGE_DELEGATION.ISOLATED_TESTS.system,
     },
   };
+}
+
+/**
+ * AC2 风险分级标志（确定性、保守）：命中任一 ⇒ HIGH。
+ * 保守方向的理由：AC2 只授权"**低风险**陌生任务"自主研究；把不确定的文本判为 HIGH 只会
+ * 让动作多经一次人工门，不会造成越权，故宁可误判为高。
+ */
+export const RESEARCH_HIGH_RISK_MARKERS = Object.freeze([
+  // 不可逆删除 / 磁盘
+  'rm -rf', 'del /f', 'rd /s', 'format ', 'diskpart', 'mkfs', '删除全部', '全部删除', '删除所有', '清空',
+  // 数据库破坏性语句
+  'drop table', 'drop database', 'truncate table', 'migration', '迁移生产',
+  // 系统 / 权限 / 启动
+  'registry', 'regedit', '注册表', 'firewall', '防火墙', 'runas', 'sudo', '提权', 'administrator',
+  '开机自启', 'autostart', 'windows service', '系统服务',
+  // 凭据 / 密钥
+  'credential', 'credentials', '凭据', 'api key', 'apikey', 'api_key', 'password', '密码',
+  'private key', '私钥', 'secret', 'token',
+  // 金钱 / 账号
+  'payment', '付款', '转账', '充值', 'subscri', '订阅', '账单', 'billing',
+  // 生产环境 / 远端不可逆
+  // 注意：这里**刻意不写** `git` + `push` 这两个词组成的字面量 —— `test-learn-candidate.mjs`
+  // 的 B3 静态锁用该组合禁止本模块出现任何 git 执行痕迹（禁第二套引擎）。该锁是**安全护栏**，
+  // 只能遵守、不能放宽；而"普通推送"本就不属于不可逆类，真正不可逆的是强推/硬重置 ⇒ 用
+  // 'force push' / '--force' / 'reset --hard' / '强制推送' / '硬重置' 覆盖，语义等价、覆盖率不减。
+  'production', '生产环境', '线上环境', 'force push', '--force', 'reset --hard', '强制推送', '硬重置',
+]);
+
+/**
+ * AC2：把任务文本分成 LOW / HIGH（纯函数：无 IO、无状态、无网络）。
+ * LOW ⇒ 可**自主研究**；HIGH ⇒ 仍可研究，但研究得出的**动作**必须走人工门（见 learn.mjs 的 directive）。
+ *
+ * @param {string} text - 任务文本 / 查询
+ * @returns {{riskClass:'LOW'|'HIGH', matched: string|null}}
+ */
+export function classifyResearchRisk(text) {
+  const t = typeof text === 'string' ? text.toLowerCase() : '';
+  if (!t) return { riskClass: 'LOW', matched: null };
+  for (const m of RESEARCH_HIGH_RISK_MARKERS) {
+    if (t.includes(m)) return { riskClass: 'HIGH', matched: m };
+  }
+  return { riskClass: 'LOW', matched: null };
 }
 
 /**
@@ -343,6 +641,18 @@ export function sanitizeCandidate(raw) {
     if (typeof raw.promotionEvidence === 'string' && raw.promotionEvidence) {
       if (containsSecret(raw.promotionEvidence)) return { error: 'promotion_evidence_contains_secret' };
       out.promotionEvidence = redactSecrets(cleanStr(raw.promotionEvidence, MAX_EVIDENCE_LEN));
+    }
+
+    // AC6：晋升收据**摘要**（只保留机校标量；收据原文一律不入库）
+    if (isPlainObject(raw.promotionReceipts)) {
+      const summary = receiptSummaryOf(raw.promotionReceipts);
+      if (!summary) return { error: 'bad_promotion_receipts' };
+      for (const leg of PROMOTION_RECEIPT_LEGS) {
+        for (const v of Object.values(summary[leg])) {
+          if (typeof v === 'string' && containsSecret(v)) return { error: 'promotion_receipts_contains_secret' };
+        }
+      }
+      out.promotionReceipts = summary;
     }
 
     return { value: out };
@@ -562,24 +872,60 @@ export function promoteCandidate(store, id, opts = {}) {
   }
   const at = Number.isSafeInteger(opts.at) ? opts.at : 0;
 
+  // ④ AC6 收据门（**必备**，fail-closed）：晋升必须交出既有 Git / CI / Transaction 三条腿的收据。
+  //    A10 的 AC6 缺口正因缺这一条：阶段证据只是字符串，谁都能自证"跑过了"。
+  //    现在必须交出**三腿互相一致**的收据，否则状态不变、Stable 不变。
+  //    ⚠ P0-4 精确化（2026-09-29）：本门证明的是"收据**自洽**"（形状 + 来源白名单 + 三腿互不矛盾），
+  //      **不是**"来源真实"——纯函数不会去真实仓库查 sha / 查 CI 运行 / 查 journal（见 verifyPromotionReceipts
+  //      文档）。来源真实性由产出收据的既有系统附的来源指纹 + E2E 真跑过程保证。故下述遥测措辞
+  //      已相应改精确，不再声称"receipts from existing git ci transaction"（那会被读成来源已被核实）。
+  //    拒绝也写遥测（CANDIDATE_PROMOTION_DENIED）——不留静默死路径，且调用方拿得到新 store。
+  const gate = verifyPromotionReceipts(cand, opts.receipts);
+  if (!gate.ok) {
+    let denied = withTelemetry(store, 'CANDIDATE_PROMOTION_DENIED', {
+      experienceId: cand.id,
+      detail: `error=${gate.error}${gate.leg ? ` leg=${gate.leg}` : ''}${gate.detail ? ` detail=${gate.detail}` : ''}`
+        + `${gate.missing ? ` missing=${gate.missing.join(',')}` : ''}`,
+      reason: 'promotion_requires_consistent_git_ci_transaction_receipts',
+    }, at);
+    denied = { ...denied, version: store.version + 1, updatedAt: at };
+    return {
+      ok: false,
+      error: gate.error,
+      leg: gate.leg,
+      missing: gate.missing,
+      detail: gate.detail,
+      // 状态**未变**（candidate 仍在原状态），但拒绝事实已入遥测权威 ⇒ 可审计
+      value: denied,
+      candidate: cand,
+    };
+  }
+
   const updated = {
     ...cand,
     state: 'PROMOTED',
     updatedAt: at,
     approval: { by, evidence: redactSecrets(approvalEvidence), at },
     promotionEvidence: redactSecrets(cleanStr(opts.evidence, MAX_EVIDENCE_LEN)),
+    promotionReceipts: gate.summary,     // AC6：只存**有界脱敏摘要**，绝不存收据原文
   };
   const checked = sanitizeCandidate(updated);
   if (checked.error) return { ok: false, error: checked.error };
 
   let next = withCandidate(store, checked.value);
+  next = withTelemetry(next, 'CANDIDATE_RECEIPTS_ACCEPTED', {
+    experienceId: cand.id,
+    detail: `git=${gate.summary.git.branch}@${gate.summary.git.commitSha.slice(0, 12)} `
+      + `ci=${gate.summary.ci.system} transaction=${gate.summary.transaction.finalState}`,
+    reason: 'receipts_three_leg_consistent_source_authenticity_not_attested',
+  }, at);
   next = withTelemetry(next, 'CANDIDATE_PROMOTED', {
     experienceId: cand.id,
-    detail: `kind=${cand.kind} approvedBy=${by}`,
+    detail: `kind=${cand.kind} approvedBy=${by} receipts=git+ci+transaction`,
     reason: 'all_stages_passed_and_human_approved',
   }, at);
-  next = { ...next, version: store.version + 1, updatedAt: at };
-  return { ok: true, value: next, candidate: checked.value };
+  next = { ...next, version: store.version + 2, updatedAt: at };
+  return { ok: true, value: next, candidate: checked.value, receipts: gate.summary };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

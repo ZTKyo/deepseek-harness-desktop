@@ -183,6 +183,24 @@ export const TELEMETRY_KINDS = [
   'HUMAN_APPROVAL_DENIED',     // 通道拒绝/取消/不可用，或**无宿主事实**（自述审批）⇒ 绝不 mint APPROVED
   'HUMAN_APPROVAL_UNAVAILABLE',// 部署中不存在宿主批准通道（ctx.get('approval') 缺席）⇒ fail-closed 拒绝
   'APPROVAL_EXPIRED',          // 持久化审批的进程内签章不可验证（跨进程重启）⇒ 需人类重新批准
+  // ── AC2 自主研究腿面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
+  // A10 药丸 2 的缺陷：AC2 的"研究腿"在实现上**无字面痕迹**（`RESEARCH_BOUNDED_EXHAUSTED` 有，
+  // 却没有任何"打开研究腿 / 研究成功闭环"的可审计事实）⇒ 纸面条款。
+  // 下面几个 kind 让研究腿的**触发 / 打开 / 闭环**全部成为可审计事实，且全部走同一遥测权威：
+  'EXPERIENCE_LOOKUP_MISS',    // 检索**无命中** = 无经验覆盖（与 RECALLED 对偶；AC2 的触发事实，不是启发式猜测）
+  'RESEARCH_REQUESTED',        // AC2：无经验覆盖的低风险陌生任务 ⇒ 打开**有界**研究腿（计划/风险分级/委托去处留痕）
+  'RESEARCH_FULFILLED',        // AC2：研究腿由**通过确定性验证**的经验闭环（`RESEARCH_BOUNDED_EXHAUSTED` 的对偶）
+  // P0-3（2026-09-29，对抗式评审）：旧实现只按**时间序**闭环 ⇒ 一条无关经验可一次闭掉本会话全部腿，
+  // `RESEARCH_FULFILLED count=N` **多报**了一个并不成立的因果。现在闭环强度分两级，两个事实各自留痕：
+  //   · 经验文本**完整覆盖**该腿主体词 ⇒ `RESEARCH_FULFILLED`（主体绑定，可作因果证据）；
+  //   · 仅时间序成立而主体未绑定 ⇒ 下面这条（**措辞明确"相关、非因果"**，绝不冒充 FULFILLED）。
+  'RESEARCH_LEG_CLOSED_TIME_ONLY', // AC2：研究腿仅因时间序被关闭（主体未绑定 ⇒ 相关而非因果，不作为证据引用）
+  // ── AC6 候选晋升收据面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
+  // A10 的 AC6 缺口：候选生命周期"有对象、有测试"，但 Transaction/CI 腿**调用数 = 0** ⇒
+  // 晋升路径上没有任何真实系统的收据。下面两个 kind 让"凭现有 Git/CI/Transaction 收据才能晋升"
+  // 从条款变成**可审计事实**（拒绝也留痕，不留静默死路径）：
+  'CANDIDATE_PROMOTION_DENIED',// AC6：晋升被**收据门**拒绝（缺/伪/不一致收据）⇒ 状态不变、Stable 不变
+  'CANDIDATE_RECEIPTS_ACCEPTED',// AC6：三腿收据（git/ci/transaction）全部来自**现有系统**且互相一致
 ];
 
 /** 学习允许写入的目标（白名单）；其余一律拒绝。 */
@@ -197,11 +215,16 @@ export const PROTECTED_TARGETS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. 密钥脱敏（AC3）：运行时脱敏，覆盖 Security-Hardening 的 9 个规范家族
-//    （notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws）
-//    外加通用 "KEY=值" / Bearer 形态。families 名称与 tests/reliability/
+// 1. 密钥脱敏（**合同 AC1「Experience 无 Secret」**）：运行时脱敏，覆盖 16 个规范家族
+//    （notion/openai/openrouter/slack/github/jwt/anthropic/telegram/aws
+//     + google/stripe/gitlab/huggingface/npm/pem-private-key/slack-webhook —— 后 7 类
+//     由 P4 FINAL CLOSURE A10 审计按 R1 独立评审的反证补齐，2026-09-27）
+//    外加通用 "KEY=值" / Bearer / URI 凭据形态。families 名称与 tests/reliability/
 //    secret-scan-check.mjs 保持一致，并由 tests/learn/test-learn-r3-secrets.mjs
-//    做覆盖平价校验（§A 家族名平价 + §B~§H 通用形态与真实落盘脱敏）。
+//    做覆盖平价校验（§I 家族名平价 + §A~§H 通用形态与真实落盘脱敏）。
+//    ⚠ 口径更正：本段此前写作「AC3」——那是 R2/R3 的自定编号，与合同 AC1–AC10 不同号
+//      （合同 AC1 = 无 Secret；合同 AC3 = 只有已验证经验进 verified）。两套编号对照见
+//      docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** 运行时脱敏模式表。name 与仓库规范扫描器 secret-scan-check.mjs 的家族名对齐。 */
@@ -215,6 +238,17 @@ export const SECRET_PATTERNS = [
   { name: 'jwt', re: /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g },
   { name: 'telegram', re: /\b\d{8,10}:[A-Za-z0-9_-]{30,}\b/g },
   { name: 'aws', re: /\bAKIA[A-Z0-9]{16}\b/g },
+  // ── AC1 补齐（2026-09-27，P4 FINAL CLOSURE A10 审计）：R1 独立评审反证的 7 类家族 ──
+  //   此前运行时脱敏表与 tests/reliability/secret-scan-check.mjs **同时缺失**这 7 类，
+  //   导致 R1 的 7 个反证样本"值原样存活 + containsSecret 返回 false"（双层同时漏，
+  //   不是单纯漏打码）。族名必须与扫描器**双向完全平价**（test-learn-r3-secrets.mjs §I3）。
+  { name: 'google', re: /\bAIza[0-9A-Za-z_-]{35}\b/g },                      // Google API key / Firebase
+  { name: 'stripe', re: /\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}\b/g },    // Stripe secret / restricted key
+  { name: 'gitlab', re: /\bglpat-[0-9A-Za-z_-]{20,}\b/g },                    // GitLab personal access token
+  { name: 'huggingface', re: /\bhf_[0-9A-Za-z]{30,}\b/g },                    // HuggingFace token
+  { name: 'npm', re: /\bnpm_[0-9A-Za-z]{36}\b/g },                            // npm automation token
+  { name: 'pem-private-key', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g },
+  { name: 'slack-webhook', re: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\/-]{20,}/g },
   // 通用形态 1：URI userinfo（DB / broker / 服务的连接串）
   //   PRE-MERGE R-3：此前完全缺失。口令内的 "@" 与 userinfo/host 分隔符的 "@" 同形，
   //   故从 "://" 之后**贪婪**取到 authority 内最后一个 "@"（authority 不含 "/"），
@@ -435,6 +469,113 @@ export function sanitizeExperience(raw) {
   return { value: raw };
 }
 
+/**
+ * 自愈迁移时不参与改写的**结构键**：身份/状态/版本/枚举。
+ * 改写它们会破坏引用一致性（id 被别处引用）或状态机语义（state/promotion 是枚举）。
+ */
+const NON_REDACTABLE_KEYS = new Set([
+  'id', 'originSessionId', 'sessionId', 'state', 'promotion',
+  'schemaVersion', 'version', 'kind', 'method', 'status',
+]);
+
+/**
+ * 对一棵 JSON 子树做传播式重新脱敏（内部实现）。
+ * 纪律：**只在字符串确实命中密钥家族时才替换**；未命中 ⇒ 原引用原样返回
+ * （保证"无命中即字节不变"，既是幂等的基础，也把内容漂移压到最小）。
+ * hits 为共享累加器，元素形如 `experiences[78].body(stripe+google)` —— 只含字段路径与
+ * 家族名，**绝不含密钥值**（审计可用、日志安全）。
+ */
+function redactTree(node, pathStr, hits) {
+  if (typeof node === 'string') {
+    if (!containsSecret(node)) return { value: node };
+    const cleaned = redactSecrets(node);
+    // P0-1 修复（2026-09-29）：先比较、后记账。uri-credential 家族的正则会命中**它自己的占位符**——
+    // `postgres://[REDACTED:uri-credential]@db/x` 里的占位符含 `:`，形似 `user:pass@`，于是
+    // containsSecret() 再次为真，而 redactSecrets() 返回**同一字符串**（数据没被改写、引用也没变）。
+    // 旧实现"先记账后比较"⇒ 这类库每次载入都被记成 1 条新泄漏：审计行 STORE_REDACTED 永久误报、
+    // 每次载入白写一次盘、count 永不归零（"库已清理干净"这一可用信号被摧毁）。
+    // 现在只在**值真的被改写**时才记账，且未改写时返回原引用（父层 changed 判定随之保持 false）。
+    if (cleaned === node) return { value: node };
+    hits.push(`${pathStr}(${secretFamiliesIn(node).join('+')})`);
+    return { value: cleaned };
+  }
+  if (Array.isArray(node)) {
+    let changed = false;
+    const out = node.map((v, i) => {
+      const r = redactTree(v, `${pathStr}[${i}]`, hits);
+      if (r.value !== v) changed = true;
+      return r.value;
+    });
+    return { value: changed ? out : node };
+  }
+  if (isPlainObject(node)) {
+    let changed = false;
+    const out = {};
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (NON_REDACTABLE_KEYS.has(k)) { out[k] = v; continue; }
+      const r = redactTree(v, pathStr ? `${pathStr}.${k}` : k, hits);
+      if (r.value !== v) changed = true;
+      out[k] = r.value;
+    }
+    return { value: changed ? out : node };
+  }
+  return { value: node };
+}
+
+/**
+ * ★ 载入边界自愈（P4-R2 / AC1 补齐，2026-09-28）：
+ * 补齐家族表只能拦住**新增**泄漏；修复前（家族表缺 7 族时）已经落盘的条目仍带着明文存活，
+ * 且运行中进程会一直把内存副本回写落盘（实证：session-76de1ca9 库 mtime 在文件级清理后
+ * 仍被刷新，命中数回到 2）。因此历史明文**必须由载入边界清除**。
+ *
+ * 三条硬约束（不满足则**该条原样保留**，绝不写坏数据）：
+ *   ① 只替换命中家族的值（未命中 ⇒ 引用与字节都不变）；
+ *   ② 结构键（id/state/promotion/…）永不改写 → 不破坏引用与状态机；
+ *   ③ 改写后的条目必须**仍通过 sanitizeExperience**（含 APPROVED 的宿主 attestation 校验）——
+ *      否则回退该条原值并计入 skipped。理由：validateStore 是"一条坏则整库判废"，
+ *      写入一条校验不过的记录会在下次载入时导致**整库被重建为空**（静默数据丢失），
+ *      比"该条暂留明文"严重得多；故此处选择保守回退并把该条上报给人。
+ * 幂等：占位符 [REDACTED:<family>] 不再命中任何家族 ⇒ 二次调用 count=0 且库完全不变。
+ * 纯函数：返回新 store（未改动部分保持原引用），不改动入参。
+ */
+export function redactStore(store) {
+  if (!isPlainObject(store)) return { store, count: 0, entries: 0, fields: [], skipped: [] };
+  const hits = [];
+  const skipped = [];
+  let entries = 0;
+  const out = { ...store };
+  const exp = Array.isArray(store.experiences) ? store.experiences : null;
+  if (exp) {
+    out.experiences = exp.map((e, i) => {
+      if (!isPlainObject(e)) return e;
+      const mark = hits.length;
+      const r = redactTree(e, `experiences[${i}]`, hits);
+      if (r.value === e) return e;                       // 未命中：引用不变
+      const revalidated = sanitizeExperience(r.value);
+      if (revalidated.error) {                           // fail-closed：宁可暂留该条，也不写坏整库
+        hits.length = mark;                              // 该条命中不计入（因为它并未被改写）
+        skipped.push(`experiences[${i}]:${revalidated.error}`);
+        return e;
+      }
+      entries += 1;
+      return r.value;
+    });
+  }
+  const tel = Array.isArray(store.telemetry) ? store.telemetry : null;
+  if (tel) {
+    // 遥测只校验 kind（不在家族表内），故无需 revalidate；同样只在命中时替换。
+    out.telemetry = tel.map((t, i) => redactTree(t, `telemetry[${i}]`, hits).value);
+  }
+  return {
+    store: out,
+    count: hits.length,
+    entries,
+    fields: hits,
+    skipped,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. 经验库 store：空骨架 / 校验（fail-closed）
 // ─────────────────────────────────────────────────────────────────────────────
@@ -485,18 +626,44 @@ export function validateStore(raw) {
 /** 稳定排序比较器：createdAt 升序 → id 升序（完全确定性，与输入顺序无关）。 */
 const byCreatedThenId = (a, b) => (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/**
+ * 待人工处置的状态：PROPOSED（等审批）与 VERIFIED_EXPERIENCE（机器已验证、**正等人工审批**）。
+ * 这两种条目一旦因容量被淘汰，其证据与痕迹**不可重建**（人已经离开那个时刻，重跑不会再造出
+ * 同一份 success evidence）⇒ 它是唯一"丢了就永远无法完成该循环"的一类条目。
+ * REJECTED / RETIRED / APPROVED 均可由既有流程重建或追溯（REJECTED 复活须重新 propose 并留新痕迹，
+ * 见 ALLOWED_TRANSITIONS 注释），属可弃。
+ */
+const AWAITING_HUMAN_STATES = Object.freeze(['PROPOSED', 'VERIFIED_EXPERIENCE']);
+function isAwaitingHuman(e) {
+  return AWAITING_HUMAN_STATES.includes(e?.state);
+}
+
 function withExperience(store, exp) {
   const next = store.experiences.filter((e) => e.id !== exp.id);
   next.push(exp);
   // 稳定排序：按 createdAt 升序、id 升序 → 确定性
   next.sort(byCreatedThenId);
-  let kept = next.slice(-MAX_EXPERIENCES);
-  // R-6：容量淘汰必须「保留刚写入的这条」。当 exp.createdAt 为 0（调用方未传时间戳）时它会排到
-  // 最前，被 slice(-N) 直接裁掉 → 新提案"写成功但库里没有"，属静默数据丢失。此处改为淘汰最旧的
-  // 一条给它腾位，保证任何返回 ok:true 的写入都一定存在于返回的 store 中，绝不静默丢失。
-  if (kept.length >= MAX_EXPERIENCES && !kept.some((e) => e.id === exp.id)) {
-    kept = next.slice(-(MAX_EXPERIENCES - 1)).concat(exp).sort(byCreatedThenId);
+  const overflow = next.length - MAX_EXPERIENCES;
+  if (overflow <= 0) return { ...store, experiences: next };
+
+  // 容量淘汰顺序（AC6 Tier-1 持久性修复，2026-09-29）：
+  //   ① 待人工处置（PROPOSED / VERIFIED_EXPERIENCE）**排在最后**——只有它们丢了不可重建；
+  //   ② 组内仍是最旧优先（createdAt 升序 → id 升序），保持确定性；
+  //   ③ 刚写入的这条**永不淘汰**（R-6 不变量原样保留）。
+  // 原实现在这里直接用 `slice(-MAX_EXPERIENCES)`：任何 state 一视同仁按 createdAt 淘汰，
+  // 于是"已机器验证、只差人工点一下"的待审批条目会因为后来 200 条新经验而被静默丢弃
+  // （实测约 18.7h：exp-2ed0f0c9 真的消失，人工审批步永远无法完成）。
+  const dropOrder = [...next].sort((a, b) =>
+    ((isAwaitingHuman(a) ? 1 : 0) - (isAwaitingHuman(b) ? 1 : 0)) || byCreatedThenId(a, b));
+  const drop = new Set();
+  for (const e of dropOrder) {
+    if (drop.size >= overflow) break;
+    if (e.id === exp.id) continue;   // R-6：绝不淘汰刚写入的这条
+    drop.add(e.id);
   }
+  let kept = next.filter((e) => !drop.has(e.id));
+  // 防御性兜底：容量上限必须绝对有界（正常路径下 overflow ≤ next.length-1 已保证 kept === MAX_EXPERIENCES）。
+  if (kept.length > MAX_EXPERIENCES) kept = kept.slice(-MAX_EXPERIENCES);
   return { ...store, experiences: kept };
 }
 
@@ -1056,7 +1223,7 @@ export const MAX_TOOL_FACTS = 256;
  *      来源域（tool / unknown）由 Capability-Gap Qualification Adapter 判定，
  *      本函数**不**替它下结论（toolName 缺失 ⇒ 适配器判 unknown ⇒ fail-closed 否决）。
  */
-export function extractToolOutcomes(events, nodeSeqs) {
+export function extractToolOutcomes(events, nodeSeqs, lowerBound = 0) {
   const empty = { calls: [], failures: [], successes: [] };
   if (!Array.isArray(events) || !Array.isArray(nodeSeqs)) return empty;
 
@@ -1083,8 +1250,16 @@ export function extractToolOutcomes(events, nodeSeqs) {
   const failures = [];
   const successes = [];
 
+  // ★ 修复（2026-09-28，P4 尾部工具事实）：**可选窗口下界** lowerBound。
+  //   原实现自 seq=0 起收集工具事实并**从头**截断到 MAX_TOOL_FACTS（前 256 条），调用方
+  //   再按窗口过滤 ⇒ 当会话的工具事实总数 > 256 时，任何"尾部窗口"过滤后必为空，
+  //   自动候选永远 no_success_evidence（长会话 200/200 候选实测复现，见 _p4-gate-resume）。
+  //   给出下界后，上限约束作用在**窗口内**事实上，采集依旧有界（窗口宽度 << 全会话）。
+  //   缺省 lowerBound=0 ⇒ 与旧行为**逐位一致**（向后兼容：既有 2 参调用方/测试不受影响）。
+  const from = Number.isSafeInteger(lowerBound) && lowerBound > 0 ? lowerBound : 0;
+
   // ③ 扫**事件范围**（工具事件不在节点 seq 上，故必须按 seq 连续区间扫描）
-  for (let seq = 0; seq <= upper; seq++) {
+  for (let seq = from; seq <= upper; seq++) {
     const ev = events[seq];
     if (!ev || typeof ev.type !== 'string') continue;
     const d = isPlainObject(ev.data) ? ev.data : null;

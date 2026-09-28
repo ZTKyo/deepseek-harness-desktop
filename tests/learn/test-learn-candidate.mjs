@@ -64,6 +64,24 @@ function driveToCanary(store, id) {
   return r.value;
 }
 
+/**
+ * AC6 收据：晋升必须交出既有 Git / CI / Transaction 三腿收据，形状逐字对齐三个既有系统的真实产物。
+ * （本文件只测管线状态机；收据门本身的逐腿 mutation 验收见 test-learn-candidate-receipts.mjs。）
+ */
+function realReceipts(id) {
+  const commitSha = 'c'.repeat(40);
+  return {
+    git: { system: 'git', branch: C.candidateBranchName(id), commitSha, worktreePath: 'C:\\tmp\\wt\\' + id, isolated: true },
+    ci: { system: 'ci-level2.yml', job: 'Reliability state machine tests', headSha: commitSha, conclusion: 'success', runUrl: 'https://github.com/ZTKyo/DeepSeek-Harness/actions/runs/1' },
+    transaction: {
+      system: 'dsh-transaction.ps1', label: C.candidateTransactionLabel(id),
+      transactionId: C.candidateTransactionLabel(id) + '-20260101-000000-abc123',
+      finalState: 'COMMITTED', verifyResult: 'COMMIT_READY(shallow)', faultClass: 'none', rollbackResult: 'none',
+      journalPath: 'C:\\tmp\\wt\\' + id + '\\tx-journal.json',
+    },
+  };
+}
+
 console.log('=== STAGE 6-7 验收：Candidate Lifecycle + Autonomous Research ===');
 console.log('');
 
@@ -264,6 +282,21 @@ check('D5 ★ 阶梯单调性：逐级放宽条件，形态只能变重不能变
   assertEq(ladder.join('>'), 'RULE>EXTEND_SKILL>NEW_SKILL>NEW_PLUGIN', '阶梯顺序错误: ' + ladder.join('>'));
 });
 
+check('D6 ★ P0-2：无依据时理由必须如实说"无依据"，不得断言"不存在既有 skill"', () => {
+  // 反例（修复前实测）：chooseCandidateKind({}) 返回 'no_existing_skill_capability_is_procedural'，
+  // 这是一个**肯定断言**（"不存在既有 skill、且这是做法问题"），而调用方根本没查过 —— 审计面被污染。
+  const noBasis = C.chooseCandidateKind({});
+  assertEq(noBasis.kind, 'NEW_SKILL', '无依据时仍应保守取最轻可用形态 NEW_SKILL');
+  assertEq(noBasis.reason, 'no_qualification_basis_conservative_new_skill', '无依据却谎称已评估阶梯');
+  // 正例：调用方**真的**把三个输入都评估过（哪怕结论都是 false）⇒ 保留原有理由措辞（形态不变）
+  const withBasis = C.chooseCandidateKind({ ruleExpressible: false, existingSkill: '', requiresRuntimeCapability: false });
+  assertEq(withBasis.kind, noBasis.kind, '依据有无只影响理由，**不得**改变形态选择');
+  assertEq(withBasis.reason, 'no_existing_skill_capability_is_procedural', '有依据时理由措辞漂移');
+  // 依据键只要**存在**就算"评估过"（false / '' 是结论，不是缺席）
+  assertEq(C.chooseCandidateKind({ requiresRuntimeCapability: false }).reason,
+    'no_existing_skill_capability_is_procedural', 'false 被误判成"没给依据"');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('');
 console.log('=== E 组：生命周期状态机（isolated tests → regression/holdout → canary）===');
@@ -319,6 +352,7 @@ check('E6 ★ 走完管线 + 人工批准 → 晋升成功（对照组）', () =
   const store = driveToCanary(p.value, p.candidate.id);
   const r = C.promoteCandidate(store, p.candidate.id, {
     at: T(4), approvedBy: 'operator', approvalEvidence: 'canary metrics reviewed', evidence: 'promote to rule',
+    receipts: realReceipts(p.candidate.id),
   });
   assert(r.ok, '正规晋升失败: ' + r.error);
   assertEq(r.candidate.state, 'PROMOTED');

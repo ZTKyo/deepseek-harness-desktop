@@ -644,3 +644,52 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
     （`OFFICIAL_DSH_UPGRADE = NO`、`UPSTREAM_SYNC = BLOCKED` 保持）、未进入 P5（`PHASE_05_STARTED = NO`）、
     **未**修任何旁支缺陷（six pre-existing defects / restart 缺陷 / P4 合同缺口一律 `NOT FIXED / OUT OF SCOPE`）、
     **未**重新实现 P4、**未**补 P4 AC、**未**在 Reviewer 99 生成新 verdict（只记执行结果）。
+
+  - **2026-09-28 00:25 P4 FINAL CLOSURE（R3 收尾回合，终局判定落地）**：
+    - **判定：`P4 ≠ VERIFIED`**（两条独立阻塞，均**非**本轮修复引入）：
+      ① **真人审批门结构上不可达**——本会话 approval policy=`never`，`dsh-user-approval` 在交互式
+         分发**之前**直接返回 rejected；实测 `learn_review(approve)` → `approval_not_granted:rejected`、
+         台账 `HUMAN_APPROVAL_REQUESTED → HUMAN_APPROVAL_DENIED`、全局库 `GLOBAL_PUBLISH_DENIED×2 / count=0`。
+         ⇒ 代理**只能请求、不能授予**；需**真人在 policy=ask 的新会话**批准 `exp-2ed0f0c9`。
+      ② **A10 独立复核确认 3 处合同缺口**（属既有范畴，本轮**只登记不修**）：AC2 运行时研究腿
+         `researchPlan` 零调用（mandatory 场景①未达成）、AC6 Transaction/canary/deploy 腿零调用
+         （`tests/learn` 中 `Transaction` 引用=0）、AC10 CI 内无真实 E2E 门（`ci-level2.yml:149-154` 自述排除 6 个真实门）。
+    - **已完成并生产生效**：B1/B2 修复（分支 `p4-final-b1b2-fix` @ `0d3adf7`，PR #97 merge=`171f1b4`）；
+      AC1 密钥族 **19** + 存量**自愈迁移生产生效**（重启后 `LEAK_AUDIT=CLEAN`，重启前 google=1/stripe=1 → **0**）；
+      全量回归 **29/29 套件全绿、1129 PASS / 0 FAIL**；生产健康 **200**、learn 工具**恰好 6 个**、
+      四插件 `source == deployed` 且 mtime < 服务启动时间、无重复注册 / 无崩溃签名 / 无未捕获异常。
+    - **真实服务级重启（非推断）**：PID **15540 → 20580**（00:17:59 绑定；00:18:45 `COMMIT_READY: True` → committed）。
+    - **本任务产物安全**：产物内 3 个文件含真实凭据副本（2 份配置备份含**与现行生产配置同值**的 Notion PAT、
+      1 份生产 store 快照含 google/stripe 形态）→ **就地脱敏 + 逐文件复验 0 命中**；
+      其余命中经无泄漏细看定性为源码表达式/文档示例/合成夹具（保留原样）。
+    - **未做（边界）**：未冻结 `POST_P4_VERIFIED_GOLDEN`（判定不是 VERIFIED）、未进 STAGE B（`NO`）、
+      未代外部评审出 verdict、未修任何旁支缺陷、未触碰生产配置与凭据库。
+    - 报告：`docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/`
+      （`P4_FINAL_VERDICT.md` + `A10_CONTRACT_MATRIX.md` + `AC1_ARTIFACT_REDACTION.md`）。
+
+  - **2026-09-28 01:41 AC6 合同缺口关闭（真实三腿晋升 E2E，范围扩权后）**：
+    - **判定增量：AC6 `PARTIAL → PASS`**（真实 E2E **24 PASS / 0 FAIL**）。**总判定不变：`P4 ≠ VERIFIED`**
+      —— A8 真人审批门、AC2 研究腿、AC10 CI 内真实门**均未触碰/未关闭**。
+    - **三腿全真**：真 `git worktree` + 真分支/commit `74fd41c9…`；**在该 commit 的 worktree 内真跑
+      `ci-level2.yml` 作业命令**（14 命令全 exit 0、13 套件 PASS、环境隔离判据与 CI 相同）；
+      真 `dsh-transaction.ps1` → `FinalState=COMMITTED` + `Verify=COMMIT_READY` + **journal 独立回读**；
+      真 `mount-gate --hold host` 隔离宿主 canary（`127.0.0.1:3099`，生产 3080 PID 全程一致）。
+    - **门有承载力（双向）**：正向真收据 ⇒ `PROMOTED` 且**只存 1859 B 有界摘要**；
+      反向 3 组篡改（`ci.headSha`／`transaction.faultClass`／`git.branch`）⇒ **全拒 + `CANDIDATE_PROMOTION_DENIED` 留痕 + 状态不动**。
+      不变量：晋升未改插件（`learn.mjs` `bf5cfa6d…`、`learn-candidate.mjs` `f732806a…`），工作区仍干净。
+    - **修复前 19P/5F → 修复后 24P/0F**（两份原始日志均留档）。本轮在 AC6 路径上修掉 **4 个必经缺陷**：
+      ① 候选 label 含 `:`（Windows 路径非法）→ 改 `candidate-<id>` + 引擎防御性清洗 + 门拒绝不安全 label；
+      ② mount-gate 隔离未复现生产 profile 形态 → 临时 `DSH_HOME` + `--profile web`；
+      ③ **PS 5.1 给 JSON 产物写入 BOM** ⇒ Node `JSON.parse` 报 `Unexpected token ''` ⇒ 收据门判事务腿无效
+      （= 5 FAIL 的**总根因**）→ 引擎写 journal/manifest 改**无 BOM UTF-8**；
+      ④ E2E 自身两处误判（本机无 `pwsh`、worktree 路径比较）→ 修 harness，非产品缺陷。
+      **方法学**：`UTF-8 带 BOM` 与 `UTF-8 不带 BOM` 是**按消费方**定的两套要求——PS 脚本（给 PS 5.1 读）必须带 BOM，
+      给 Node 解析的 JSON 必须不带。
+    - **证据留档**：`docs/roadmap/evidence/AC6_REAL_E2E_R3_CLOSURE/`（8 文件，密钥扫描 **0 命中**）；
+      报告 `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md`（含 §6 诚实的范围边界）。
+    - **未做（边界）**：**未动 `main`**（只在特性分支 `p4-final-b1b2-fix`）、未重启服务、未改 `cordis.patch.yml`、
+      未把插件部署到生产挂载位、**未放宽真人审批门**（本 E2E 的「晋升」用的是纯状态函数 + 自报审批字段，
+      **不构成真人审批**）、未改 `tests/learn` 之外的生产代码。
+    - **AC10 结构性说明（实测）**：`ci-level2.yml` 触发仅 `pull_request → main` 与 `push → reliability-v1`
+      ⇒ 本特性分支**不可能**产生 GitHub 托管运行（证据 `ci.runUrl` 为空），关闭 AC10 需动 main / reliability-v1
+      = **需人类裁决的范围扩权**；AC2（研究腿接线）同理。

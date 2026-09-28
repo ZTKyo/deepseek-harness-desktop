@@ -1,0 +1,61 @@
+{
+  "artifact": "AC2 post-deploy load gap evidence",
+  "generatedAtLocal": "2026-09-28 07:12 +08:00",
+  "phase": "P4_FINAL_CLOSURE / STAGE_A / AC2_research_leg",
+  "verdicts": {
+    "source_eq_deployed": true,
+    "deployed_eq_loaded": false,
+    "production_health_ok": true,
+    "hot_reload_path_exists": false
+  },
+  "deploy": {
+    "deployedAtLocal": "2026-09-28 06:50:30",
+    "backupDir": "DSH-Client/_backup-learn-20260928-AC2deploy",
+    "backupContents": ["learn.mjs", "learn-core.mjs", "learn-candidate.mjs", "MANIFEST.sha256", "_rollback.ps1"],
+    "files": [
+      { "name": "learn.mjs", "preDeploySha256": "6bdd3fe5b68bbde1663a8157253c640526072157c5e13e50b2bc33ae4437415d", "deployedSha256": "bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc", "sourceSha256": "bf5cfa6d7f0360751bc2c252a7b93e870804a56c39abfdc16c5eb270813a4ffc", "sourceEqDeployed": true },
+      { "name": "learn-core.mjs", "preDeploySha256": "4fb40331b607faa08e5221fd309f9c75f122b697e6a5e8e5cd0488f8e7916e2e", "deployedSha256": "38c1d09296aa4bc1c8144603698434292f8455a2139a66a10fd4a6721be5700c", "sourceSha256": "38c1d09296aa4bc1c8144603698434292f8455a2139a66a10fd4a6721be5700c", "sourceEqDeployed": true },
+      { "name": "learn-candidate.mjs", "preDeploySha256": "f218514751c57ca5e42b0ed1ec6fe91f4182628554f5bb563b73bc4f69a5421a", "deployedSha256": "f732806aa5f9d868febd07d597f78c4fb65858e51f5cbf1c9de9a3b831514e97", "sourceSha256": "f732806aa5f9d868febd07d597f78c4fb65858e51f5cbf1c9de9a3b831514e97", "sourceEqDeployed": true },
+      { "name": "learn-gap-veto.mjs", "preDeploySha256": "unchanged_in_this_round", "deployedSha256": "b7623cedf87e13f49500b368e27bbf9dc358b9b400d7a0b7a064e1c27a090b36", "sourceSha256": "b7623cedf87e13f49500b368e27bbf9dc358b9b400d7a0b7a064e1c27a090b36", "sourceEqDeployed": true }
+    ]
+  },
+  "runtimeProcess": {
+    "port": 3080,
+    "pid": 20580,
+    "startLocal": "2026-09-28 00:17:35",
+    "note": "started 6.5h BEFORE the 06:50:30 deploy; PID unchanged across three probes 06:53-07:09",
+    "restartLedgerLastCommit": "2026-09-28 00:18:45 attempt bfcfd585a5a44b7489f0fbdee78e373a"
+  },
+  "liveBehaviourProbes": [
+    { "at": "06:53", "sessionId": "session-1baa36ad-dfbd-44a2-9bf9-65d8dcd042c4", "learnRecallOutput": "{\"ok\":true,\"items\":[],\"considered\":0,\"excluded\":0,\"blocked\":[]}", "researchDirective": false, "verdict": "OLD_CODE" },
+    { "at": "07:06", "sessionId": "session-071d92bf-1fdb-4bc2-a196-558dea129f8e", "learnRecallOutput": "{\"ok\":true,\"items\":[],\"considered\":0,\"excluded\":0,\"blocked\":[]}", "researchDirective": false, "verdict": "OLD_CODE" },
+    { "at": "07:07", "sessionId": "session-6ee47cc9-df3f-48b9-a511-2d3041553111", "learnRecallOutput": "{\"ok\":true,\"items\":[],\"considered\":0,\"excluded\":0,\"blocked\":[]}", "researchDirective": false, "verdict": "OLD_CODE" },
+    { "at": "07:09", "sessionId": "session-6a97346a-0413-4cbf-ac36-8b516e178a4c", "learnRecallOutput": "{\"ok\":true,\"items\":[],\"considered\":0,\"excluded\":0,\"blocked\":[]}", "researchDirective": false, "verdict": "OLD_CODE" }
+  ],
+  "discriminator": {
+    "rule": "deployed learn.mjs attaches researchDirective to learn_recall output whenever the experience store returns no items; the pre-deploy build never does",
+    "source": "_p4r2-inject-fix/plugins/learn.mjs (zero-hit branch) — 7 hits of 'researchDirective' in deployed bytes, 0 in pre-deploy backup copy",
+    "evidenceTakenFrom": "official session log tool/result events (host artifact), not model narration"
+  },
+  "hotReloadTests": [
+    { "test": "touch learn.mjs mtime (07:04:17, bytes unchanged)", "result": "no remount (PID 20580 unchanged, behaviour still OLD after 90s)" },
+    { "test": "touch cordis.patch.yml mtime (07:07:17, bytes unchanged)", "result": "no remount (PID 20580 unchanged, behaviour still OLD after 75s)" },
+    { "test": "source inspection of dsh package (fs.watch / watchFile / .watch() / cordis.patch)", "result": "no profile-plugin or patch watcher; patch layers are parsed when the profile is mounted at boot" }
+  ],
+  "rootCause": "DSH loads profile plugins (cordis.patch.yml ./learn.mjs etc.) once, at service process start; there is no watcher/HMR for host plugins. Deploying bytes to ~/.dsh/profiles/web satisfies source==deployed only; deployed==loaded additionally requires a service restart.",
+  "invalidatedAssumption": {
+    "where": "RUNBOOK.md AC2 deploy step 3 + DSH-Client/_backup-learn-20260928-AC2deploy/_rollback.ps1 comment",
+    "claim": "'profile watcher 热挂载（实测无需重启）'",
+    "status": "FALSIFIED by this evidence"
+  },
+  "affectedPriorEvidence": [
+    "Any production observation taken before 2026-09-28 06:50:30 reflects the PRE-FIX learn plugin, including the previously recorded production negative-security checks — they must be re-taken after the restart before claiming they cover the new bytes."
+  ],
+  "remediation": {
+    "mechanism": "DSH-Client/restart-dsh-server-delayed.ps1 (preflight + detached worker + stable window + COMMIT_READY; ledger %LOCALAPPDATA%/DSHHarness/state/restart-attempts)",
+    "preflight": "restart-dsh-server-delayed.ps1 -PreflightOnly",
+    "scheduled": "-Detach -DelaySeconds 240 -Reason 'AC2 learn deploy: load deployed plugin bytes (live code verified stale)'",
+    "postRestartProbe": "_p4r2-inject-fix/tests/learn/production-load-probe.mjs (exit 0 = NEW_CODE_LOADED, exit 3 = OLD_CODE_STILL_LOADED)",
+    "expect": "NEW_CODE_LOADED"
+  }
+}

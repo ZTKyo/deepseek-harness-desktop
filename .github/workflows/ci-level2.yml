@@ -144,37 +144,87 @@ jobs:
           Write-Host 'PASS P4 LEARN plugin host-contract gate'
       # ── P4 LEARN R2 contract closure (Notion canonical contract AC1-AC10) ────
       # CI-SAFE subset only, established empirically rather than by reading: every
+      # 2026-09-27 P4 R2 AC6: test-learn-candidate-receipts.mjs was added only after
+      # re-running it under the same empty-profile redirection (USERPROFILE/HOME/
+      # LOCALAPPDATA -> empty dir): 32 PASS / 0 FAIL, exit 0.
+      # 2026-09-28 P4 R2 AC2: test-learn-ac2-research-leg.mjs was added the same way
+      # (empty-profile redirection + CI=true/GITHUB_ACTIONS=true, temp HOME written by
+      # nothing): 25 PASS / 0 FAIL, exit 0. It is pure in-process plugin + host-harness
+      # work (no live server, no session logs, no credentials) — the AC2 research-leg
+      # wiring lock stays executed in CI from now on, not only locally.
       # suite below was executed on Windows with USERPROFILE / HOME / LOCALAPPDATA
       # redirected to an empty directory (no ~/.dsh/sessions, no live profile) and
-      # still exited 0. Deliberately NOT here are the real-data release gates:
-      # run-learn-contract-scenarios.mjs, run-learn-real-e2e.mjs,
+      # still exited 0. Deliberately NOT here are the real-data release gates
+      # (run-learn-contract-scenarios.mjs, run-learn-real-e2e.mjs,
       # run-learn-real-gap-e2e.mjs, test-learn-stage2-schema-and-negative-lock.mjs,
-      # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs. Those consume real
+      # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs, ...). Those consume real
       # session logs / P2.6 failure telemetry, so on a bare runner they fail for
       # lack of data rather than for a defect; they run locally as pre-release gates.
+      # 2026-09-29 P4 AC6 Tier-1: test-learn-ac6-candidate-durability.mjs 加入同一套判据——
+      # 纯逻辑（无真实会话/无子进程/无网络），临时状态只落 os.tmpdir()，确定性强，
+      # 且内含**负控**（逐字复刻旧实现，断言它确实丢掉待审批条目）⇒ 回退即红。
+      # 2026-09-29 P4 LEARN AC10: the authoritative ledger of *every* learn suite,
+      # what real data it needs, and why it is or is not in CI is now
+      # tests/learn/gate-registry.json — validated fail-closed by
+      # tests/learn/validate-gate-registry.mjs in ci-level1. Keep this list and that
+      # ledger in sync: an unregistered suite or a registered-but-unwired gate turns
+      # the L1 registry gate red (the failure mode being prevented is a gate that
+      # silently stops running while the report still calls it required).
+      # 2026-09-29 P4 LEARN AC10 → 同日被 CI 证伪后修正：四个套件曾据"空 profile 重定向本地实测"
+      # 判为 CI-safe 并接入本车道；run 36463837981 / job 109068810397 证伪了其中 b1：
+      # test-learn-b1-session-access.mjs 在 runner 上 §T2.0 打印 SKIP-REASON 后 exit 1 —— 它调
+      # mkHostApproval() / resolveHarnessPackage()，需要宿主**已安装**的 cordis + dsh-user-approval，
+      # 而"空 profile"只清数据、清不掉"包不在 runner 上"。⇒ b1 退回本地/发布前门（本机 22 PASS / 0 FAIL、exit 0），
+      # 本车道保留其余三个：test-learn-b2-verify-output-contract.mjs（本机 21 PASS / 0 FAIL）、
+      # test-learn-r2-f2-store-min.mjs（本机 19 PASS / 0 FAIL）、redteam-r3-injection-positions.mjs
+      # （本机 exit 0；缺语料时按自身规则打印 missing session-…，不假绿）。这三个尚未在 runner 上取得
+      # 实证，登记表里标「本地实测」，首次真跑通过后升级为「CI 实证」。
+      # 判据固化：登记表校验新增「接线双向为真」检查——被 run 脚本真实调用却登记为"未进 CI"、
+      # 或跨车道错标 ⇒ ci-level1 立刻红。⇒ 本注释不再是"证据"，登记表 + 该检查才是。
       - name: P4 LEARN R2 contract-closure gates (CI-safe subset)
         shell: pwsh
         run: |
           $suites = @(
             'tests\learn\test-learn-core.mjs',
             'tests\learn\test-learn-candidate.mjs',
+            'tests\learn\test-learn-ac6-candidate-durability.mjs',
             'tests\learn\test-learn-ac5-e2e.mjs',
             'tests\learn\test-learn-stage85-twins.mjs',
             'tests\learn\test-learn-real-topology-tool-events.mjs',
+            'tests\learn\test-learn-candidate-receipts.mjs',
+            'tests\learn\test-learn-ac2-research-leg.mjs',
             'tests\learn\test-learn-r3-fixes.mjs',
             'tests\learn\test-learn-r3-hardening.mjs',
             'tests\learn\test-learn-r3-secrets.mjs',
             'tests\learn\redteam-r3-contamination.mjs',
             'tests\learn\redteam-r3-isolation.mjs',
             'tests\learn\redteam-r3-labels.mjs',
-            'tests\learn\redteam-r3-probe.mjs'
+            'tests\learn\redteam-r3-probe.mjs',
+            'tests\learn\test-learn-b2-verify-output-contract.mjs',
+            'tests\learn\test-learn-r2-f2-store-min.mjs',
+            'tests\learn\redteam-r3-injection-positions.mjs'
           )
           foreach ($s in $suites) {
             Write-Host "--- $s"
             node $s
             if ($LASTEXITCODE -ne 0) { throw "P4 LEARN R2 contract gate failed: $s" }
           }
-          Write-Host 'PASS P4 LEARN R2 contract-closure gates (12 suites)'
+          Write-Host 'PASS P4 LEARN R2 contract-closure gates ($($suites.Count) suites)'
+
+      # ── P4 LEARN AC2 mutation proof (a gate that cannot turn red is decoration) ──
+      # tests/learn/_ac2-mutation-proof.mjs injects six real defects into the AC2
+      # research-leg and asserts the gate catches EACH one, after first proving the
+      # unmutated copy is green (so the red is not tautological). It had only ever
+      # run locally; wiring it in means the "requirement gate verified" claim is
+      # backed by CI from now on, not by a local run nobody can re-check.
+      # Pure node + repo-relative plugin copies: no live server, no credentials,
+      # no session data. Runtime ≈ tens of seconds (7 suite runs).
+      - name: P4 LEARN AC2 mutation proof (gate must turn RED)
+        shell: pwsh
+        run: |
+          node tests\learn\_ac2-mutation-proof.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host 'AC2 MUTATION PROOF FAIL'; exit 1 }
+          Write-Host 'PASS P4 LEARN AC2 mutation proof'
 
       # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
       # Per External Review Blocker B: quota-defer / network-error /

@@ -37,6 +37,7 @@ import { dirname, join } from 'node:path';
 import {
   loadRealSession, listRealSessions, mkCtx, mkExec, growSession,
   mkHostApproval, mkTurnSession, appendHostApprovalFact,
+  pickLearnableRealSession, envPreconditionExit,
 } from './_real-session-harness.mjs';
 import {
   GLOBAL_STORE_KIND, GLOBAL_STORE_SCHEMA_VERSION, emptyGlobalStore,
@@ -98,10 +99,15 @@ console.log('=== R2 BLOCKER-1 回归门：人工审批是跨会话传播的唯�
 console.log('  插件 = ' + PLUGIN_URL);
 
 // ── 真实会话（唯一能产出 machine-checkable evidence 的路径）─────────────────
-const cands = listRealSessions(500_000);
-assert.ok(cands.length > 0, '无真实会话候选（无法建立 machine-checkable 证据面）');
-const real = loadRealSession(cands[0].p);
-console.log(`  真实会话 = ${path.basename(path.dirname(cands[0].p))} nodes=${real.nodes.length}`);
+// ★ 2026-09-29 修复：选择判据从"体积最小的 >500KB 会话"改为**证据驱动**（重放后能否真的
+//   喂出经验）。旧口径在会话库增长后会让新增的 subagent 会话（体积最小、但无可用工具事实）
+//   当选 ⇒ A/B/C 三组 15 个断言集体假红（实测 idx0 经验=0；idx1/2/3/9/10/13 经验=1）。
+//   语料缺失时走**环境前置**退出（exit 2 + [env error]），绝不降级为"产品失败"。
+const sel = await pickLearnableRealSession({ pluginUrl: PLUGIN_URL });
+if (!sel.ok) envPreconditionExit(sel.reason, sel.scanned);
+const real = sel.real;
+console.log(`  真实会话 = ${path.basename(path.dirname(sel.cand.p))} nodes=${real.nodes.length}`
+  + `（证据驱动选定；已扫描 ${sel.scanned.length} 个候选）`);
 console.log('');
 
 // ═══════════════════════════════════════════════════════════════════════════

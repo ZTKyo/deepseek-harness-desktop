@@ -34,6 +34,7 @@ import { dirname, join } from 'node:path';
 
 import {
   loadRealSession, listRealSessions, mkCtx, mkExec, growSession, mkHostApproval,
+  pickLearnableRealSession, envPreconditionExit,
 } from './_real-session-harness.mjs';
 import { canPublish, validHumanApproval, HUMAN_APPROVAL_ACTOR } from '../../plugins/learn-core.mjs';
 
@@ -101,8 +102,16 @@ for (const k of ['LEARN_SESSION_STORE_MAX_FILES', 'LEARN_SESSION_STORE_TTL_DAYS'
   }
 }
 
-const real = loadRealSession(listRealSessions(500_000)[0].p);
-console.log(`  真实会话 = nodes=${real.nodes.length} events=${real.events.length}（只读）`);
+// ★ 2026-09-29 修复：选择判据 = "重放后能否真的喂出经验"（证据驱动），不再是文件体积。
+//   旧写法 `listRealSessions(500_000)[0]` 在会话库增长后选中了体积最小、却无可用工具事实的
+//   subagent 会话 ⇒ 1.0/1.1/1.2 假红，并让 177 行读不存在的 _global-verified.json 直接崩溃
+//   （整包降级为 NO-SUMMARY，既非产品失败也非 ENV，属最坏的"无法判读"）。语料不合格时走
+//   环境前置退出（exit 2 + [env error]），语义不变、断言不放松。
+const sel = await pickLearnableRealSession({ pluginUrl: PLUGIN_URL });
+if (!sel.ok) envPreconditionExit(sel.reason, sel.scanned);
+const real = sel.real;
+console.log(`  真实会话 = nodes=${real.nodes.length} events=${real.events.length}（只读；`
+  + `证据驱动选定，已扫描 ${sel.scanned.length} 个候选）`);
 console.log('');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -174,7 +183,17 @@ await acheck('1.2 第二个会话：真实 VERIFIED 但**不审批**（验证淘
   assert.equal(P.api.globalStore().experiences.length, 1, '未审批的经验不得进入 Layer B');
 });
 
-const GLOBAL_BYTES_0 = fs.readFileSync(P.gpath, 'utf8');
+// 防御式读取：前置不成立时（夹具未落盘）不得让整包**崩溃**——崩溃会把"环境前置未满足"
+// 变成 NO-SUMMARY（机制上无法判读），比断言失败更坏。缺文件 ⇒ 显式环境前置退出。
+const GLOBAL_BYTES_0 = (() => {
+  if (!fs.existsSync(P.gpath)) {
+    envPreconditionExit(
+      `夹具未产出 Layer B 文件 ${P.gpath}（1 组前置不成立：真实会话→候选→验证→审批→发表 未走通）`,
+      sel.scanned,
+    );
+  }
+  return fs.readFileSync(P.gpath, 'utf8');
+})();
 console.log('');
 
 // ═══════════════════════════════════════════════════════════════════════════

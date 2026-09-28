@@ -37,7 +37,13 @@ export function loadRealSession(file) {
   return { file, frames, events, nodes, parseErrors };
 }
 
-export const SESSIONS_DIR = path.join(os.homedir(), '.dsh', 'sessions');
+// 真实会话语料目录。默认 = 本机生产会话库（只读）；可用 `DSH_SESSIONS_DIR` 指向
+// **播种语料**（CI runner 必需：裸 runner 上没有 ~/.dsh/sessions，真实门会因缺数据而
+// 假红——这正是 ci-level2.yml 当初把这些门排除出 CI 的原因）。此覆盖只改**来源**，
+// 不改任何断言语义：门仍然必须读到"真实会话"才可能通过。
+export const SESSIONS_DIR = process.env.DSH_SESSIONS_DIR
+  ? path.resolve(process.env.DSH_SESSIONS_DIR)
+  : path.join(os.homedir(), '.dsh', 'sessions');
 
 /** 真实会话候选清单（按体积升序）。 */
 export function listRealSessions(minBytes = 500_000) {
@@ -264,6 +270,85 @@ export async function growSession(api, hooks, real, sid, startAt = 24, stopWhen,
     if (stop(api, n)) { stopped = true; break; }
   }
   return { steps, stopped, store: api.getStore(sid) };
+}
+
+/**
+ * 证据驱动的**真实会话选择**（2026-09-29 修复：把"体积最小"换成"能否真的喂出经验"）。
+ *
+ * 为什么必须换（真实缺陷，实测）：
+ *   旧写法 `loadRealSession(listRealSessions(500_000)[0].p)` 按**体积升序**取第一个。
+ *   会话库是持续增长的：新增的 subagent 会话（如 4cd1facf，503KB / 34 nodes）体积刚好最小，
+ *   但它的工具事实喂不出任何经验 ⇒ auto-propose 前置不成立 ⇒ `test-learn-r2-b1-approval-gate`
+ *   报 **15 FAIL**、`test-learn-r2-b2-bounds` 直接崩在缺 `_global-verified.json`。
+ *   那 15 个 FAIL 不是产品缺陷，而是**选错了语料**——门把"环境前置"误报成了"产品失败"。
+ *   实测（`_overnight/corpus-probe.mjs`，119 个候选）：idx0 经验=0；idx1/2/3/9/10/13 经验=1。
+ *
+ * 现在判据 = 客观事实：**重放该会话是否真的产出 ≥1 条经验**。
+ *   - 顺序确定（体积升序），结果可复现；
+ *   - `LEARN_REAL_SESSION=<path>` 可显式钉住某个会话（CI / 复现用）；
+ *   - 全部候选都不满足 ⇒ 返回 ok:false，调用方必须走**环境前置**退出（见 envPreconditionExit），
+ *     绝不把"没有语料"降级成"产品坏了"，也不允许"跳过即通过"。
+ *
+ * @returns {Promise<{ok:true,cand:object,real:object,scanned:object[]}
+ *                  |{ok:false,reason:string,scanned:object[]}>}
+ */
+export async function pickLearnableRealSession({
+  minBytes = 500_000, maxScan = 14, pluginUrl, pluginOpts = {}, minNodes = 28, sid = 'select-probe',
+} = {}) {
+  const scanned = [];
+  let cands = listRealSessions(minBytes);
+  const pin = process.env.LEARN_REAL_SESSION;
+  if (pin) {
+    const p = path.resolve(pin);
+    if (!fs.existsSync(p)) return { ok: false, reason: `LEARN_REAL_SESSION 指向的文件不存在：${p}`, scanned };
+    cands = [{ p, size: fs.statSync(p).size }, ...cands.filter((c) => c.p !== p)];
+  }
+  if (!cands.length) {
+    return { ok: false, reason: `在 ${SESSIONS_DIR} 下找不到 >${minBytes}B 的真实会话（语料缺失）`, scanned };
+  }
+  let gen = 0;
+  for (const c of cands.slice(0, maxScan)) {
+    let real;
+    try { real = loadRealSession(c.p); }
+    catch (e) { scanned.push({ p: c.p, err: 'load: ' + e.message }); continue; }
+    if (real.nodes.length < minNodes) {
+      scanned.push({ p: c.p, nodes: real.nodes.length, skip: `nodes<${minNodes}` });
+      continue;
+    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learnsel-'));
+    const mod = await import(`${pluginUrl}?sel=${++gen}`);
+    const host = mkCtx({});
+    const api = mod.apply(host.ctx, {
+      stateDir: dir,
+      globalStorePath: path.join(dir, '_global-verified.json'),
+      autoPropose: true, minTurnsForLearning: 4, minNewNodes: 4, maxDigestTurns: 40,
+      ...pluginOpts,
+    });
+    let experiences = -1;
+    try { const g = await growSession(api, host.hooks, real, sid); experiences = g.store.experiences.length; }
+    catch (e) { scanned.push({ p: c.p, nodes: real.nodes.length, err: 'grow: ' + e.message }); continue; }
+    scanned.push({ p: c.p, nodes: real.nodes.length, experiences });
+    if (experiences > 0) return { ok: true, cand: c, real, scanned };
+  }
+  return { ok: false, reason: `扫描 ${scanned.length} 个真实会话候选，没有一个能喂出经验（auto-propose 前置不成立）`, scanned };
+}
+
+/**
+ * **环境前置未满足**的统一退出（不是产品失败）。
+ *
+ * 约定（与 tests/learn/run-learn-all-tests.mjs:129-137 的 ENV 分类同口径）：
+ * `exit 2` + `[env error]` 字样 ⇒ 回归器单列 ENV，既不算通过也不算产品失败，
+ * 且在报告里显式可见（不静默吞掉）。
+ */
+export function envPreconditionExit(reason, scanned = []) {
+  console.log(`[env error] 环境不满足：${reason}`);
+  console.log(`[env error] 语料目录 = ${SESSIONS_DIR}（可用 DSH_SESSIONS_DIR 覆盖；可用 LEARN_REAL_SESSION 钉住单文件）`);
+  for (const s of scanned) {
+    const id = path.basename(path.dirname(s.p));
+    console.log(`[env error]   - ${id} nodes=${s.nodes ?? '-'} experiences=${s.experiences ?? s.skip ?? s.err ?? '-'}`);
+  }
+  console.log('[env error] 这是**真实语料缺失/不合格**导致的环境前置，不是产品缺陷；断言语义未被放宽。');
+  process.exit(2);
 }
 
 export const harnessDir = HERE;

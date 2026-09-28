@@ -239,6 +239,17 @@ function finalize() {
     out.lockReleaseDetail = releaseAc6Lock(CLEAN.lockDir);
     out.lockReleased = CLEAN.lockDir ? out.lockReleaseDetail.released === true : true;
   } catch (e) { out.errors.push('unlock: ' + e.message); }
+  // 归档副本必须能自证收尾结果（尤其崩溃/提前退出路径：主流程来不及补写）。
+  // 正常路径随后会用更全的信息再补写一次（含 pass/fail），这里写的字段与其一致。
+  try {
+    const rep = JSON.parse(fs.readFileSync(ARCHIVED_REPORT, 'utf8'));
+    rep.cleanup = {
+      ...(rep.cleanup || {}), tempRootRemoved: out.tempRootRemoved, tempRoot: ROOT,
+      lockDir: out.lockDir, lockReleased: out.lockReleased, lockReleaseDetail: out.lockReleaseDetail ?? null,
+      finalizedAt: new Date().toISOString(), finalizeErrors: out.errors,
+    };
+    fs.writeFileSync(ARCHIVED_REPORT, JSON.stringify(rep, null, 2), 'utf8');
+  } catch (e) { out.errors.push('archive annotate: ' + e.message); }
   CLEAN.archiveResult = out;
   return out;
 }

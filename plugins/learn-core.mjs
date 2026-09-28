@@ -1184,7 +1184,7 @@ export const MAX_TOOL_FACTS = 256;
  *      来源域（tool / unknown）由 Capability-Gap Qualification Adapter 判定，
  *      本函数**不**替它下结论（toolName 缺失 ⇒ 适配器判 unknown ⇒ fail-closed 否决）。
  */
-export function extractToolOutcomes(events, nodeSeqs) {
+export function extractToolOutcomes(events, nodeSeqs, lowerBound = 0) {
   const empty = { calls: [], failures: [], successes: [] };
   if (!Array.isArray(events) || !Array.isArray(nodeSeqs)) return empty;
 
@@ -1211,8 +1211,16 @@ export function extractToolOutcomes(events, nodeSeqs) {
   const failures = [];
   const successes = [];
 
+  // ★ 修复（2026-09-28，P4 尾部工具事实）：**可选窗口下界** lowerBound。
+  //   原实现自 seq=0 起收集工具事实并**从头**截断到 MAX_TOOL_FACTS（前 256 条），调用方
+  //   再按窗口过滤 ⇒ 当会话的工具事实总数 > 256 时，任何"尾部窗口"过滤后必为空，
+  //   自动候选永远 no_success_evidence（长会话 200/200 候选实测复现，见 _p4-gate-resume）。
+  //   给出下界后，上限约束作用在**窗口内**事实上，采集依旧有界（窗口宽度 << 全会话）。
+  //   缺省 lowerBound=0 ⇒ 与旧行为**逐位一致**（向后兼容：既有 2 参调用方/测试不受影响）。
+  const from = Number.isSafeInteger(lowerBound) && lowerBound > 0 ? lowerBound : 0;
+
   // ③ 扫**事件范围**（工具事件不在节点 seq 上，故必须按 seq 连续区间扫描）
-  for (let seq = 0; seq <= upper; seq++) {
+  for (let seq = from; seq <= upper; seq++) {
     const ev = events[seq];
     if (!ev || typeof ev.type !== 'string') continue;
     const d = isPlainObject(ev.data) ? ev.data : null;

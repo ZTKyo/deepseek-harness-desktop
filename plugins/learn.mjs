@@ -945,7 +945,7 @@ export function apply(ctx, config = {}) {
   /** 从官方原始事件重算窗口事实（唯一判定路径；与提案期调用同一官方提取器）。 */
   function recomputeOutcome(events, ev) {
     const lo = ev.window[0]; const hi = ev.window[1];
-    const out = extractToolOutcomes(events, [hi]);
+    const out = extractToolOutcomes(events, [hi], lo);
     const inWin = (arr) => arr.filter((o) => o.seq >= lo && o.seq <= hi);
     const calls = inWin(out.calls);
     const successes = inWin(out.successes);
@@ -1167,7 +1167,7 @@ export function apply(ctx, config = {}) {
     // 不一致即判 FAIL（详见 recomputeOutcome）。
     const winLo = digest.firstSeq;
     const winHi = digest.lastSeq;
-    const rawOut = extractToolOutcomes(session.events, [winHi]);
+    const rawOut = extractToolOutcomes(session.events, [winHi], winLo);
     const inWin = (arr) => arr.filter((o) => o.seq >= winLo && o.seq <= winHi);
     const winCalls = inWin(rawOut.calls);
     const winSuccesses = inWin(rawOut.successes);

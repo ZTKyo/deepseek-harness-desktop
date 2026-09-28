@@ -359,6 +359,18 @@
       "exclusionReason": "夹具模块（loadRealSession / mkCtx / mkHostApproval / growSession …），不是可执行门；被上面各门 import 使用，本身无独立断言。",
       "localCommand": "（无需运行：被各门 import）",
       "lastVerified": "2026-09-29"
+    },
+    {
+      "suite": "tests/learn/audit-merge-enforcement.mjs",
+      "kind": "tool",
+      "ci": null,
+      "requires": [
+        "gh CLI 已登录，且对该仓库有 admin 级**只读**权限（`GET /repos/{owner}/{repo}/branches/main/protection` 需要 admin 才能读到必需检查列表）",
+        "网络可达 api.github.com（只读 GET / 0 写操作）"
+      ],
+      "exclusionReason": "不是「门」，是「门硬不硬」的只读审计器：它读线上分支保护/ruleset + 事故 PR 的红门证据，判定每条路径（PR→main / 直推→main / 管理员绕过）能不能拦住一个红门。不能进 CI 的理由是**它需要 admin 级只读 token**：GitHub Actions 自带的 GITHUB_TOKEN 没有 administration 权限，读 protection 会 403，若把它当 CI 门就会产生「读不到即判红」的**永久假红**——正是 AC6 那类噪声的来源。故只在发布前/改动仓库设置后在本机跑，用 --strict 得到退出码。",
+      "localCommand": "node tests\\learn\\audit-merge-enforcement.mjs [--strict] [--json] [--repo <path>] [--pr <n>]",
+      "lastVerified": "2026-09-29"
     }
   ]
 }

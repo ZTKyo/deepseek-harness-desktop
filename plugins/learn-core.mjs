@@ -186,10 +186,15 @@ export const TELEMETRY_KINDS = [
   // ── AC2 自主研究腿面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
   // A10 药丸 2 的缺陷：AC2 的"研究腿"在实现上**无字面痕迹**（`RESEARCH_BOUNDED_EXHAUSTED` 有，
   // 却没有任何"打开研究腿 / 研究成功闭环"的可审计事实）⇒ 纸面条款。
-  // 下面三个 kind 让研究腿的**触发 / 打开 / 闭环**全部成为可审计事实，且全部走同一遥测权威：
+  // 下面几个 kind 让研究腿的**触发 / 打开 / 闭环**全部成为可审计事实，且全部走同一遥测权威：
   'EXPERIENCE_LOOKUP_MISS',    // 检索**无命中** = 无经验覆盖（与 RECALLED 对偶；AC2 的触发事实，不是启发式猜测）
   'RESEARCH_REQUESTED',        // AC2：无经验覆盖的低风险陌生任务 ⇒ 打开**有界**研究腿（计划/风险分级/委托去处留痕）
   'RESEARCH_FULFILLED',        // AC2：研究腿由**通过确定性验证**的经验闭环（`RESEARCH_BOUNDED_EXHAUSTED` 的对偶）
+  // P0-3（2026-09-29，对抗式评审）：旧实现只按**时间序**闭环 ⇒ 一条无关经验可一次闭掉本会话全部腿，
+  // `RESEARCH_FULFILLED count=N` **多报**了一个并不成立的因果。现在闭环强度分两级，两个事实各自留痕：
+  //   · 经验文本**完整覆盖**该腿主体词 ⇒ `RESEARCH_FULFILLED`（主体绑定，可作因果证据）；
+  //   · 仅时间序成立而主体未绑定 ⇒ 下面这条（**措辞明确"相关、非因果"**，绝不冒充 FULFILLED）。
+  'RESEARCH_LEG_CLOSED_TIME_ONLY', // AC2：研究腿仅因时间序被关闭（主体未绑定 ⇒ 相关而非因果，不作为证据引用）
   // ── AC6 候选晋升收据面（P4 FINAL GAP CLOSURE R3 新增；**追加**到同一遥测权威，不新建第二套）──
   // A10 的 AC6 缺口：候选生命周期"有对象、有测试"，但 Transaction/CI 腿**调用数 = 0** ⇒
   // 晋升路径上没有任何真实系统的收据。下面两个 kind 让"凭现有 Git/CI/Transaction 收据才能晋升"

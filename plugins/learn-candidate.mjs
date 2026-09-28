@@ -250,13 +250,22 @@ export function receiptSummaryOf(receipts) {
 }
 
 /**
- * AC6 收据门：校验候选晋升是否**真走既有 Git / CI / Transaction**。
+ * AC6 收据门：校验候选晋升所交的收据**形状合法、来源在三腿白名单内、且三腿互相自洽**。
+ *
+ * ★ P0-4 精确化（2026-09-29 对抗式评审）：本门的**实际强度**必须说清，否则遥测措辞会夸大它：
+ *   ✅ 它能挡住：缺收据 / 结构不对 / 来源不在白名单 / 三腿互相矛盾（commitSha 与 ci.headSha 不一致、
+ *      事务 label 与候选派生 label 不符、非隔离分支、含密钥）。
+ *   ❌ 它**挡不住**"形状完全正确但整组伪造"——本函数是纯函数（无 IO / 无子进程 / 无网络），
+ *      不会去问真实仓库"这个 sha 存在吗"、CI 是否真跑过、journal 是否真有那条事务。
+ *  ⇒ 本门证明的是「**自洽**」，不是「**来源真实**」；来源真实性由**产出收据的既有系统**（CI/事务侧
+ *     在产出时附来源指纹）与实际执行过程（E2E 真跑一遍）保证。禁止在本模块内新增任何校验引擎
+ *     或 git/CI 调用（那正是 AC6"不造第二套 promotion engine"与 B3 静态锁所禁止的）。
  *
  * fail-closed：结构缺失、来源白名单外、三腿不一致、含密钥、非隔离分支 —— 任一即拒绝。
  * 纯函数（无 IO / 无子进程 / 无网络），可在任何环境确定性复算。
  *
  * @param {object} candidate - 候选对象（只用到 id）
- * @param {object} receipts  - 三腿收据（由既有系统产出）
+ * @param {object} receipts  - 三腿收据（**由调用方提供**，本模块不产出、不核验其来源真实性）
  * @returns {{ok:true, receipts:object, summary:object}
  *          |{ok:false, error:string, leg?:string, missing?:string[], detail?:string}}
  */
@@ -374,14 +383,29 @@ export function candidateIdOf(dedupKey) {
 /**
  * 选候选形态（合同 §七阶梯）。**永远选代价最低且够用的形态。**
  *
+ * ★ P0-2 修复（2026-09-29，对抗式评审）：本函数返回的 `reason` 是**可审计的事实陈述**，
+ *   因此必须区分"调用方真的给了判断依据"与"调用方什么依据都没给"：
+ *     · 给了依据（哪怕三个输入都被判为 false）⇒ 走原阶梯理由，陈述"已评估过、落到这一级"；
+ *     · **一个依据键都没给** ⇒ 只能保守取 NEW_SKILL，理由必须如实写成"**无依据 ⇒ 保守取 NEW_SKILL**"，
+ *       绝不能声称 'no_existing_skill_capability_is_procedural'（那是对"不存在既有 skill"的**肯定断言**，
+ *       而调用方根本没查过）。
+ *   动机（实测）：生产两个调用点此前都以"填死值"的方式调用（研究腿传三个 false、缺口级传 `{}`），
+ *   于是契约 §七的四级阶梯在生产路径上**恒为分支③**，`reason` 还凭空断言了一个未经验证的前提。
+ *   本修复**不改变形态选择结果**（kind 一字不变，两个调用点仍取 NEW_SKILL），只让"有没有依据"如实可见——
+ *   附带收益：日后调用方真的补上 `qualifyGap` 的依据时，理由会自动切回原措辞，无需再改本函数。
+ *
  * @param {object} ctx
  * @param {boolean} [ctx.ruleExpressible]        - 该缺口能否用声明式规则表达
  * @param {string}  [ctx.existingSkill]          - 已有的、覆盖该领域的 skill 标识
  * @param {boolean} [ctx.requiresRuntimeCapability] - 是否必须新增运行时能力（超出 skill 能表达的范围）
- * @returns {{kind:string, reason:string}}
+ * @returns {{kind:string, reason:string}} kind ∈ CANDIDATE_KINDS；reason **如实**描述依据有无
  */
 export function chooseCandidateKind(ctx = {}) {
   const c = isPlainObject(ctx) ? ctx : {};
+  // 依据是否被真的提供过（键存在即视为已评估——传 false / '' 也是"评估过的结论"，不是"没依据"）
+  const hasBasis = Object.hasOwn(c, 'ruleExpressible')
+    || Object.hasOwn(c, 'existingSkill')
+    || Object.hasOwn(c, 'requiresRuntimeCapability');
   // ① 能用规则表达 → RULE（最轻，优先）
   if (c.ruleExpressible === true) {
     return { kind: 'RULE', reason: 'rule_expressible' };
@@ -393,7 +417,11 @@ export function chooseCandidateKind(ctx = {}) {
   }
   // ③ 需要的是"做法"而非"新运行时能力" → 新 Skill
   if (c.requiresRuntimeCapability !== true) {
-    return { kind: 'NEW_SKILL', reason: 'no_existing_skill_capability_is_procedural' };
+    return {
+      kind: 'NEW_SKILL',
+      // 无依据时**不得**断言"不存在既有 skill"——只能声明"保守取最轻的可用形态"
+      reason: hasBasis ? 'no_existing_skill_capability_is_procedural' : 'no_qualification_basis_conservative_new_skill',
+    };
   }
   // ④ 兜底：确实需要新运行时能力 → 新 Plugin（最重，最后手段）
   return { kind: 'NEW_PLUGIN', reason: 'requires_new_runtime_capability' };
@@ -844,9 +872,13 @@ export function promoteCandidate(store, id, opts = {}) {
   }
   const at = Number.isSafeInteger(opts.at) ? opts.at : 0;
 
-  // ④ AC6 收据门（**必备**，fail-closed）：晋升必须真走既有 Git / CI / Transaction。
+  // ④ AC6 收据门（**必备**，fail-closed）：晋升必须交出既有 Git / CI / Transaction 三条腿的收据。
   //    A10 的 AC6 缺口正因缺这一条：阶段证据只是字符串，谁都能自证"跑过了"。
-  //    现在必须交出**既有系统自己产出、且三腿互相一致**的收据，否则状态不变、Stable 不变。
+  //    现在必须交出**三腿互相一致**的收据，否则状态不变、Stable 不变。
+  //    ⚠ P0-4 精确化（2026-09-29）：本门证明的是"收据**自洽**"（形状 + 来源白名单 + 三腿互不矛盾），
+  //      **不是**"来源真实"——纯函数不会去真实仓库查 sha / 查 CI 运行 / 查 journal（见 verifyPromotionReceipts
+  //      文档）。来源真实性由产出收据的既有系统附的来源指纹 + E2E 真跑过程保证。故下述遥测措辞
+  //      已相应改精确，不再声称"receipts from existing git ci transaction"（那会被读成来源已被核实）。
   //    拒绝也写遥测（CANDIDATE_PROMOTION_DENIED）——不留静默死路径，且调用方拿得到新 store。
   const gate = verifyPromotionReceipts(cand, opts.receipts);
   if (!gate.ok) {
@@ -854,7 +886,7 @@ export function promoteCandidate(store, id, opts = {}) {
       experienceId: cand.id,
       detail: `error=${gate.error}${gate.leg ? ` leg=${gate.leg}` : ''}${gate.detail ? ` detail=${gate.detail}` : ''}`
         + `${gate.missing ? ` missing=${gate.missing.join(',')}` : ''}`,
-      reason: 'promotion_requires_real_git_ci_transaction_receipts',
+      reason: 'promotion_requires_consistent_git_ci_transaction_receipts',
     }, at);
     denied = { ...denied, version: store.version + 1, updatedAt: at };
     return {
@@ -885,7 +917,7 @@ export function promoteCandidate(store, id, opts = {}) {
     experienceId: cand.id,
     detail: `git=${gate.summary.git.branch}@${gate.summary.git.commitSha.slice(0, 12)} `
       + `ci=${gate.summary.ci.system} transaction=${gate.summary.transaction.finalState}`,
-    reason: 'receipts_from_existing_git_ci_transaction_consistent',
+    reason: 'receipts_three_leg_consistent_source_authenticity_not_attested',
   }, at);
   next = withTelemetry(next, 'CANDIDATE_PROMOTED', {
     experienceId: cand.id,

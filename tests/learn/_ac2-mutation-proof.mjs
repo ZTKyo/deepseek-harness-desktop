@@ -68,6 +68,27 @@ const MUTATIONS = [
     to: '      researchPlan(gap); const planRes = { ok: false, error: "mutated_discarded" };',
     expectFail: ['0.7'],
   },
+  {
+    id: 'M7',
+    what: '★P0-2 回退：研究腿重新用**伪造的**阶梯入参（三个输入都报"否"）⇒ 谎称走过阶梯判断',
+    from: '    const choice = chooseCandidateKind({});',
+    to: "    const choice = chooseCandidateKind({ ruleExpressible: false, existingSkill: '', requiresRuntimeCapability: false }); // MUTATED: fake qualification inputs",
+    expectFail: ['A3'],
+  },
+  {
+    id: 'M8',
+    what: '★P0-5 回退：status 不再声明"有界"的语义（只留数字，读者会以为它约束研究动作次数）',
+    from: "            boundSemantics: 'per_session_leg_opens_not_research_actions',",
+    to: "            // MUTATED: bound semantics no longer declared",
+    expectFail: ['A5'],
+  },
+  {
+    id: 'M9',
+    what: '★P0-3 回退：闭环不再做**主体绑定**判定（回到"只按时间就宣布因果"的旧实现 ⇒ 多报 RESEARCH_FULFILLED）',
+    from: "      const binding = subjectBoundToLeg(leg, experience) ? 'subject' : 'time_only';",
+    to: "      const binding = 'subject'; // MUTATED: subject binding removed (old P0-3 over-report)",
+    expectFail: ['C3'],
+  },
 ];
 
 let pass = 0; let fail = 0;

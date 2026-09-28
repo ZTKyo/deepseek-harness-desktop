@@ -303,8 +303,17 @@ await acheck('A3 同一陌生任务重复触发 ⇒ 同一 legId 续用 + 尝试
   assert.ok(CANDIDATE_KINDS.includes(st.summary.researchLegs[0].candidateKind),
     'candidateKind 不是候选面阶梯的合法取值：' + st.summary.researchLegs[0].candidateKind);
   assert.equal(st.summary.researchLegs[0].candidateKind,
-    chooseCandidateKind({ ruleExpressible: false, existingSkill: '', requiresRuntimeCapability: false }).kind,
+    chooseCandidateKind({}).kind,
     '研究腿的阶梯未复用候选面唯一的 chooseCandidateKind');
+  // ★ P0-2 回归锁（对抗式评审 round 1，2026-09-29）：研究腿的主体只是一条召回未命中的查询文本，
+  // 不是 `qualifyGap` 的合格缺口 ⇒ **没有**阶梯依据，不能宣称走过阶梯判断，更不能声称"不存在既有 skill"。
+  // 锁两处：① 腿的 reason 必须是"无依据 ⇒ 保守"这一分支；② 指令里必须把它带给调用方（不能藏起来）。
+  assert.equal(st.summary.researchLegs[0].candidateKindReason,
+    'no_qualification_basis_conservative_new_skill',
+    '研究腿谎称走过阶梯判断：' + st.summary.researchLegs[0].candidateKindReason);
+  assert.equal(a1.researchDirective.candidateKindReason,
+    'no_qualification_basis_conservative_new_skill',
+    '研究指令未把阶梯依据如实交给调用方');
 });
 
 await acheck('A4 高风险文本 ⇒ 仍可研究，但 autonomy 收紧为人工门（AC2 只授权低风险自主）', async () => {
@@ -324,6 +333,10 @@ await acheck('A5 learn_status 暴露研究腿账本 + 有界事实（可审计 +
   assert.equal(b.daemon, false, 'AC8：无常驻 daemon');
   assert.equal(b.persistence, 'in_memory_only', 'AC8：纯内存、随会话淘汰，不新增持久进程/服务');
   assert.ok(Number.isInteger(b.maxLegsPerSession) && b.maxLegsPerSession > 0, '必须有会话级防刷上限');
+  // ★ P0-5：有界的**真实语义**必须一并暴露，不能只给一个数字让人以为它约束的是"研究动作次数"。
+  assert.equal(b.boundSemantics, 'per_session_leg_opens_not_research_actions',
+    '有界语义未声明：上限约束的是"打开腿的次数"而非研究动作次数');
+  assert.equal(b.boundConsumedBy, 'recall_miss', '未声明计数由什么消耗（召回未命中）');
   assert.equal(st.summary.researchLegs.length, 2);
   for (const l of st.summary.researchLegs) {
     assert.equal(l.fulfilledAt, null, '未闭环的腿 fulfilledAt 必须为 null');
@@ -499,7 +512,7 @@ await acheck('C2 负控：更早创建的经验即使验证通过也**不**闭�
   assert.equal(st.summary.counts.RESEARCH_FULFILLED ?? 0, 0, '不得产生闭环遥测');
 });
 
-await acheck('C3 正例：晚于研究腿的经验通过确定性验证 ⇒ 闭环 + RESEARCH_FULFILLED 留痕', async () => {
+await acheck('C3 正例：晚于研究腿的经验通过确定性验证 ⇒ 闭环 + **如实标注为 time_only**（P0-3 修复）', async () => {
   assert.ok(newExp.createdAt >= openedAt, '夹具时间戳必须晚于 openedAt');
   const st0 = emptyStore(SID_D);
   st0.experiences.push(oldExp, newExp);
@@ -511,10 +524,51 @@ await acheck('C3 正例：晚于研究腿的经验通过确定性验证 ⇒ 闭�
   const leg = st.summary.researchLegs[0];
   assert.equal(leg.fulfilledBy, newExp.id, '闭环必须记录是哪条经验闭的（可审计）');
   assert.ok(Number.isSafeInteger(leg.fulfilledAt) && leg.fulfilledAt > 0, 'fulfilledAt 必须是真实时间戳');
-  assert.equal(st.summary.counts.RESEARCH_FULFILLED ?? 0, 1, '闭环必须留痕 RESEARCH_FULFILLED');
+  // ★ P0-3（2026-09-29）：本夹具的经验标题与研究腿主体**毫不相干**（这正是评审 P0-3 的场景）。
+  //   旧实现会把它记成 RESEARCH_FULFILLED ⇒ 多报因果。现在必须如实降级为 time_only。
+  assert.equal(leg.binding, 'time_only',
+    'P0-3：主题无关的经验只能标为 time_only 绑定（不得冒充因果证据）');
+  assert.equal(st.summary.counts.RESEARCH_FULFILLED ?? 0, 0,
+    'P0-3：主体未绑定 ⇒ 不得记 RESEARCH_FULFILLED（旧实现此处多报）');
+  assert.equal(st.summary.counts.RESEARCH_LEG_CLOSED_TIME_ONLY ?? 0, 1,
+    'P0-3：必须如实留痕 RESEARCH_LEG_CLOSED_TIME_ONLY（相关而非因果）');
   // 闭环后新任务仍可正常开腿（闭环不破坏后续研究能力）
   const again = await recall(D.api, SID_D, { query: 'P4AC2 闭环后新任务 delta：另一个陌生任务' });
   assert.equal(again.researchDirective.state, 'OPEN');
+});
+
+// ── C4（P0-3 修复配套）：**主体绑定**的闭环必须真的可达，且与 time_only 可区分 ──────────
+const SID_E = 'ac2-subject-binding-session';
+const E = await newInstance('closure-subject');
+const Q_E = 'P4AC2 gamma 主体绑定';
+
+await acheck('C4-1 前置：新会话无覆盖召回 ⇒ 打开研究腿（主体词可覆盖）', async () => {
+  const res = await recall(E.api, SID_E, { query: Q_E });
+  assert.equal(res.researchDirective.state, 'OPEN');
+  const st = await status(E.api, SID_E);
+  assert.equal(st.summary.researchLegs.length, 1);
+  assert.equal(st.summary.researchLegs[0].binding, null, '未闭环的腿 binding 必须为 null');
+});
+
+const boundExp = mkFileHashExperience({
+  title: 'P4AC2 gamma 主体绑定：研究腿产出并完整覆盖该主体词的经验',
+  seqs: [901, 903], createdAt: Date.now(), target: targetFile, digest: realDigest,
+});
+
+await acheck('C4-2 正例：经验文本**完整覆盖**腿主体词 ⇒ binding=subject + RESEARCH_FULFILLED', async () => {
+  const st0 = emptyStore(SID_E);
+  st0.experiences.push(boundExp);
+  E.api._setStoreForTest(SID_E, st0);
+  const r = await verify(E.api, SID_E, { experienceId: boundExp.id });
+  assert.equal(r.ok, true, '夹具必须真的验证成功（否则本门空转）：' + JSON.stringify(r));
+  const st = await status(E.api, SID_E);
+  const leg = st.summary.researchLegs[0];
+  assert.equal(leg.fulfilledBy, boundExp.id);
+  assert.equal(leg.binding, 'subject', '主体词被完整覆盖 ⇒ 必须标为 subject 绑定');
+  assert.equal(st.summary.counts.RESEARCH_FULFILLED ?? 0, 1,
+    '主体绑定必须留痕 RESEARCH_FULFILLED（否则该分支不可达 = 假门）');
+  assert.equal(st.summary.counts.RESEARCH_LEG_CLOSED_TIME_ONLY ?? 0, 0,
+    '主体绑定不得同时记 time_only（两个事实必须互斥）');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

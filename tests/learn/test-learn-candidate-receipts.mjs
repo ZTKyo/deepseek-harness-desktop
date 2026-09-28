@@ -360,6 +360,23 @@ check('D4 sanitizeCandidate 对畸形 promotionReceipts fail-closed', () => {
   assert(bad.error, '畸形收据摘要未被拒绝');
 });
 
+check('D5 ★ P0-4：遥测措辞不得把「三腿自洽」说成「来源已核实」', () => {
+  // 本门是纯函数，不会去真实仓库查 sha / 查 CI 运行 / 查 journal ⇒ 它证明"自洽"，不证明"来源真实"。
+  // 故 reason 必须显式带"来源未经核证"，且不得再出现"from_existing"/"real_git"这类来源断言。
+  const { store, id, receipts } = canaryWithReceipts();
+  const ok = C.promoteCandidate(store, id, { ...APPROVE, receipts, at: T(9) });
+  const acc = ok.value.telemetry.find((t) => t.kind === 'CANDIDATE_RECEIPTS_ACCEPTED');
+  assertEq(acc.reason, 'receipts_three_leg_consistent_source_authenticity_not_attested',
+    'AC6 收据门遥测措辞夸大（把自洽说成来源真实）: ' + acc.reason);
+  assert(!/from_existing|real_git/.test(acc.reason), 'reason 仍在断言来源真实: ' + acc.reason);
+  // 拒绝侧的 reason 同理：只能是"要求自洽收据"，不能是"要求真实收据"（本模块核不了真假）
+  const bad = C.promoteCandidate(store, id, { ...APPROVE, receipts: {}, at: T(9) });
+  assertEq(bad.ok, false);
+  const denied = bad.value.telemetry.filter((t) => t.kind === 'CANDIDATE_PROMOTION_DENIED').pop();
+  assertEq(denied.reason, 'promotion_requires_consistent_git_ci_transaction_receipts',
+    '拒绝侧措辞夸大了本门的核验能力: ' + denied.reason);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('=== E 组：AC6「Stable 必须保持不变」+ 复用纪律（静态锁）===');
 // ─────────────────────────────────────────────────────────────────────────────

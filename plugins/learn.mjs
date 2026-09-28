@@ -85,6 +85,8 @@ import {
   HUMAN_APPROVAL_HOST_TOOL,
   validHumanApproval,
   isRecallable,
+  // ── P0-3：研究腿闭环的**主体绑定**判定复用同一分词口径（learn-core 唯一实现），不自造第二套 ──
+  tokenize,
   // ── F2：sessionStoreMaxFiles 的最小受支持值 + 纯校验函数（见 learn-core.mjs §F2）──
   MIN_SESSION_STORE_MAX_FILES,
   SESSION_STORE_MAX_FILES_MIN_DIAGNOSTIC,
@@ -773,7 +775,9 @@ export function apply(ctx, config = {}) {
   //   ① 任务级：`learn_recall` **无命中** = 无经验覆盖 ⇒ 打开研究腿（AC2 的主场景）。
   //   ② 缺口级：能力缺口合格、要建立候选时 ⇒ 用 `researchPlan(gap)` 生成有界计划并留痕
   //     （此前 `researchPlan` 无任何调用者 = A10 药丸 2 所指的纸面缺陷）。
-  // 闭环：研究腿产出的经验通过**确定性验证** ⇒ 记 RESEARCH_FULFILLED 并关闭该腿。
+  // 闭环：研究腿产出的经验通过**确定性验证** ⇒ 关闭该腿并留痕。**两级事实**（P0-3 修复，2026-09-29）：
+  //   主体绑定（经验文本完整覆盖本腿主体词）⇒ `RESEARCH_FULFILLED`（可作因果证据）；
+  //   仅时间序成立 ⇒ `RESEARCH_LEG_CLOSED_TIME_ONLY`（时间相关、**不**可作因果证据）。
   // 有界：每条腿上限 MAX_RESEARCH_ATTEMPTS 次尝试；每会话上限 MAX_RESEARCH_LEGS_PER_SESSION 条；
   //       结构随会话 LRU 淘汰（与 stores/watermarks 同一口径）。
   // ═══════════════════════════════════════════════════════════════════════════
@@ -804,6 +808,12 @@ export function apply(ctx, config = {}) {
    * 纪律：本函数**只生成有界计划与留痕**，绝不执行任何研究动作、不起后台任务/常驻进程（AC8）。
    * 达上限 ⇒ 拒绝再打开（`research_bounded_exhausted`，与 AC8「禁无限重试」同一判据）。
    *
+   * ★ P0-5 语义精确化（2026-09-29 对抗式评审）：本上限**约束的是"打开腿的次数"**，不是"研究动作次数"。
+   *   本函数的唯一触发是 `learn_recall` 无命中（见 recall 的 task_no_experience_coverage 分支），
+   *   所以同一主题**连续三次召回未命中**（哪怕一次研究都没做）即达上限并返回 exhausted。
+   *   另：账本是**进程内存态**（不落盘，随会话淘汰），重启即清零 ⇒ 该上限是**每会话/每进程**上限，
+   *   **不得**被当作持久或跨会话的保证来引用。以上两点必须在指令与遥测里如实声明（下方 directive 字段）。
+   *
    * @returns {{ok:true, leg:object, directive:object}|{ok:false, error:string, exhausted?:boolean, ...}}
    */
   function openResearchLeg(sid, { subject, source, at } = {}) {
@@ -828,8 +838,13 @@ export function apply(ctx, config = {}) {
     const nextUsed = rec.candidate && Number.isInteger(rec.candidate.attemptsUsed) ? rec.candidate.attemptsUsed : attemptsUsed + 1;
     // 风险分级（确定性、纯函数）：LOW ⇒ 可自主研究；HIGH ⇒ 仍可研究，但**动作**必须走人工门
     const risk = classifyResearchRisk(text);
-    // 阶梯选择：**复用**候选面的唯一阶梯（RULE → EXTEND_SKILL → NEW_SKILL → NEW_PLUGIN）
-    const choice = chooseCandidateKind({ ruleExpressible: false, existingSkill: '', requiresRuntimeCapability: false });
+    // 阶梯选择：**复用**候选面的唯一阶梯（RULE → EXTEND_SKILL → NEW_SKILL → NEW_PLUGIN）。
+    // ★ P0-2 修复（2026-09-29）：这里**不再填死值**（旧代码传 `{ruleExpressible:false, existingSkill:'',
+    //   requiresRuntimeCapability:false}` = 三个输入都伪装成"已评估为否"，于是阶梯在生产上恒为分支③，
+    //   且理由凭空断言"不存在既有 skill"）。研究腿的主体只是一条**召回未命中的查询文本**，不是
+    //   `qualifyGap` 的合格缺口 ⇒ 本处**确无**阶梯依据，故如实传"无依据"，让选择理由自己说明这一点。
+    //   形态不变（仍是 NEW_SKILL = 最轻的可用形态），但审计面不再声称走过阶梯判断。
+    const choice = chooseCandidateKind({});
     const leg = {
       legId: `leg_${String(key).replace(/^cand_/, '')}`,
       subjectKey: key,
@@ -838,6 +853,9 @@ export function apply(ctx, config = {}) {
       riskClass: risk.riskClass,
       riskMatched: risk.matched,
       candidateKind: choice.kind,
+      // P0-2：形态**依据**如实落账（无依据 ⇒ 'no_qualification_basis_conservative_new_skill'）。
+      // 与研究腿的 binding 同理：审计面必须能区分"查过之后的结论"与"保守默认值"。
+      candidateKindReason: choice.reason,
       attemptsUsed: nextUsed,
       maxAttempts: MAX_RESEARCH_ATTEMPTS,
       openedAt: prior ? prior.openedAt : (Number.isSafeInteger(at) ? at : Date.now()),
@@ -845,6 +863,9 @@ export function apply(ctx, config = {}) {
       exhausted: nextUsed >= MAX_RESEARCH_ATTEMPTS,
       fulfilledAt: null,
       fulfilledBy: null,
+      // P0-3：闭环强度（'subject' = 主体绑定 / 'time_only' = 仅时间相关；null = 未闭环）。
+      // 绝不把"时间在后"当成因果证据——旧实现正是因此把无关经验算成多腿闭环。
+      binding: null,
     };
     ledger.set(key, leg);
     return { ok: true, leg, directive: researchDirectiveFor(leg) };
@@ -864,45 +885,92 @@ export function apply(ctx, config = {}) {
       // AC2 的前置条件"低风险"在此落地：HIGH 只允许研究并产出提案，动作必须人工门。
       autonomy: leg.riskClass === 'HIGH' ? 'research_only_actions_human_gated' : 'autonomous_research_apply_low_risk',
       bounded: true,
+      // ★ P0-5（2026-09-29）：下面三个字段把"有界"的**真实语义**说清楚，避免把上限当成它并不是的东西：
+      //   · boundSemantics  —— 上限约束的是**本会话内打开该腿的次数**，不是"研究动作的次数"；
+      //   · boundConsumedBy —— 计数由**召回未命中**消耗（打开腿即记 1 次），与"做了多少研究"无关；
+      //   · boundPersistence —— 账本为**进程内存态**，重启清零 ⇒ 不是持久/跨会话保证。
+      boundSemantics: 'per_session_leg_opens_not_research_actions',
+      boundConsumedBy: 'recall_miss',
+      boundPersistence: 'in_memory_only_reset_on_restart',
       maxAttempts: leg.maxAttempts,
       attemptsUsed: leg.attemptsUsed,
       remaining: Math.max(0, leg.maxAttempts - leg.attemptsUsed),
       daemon: false,                                        // 显式：不新增常驻进程（AC8）
-      candidateKind: leg.candidateKind,                     // 合同 §七 阶梯
+      candidateKind: leg.candidateKind,                     // 合同 §七 阶梯（形态）
+      // ★ P0-2：把"为什么是这个形态"一并交出去——本腿**没有** `qualifyGap` 依据，
+      //   故此处如实为 `no_qualification_basis_conservative_new_skill`（无依据 ⇒ 保守取最轻形态），
+      //   绝不宣称走过阶梯判断。调用方可据此判断"该形态是查过之后的结论"还是"保守默认"。
+      candidateKindReason: leg.candidateKindReason,
       delegatesTo: STAGE_DELEGATION.ISOLATED_TESTS.system,   // 隔离测试腿（AC8）
       noExperienceCoverage: true,
       steps: [
         '① 先查证：用只读研究工具（web_search / web_fetch / read）核对该任务的标准做法或官方 API，禁止凭记忆臆断。',
         '② 分动作：把"要验证的假设"与"要执行的动作"分开；删除/权限/凭据/付费/生产环境类动作一律先经人类批准。',
         '③ 隔离验证：在临时目录、只读探针或隔离测试腿里做最小实验，绝不直接改生产状态或用户数据。',
-        '④ 记账：每次尝试都算一次有界尝试；达到上限即停止（禁无限重试）。',
+        '④ 记账：每次**打开本腿**（即每次召回未命中）算一次有界尝试；达到上限即停止（禁无限重试）。注意本上限约束的是"本会话打开次数"，不是研究动作次数，且账本为进程内存态、重启清零。',
         '⑤ 沉淀：把结论写成 learn_propose 的 body（带真实 sourceEventSeqs 与可机校验证据），再用 learn_verify 取证闭环。',
       ],
       verificationRequirement: '结论必须带**机器可校验**证据：file_hash(sha256) / system_api(本机 GET 期望状态码) / session_outcome(官方原始会话事实)；仅文字描述不算验证通过。',
-      closure: '本条研究腿由**通过确定性验证**的经验闭环（遥测 RESEARCH_FULFILLED）；达上限则记 RESEARCH_BOUNDED_EXHAUSTED 并停止，不影响经验库其余功能。',
+      closure: '本条研究腿由**通过确定性验证**的经验闭环，且闭环强度如实分两级：经验文本**完整覆盖**本腿主体词 ⇒ 记 RESEARCH_FULFILLED（主体绑定，可作因果证据）；仅时间序成立而主体未绑定 ⇒ 记 RESEARCH_LEG_CLOSED_TIME_ONLY（时间相关、**不**可作为因果证据）。达上限则记 RESEARCH_BOUNDED_EXHAUSTED 并停止，不影响经验库其余功能。',
     };
+  }
+
+  /**
+   * **主体绑定**判定（P0-3 修复，2026-09-29）：经验文本是否**完整覆盖**该研究腿的主体词。
+   *
+   * 为什么需要它：闭环的旧判据只有"时间序"，于是**任何**晚于研究腿创建的经验（哪怕主题毫不相干）
+   * 都能一次闭掉本会话全部未闭环腿 ⇒ 遥测 `RESEARCH_FULFILLED count=N` 多报了一个并不成立的因果。
+   * 现在把"因果强度"如实算出来：全部主体词都能在经验文本中找到 ⇒ `subject`；否则 `time_only`。
+   *
+   * 确定性：复用 learn-core `tokenize`（同一分词口径、无 locale 依赖、无随机性、无时间依赖）。
+   * 这是**文本覆盖事实**，不是"证明因果"——故遥测里只声明"经验文本覆盖了该腿主体词且时间在后"。
+   *
+   * @param {object} leg 研究腿（含 subject）
+   * @param {object} exp 经验（含 title/body）
+   * @returns {boolean} true = 主体绑定
+   */
+  function subjectBoundToLeg(leg, exp) {
+    const subj = tokenize(typeof leg?.subject === 'string' ? leg.subject : '');
+    if (subj.length === 0) return false;
+    const body = exp && typeof exp === 'object' ? `${exp.title ?? ''} ${exp.body ?? ''}` : '';
+    const expTokens = new Set(tokenize(body));
+    if (expTokens.size === 0) return false;
+    return subj.every((t) => expTokens.has(t));
   }
 
   /**
    * 研究腿**闭环**：由通过**确定性验证**的经验关闭本会话的研究腿。
    * 只关闭"开启时间不晚于该经验创建时间"的腿（时间序是硬约束：腿之后才产出的经验才可能是它的产物）。
    *
-   * @returns {string[]} 被关闭的 legId 列表（空数组 = 本会话当前没有可闭环的研究腿）
+   * ★ P0-3 修复（2026-09-29，对抗式评审 P0-3）：时间序只是**必要条件**，不是因果证明。
+   *   旧实现只要时间在后就关闭**全部**未闭环腿 ⇒ 一条无关经验可把 5 条不同主题的腿一次标成
+   *   fulfilled，`RESEARCH_FULFILLED count=5` **多报**。现在闭环分两级如实留痕：
+   *     · binding='subject'   —— 经验文本完整覆盖该腿主体词（subjectBoundToLeg）⇒ 记 `RESEARCH_FULFILLED`；
+   *     · binding='time_only' —— 仅时间序成立 ⇒ 记 `RESEARCH_LEG_CLOSED_TIME_ONLY`（措辞明确"非因果证据"）。
+   *   腿照样关闭（有界账本语义不变，`RESEARCH_BOUNDED_EXHAUSTED` 对偶保持），但强度写在 `leg.binding` 上，
+   *   调用方可据 `learn_status.summary.researchLegs[].binding` 复核，不必相信遥测的一面之词。
+   *
+   * @returns {{closed:string[], subject:string[], timeOnly:string[]}} 三个 legId 列表（空 = 无可闭环腿）
    */
-  function fulfillResearchLegs(sid, { at, experienceId, experienceCreatedAt } = {}) {
+  function fulfillResearchLegs(sid, { at, experienceId, experienceCreatedAt, experience } = {}) {
     const m = researchLegs.get(sid);
-    if (!m || m.size === 0) return [];
+    if (!m || m.size === 0) return { closed: [], subject: [], timeOnly: [] };
     const now = Number.isSafeInteger(at) ? at : Date.now();
     const created = Number.isSafeInteger(experienceCreatedAt) ? experienceCreatedAt : now;
     const closed = [];
+    const subject = [];
+    const timeOnly = [];
     for (const leg of m.values()) {
       if (leg.fulfilledAt) continue;
       if (Number.isSafeInteger(leg.openedAt) && leg.openedAt > created) continue;   // 早于研究腿的经验不是它的产物
+      const binding = subjectBoundToLeg(leg, experience) ? 'subject' : 'time_only';
       leg.fulfilledAt = now;
       leg.fulfilledBy = typeof experienceId === 'string' ? experienceId : null;
+      leg.binding = binding;
       closed.push(leg.legId);
+      (binding === 'subject' ? subject : timeOnly).push(leg.legId);
     }
-    return closed;
+    return { closed, subject, timeOnly };
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1378,6 +1446,11 @@ export function apply(ctx, config = {}) {
       //   与无经验覆盖的召回未命中（learn_recall）互补：这里是"重复失败暴露的能力缺口"路径。
       //   计划内容（上限/风险分级/隔离腿去处/验证要求/闭环条件）全部来自 learn-candidate 的
       //   **唯一**研究计划生成器 `researchPlan`，本插件不复制、不另立阈值。
+      //   ★ P0-2 诚实性说明（2026-09-29 对抗式评审）：`researchPlan(gap)` 内部把 `opts`（此处为空）
+      //   交给阶梯 `chooseCandidateKind` ⇒ 本路径**同样没有**阶梯依据（`qualifyGap` 只判"是否合格"，
+      //   不产出 ruleExpressible/existingSkill/requiresRuntimeCapability），故 `plan.kind` 恒为 NEW_SKILL
+      //   且 `plan.kindReason` 现如实为 'no_qualification_basis_conservative_new_skill'。
+      //   这与本插件的失败分类器（FAILURE_CLASS=传输层故障类）无关，**不得**据此杜撰阶梯依据。
       const planRes = researchPlan(gap);
       if (planRes.ok) {
         const plan = planRes.plan;
@@ -1747,6 +1820,12 @@ export function apply(ctx, config = {}) {
           //   ⇒ 打开一条**有界**研究腿，使"陌生任务不第一时间失败"成为**可执行事实**：
           //   调用方拿到的是带 legId / 上限 / 风险分级 / 隔离腿去处 / 验证要求 / 闭环条件的具体指令。
           //   注意：经验库其余功能**不受影响**（研究腿只在内存、有界、LRU 淘汰），这是额外能力而非闸门。
+          //   ★ P0-6 明示（2026-09-29 对抗式评审）：这是**有意的副作用**——`learn_recall` 本应只读，
+          //   但无命中分支会写遥测（EXPERIENCE_LOOKUP_MISS / RESEARCH_REQUESTED），而遥测走 commit→saveStore，
+          //   于是即便该会话此前没有任何库文件，一次纯查询也会创建并落盘 store。取舍：
+          //   "无覆盖"这件事必须留下**可审计痕迹**（否则 AC2 的研究腿事后无从解释为何被打开），
+          //   故接受该写入；它不是默认预期的只读行为，评审/后续改动须知悉。
+          //   脱敏面：detail 只放 query 的 oneLine 摘要，且仍过同一脱敏表（redactSecrets/containsSecret 口径不变）。
           const at = Date.now();
           tel(sid, 'EXPERIENCE_LOOKUP_MISS', {
             detail: `no experience coverage for: ${oneLine(args.query, 100)}`,
@@ -1887,19 +1966,30 @@ export function apply(ctx, config = {}) {
           });
           diag(`VERIFY sid=${sid} id=${args.experienceId} PASS method=${res.method}`);
           // ★ AC2（P4 FINAL GAP CLOSURE R3）：**研究腿闭环**。
-          //   研究腿产出的经验通过**确定性验证** ⇒ 记 RESEARCH_FULFILLED 并关闭该腿
+          //   研究腿产出的经验通过**确定性验证** ⇒ 关闭该腿并留痕
           //   （这是 `RESEARCH_BOUNDED_EXHAUSTED` 的对偶：一个"有界研究成功闭环"的可审计事实）。
           //   时间序是硬约束：只关闭"开启于该经验创建之前"的腿。
-          const fulfilledLegs = fulfillResearchLegs(sid, {
-            at: Date.now(), experienceId: args.experienceId, experienceCreatedAt: after.createdAt,
+          //   ★ P0-3（2026-09-29）：闭环强度**分两级如实留痕**——主体绑定才记 RESEARCH_FULFILLED；
+          //   仅时间序成立则记 RESEARCH_LEG_CLOSED_TIME_ONLY，绝不冒充因果（旧实现把两者混为一谈 ⇒ 多报）。
+          const fulfilled = fulfillResearchLegs(sid, {
+            at: Date.now(), experienceId: args.experienceId, experienceCreatedAt: after.createdAt, experience: after,
           });
-          if (fulfilledLegs.length > 0) {
+          if (fulfilled.subject.length > 0) {
             tel(sid, 'RESEARCH_FULFILLED', {
               experienceId: args.experienceId,
-              count: fulfilledLegs.length,
-              detail: `research leg(s) closed by verified experience: ${fulfilledLegs.join(',')} (method=${res.method})`,
+              count: fulfilled.subject.length,
+              detail: `research leg(s) closed by verified experience with SUBJECT binding: ${fulfilled.subject.join(',')} (method=${res.method})`,
             });
-            diag(`RESEARCH FULFILLED sid=${sid} legs=${fulfilledLegs.join(',')} by=${args.experienceId}`);
+            diag(`RESEARCH FULFILLED sid=${sid} legs=${fulfilled.subject.join(',')} by=${args.experienceId} binding=subject`);
+          }
+          if (fulfilled.timeOnly.length > 0) {
+            // 主体未绑定 ⇒ 不冒充因果：另立一条**措辞精确**的事实（时间相关 ≠ 因果）。
+            tel(sid, 'RESEARCH_LEG_CLOSED_TIME_ONLY', {
+              experienceId: args.experienceId,
+              count: fulfilled.timeOnly.length,
+              detail: `research leg(s) closed on TIME ORDER ONLY (subject not bound on the experience text => correlational, NOT causal evidence): ${fulfilled.timeOnly.join(',')}`,
+            });
+            diag(`RESEARCH LEG CLOSED time_only sid=${sid} legs=${fulfilled.timeOnly.join(',')} by=${args.experienceId}`);
           }
         } else {
           tel(sid, 'VERIFICATION_FAILED', {
@@ -1984,6 +2074,11 @@ export function apply(ctx, config = {}) {
             maxAttemptsPerLeg: MAX_RESEARCH_ATTEMPTS,
             daemon: false,
             persistence: 'in_memory_only',
+            // ★ P0-5（2026-09-29）：把"有界"的语义如实暴露给审计面——上限约束的是**打开腿的次数**
+            //   （由召回未命中消耗），不是"研究动作次数"；且账本为进程内存态、重启清零，故不得
+            //   被当作持久/跨会话保证。仅追加字段（summary 是 additionalProperties:true 的纯增量）。
+            boundSemantics: 'per_session_leg_opens_not_research_actions',
+            boundConsumedBy: 'recall_miss',
           },
         };
         const experiences = store.experiences.map((e) => ({

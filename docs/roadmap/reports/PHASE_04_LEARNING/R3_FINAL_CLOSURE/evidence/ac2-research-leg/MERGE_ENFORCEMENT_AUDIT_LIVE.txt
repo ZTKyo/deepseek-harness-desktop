@@ -1,0 +1,88 @@
+=== 1. 本地：lane → job 名（必需 context 的真实来源）与触发路径 ===
+  .github/workflows/ci-level1.yml
+    name     : CI Level 1 - Static Gate (every PR)
+    triggers : push(reliability-v1), pull_request(main)
+    job      : static-gate → context "Static + secret + syntax gate" (26 steps)
+  .github/workflows/ci-level2.yml
+    name     : CI Level 2 - Windows Reliability State Machines
+    triggers : push(reliability-v1), pull_request(main)
+    job      : state-machine-tests → context "Reliability state machine tests" (28 steps)
+  .github/workflows/ci-level3.yml
+    name     : CI Level 3 - Harness Smoke (current version + sanitized profile)
+    triggers : pull_request(main), workflow_dispatch
+    job      : smoke → context "DSH boot + readiness smoke" (12 steps)
+  .github/workflows/ci-level4.yml
+    name     : CI Level 4 - Chaos Drill (manual / nightly / release-candidate only)
+    triggers : workflow_dispatch, schedule
+    job      : chaos → context "Registered chaos scenarios" (5 steps)
+
+=== 2. 线上事实（只读 GET） ===
+  repo              : ZTKyo/deepseek-harness-desktop
+  required contexts : Static + secret + syntax gate  |  Reliability state machine tests
+  strict(up-to-date): true
+  enforce_admins    : false
+  main rulesets     : []（无：直推 main 无人拦）
+  protection 读数   : ok
+
+=== 3. learn 门落在哪个 context（红灯能否被 required 承载）===
+  .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate" required=true  :: P4 LEARN gate registry (no silently-missing / silently-excluded gate)
+  .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate" required=true  :: P4 LEARN AC10 registry mutation proof (registry gate must turn RED)
+  .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests" required=true  :: P4 LEARN plugin host-contract gate
+  .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests" required=true  :: P4 LEARN R2 contract-closure gates (CI-safe subset)
+  .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests" required=true  :: P4 LEARN AC2 mutation proof (gate must turn RED)
+  .github/workflows/ci-level3.yml job=smoke context="DSH boot + readiness smoke" required=false  :: P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)
+
+=== 4. 逐路径判定（谁能不能拦住红门） ===
+  [NOT-BLOCKED] PR → main（门：P4 LEARN gate registry (no silently-missing / silently-excluded gate)）
+      carrier: .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate"
+      why    : context required=是；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN gate registry (no silently-missing / silently-excluded gate)）
+      carrier: .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+  [NOT-BLOCKED] PR → main（门：P4 LEARN AC10 registry mutation proof (registry gate must turn RED)）
+      carrier: .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate"
+      why    : context required=是；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN AC10 registry mutation proof (registry gate must turn RED)）
+      carrier: .github/workflows/ci-level1.yml job=static-gate context="Static + secret + syntax gate"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+  [NOT-BLOCKED] PR → main（门：P4 LEARN plugin host-contract gate）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : context required=是；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN plugin host-contract gate）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+  [NOT-BLOCKED] PR → main（门：P4 LEARN R2 contract-closure gates (CI-safe subset)）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : context required=是；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN R2 contract-closure gates (CI-safe subset)）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+  [NOT-BLOCKED] PR → main（门：P4 LEARN AC2 mutation proof (gate must turn RED)）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : context required=是；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN AC2 mutation proof (gate must turn RED)）
+      carrier: .github/workflows/ci-level2.yml job=state-machine-tests context="Reliability state machine tests"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+  [NOT-BLOCKED] PR → main（门：P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)）
+      carrier: .github/workflows/ci-level3.yml job=smoke context="DSH boot + readiness smoke"
+      why    : context required=**否**；跑在 PR 路径=是；enforce_admins=false；无 main ruleset
+  [NOT-BLOCKED] 直推 → main（门：P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)）
+      carrier: .github/workflows/ci-level3.yml job=smoke context="DSH boot + readiness smoke"
+      why    : 该 workflow 在 push→main 触发=**否**；ruleset 强制 PR（可堵死直推）=**否**；ruleset 必需检查且无 bypass=否
+
+  ⇒ 必需检查在 push→main 触发的情况：
+     「Static + secret + syntax gate」push→main 触发=**否**（直推看不到这条检查）
+     「Reliability state machine tests」push→main 触发=**否**（直推看不到这条检查）
+
+=== 5. 事故实证（只读）：PR #97 ===
+  merged=true by=ZTKyo at=2026-09-26T16:46:07Z mergeCommit=171f1b4055042b1fe23a64b948be6a9e95d680aa
+    ✗ DSH boot + readiness smoke = failure  required=false
+  ⇒ 红的是**非必需**检查 ⇒ 这条红灯本来就不拦合并（缺口就在 required 列表）
+
+=== 6. 机器结论 ===
+  PR → main：**红门能到达 main**（1 条门不在必需检查内、5 条门在必需检查内但绕过路径开着）
+  直推 → main：**红门能到达 main**（6 条：workflow 不在 push→main 触发、且无 ruleset 强制 PR / 必需检查）
+  绕过路径：开通（enforce_admins=false 或 ruleset 有 bypass_actors）
+  ⇒ 结论：当前存在"红门能到达 main"的路径。缺口不在"门假"（门确实在跑、变异证明也证明它变红），而在**承载（required 列表）/绕过（enforce_admins、无 ruleset）**没堵住。
+
+--strict：存在能让红门到达 main 的路径 ⇒ exit 1

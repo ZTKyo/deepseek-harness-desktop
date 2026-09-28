@@ -613,18 +613,44 @@ export function validateStore(raw) {
 /** 稳定排序比较器：createdAt 升序 → id 升序（完全确定性，与输入顺序无关）。 */
 const byCreatedThenId = (a, b) => (a.createdAt - b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
+/**
+ * 待人工处置的状态：PROPOSED（等审批）与 VERIFIED_EXPERIENCE（机器已验证、**正等人工审批**）。
+ * 这两种条目一旦因容量被淘汰，其证据与痕迹**不可重建**（人已经离开那个时刻，重跑不会再造出
+ * 同一份 success evidence）⇒ 它是唯一"丢了就永远无法完成该循环"的一类条目。
+ * REJECTED / RETIRED / APPROVED 均可由既有流程重建或追溯（REJECTED 复活须重新 propose 并留新痕迹，
+ * 见 ALLOWED_TRANSITIONS 注释），属可弃。
+ */
+const AWAITING_HUMAN_STATES = Object.freeze(['PROPOSED', 'VERIFIED_EXPERIENCE']);
+function isAwaitingHuman(e) {
+  return AWAITING_HUMAN_STATES.includes(e?.state);
+}
+
 function withExperience(store, exp) {
   const next = store.experiences.filter((e) => e.id !== exp.id);
   next.push(exp);
   // 稳定排序：按 createdAt 升序、id 升序 → 确定性
   next.sort(byCreatedThenId);
-  let kept = next.slice(-MAX_EXPERIENCES);
-  // R-6：容量淘汰必须「保留刚写入的这条」。当 exp.createdAt 为 0（调用方未传时间戳）时它会排到
-  // 最前，被 slice(-N) 直接裁掉 → 新提案"写成功但库里没有"，属静默数据丢失。此处改为淘汰最旧的
-  // 一条给它腾位，保证任何返回 ok:true 的写入都一定存在于返回的 store 中，绝不静默丢失。
-  if (kept.length >= MAX_EXPERIENCES && !kept.some((e) => e.id === exp.id)) {
-    kept = next.slice(-(MAX_EXPERIENCES - 1)).concat(exp).sort(byCreatedThenId);
+  const overflow = next.length - MAX_EXPERIENCES;
+  if (overflow <= 0) return { ...store, experiences: next };
+
+  // 容量淘汰顺序（AC6 Tier-1 持久性修复，2026-09-29）：
+  //   ① 待人工处置（PROPOSED / VERIFIED_EXPERIENCE）**排在最后**——只有它们丢了不可重建；
+  //   ② 组内仍是最旧优先（createdAt 升序 → id 升序），保持确定性；
+  //   ③ 刚写入的这条**永不淘汰**（R-6 不变量原样保留）。
+  // 原实现在这里直接用 `slice(-MAX_EXPERIENCES)`：任何 state 一视同仁按 createdAt 淘汰，
+  // 于是"已机器验证、只差人工点一下"的待审批条目会因为后来 200 条新经验而被静默丢弃
+  // （实测约 18.7h：exp-2ed0f0c9 真的消失，人工审批步永远无法完成）。
+  const dropOrder = [...next].sort((a, b) =>
+    ((isAwaitingHuman(a) ? 1 : 0) - (isAwaitingHuman(b) ? 1 : 0)) || byCreatedThenId(a, b));
+  const drop = new Set();
+  for (const e of dropOrder) {
+    if (drop.size >= overflow) break;
+    if (e.id === exp.id) continue;   // R-6：绝不淘汰刚写入的这条
+    drop.add(e.id);
   }
+  let kept = next.filter((e) => !drop.has(e.id));
+  // 防御性兜底：容量上限必须绝对有界（正常路径下 overflow ≤ next.length-1 已保证 kept === MAX_EXPERIENCES）。
+  if (kept.length > MAX_EXPERIENCES) kept = kept.slice(-MAX_EXPERIENCES);
   return { ...store, experiences: kept };
 }
 

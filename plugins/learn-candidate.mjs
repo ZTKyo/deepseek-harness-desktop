@@ -84,9 +84,13 @@ export const EVIDENCE_REQUIRED_STATES = Object.freeze([
  */
 export const STAGE_DELEGATION = Object.freeze({
   ISOLATED_TESTS: Object.freeze({
-    file: '.github/workflows/ci-level1.yml',
+    // Tier-0 事实修正（2026-09-29）：learn 套件的**实际承载**是 ci-level2.yml 的
+    // 「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤（14 套件 + plugin-contract），
+    // 原值 ci-level1.yml 是纸上权威（该层只有静态门，不跑 tests\learn\）。真实收据的
+    // `ci.system` 亦为 ci-level2.yml（见 AC6 真 E2E 报告），此处对齐真实承载。
+    file: '.github/workflows/ci-level2.yml',
     system: 'CI 四层（既有）',
-    entry: 'ci-level1.yml … ci-level4.yml',
+    entry: 'learn 门 = ci-level2.yml「P4 LEARN R2 contract-closure gates」步骤；其余层 ci-level1/3/4',
     note: 'isolated tests 走既有四层 CI；禁建第二套 CI',
   }),
   REGRESSION_HOLDOUT: Object.freeze({

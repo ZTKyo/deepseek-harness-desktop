@@ -539,9 +539,12 @@ check('D3 委托去处 = 既有隔离测试腿（AC8：绝不新建第二套 CI/
   assert.equal(a1.researchDirective.delegatesTo, STAGE_DELEGATION.ISOLATED_TESTS.system);
   const iso = STAGE_DELEGATION.ISOLATED_TESTS;
   assert.equal(typeof iso.system, 'string');
-  // 事实锁：隔离测试腿**就是**仓库既有四层 CI（不新建第二套 CI）——逐字核对委托块的原文。
-  assert.equal(iso.file, '.github/workflows/ci-level1.yml');
-  assert.match(iso.entry, /ci-level1\.yml.*ci-level4\.yml/);
+  // 事实锁：隔离测试腿**就是**仓库既有四层 CI 中的一层（不新建第二套 CI）——逐字核对委托块的原文。
+  // Tier-0 更正（2026-09-29）：真实承载 learn 套件的是 ci-level2.yml 的 R2 gates 步骤；
+  // 原值 ci-level1.yml 属纸上权威（该层不跑 tests\learn\），故此处锁真实承载。
+  assert.equal(iso.file, '.github/workflows/ci-level2.yml');
+  assert.match(iso.entry, /ci-level2\.yml/);
+  assert.match(iso.entry, /ci-level1\/3\/4/, '委托块仍需声明"属既有四层 CI"（AC8 复用纪律）');
   assert.match(iso.note, /禁建第二套 CI/, '委托块必须显式声明"禁建第二套 CI"（AC8 复用纪律）');
 });
 

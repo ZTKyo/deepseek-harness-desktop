@@ -160,12 +160,16 @@ jobs:
       # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs. Those consume real
       # session logs / P2.6 failure telemetry, so on a bare runner they fail for
       # lack of data rather than for a defect; they run locally as pre-release gates.
+      # 2026-09-29 P4 AC6 Tier-1: test-learn-ac6-candidate-durability.mjs 加入同一套判据——
+      # 纯逻辑（无真实会话/无子进程/无网络），临时状态只落 os.tmpdir()，确定性强，
+      # 且内含**负控**（逐字复刻旧实现，断言它确实丢掉待审批条目）⇒ 回退即红。
       - name: P4 LEARN R2 contract-closure gates (CI-safe subset)
         shell: pwsh
         run: |
           $suites = @(
             'tests\learn\test-learn-core.mjs',
             'tests\learn\test-learn-candidate.mjs',
+            'tests\learn\test-learn-ac6-candidate-durability.mjs',
             'tests\learn\test-learn-ac5-e2e.mjs',
             'tests\learn\test-learn-stage85-twins.mjs',
             'tests\learn\test-learn-real-topology-tool-events.mjs',

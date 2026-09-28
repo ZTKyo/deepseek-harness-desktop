@@ -170,14 +170,17 @@ jobs:
       # ledger in sync: an unregistered suite or a registered-but-unwired gate turns
       # the L1 registry gate red (the failure mode being prevented is a gate that
       # silently stops running while the report still calls it required).
-      # 2026-09-29 P4 LEARN AC10: four more suites were proven CI-safe by the same
-      # empty-profile redirection and are therefore wired in from now on
-      # (they had been running only locally): test-learn-b1-session-access.mjs
-      # (22 PASS / 0 FAIL), test-learn-b2-verify-output-contract.mjs (21 PASS / 0 FAIL),
-      # test-learn-r2-f2-store-min.mjs (19 PASS / 0 FAIL),
-      # redteam-r3-injection-positions.mjs (exit 0; prints `missing session-…` for the
-      # 因缺数据而"红"，于是有人把整条门删掉——门就没了。
-      # (merged p4-integration-r3: 以上 AC6 Tier-1 与 AC10 两段说明并存，分别记录 keep 耐久性套件与登记表两条事实)
+      # 2026-09-29 P4 LEARN AC10 → 同日被 CI 证伪后修正：四个套件曾据"空 profile 重定向本地实测"
+      # 判为 CI-safe 并接入本车道；run 36463837981 / job 109068810397 证伪了其中 b1：
+      # test-learn-b1-session-access.mjs 在 runner 上 §T2.0 打印 SKIP-REASON 后 exit 1 —— 它调
+      # mkHostApproval() / resolveHarnessPackage()，需要宿主**已安装**的 cordis + dsh-user-approval，
+      # 而"空 profile"只清数据、清不掉"包不在 runner 上"。⇒ b1 退回本地/发布前门（本机 22 PASS / 0 FAIL、exit 0），
+      # 本车道保留其余三个：test-learn-b2-verify-output-contract.mjs（本机 21 PASS / 0 FAIL）、
+      # test-learn-r2-f2-store-min.mjs（本机 19 PASS / 0 FAIL）、redteam-r3-injection-positions.mjs
+      # （本机 exit 0；缺语料时按自身规则打印 missing session-…，不假绿）。这三个尚未在 runner 上取得
+      # 实证，登记表里标「本地实测」，首次真跑通过后升级为「CI 实证」。
+      # 判据固化：登记表校验新增「接线双向为真」检查——被 run 脚本真实调用却登记为"未进 CI"、
+      # 或跨车道错标 ⇒ ci-level1 立刻红。⇒ 本注释不再是"证据"，登记表 + 该检查才是。
       - name: P4 LEARN R2 contract-closure gates (CI-safe subset)
         shell: pwsh
         run: |
@@ -197,7 +200,6 @@ jobs:
             'tests\learn\redteam-r3-isolation.mjs',
             'tests\learn\redteam-r3-labels.mjs',
             'tests\learn\redteam-r3-probe.mjs',
-            'tests\learn\test-learn-b1-session-access.mjs',
             'tests\learn\test-learn-b2-verify-output-contract.mjs',
             'tests\learn\test-learn-r2-f2-store-min.mjs',
             'tests\learn\redteam-r3-injection-positions.mjs'
@@ -207,7 +209,7 @@ jobs:
             node $s
             if ($LASTEXITCODE -ne 0) { throw "P4 LEARN R2 contract gate failed: $s" }
           }
-          Write-Host 'PASS P4 LEARN R2 contract-closure gates (18 suites)'
+          Write-Host 'PASS P4 LEARN R2 contract-closure gates ($($suites.Count) suites)'
 
       # ── P4 LEARN AC2 mutation proof (a gate that cannot turn red is decoration) ──
       # tests/learn/_ac2-mutation-proof.mjs injects six real defects into the AC2

@@ -7,22 +7,39 @@
     "  ③ tool / runner / helper：不是独立门（需要显式参数、或只是聚合 runner、或只是夹具）。",
     "任何 ci 字段为 null 的条目**必须**写明 requires（它依赖什么真实数据/环境）与 exclusionReason（为什么不能进 CI）；",
     "validator（tests/learn/validate-gate-registry.mjs）会对本表做 fail-closed 校验：新增套件未登记 ⇒ 红；登记成 CI 门但 workflow 里没有真调用 ⇒ 红；",
-    "排除但没写原因 ⇒ 红；STAGE_DELEGATION 指向的 workflow 不跑对应门 ⇒ 红（防『假绿灯指针』再次发生）。"
+    "排除但没写原因 ⇒ 红；STAGE_DELEGATION 指向的 workflow 不跑对应门 ⇒ 红（防『假绿灯指针』再次发生）。",
+    "另有两条 2026-09-29 一次真实红门事故换来的检查：ci-level2（CI-safe 车道）上登记的门不得静态出现宿主安装包解析调用（mkHostApproval/resolveHarnessPackage/@deepseek-ai/dsh）",
+    "  ⇒ 红（它依赖 runner 上不存在的已安装包）；每个 ci 条目必须写明 ciSafeEvidence 并标记「CI 实证」还是「本地实测」⇒ 红（防止本地实测被当成 CI 实证）。",
+    "接线双向为真（2026-09-29 摘除 b1 时发现的不一致形态）：workflow 的 run 脚本（剥掉 # 注释后）真实调用的套件，若登记为『未进 CI』或登记的 ci.workflow 与其实际所在航道不符 ⇒ 红。",
+    "反空转证明：tests/learn/_ac10-registry-mutation-proof.mjs 注入 9 种真实缺陷，必须逐条被抓。"
   ],
   "registryVersion": 1,
   "verifiedAt": "2026-09-29",
   "eforEmptyProfileCriterion": "CI-SAFE 判据（与 ci-level2.yml 逐字同口径）：USERPROFILE/HOME/LOCALAPPDATA 指向一个空目录（无 ~/.dsh/sessions、无已部署 profile、无生产遥测），并置 CI=true / GITHUB_ACTIONS=true；在此条件下仍 exit 0 才允许进 CI。",
   "workflows": [
-    { "file": ".github/workflows/ci-level1.yml", "lane": "static gate（每个 PR 都跑）" },
-    { "file": ".github/workflows/ci-level2.yml", "lane": "Windows reliability state machines（每个 PR 都跑，无 paths 过滤）" },
-    { "file": ".github/workflows/ci-level3.yml", "lane": "Harness smoke + 隔离真实实例（需要已安装的 dsh 包）" },
-    { "file": ".github/workflows/ci-level4.yml", "lane": "release/deploy 门（tag 触发）" }
+    {
+      "file": ".github/workflows/ci-level1.yml",
+      "lane": "static gate（每个 PR 都跑）"
+    },
+    {
+      "file": ".github/workflows/ci-level2.yml",
+      "lane": "Windows reliability state machines（每个 PR 都跑，无 paths 过滤）"
+    },
+    {
+      "file": ".github/workflows/ci-level3.yml",
+      "lane": "Harness smoke + 隔离真实实例（需要已安装的 dsh 包）"
+    },
+    {
+      "file": ".github/workflows/ci-level4.yml",
+      "lane": "release/deploy 门（tag 触发）"
+    }
   ],
   "suites": [
     {
       "suite": "tests/learn/test-learn-plugin-contract.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN plugin host-contract gate" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN plugin host-contract gate」PASS",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-plugin-contract.mjs",
       "lastVerified": "2026-09-29"
@@ -31,6 +48,7 @@
       "suite": "tests/learn/test-learn-core.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-core.mjs",
       "lastVerified": "2026-09-29"
@@ -39,6 +57,7 @@
       "suite": "tests/learn/test-learn-candidate.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-candidate.mjs",
       "lastVerified": "2026-09-29"
@@ -47,6 +66,7 @@
       "suite": "tests/learn/test-learn-ac5-e2e.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-ac5-e2e.mjs",
       "lastVerified": "2026-09-29"
@@ -55,6 +75,7 @@
       "suite": "tests/learn/test-learn-stage85-twins.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-stage85-twins.mjs",
       "lastVerified": "2026-09-29"
@@ -63,6 +84,7 @@
       "suite": "tests/learn/test-learn-real-topology-tool-events.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-real-topology-tool-events.mjs",
       "lastVerified": "2026-09-29"
@@ -71,7 +93,7 @@
       "suite": "tests/learn/test-learn-candidate-receipts.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-27 用同一空 profile 重定向实测 32 PASS / 0 FAIL、exit 0（已写入 ci-level2 注释）。",
+      "ciSafeEvidence": "CI 实证：run 36463837981 / job 109068810397 的「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤中 PASS（与 2026-09-27 空 profile 重定向本地实测 32 PASS / 0 FAIL 结论一致）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-candidate-receipts.mjs",
       "lastVerified": "2026-09-29"
@@ -80,7 +102,7 @@
       "suite": "tests/learn/test-learn-ac2-research-leg.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-28 空 profile 重定向实测 25 PASS / 0 FAIL、exit 0；纯进程内插件 + 宿主夹具（无活服务/无会话日志/无凭据）。",
+      "ciSafeEvidence": "CI 实证：run 36463837981 / job 109068810397 的「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤中 PASS（与 2026-09-28 空 profile 重定向本地实测 25 PASS / 0 FAIL 结论一致）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-ac2-research-leg.mjs",
       "lastVerified": "2026-09-29"
@@ -89,6 +111,7 @@
       "suite": "tests/learn/test-learn-r3-fixes.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-r3-fixes.mjs",
       "lastVerified": "2026-09-29"
@@ -97,6 +120,7 @@
       "suite": "tests/learn/test-learn-r3-hardening.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-r3-hardening.mjs",
       "lastVerified": "2026-09-29"
@@ -105,6 +129,7 @@
       "suite": "tests/learn/test-learn-r3-secrets.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-r3-secrets.mjs",
       "lastVerified": "2026-09-29"
@@ -113,6 +138,7 @@
       "suite": "tests/learn/redteam-r3-contamination.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\redteam-r3-contamination.mjs",
       "lastVerified": "2026-09-29"
@@ -121,6 +147,7 @@
       "suite": "tests/learn/redteam-r3-isolation.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\redteam-r3-isolation.mjs",
       "lastVerified": "2026-09-29"
@@ -129,6 +156,7 @@
       "suite": "tests/learn/redteam-r3-labels.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\redteam-r3-labels.mjs",
       "lastVerified": "2026-09-29"
@@ -137,6 +165,7 @@
       "suite": "tests/learn/redteam-r3-probe.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\redteam-r3-probe.mjs",
       "lastVerified": "2026-09-29"
@@ -144,17 +173,20 @@
     {
       "suite": "tests/learn/test-learn-b1-session-access.mjs",
       "kind": "gate",
-      "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-29 空 profile 重定向实测：结果 PASS 22 / FAIL 0、exit 0（本表 CI-SAFE 判据逐条执行）。",
-      "requires": [],
-      "localCommand": "node tests\\learn\\test-learn-b1-session-access.mjs",
-      "lastVerified": "2026-09-29"
+      "lastVerified": "2026-09-29",
+      "ci": null,
+      "requires": [
+        "宿主**已安装**的 @deepseek-ai/dsh 包（mkHostApproval → resolveHarnessPackage 需要 cordis + dsh-user-approval）"
+      ],
+      "exclusionReason": "CI 实证证伪（不是推断）：GitHub Actions run 36463837981 / job 109068810397 的「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤中，本套件 §T2.0 打印 SKIP-REASON 后 exit 1 ⇒ 步骤整体红、必需检查「Reliability state machine tests」红。根因不是缺陷而是**判据选错变量**：本套件调 mkHostApproval()/resolveHarnessPackage()，需要宿主已安装的 cordis + dsh-user-approval；『空 profile 重定向实测 22 PASS / 0 FAIL』只清掉了 ~/.dsh 数据，清不掉『包不在 runner 上』。⇒ 退回本地/发布前门（本机实测 22 PASS / 0 FAIL、exit 0）；CI 里的隔离真实门是 ci-level3.yml 的 test-learn-ac6-real-promotion-e2e.mjs。",
+      "localCommand": "node tests\\learn\\test-learn-b1-session-access.mjs（需宿主已安装 @deepseek-ai/dsh）",
+      "ciSafeEvidence": "CI 实证（反例）：run 36463837981 / job 109068810397 中 exit 1 —— 该车道的 CI-safe 判据对本套件不成立"
     },
     {
       "suite": "tests/learn/test-learn-b2-verify-output-contract.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-29 空 profile 重定向实测：21 PASS / 0 FAIL、exit 0。",
+      "ciSafeEvidence": "本地实测（CI 实证待下一次 run：该步骤在 b1 处中断，本套件尚未在 runner 上执行）：2026-09-29 空 profile 重定向实测 21 PASS / 0 FAIL，exit 0",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-b2-verify-output-contract.mjs",
       "lastVerified": "2026-09-29"
@@ -163,7 +195,7 @@
       "suite": "tests/learn/test-learn-r2-f2-store-min.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-29 空 profile 重定向实测：19 PASS / 0 FAIL、exit 0。",
+      "ciSafeEvidence": "本地实测（CI 实证待下一次 run：该步骤在 b1 处中断，本套件尚未在 runner 上执行）：2026-09-29 空 profile 重定向实测 19 PASS / 0 FAIL，exit 0",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-r2-f2-store-min.mjs",
       "lastVerified": "2026-09-29"
@@ -172,7 +204,7 @@
       "suite": "tests/learn/redteam-r3-injection-positions.mjs",
       "kind": "gate",
       "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
-      "ciSafeEvidence": "2026-09-29 空 profile 重定向实测：exit 0（缺语料时逐条打印 missing session… 仍按自身规则判定，不假红）。",
+      "ciSafeEvidence": "本地实测（CI 实证待下一次 run：该步骤在 b1 处中断，本套件尚未在 runner 上执行）：2026-09-29 空 profile 重定向实测 exit 0（缺语料时逐条打印 missing session-…，按设计不假绿）",
       "requires": [],
       "localCommand": "node tests\\learn\\redteam-r3-injection-positions.mjs",
       "lastVerified": "2026-09-29"
@@ -204,6 +236,7 @@
       "suite": "tests/learn/validate-gate-registry.mjs",
       "kind": "registry-gate",
       "ci": { "workflow": ".github/workflows/ci-level1.yml", "step": "P4 LEARN gate registry (no silently-missing / silently-excluded gate)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837864 / job 109068809542（Static + secret + syntax gate，PASS）中的「P4 LEARN gate registry …」步骤",
       "requires": [],
       "localCommand": "node tests\\learn\\validate-gate-registry.mjs",
       "lastVerified": "2026-09-29"
@@ -212,6 +245,7 @@
       "suite": "tests/learn/_ac10-registry-mutation-proof.mjs",
       "kind": "mutation-proof",
       "ci": { "workflow": ".github/workflows/ci-level1.yml", "step": "P4 LEARN AC10 registry mutation proof (registry gate must turn RED)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837864 / job 109068809542（Static + secret + syntax gate，PASS）中的「P4 LEARN AC10 registry mutation proof …」步骤",
       "requires": [],
       "localCommand": "node tests\\learn\\_ac10-registry-mutation-proof.mjs",
       "lastVerified": "2026-09-29"
@@ -220,7 +254,9 @@
       "suite": "tests/learn/test-learn-ac1-secret-families.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["已部署的 profile：$USERPROFILE\\.dsh\\profiles\\web\\learn-core.mjs（测试直接 import 生产部署字节）"],
+      "requires": [
+        "已部署的 profile：$USERPROFILE\\.dsh\\profiles\\web\\learn-core.mjs（测试直接 import 生产部署字节）"
+      ],
       "exclusionReason": "在空 profile 下 §0 直接 FAIL『无法 import 被测模块 …\\.dsh\\profiles\\web\\learn-core.mjs』= 缺部署产物，不是缺陷；只在本机/发布前对着真实部署跑。",
       "localCommand": "node tests\\learn\\test-learn-ac1-secret-families.mjs（需已部署 profile）",
       "lastVerified": "2026-09-29"
@@ -229,7 +265,9 @@
       "suite": "tests/learn/test-learn-ac5-gap-veto.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["生产 P2.6 遥测 $USERPROFILE\\.dsh\\p26-failure-classifier.log（D1『evidence stream present』读它）"],
+      "requires": [
+        "生产 P2.6 遥测 $USERPROFILE\\.dsh\\p26-failure-classifier.log（D1『evidence stream present』读它）"
+      ],
       "exclusionReason": "空环境下 41 PASS / 1 FAIL，唯一失败项是 D1：not found …\\p26-failure-classifier.log —— 缺生产遥测数据，不是门本身缺陷；本机/发布前跑。",
       "localCommand": "node tests\\learn\\test-learn-ac5-gap-veto.mjs（需真实 p26-failure-classifier.log）",
       "lastVerified": "2026-09-29"
@@ -238,7 +276,10 @@
       "suite": "tests/learn/test-learn-r2-b1-approval-gate.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR 指向播种语料）", "宿主批准事实（approval ledger）"],
+      "requires": [
+        "真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR 指向播种语料）",
+        "宿主批准事实（approval ledger）"
+      ],
       "exclusionReason": "空环境下 exit 2 + 『[env error] 环境不满足：…』= 拿不到真实会话/批准事实就**拒绝判定**（fail-closed 的 env 分支），不是假绿也不是缺陷；本机/发布前跑。",
       "localCommand": "node tests\\learn\\test-learn-r2-b1-approval-gate.mjs",
       "lastVerified": "2026-09-29"
@@ -247,7 +288,9 @@
       "suite": "tests/learn/test-learn-r2-b2-bounds.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR）"],
+      "requires": [
+        "真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR）"
+      ],
       "exclusionReason": "与 r2-b1 同源：空环境下 exit 2 + 『[env error] 环境不满足：…』，属缺数据 fail-closed；本机/发布前跑。",
       "localCommand": "node tests\\learn\\test-learn-r2-b2-bounds.mjs",
       "lastVerified": "2026-09-29"
@@ -256,7 +299,9 @@
       "suite": "tests/learn/test-learn-r3-approval-forgery.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话候选（machine-checkable 证据面）"],
+      "requires": [
+        "真实会话候选（machine-checkable 证据面）"
+      ],
       "exclusionReason": "空环境下 AssertionError『无真实会话候选（无法建立 machine-checkable 证据面）』——缺真实语料，不是缺陷；本机/发布前跑。",
       "localCommand": "node tests\\learn\\test-learn-r3-approval-forgery.mjs",
       "lastVerified": "2026-09-29"
@@ -265,7 +310,9 @@
       "suite": "tests/learn/test-learn-stage2-schema-and-negative-lock.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话语料（S1/S6/S7 需要真实 tool/result 事实）"],
+      "requires": [
+        "真实会话语料（S1/S6/S7 需要真实 tool/result 事实）"
+      ],
       "exclusionReason": "空环境下 20 PASS / 3 FAIL，三条失败全是 S1/S6/S7（样本量下限 + 防静默 0 候选 + 对照实验）——真实工具事实 0 条导致，数据依赖而非缺陷；本机/发布前跑。",
       "localCommand": "node tests\\learn\\test-learn-stage2-schema-and-negative-lock.mjs",
       "lastVerified": "2026-09-29"
@@ -274,7 +321,9 @@
       "suite": "tests/learn/run-learn-contract-scenarios.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["≥2 个真实会话文件"],
+      "requires": [
+        "≥2 个真实会话文件"
+      ],
       "exclusionReason": "空环境下 FATAL『需要 ≥2 个真实会话文件』——裸 runner 上必然失败但失败原因与缺陷无关；本机/发布前跑。",
       "localCommand": "node tests\\learn\\run-learn-contract-scenarios.mjs",
       "lastVerified": "2026-09-29"
@@ -283,7 +332,9 @@
       "suite": "tests/learn/run-learn-real-e2e.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话文件（默认 ~/.dsh/sessions，可 DSH_SESSIONS_DIR）"],
+      "requires": [
+        "真实会话文件（默认 ~/.dsh/sessions，可 DSH_SESSIONS_DIR）"
+      ],
       "exclusionReason": "空环境下 FATAL『no real session file found under …\\sessions』——纯数据缺失；本机/发布前跑。",
       "localCommand": "node tests\\learn\\run-learn-real-e2e.mjs",
       "lastVerified": "2026-09-29"
@@ -292,7 +343,9 @@
       "suite": "tests/learn/run-learn-real-gap-e2e.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话语料中确实含『重复未解决工具失败』（≥2 次同签名）"],
+      "requires": [
+        "真实会话语料中确实含『重复未解决工具失败』（≥2 次同签名）"
+      ],
       "exclusionReason": "空环境下 1 PASS / 2 FAIL，两条失败都是『含达标签名的会话数=0 / facts=0』——需要真实数据里恰好含有该形态；本机/发布前跑。",
       "localCommand": "node tests\\learn\\run-learn-real-gap-e2e.mjs",
       "lastVerified": "2026-09-29"
@@ -301,7 +354,9 @@
       "suite": "tests/learn/redteam-r3-metrics.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["外部审计产物 $USERPROFILE\\Desktop\\sdeepseek harness\\_r3\\r3_quality_sample.json（R3 抽样人工评审结果，不在仓内）"],
+      "requires": [
+        "外部审计产物 $USERPROFILE\\Desktop\\sdeepseek harness\\_r3\\r3_quality_sample.json（R3 抽样人工评审结果，不在仓内）"
+      ],
       "exclusionReason": "空环境下 ENOENT …\\_r3\\r3_quality_sample.json —— 依赖仓外人工审计产物，CI 里无法生成；本机/发布前跑。",
       "localCommand": "node tests\\learn\\redteam-r3-metrics.mjs（需 _r3\\r3_quality_sample.json）",
       "lastVerified": "2026-09-29"
@@ -310,7 +365,9 @@
       "suite": "tests/learn/redteam-r3-quality.mjs",
       "kind": "gate",
       "ci": null,
-      "requires": ["真实会话语料（candidates ≥1，取体积最大者）"],
+      "requires": [
+        "真实会话语料（candidates ≥1，取体积最大者）"
+      ],
       "exclusionReason": "空环境下 real session candidates: 0 → TypeError candidates[0].p —— 纯数据缺失；本机/发布前跑。",
       "localCommand": "node tests\\learn\\redteam-r3-quality.mjs",
       "lastVerified": "2026-09-29"
@@ -319,7 +376,9 @@
       "suite": "tests/learn/production-load-probe.mjs",
       "kind": "tool",
       "ci": null,
-      "requires": ["活的**生产**服务（127.0.0.1:3080）+ 已部署且已装载的 learn.mjs + 真实模型凭据（会发起一次真实对话）"],
+      "requires": [
+        "活的**生产**服务（127.0.0.1:3080）+ 已部署且已装载的 learn.mjs + 真实模型凭据（会发起一次真实对话）"
+      ],
       "exclusionReason": "它判定的对象是『生产进程里到底装载了哪版字节』：必须在生产机上对活进程跑，且会花真实 token（CI 无凭据、也不该在 runner 上造生产会话）；只在发布/重启后本机执行（exit 0=新版已装载 / 3=仍旧版 / 2=无法判定）。",
       "localCommand": "node tests\\learn\\production-load-probe.mjs（生产机、服务在跑）",
       "lastVerified": "2026-09-29"
@@ -328,7 +387,9 @@
       "suite": "tests/learn/mount-gate.mjs",
       "kind": "tool",
       "ci": null,
-      "requires": ["显式参数 --plugin <abs path>；已安装的 dsh 包（lib/bin.js）"],
+      "requires": [
+        "显式参数 --plugin <abs path>；已安装的 dsh 包（lib/bin.js）"
+      ],
       "exclusionReason": "不是独立门而是**被调用的挂载门禁工具**：无参运行 exit 2（ENV_ERROR 缺少 --plugin）。它作为 AC6 真实端到端第 3 步（--hold）与交付前挂载校验被真实执行，报告落在 tests/learn/mount-gate.mjs 的输出/AC6 报告里。",
       "localCommand": "node tests\\learn\\mount-gate.mjs --plugin <abs>\\learn.mjs [--port 3099] [--hold]",
       "lastVerified": "2026-09-29"
@@ -337,7 +398,9 @@
       "suite": "tests/learn/deploy-preflight.mjs",
       "kind": "tool",
       "ci": null,
-      "requires": ["显式参数 --deploy <file1,file2,...>（禁止『全部同步』）"],
+      "requires": [
+        "显式参数 --deploy <file1,file2,...>（禁止『全部同步』）"
+      ],
       "exclusionReason": "部署前置检查工具，入参是本轮要部署的文件清单（由部署流程/人工给出，CI 无法推断），无参运行 exit 2。",
       "localCommand": "node tests\\learn\\deploy-preflight.mjs --deploy <files>",
       "lastVerified": "2026-09-29"
@@ -346,7 +409,9 @@
       "suite": "tests/learn/run-learn-all-tests.mjs",
       "kind": "runner",
       "ci": null,
-      "requires": ["本机完整环境（真实会话语料 + 已部署 profile + 生产遥测）——它把全部床子（含数据依赖门）跑一遍"],
+      "requires": [
+        "本机完整环境（真实会话语料 + 已部署 profile + 生产遥测）——它把全部床子（含数据依赖门）跑一遍"
+      ],
       "exclusionReason": "聚合 runner（--filter/--timeout），本身不新增断言；裸 runner 上会因数据依赖门集体失败而无法作为 CI 门。发布前在本机跑它做全量回归。",
       "localCommand": "node tests\\learn\\run-learn-all-tests.mjs [--filter=<substr>] [--timeout=<ms>]",
       "lastVerified": "2026-09-29"
@@ -363,10 +428,8 @@
     {
       "suite": "tests/learn/test-learn-ac6-candidate-durability.mjs",
       "kind": "gate",
-      "ci": {
-        "workflow": ".github/workflows/ci-level2.yml",
-        "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)"
-      },
+      "ci": { "workflow": ".github/workflows/ci-level2.yml", "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)" },
+      "ciSafeEvidence": "CI 实证：GitHub Actions run 36463837981 / job 109068810397，步骤「P4 LEARN R2 contract-closure gates (CI-safe subset)」中该套件 PASS（步骤整体因 b1 摘除前红；本套件在其之前执行并通过）",
       "requires": [],
       "localCommand": "node tests\\learn\\test-learn-ac6-candidate-durability.mjs（含负控：逐字复刻旧实现，必须被抓住；回退即红）",
       "lastVerified": "2026-09-29"

@@ -9,10 +9,15 @@
 //     M4 STAGE_DELEGATION 指向不跑该门的航道 ⇒ 检查 10b 变红（假绿灯指针）
 //     M5 workflow YAML 被写坏            ⇒ 检查 7 变红（带病 YAML 进 CI）
 //     M6 workflow 里接了未登记的套件      ⇒ 检查 9 变红（偷偷接线）
+//     M7 CI-safe 车道里混入依赖宿主包的套件 ⇒ 检查 11 变红（= 2026-09-29 真实红门事故的复现）
+//     M8 ci 条目的证据字段被清空          ⇒ 检查 12 变红（拿不出实测证据却声称在 CI 跑）
+//     M9 被 run 脚本真实调用的套件改成"未进 CI" ⇒ 检查 9 变红（谎报排除 —— 2026-09-29 摘除 b1 时
+//                                              真实存在过的不一致：注释与登记表都写"已接入/未接入"，
+//                                              而 workflow 的 run 脚本说的是另一回事）
 //   第 0 步先证明**未突变的副本**是全绿的 —— 否则上面的"变红"可能只是副本本身有问题（恒真式）。
 //
 // 用法：node tests/learn/_ac10-registry-mutation-proof.mjs
-// 退出码：0 = 基线绿且 6 种突变全部被抓；1 = 有突变没被抓（门是摆设）。
+// 退出码：0 = 基线绿且 9 种突变全部被抓；1 = 有突变没被抓（门是摆设）。
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -170,6 +175,43 @@ check('M6 突变被抓住（workflow 里接了未登记的套件）', () => expe
   assert(anchorLine, '未找到注入锚点（ci-level2 结构变了，需同步更新本门）');
   fs.writeFileSync(p, src.replace(anchorLine, '          node tests\\learn\\test-learn-ghost.mjs\n' + anchorLine), 'utf8');
   return { because: 'ci-level2 多出一条 tests/learn/test-learn-ghost.mjs 调用但登记表里没有它' };
+}));
+
+// ─── M7：CI-safe 车道里混入依赖宿主包的套件（本次真实红门事故的机制复现）─────────
+check('M7 突变被抓住（CI-safe 车道套件里出现宿主包解析调用）', () => {
+  const p = path.join(ROOT, 'tests', 'learn', 'test-learn-core.mjs');
+  const pristine = fs.readFileSync(p, 'utf8');
+  try {
+    return expectRed(11, () => {
+      fs.writeFileSync(p, pristine + "\nvoid resolveHarnessPackage('@deepseek-ai/dsh');\n", 'utf8');
+      return { because: 'test-learn-core.mjs（登记在 ci-level2 CI-safe 车道）出现 resolveHarnessPackage/@deepseek-ai/dsh 调用 —— 正是 b1 在 runner 上 exit 1 的机制' };
+    });
+  } finally { fs.writeFileSync(p, pristine, 'utf8'); }
+});
+
+// ─── M8：ci 条目的证据字段被清空（拿不出实测证据却声称在 CI 跑）─────────────────
+check('M8 突变被抓住（ci 条目的 ciSafeEvidence 被清空）', () => expectRed(12, () => {
+  const reg = readReg();
+  const victim = reg.suites.find((s) => s.ci && s.ciSafeEvidence);
+  assert(victim, '登记表里没有任何带证据的 ci 条目（突变注入点变了，需同步更新本门）');
+  delete victim.ciSafeEvidence;
+  writeReg(reg);
+  return { because: `${victim.suite} 的 ciSafeEvidence 被删除（声称在 CI 跑，却拿不出"CI 实证/本地实测"级证据）` };
+}));
+
+// ─── M9：谎报排除（workflow 的 run 脚本真实调用，登记表却说"未进 CI"）─────────────
+// 这是 2026-09-29 摘除 b1 时**真实出现过的**不一致形态：注释与登记表都写着"已接入"或"未接入"，
+// 而 run 脚本说的是另一回事。旧版检查 9 只查"未登记"，查不出这一半，所以必须单独证明它能抓。
+check('M9 突变被抓住（被 run 脚本真实调用的套件被标成"未进 CI"）', () => expectRed(9, () => {
+  const reg = readReg();
+  const victim = reg.suites.find(
+    (s) => s.ci && /ci-level2\.yml$/.test(s.ci.workflow) && s.ci.step.includes('CI-safe subset'),
+  );
+  assert(victim, 'ci-level2 CI-safe 子集里找不到已登记的套件（突变注入点变了，需同步更新本门）');
+  const name = victim.suite;
+  victim.ci = null;
+  writeReg(reg);
+  return { because: `${name} 仍挂在 ci-level2 的 run 脚本里，却被改成"未进 CI"（排除声明与事实不符）` };
 }));
 
 fs.rmSync(TMP, { recursive: true, force: true });

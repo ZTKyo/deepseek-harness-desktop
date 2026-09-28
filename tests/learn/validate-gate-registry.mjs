@@ -209,17 +209,48 @@ check('8 CI 门：workflow 存在 + step 名真实存在 + run 里真实调用�
   return `${ciGates} 个 CI 门均经"workflow+step+run 调用"三连核验`;
 });
 
-check('9 无未登记接线：workflow run 里出现的 tests/learn 套件都必须在登记表内', () => {
-  const problems = [];
-  const seen = new Set();
-  for (const w of REG.workflows) {
-    const t = wfText(w.file);
-    if (t === null) continue;
-    for (const m of t.matchAll(/tests[\\/]learn[\\/]([\w.-]+\.mjs)/g)) seen.add(`tests/learn/${m[1]}`);
+// 只扫**真实执行**的部分：解析 YAML → 取每个 step 的 run 脚本体 → 剥掉 PowerShell 注释行。
+// （历史教训：按整份 workflow 文本做正则，会把 YAML/PowerShell 注释里提到的套件也当成"已接线"，
+//   于是 2026-09-29 出现"注释说 b1 已接入、登记表也照抄，而 runner 上它 exit 1"的双重不一致。）
+function wiredSuites(rel) {
+  const doc = wfDoc(rel);
+  const out = new Set();
+  for (const job of Object.values(doc?.jobs ?? {})) {
+    for (const st of job?.steps ?? []) {
+      const run = String(st?.run ?? '');
+      if (!run) continue;
+      const body = run.split(/\r?\n/).filter((l) => !/^\s*#/.test(l)).join('\n');
+      for (const m of body.matchAll(/tests[\\/]learn[\\/]([\w.-]+\.mjs)/g)) out.add(`tests/learn/${m[1]}`);
+    }
   }
-  for (const s of seen) if (!registered.has(s)) problems.push(`${s}（被 workflow 调用但未登记）`);
+  return out;
+}
+
+check('9 接线双向为真：run 脚本里真实出现的套件必须登记，且登记的车道必须与事实相符（防"偷偷接线"/"谎报排除"）', () => {
+  const problems = [];
+  const wiredBy = new Map();
+  for (const w of REG.workflows) {
+    if (wfText(w.file) === null) continue;
+    for (const s of wiredSuites(w.file)) {
+      if (!wiredBy.has(s)) wiredBy.set(s, new Set());
+      wiredBy.get(s).add(w.file);
+    }
+  }
+  for (const [s, lanes] of wiredBy) {
+    const laneText = [...lanes].join(' / ');
+    if (!registered.has(s)) { problems.push(`${s}（被 ${laneText} 的 run 脚本调用但未登记）`); continue; }
+    const entry = REG.suites.find((x) => x.suite === s);
+    if (!entry.ci) {
+      problems.push(`${s}: 被 ${laneText} 的 run 脚本真实调用，却登记为"未进 CI"（排除声明与事实不符——2026-09-29 红门事故后正是这样被发现 b1 仍挂在 CI-safe 子集里）`);
+      continue;
+    }
+    if (!lanes.has(entry.ci.workflow)) {
+      problems.push(`${s}: run 脚本出现在 ${laneText}，但登记表说它跑在 ${entry.ci.workflow}（跨车道错标）`);
+    }
+  }
+  assert(wiredBy.size > 0, '任何 workflow 的 run 脚本里都没有 tests/learn 套件（车道结构变了？本检查会静默失效）');
   assert(problems.length === 0, problems.join(' | '));
-  return `${seen.size} 条接线全部已登记`;
+  return `${wiredBy.size} 条接线与登记表双向一致`;
 });
 
 // ─── 5) STAGE_DELEGATION 指针必须指向真跑得起来的那条航道 ────────────────────
@@ -254,6 +285,65 @@ check('10b 每个登记了 stage 的门，其 ci.workflow 必须与该阶段声�
   }
   assert(problems.length === 0, problems.join(' | '));
   return staged.map((s) => `${s.stage} -> ${s.ci.workflow}`).join(', ');
+});
+
+// ─── 6) CI-safe 车道的语义约束（2026-09-29 一次真实红门事故的直接产物）─────────
+// 事故（不是假想）：tests/learn/test-learn-b1-session-access.mjs 曾按"空 profile 重定向实测
+// 22 PASS / 0 FAIL"被接进 ci-level2 的 CI-safe 子集，但在 GitHub runner 上 exit 1：
+// 它的 §T2.0 调 mkHostApproval() → resolveHarnessPackage()，需要宿主**已安装**的
+// @deepseek-ai/dsh 包（cordis + dsh-user-approval）。"空 profile 重定向"只清掉了 ~/.dsh 下的
+// 数据，清不掉『包不在 runner 上』这件事 ⇒ 判据（CI-SAFE 判据）本身选错了变量，
+// 于是必需检查「Reliability state machine tests」变红、PR 卡死。
+// 这两条把"该车道能跑什么"和"证据是什么级别"变成机器可判的事实：
+//   11 车道语义：ci-level2（CI-safe 车道）上登记的门，不得静态出现宿主安装包解析调用；
+//   12 证据分级：任何 ci 条目必须写明 ciSafeEvidence，并以「CI 实证」/「本地实测」标记级别，
+//      防止"本地实测"被当成"CI 实证"——那正是上述事故的认知来源。
+const CI_SAFE_LANES = ['.github/workflows/ci-level2.yml'];
+const HOST_RESOLUTION_PATTERNS = [
+  { re: /\bmkHostApproval\s*\(/, what: 'mkHostApproval(' },
+  { re: /\bresolveHarnessPackage\s*\(/, what: 'resolveHarnessPackage(' },
+  { re: /@deepseek-ai\/dsh/, what: '@deepseek-ai/dsh' },
+];
+const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+check('11 CI-safe 车道语义：ci-level2 上的门不得依赖"宿主已安装包"（否则在 runner 上必红）', () => {
+  const problems = [];
+  const criterion = String(REG.eforEmptyProfileCriterion ?? '');
+  assert(criterion.length > 0, '登记表缺 eforEmptyProfileCriterion（CI-SAFE 判据必须写明，否则本检查没有判据可依）');
+  let scanned = 0;
+  for (const s of REG.suites) {
+    if (!s.ci || !CI_SAFE_LANES.includes(s.ci.workflow)) continue;
+    const abs = path.join(REPO, s.suite);
+    if (!fs.existsSync(abs)) continue;
+    scanned += 1;
+    const body = stripComments(fs.readFileSync(abs, 'utf8'));
+    const hits = HOST_RESOLUTION_PATTERNS.filter((p) => p.re.test(body)).map((p) => p.what);
+    if (hits.length) {
+      problems.push(`${s.suite}: 静态出现宿主安装包解析（${hits.join(', ')}）—— CI-safe 车道判据是"空 profile + 无部署产物 + 无生产数据"，它清不掉"包不在 runner 上"，应改挂 ci-level3 或退回本地门`);
+    }
+  }
+  assert(scanned > 0, 'ci-level2 车道上没有任何登记门（车道名变了？本检查会静默失效）');
+  assert(problems.length === 0, problems.join(' | '));
+  return `${scanned} 个 CI-safe 车道门均不含宿主安装包解析`;
+});
+
+check('12 证据分级：每个 ci 条目必须写明 ciSafeEvidence 且标记「CI 实证」/「本地实测」', () => {
+  const problems = [];
+  for (const s of REG.suites) {
+    if (!s.ci) continue;
+    const ev = s.ciSafeEvidence;
+    if (typeof ev !== 'string' || ev.length < 20) {
+      problems.push(`${s.suite}: 缺 ciSafeEvidence（不许用"应该能过"代替实测证据）`);
+      continue;
+    }
+    if (!/CI 实证|本地实测/.test(ev)) {
+      problems.push(`${s.suite}: ciSafeEvidence 未标记级别（必须显式写出「CI 实证」或「本地实测」，防止本地实测被当成 CI 实证）`);
+    }
+  }
+  assert(problems.length === 0, problems.join(' | '));
+  const ci = REG.suites.filter((s) => s.ci);
+  const ciProven = ci.filter((s) => /CI 实证/.test(s.ciSafeEvidence ?? '')).length;
+  return `${ci.length} 个 ci 条目证据齐全（${ciProven} 条 CI 实证 / ${ci.length - ciProven} 条本地实测）`;
 });
 
 // ─── 汇总 ──────────────────────────────────────────────────────────────────

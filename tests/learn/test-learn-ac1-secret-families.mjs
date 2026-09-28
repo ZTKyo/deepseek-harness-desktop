@@ -141,6 +141,27 @@ check('§5.3 改写后仍通过 sanitizeExperience', healed.store.experiences.ev
 check('§5.4 缺字段入参不抛错', redactStore({ experiences: [], telemetry: [] }).count === 0
   && redactStore(null).count === 0, '边界入参抛错');
 
+// §5.5（P0-1 回归锁，2026-09-29）：uri-credential 是唯一"正则会命中自己占位符"的家族——
+// `[REDACTED:uri-credential]` 内含 `:`，形似 `user:pass@`。旧实现记录命中时不比较"值是否真被改写"，
+// 于是二次载入仍报 count≥1：审计行 `STORE_REDACTED` 永久误报 + 每次载入白写一次盘 + count 永不归零。
+// 此前 §5.2 的幂等夹具只用 stripe+google，恰好不含该家族 ⇒ 空转通过。故此处单列该家族。
+const URI_CRED = 'postgres://user:' + 's3cr3tP@ss' + '@db:5432/x';
+const uriStore = {
+  schemaVersion: 2, sessionId: 'sess', version: 3,
+  experiences: [mkExp({ id: 'exp-uri', body: `note ${URI_CRED}` })],
+  telemetry: [], updatedAt: 0,
+};
+const uri1 = redactStore(uriStore);
+check('§5.5 uri-credential 首次被清除', !JSON.stringify(uri1.store).includes('s3cr3tP@ss')
+  && JSON.stringify(uri1.store).includes('[REDACTED:uri-credential]'),
+  `首次未正确脱敏: count=${uri1.count} body=${uri1.store.experiences[0].body}`);
+const uri2 = redactStore(uri1.store);
+check('§5.5 uri-credential 幂等（二次零命中零字段）', uri2.count === 0 && uri2.fields.length === 0,
+  `二次调用仍报 count=${uri2.count} fields=${JSON.stringify(uri2.fields)}（占位符被误判为新泄漏 ⇒ STORE_REDACTED 永久误报）`);
+check('§5.5 幂等且字节/引用不变', JSON.stringify(uri2.store) === JSON.stringify(uri1.store)
+  && uri2.store.experiences[0] === uri1.store.experiences[0],
+  '二次调用仍改写了库（引用变化 ⇒ 生产路径会白写一次盘）');
+
 console.log(`\nPASS=${pass} FAIL=${fail}`);
 if (failures.length) {
   console.log('--- 失败明细 ---');

@@ -20,7 +20,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { redactSecrets, containsSecret, secretFamiliesIn, SECRET_PATTERNS } from '../../plugins/learn-core.mjs';
+import { redactSecrets, containsSecret, secretFamiliesIn, SECRET_PATTERNS, redactStore } from '../../plugins/learn-core.mjs';
 
 // 仓库根（本文件位于 <root>/tests/learn/）
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -352,6 +352,46 @@ check('I3 规范家族名集合与扫描器完全平价（双向包含，顺序�
 
 check('I4 三个通用形态族仍在（脱敏加固不被本次平价重构误删）', () => {
   for (const g of GENERIC_FAMILIES) assert.ok(oursNames.includes(g), `通用族缺失: ${g}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J. 库级脱敏的幂等性（P0-1 修复的回归锁，2026-09-29）
+//    C9/F12 只锁 `redactSecrets`（**字符串级**）幂等，缺陷却在**库级** `redactStore` 的"命中记账"：
+//    它先 push 命中、后比较值，而 uri-credential 的正则会命中**它自己的占位符**
+//    （`postgres://[REDACTED:uri-credential]@db/x` 的占位符含 `:`，形似 `user:pass@`）⇒
+//    二次载入仍报 count=1：生产路径（learn.mjs loadStore）每次载入都打印一条与真清理同形的
+//    `STORE_REDACTED` 并**白写一次盘**，`count` 永不归零（"库已清理干净"这一可用信号被摧毁）。
+//    本套件是 repo 相对路径 + 已在 CI 跑，故 P0-1 修复由 CI 守门，而不是只靠本机跑一次。
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\n=== J. 库级脱敏幂等（P0-1 回归锁）===');
+
+const URI_CRED = 'postgres://user:' + 's3cr3tP@ss' + '@db:5432/x';
+const mkUriStore = () => ({
+  schemaVersion: 2, sessionId: 'sess', version: 3, telemetry: [], updatedAt: 0,
+  experiences: [{
+    id: 'exp-uri', state: 'PROPOSED', title: 'title', body: `note ${URI_CRED}`, tags: [],
+    sourceEventSeqs: [1], originSessionId: 'sess', createdAt: 1, approvedAt: null, approvedBy: null,
+    approvalEvidence: null, rejectedAt: null, rejectedBy: null, rejectionReason: null,
+    retiredAt: null, promotion: 'NONE', promotionEvidence: null, recallCount: 0, lastRecalledAt: null,
+  }],
+});
+
+const uriPass1 = redactStore(mkUriStore());
+check('J1 uri-credential 首次被脱敏（占位符就位）', () => {
+  assert.ok(!JSON.stringify(uriPass1.store).includes('s3cr3tP@ss'), 'J1: 明文凭据仍存活');
+  assert.ok(JSON.stringify(uriPass1.store).includes('[REDACTED:uri-credential]'), 'J1: 未写入占位符');
+});
+
+const uriPass2 = redactStore(uriPass1.store);
+check('J2 uri-credential 二次零命中（占位符不得被误判为新泄漏）', () => {
+  assert.equal(uriPass2.count, 0,
+    `J2: 二次 count=${uriPass2.count} fields=${JSON.stringify(uriPass2.fields)} ⇒ STORE_REDACTED 永久误报`);
+  assert.equal(uriPass2.fields.length, 0, `J2: 二次 fields=${JSON.stringify(uriPass2.fields)}`);
+});
+
+check('J3 二次调用库字节与条目引用均不变（否则生产每次载入都白写一次盘）', () => {
+  assert.equal(JSON.stringify(uriPass2.store), JSON.stringify(uriPass1.store), 'J3: 二次调用改写了库');
+  assert.equal(uriPass2.store.experiences[0], uriPass1.store.experiences[0], 'J3: 条目引用变化 ⇒ 白写盘');
 });
 
 console.log(`\n=== R-3 通用密钥脱敏加固回归: ${pass} PASS / ${fail} FAIL ===`);

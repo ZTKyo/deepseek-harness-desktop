@@ -483,8 +483,16 @@ const NON_REDACTABLE_KEYS = new Set([
 function redactTree(node, pathStr, hits) {
   if (typeof node === 'string') {
     if (!containsSecret(node)) return { value: node };
+    const cleaned = redactSecrets(node);
+    // P0-1 修复（2026-09-29）：先比较、后记账。uri-credential 家族的正则会命中**它自己的占位符**——
+    // `postgres://[REDACTED:uri-credential]@db/x` 里的占位符含 `:`，形似 `user:pass@`，于是
+    // containsSecret() 再次为真，而 redactSecrets() 返回**同一字符串**（数据没被改写、引用也没变）。
+    // 旧实现"先记账后比较"⇒ 这类库每次载入都被记成 1 条新泄漏：审计行 STORE_REDACTED 永久误报、
+    // 每次载入白写一次盘、count 永不归零（"库已清理干净"这一可用信号被摧毁）。
+    // 现在只在**值真的被改写**时才记账，且未改写时返回原引用（父层 changed 判定随之保持 false）。
+    if (cleaned === node) return { value: node };
     hits.push(`${pathStr}(${secretFamiliesIn(node).join('+')})`);
-    return { value: redactSecrets(node) };
+    return { value: cleaned };
   }
   if (Array.isArray(node)) {
     let changed = false;

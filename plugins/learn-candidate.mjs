@@ -84,13 +84,15 @@ export const EVIDENCE_REQUIRED_STATES = Object.freeze([
  */
 export const STAGE_DELEGATION = Object.freeze({
   ISOLATED_TESTS: Object.freeze({
-    // Tier-0 事实修正（2026-09-29）：learn 套件的**实际承载**是 ci-level2.yml 的
-    // 「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤（14 套件 + plugin-contract），
-    // 原值 ci-level1.yml 是纸上权威（该层只有静态门，不跑 tests\learn\）。真实收据的
-    // `ci.system` 亦为 ci-level2.yml（见 AC6 真 E2E 报告），此处对齐真实承载。
-    file: '.github/workflows/ci-level2.yml',
+    // 指针必须指向**真的跑隔离面**的那条航道（2026-09-29 AC10 修正）：
+    // 隔离测试腿 = 真 git worktree@commit + 真隔离宿主挂载（mount-gate，端口 3099 而非生产 3080）
+    // + 真 dsh-transaction.ps1 跑到 COMMITTED，三者互证的那条端到端门 —— 它现在真实运行在
+    // ci-level3.yml（该航道已安装 dsh 包，L1/L2 没有 dsh 包跑不了隔离真实实例）。
+    // 历史缺陷：这里曾写 ci-level1.yml（一个只做静态 YAML 检查、根本不运行隔离面的 workflow）=
+    // 假绿灯指针；tests/learn/validate-gate-registry.mjs 现在会把它与登记表逐字核对并变红。
+    file: '.github/workflows/ci-level3.yml',
     system: 'CI 四层（既有）',
-    entry: 'learn 门 = ci-level2.yml「P4 LEARN R2 contract-closure gates」步骤；其余层 ci-level1/3/4',
+    entry: 'ci-level1.yml … ci-level4.yml（隔离真实面 = ci-level3.yml：真 worktree@commit + 隔离宿主 3099 + 真事务 COMMITTED；learn 契约套件 = ci-level2.yml「P4 LEARN R2 contract-closure gates」步骤）',
     note: 'isolated tests 走既有四层 CI；禁建第二套 CI',
   }),
   REGRESSION_HOLDOUT: Object.freeze({

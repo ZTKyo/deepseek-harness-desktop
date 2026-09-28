@@ -105,6 +105,41 @@ jobs:
           node tests\reliability\yaml-parse-check.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "YAML PARSE GATE FAIL"; exit 1 }
 
+      # ── P4 LEARN AC10: gate-existence gate (no silently missing/excluded gate) ──
+      # Why L1: it is a static, data-free check over the repo's own files, so it must
+      # run on EVERY PR, not only in the learn lane. It answers one question that has
+      # repeatedly gone wrong: "is every suite in this subsystem actually owned by
+      # something that runs it?" tests/learn/gate-registry.json is the single ledger
+      # (kind / CI wiring / required real data / exclusion reason / local command);
+      # the validator fails closed when a suite is unregistered, when a registered CI
+      # gate is not actually invoked by the named step, when an exclusion has no
+      # reason, when a workflow YAML does not parse, or when STAGE_DELEGATION points
+      # at a workflow that does not run the gate it claims (the old false-green
+      # pointer: ISOLATED_TESTS -> ci-level1.yml, a lane that runs no isolated tests).
+      - name: P4 LEARN gate registry (no silently-missing / silently-excluded gate)
+        shell: pwsh
+        run: |
+          npm install -g js-yaml 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { Write-Host "npm install js-yaml FAILED"; exit 1 }
+          $env:NODE_PATH = (npm root -g)
+          node tests\learn\validate-gate-registry.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "AC10 GATE REGISTRY FAIL"; exit 1 }
+          Write-Host "AC10 gate registry: PASS"
+
+      # The registry gate above is itself a gate: this step proves it can actually
+      # turn red. Six real defects are injected into a temp copy (unregistered suite,
+      # falsely-claimed CI gate, emptied exclusion reason, false-green delegation
+      # pointer, broken workflow YAML, unregistered wiring) and EACH one must make the
+      # corresponding numbered check fail — after first proving the unmutated copy is
+      # green (otherwise the red would be tautological).
+      - name: P4 LEARN AC10 registry mutation proof (registry gate must turn RED)
+        shell: pwsh
+        run: |
+          $env:NODE_PATH = (npm root -g)
+          node tests\learn\_ac10-registry-mutation-proof.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "AC10 REGISTRY MUTATION PROOF FAIL"; exit 1 }
+          Write-Host "AC10 registry mutation proof: PASS"
+
       - name: Secret / private-key scan (must block)
         shell: pwsh
         run: |

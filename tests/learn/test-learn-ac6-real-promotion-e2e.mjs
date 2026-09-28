@@ -311,6 +311,40 @@ console.log('\n=== 2. Git 腿（真 git worktree / 真隔离分支 / 真 commit�
 const WT = path.join(ROOT, 'wt');
 SNAP.wt = WT;
 let commitSha = null;
+
+// ── 前置：上次**被中断**的运行会留下确定性残留（分支名由插件哈希派生、隔离宿主占着 3099），
+//    二者都会让本门以"假红"失败——真实发生过：`branch already exists` + 3099 EADDRINUSE，
+//    然后在 CI 腿上以"exit null"连炸 19 条，看上去像代码坏了，其实与环境残留无关代码。
+//    这里只清"本次运行本来就要创建/占用"的对象：同名隔离分支（且提交信息确为本门所写）、
+//    同名 worktree、3099 的占用者。清不掉就 ENV 失败（exit 2），不进入级联失败——
+//    假红比红灯更危险：它会把真问题埋在一堆噪声里，也会训练人忽略红灯。
+{
+  const stale = gitMaybe(['rev-parse', '--verify', BRANCH], REPO);
+  if (stale) {
+    const subj = gitMaybe(['log', '-1', '--format=%s', BRANCH], REPO) ?? '';
+    assert(/^candidate\//.test(BRANCH) && /AC6 real E2E/.test(subj),
+      `残留分支 ${BRANCH} 的提交信息不是本门所写（${subj}）——拒绝删除，请人工确认`);
+    console.log(`  前置：清理上次中断运行残留的隔离分支 ${BRANCH}（${subj}）`);
+    git(['branch', '-D', BRANCH], REPO);
+  }
+  const wts = git(['worktree', 'list', '--porcelain'], REPO).split(/\r?\n/)
+    .filter((l) => l.startsWith('worktree ')).map((l) => l.slice('worktree '.length).trim());
+  for (const p of wts) {
+    if (/[\\/]ac6-real-e2e-[^\\/]+[\\/]wt$/i.test(p)) {
+      console.log(`  前置：清理上次中断运行残留的隔离工作树 ${p}`);
+      try { git(['worktree', 'remove', '--force', p], REPO); } catch { /* prune 兜底 */ }
+    }
+  }
+  gitMaybe(['worktree', 'prune'], REPO);
+  if (fs.existsSync(WT)) fs.rmSync(WT, { recursive: true, force: true });
+  const occupied = listenPid(HOST_PORT);
+  if (occupied) {
+    console.log(`  前置失败：端口 ${HOST_PORT} 已被 pid=${occupied} 占用（残留隔离宿主或别的服务）。`);
+    console.log('            本门不在他人占着端口时往下跑——那只会产生与本次改动无关的一串假失败。');
+    console.log('            处理：确认该 pid 不是生产 3080 服务后结束它，再重跑本门。');
+    process.exit(2);
+  }
+}
 check('git worktree add 建隔离工作树', () => {
   git(['worktree', 'add', '-b', BRANCH, WT, baseHead], REPO);
   assert(fs.existsSync(WT), 'worktree path missing');

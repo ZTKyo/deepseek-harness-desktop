@@ -540,7 +540,11 @@ check('D3 委托去处 = 既有隔离测试腿（AC8：绝不新建第二套 CI/
   const iso = STAGE_DELEGATION.ISOLATED_TESTS;
   assert.equal(typeof iso.system, 'string');
   // 事实锁：隔离测试腿**就是**仓库既有四层 CI（不新建第二套 CI）——逐字核对委托块的原文。
-  assert.equal(iso.file, '.github/workflows/ci-level1.yml');
+  // 2026-09-29 AC10 修正（缺陷不再放回）：这里曾锁死 ci-level1.yml，而 L1 只做静态 YAML 检查、
+  // **不运行任何隔离真实实例**；真正跑隔离面的是 ci-level3.yml（已装 dsh 包的那条航道，
+  // 现在由 tests/learn/test-learn-ac6-real-promotion-e2e.mjs 真实执行：真 worktree@commit +
+  // 隔离宿主挂载 3099 + 真事务 COMMITTED）。锁的对象因此改成**真实航道**，而不是当年写错的名字。
+  assert.equal(iso.file, '.github/workflows/ci-level3.yml');
   assert.match(iso.entry, /ci-level1\.yml.*ci-level4\.yml/);
   assert.match(iso.note, /禁建第二套 CI/, '委托块必须显式声明"禁建第二套 CI"（AC8 复用纪律）');
 });

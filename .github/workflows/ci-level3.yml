@@ -16,6 +16,11 @@ on:
       - 'tests/continuity/*'
       - 'tests/supervisor/*'
       - 'tests/fixtures/*'
+      # P4 LEARN AC10 (2026-09-29): L3 now really runs the learn isolated-real-instance
+      # gate (test-learn-ac6-real-promotion-e2e.mjs) and its registry cross-check, so a
+      # change under tests/learn must trigger this lane — otherwise the very gate that
+      # guards the learn subsystem would not run on learn changes.
+      - 'tests/learn/*'
       - 'tests/rh1-tests.ps1'
       - 'tests/dsh-disposable-server.ps1'
       - 'tools/install-plugin.mjs'
@@ -236,3 +241,34 @@ jobs:
           Write-Host "SOURCE_SHA256=$srcHash"
           if (-not $dshVer) { Write-Host 'FAIL: dsh --version unavailable'; exit 1 }
           Write-Host 'PASS: release identity recorded'
+
+      # ── P4 LEARN AC6 real isolated promotion e2e ────────────────────────────────
+      # Why L3 and not L2: this is the ISOLATED-REAL-INSTANCE gate. It really creates
+      # a git worktree + commits the candidate on its own branch, really boots an
+      # isolated host via tests/learn/mount-gate.mjs --hold on port 3099 (never the
+      # production 3080 — it verifies the production listener set is unchanged before
+      # and after), really runs the ci-level2.yml job command list at that commit
+      # (parsed out of the workflow, so the two lanes cannot drift), and really drives
+      # dsh-transaction.ps1 to COMMITTED, then cross-checks the three legs against the
+      # candidate's derived label — plus a negative leg: tampering with any one leg
+      # must be rejected with telemetry and an unchanged state.
+      # It needs an installed dsh package (dsh-disposable/mount-gate), which is why it
+      # belongs in the lane that installs dsh (L3), not in L1/L2. This is also the
+      # workflow that plugins/learn-candidate.mjs STAGE_DELEGATION.ISOLATED_TESTS.file
+      # now names as the isolated-test lane, and tests/learn/validate-gate-registry.mjs
+      # (L1) fails closed if that pointer and this invocation ever disagree.
+      # Runner-portability: DSH_BIN is resolved from `npm root -g` (no assumptions
+      # about a developer %APPDATA% path); the test also accepts the env var.
+      - name: P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)
+        shell: pwsh
+        run: |
+          $root = (npm root -g)
+          $env:DSH_BIN = Join-Path $root '@deepseek-ai\dsh\lib\bin.js'
+          if (-not (Test-Path $env:DSH_BIN)) { Write-Host "AC6: dsh bin not found at $env:DSH_BIN"; exit 1 }
+          # the test commits into a worktree, so git needs an identity on a clean runner
+          git config --global user.email 'ci@dsh.invalid'
+          git config --global user.name 'dsh ci'
+          Write-Host "AC6 DSH_BIN=$env:DSH_BIN"
+          node tests\learn\test-learn-ac6-real-promotion-e2e.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host 'AC6 REAL PROMOTION E2E FAIL'; exit 1 }
+          Write-Host 'PASS: AC6 real promotion e2e (isolated host 3099, production 3080 untouched)'

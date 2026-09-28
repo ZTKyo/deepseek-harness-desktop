@@ -154,12 +154,26 @@ jobs:
       # wiring lock stays executed in CI from now on, not only locally.
       # suite below was executed on Windows with USERPROFILE / HOME / LOCALAPPDATA
       # redirected to an empty directory (no ~/.dsh/sessions, no live profile) and
-      # still exited 0. Deliberately NOT here are the real-data release gates:
-      # run-learn-contract-scenarios.mjs, run-learn-real-e2e.mjs,
+      # still exited 0. Deliberately NOT here are the real-data release gates
+      # (run-learn-contract-scenarios.mjs, run-learn-real-e2e.mjs,
       # run-learn-real-gap-e2e.mjs, test-learn-stage2-schema-and-negative-lock.mjs,
-      # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs. Those consume real
+      # test-learn-ac5-gap-veto.mjs, redteam-r3-metrics.mjs, ...). Those consume real
       # session logs / P2.6 failure telemetry, so on a bare runner they fail for
       # lack of data rather than for a defect; they run locally as pre-release gates.
+      # 2026-09-29 P4 LEARN AC10: the authoritative ledger of *every* learn suite,
+      # what real data it needs, and why it is or is not in CI is now
+      # tests/learn/gate-registry.json — validated fail-closed by
+      # tests/learn/validate-gate-registry.mjs in ci-level1. Keep this list and that
+      # ledger in sync: an unregistered suite or a registered-but-unwired gate turns
+      # the L1 registry gate red (the failure mode being prevented is a gate that
+      # silently stops running while the report still calls it required).
+      # 2026-09-29 P4 LEARN AC10: four more suites were proven CI-safe by the same
+      # empty-profile redirection and are therefore wired in from now on
+      # (they had been running only locally): test-learn-b1-session-access.mjs
+      # (22 PASS / 0 FAIL), test-learn-b2-verify-output-contract.mjs (21 PASS / 0 FAIL),
+      # test-learn-r2-f2-store-min.mjs (19 PASS / 0 FAIL),
+      # redteam-r3-injection-positions.mjs (exit 0; prints `missing session-…` for the
+      # absent corpus but judges by its own rule instead of faking red/green).
       - name: P4 LEARN R2 contract-closure gates (CI-safe subset)
         shell: pwsh
         run: |
@@ -177,14 +191,33 @@ jobs:
             'tests\learn\redteam-r3-contamination.mjs',
             'tests\learn\redteam-r3-isolation.mjs',
             'tests\learn\redteam-r3-labels.mjs',
-            'tests\learn\redteam-r3-probe.mjs'
+            'tests\learn\redteam-r3-probe.mjs',
+            'tests\learn\test-learn-b1-session-access.mjs',
+            'tests\learn\test-learn-b2-verify-output-contract.mjs',
+            'tests\learn\test-learn-r2-f2-store-min.mjs',
+            'tests\learn\redteam-r3-injection-positions.mjs'
           )
           foreach ($s in $suites) {
             Write-Host "--- $s"
             node $s
             if ($LASTEXITCODE -ne 0) { throw "P4 LEARN R2 contract gate failed: $s" }
           }
-          Write-Host 'PASS P4 LEARN R2 contract-closure gates (14 suites)'
+          Write-Host 'PASS P4 LEARN R2 contract-closure gates (18 suites)'
+
+      # ── P4 LEARN AC2 mutation proof (a gate that cannot turn red is decoration) ──
+      # tests/learn/_ac2-mutation-proof.mjs injects six real defects into the AC2
+      # research-leg and asserts the gate catches EACH one, after first proving the
+      # unmutated copy is green (so the red is not tautological). It had only ever
+      # run locally; wiring it in means the "requirement gate verified" claim is
+      # backed by CI from now on, not by a local run nobody can re-check.
+      # Pure node + repo-relative plugin copies: no live server, no credentials,
+      # no session data. Runtime ≈ tens of seconds (7 suite runs).
+      - name: P4 LEARN AC2 mutation proof (gate must turn RED)
+        shell: pwsh
+        run: |
+          node tests\learn\_ac2-mutation-proof.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host 'AC2 MUTATION PROOF FAIL'; exit 1 }
+          Write-Host 'PASS P4 LEARN AC2 mutation proof'
 
       # ── P2.6 R1/R2 semantic layer (Failure Taxonomy V1 + quota recovery) ──────
       # Per External Review Blocker B: quota-defer / network-error /

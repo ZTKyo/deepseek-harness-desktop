@@ -84,7 +84,13 @@ export const EVIDENCE_REQUIRED_STATES = Object.freeze([
  */
 export const STAGE_DELEGATION = Object.freeze({
   ISOLATED_TESTS: Object.freeze({
-    file: '.github/workflows/ci-level1.yml',
+    // 指针必须指向**真的跑隔离面**的那条航道（2026-09-29 AC10 修正）：
+    // 隔离测试腿 = 真 git worktree@commit + 真隔离宿主挂载（mount-gate，端口 3099 而非生产 3080）
+    // + 真 dsh-transaction.ps1 跑到 COMMITTED，三者互证的那条端到端门 —— 它现在真实运行在
+    // ci-level3.yml（该航道已安装 dsh 包，L1/L2 没有 dsh 包跑不了隔离真实实例）。
+    // 历史缺陷：这里曾写 ci-level1.yml（一个只做静态 YAML 检查、根本不运行隔离面的 workflow）=
+    // 假绿灯指针；tests/learn/validate-gate-registry.mjs 现在会把它与登记表逐字核对并变红。
+    file: '.github/workflows/ci-level3.yml',
     system: 'CI 四层（既有）',
     entry: 'ci-level1.yml … ci-level4.yml',
     note: 'isolated tests 走既有四层 CI；禁建第二套 CI',

@@ -63,7 +63,35 @@ const HOME = os.homedir();
 // 真实 home 只作为**依赖来源**（junction 到 web profile 的 node_modules）；绝不作为 DSH_HOME boot。
 const REAL_PROFILES = path.join(HOME, '.dsh', 'profiles');
 const WEB_PROFILE = path.join(REAL_PROFILES, 'web');
-const DSH_BIN = path.join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+// DSH_BIN 解析（2026-09-29 AC10：本门必须能在**裸 runner** 上跑，不能假设开发者机器布局）。
+// 顺序：--dsh-bin / $env:DSH_BIN（CI 用 `npm root -g` 算出）→ %APPDATA%\npm（Windows 全局）
+// → npm 全局根（npm root -g；Linux/macOS runner 与自定义 prefix 靠它）→ 真实 web profile 内自带。
+// 注意：这里只定义函数；真正的解析在 argv 定义之后调用（否则 `--dsh-bin` 读不到，且会踩 TDZ）。
+function npmGlobalRoot() {
+  try {
+    return String(execFileSync('npm', ['root', '-g'], { encoding: 'utf8', shell: process.platform === 'win32' })).trim();
+  } catch { return ''; }   // npm 不可用时跳过该候选
+}
+function resolveDshBin() {
+  const cands = [];
+  const i = argv.indexOf('--dsh-bin');
+  if (i >= 0 && argv[i + 1]) cands.push(argv[i + 1]);
+  if (process.env.DSH_BIN) cands.push(process.env.DSH_BIN);
+  if (process.env.APPDATA) cands.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  const root = npmGlobalRoot();
+  if (root) cands.push(path.join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  cands.push(path.join(WEB_PROFILE, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  return cands;
+}
+// 依赖来源（junction 目标）：真实 web profile 的 node_modules 优先；裸 runner 上没有 ~/.dsh 时退到
+// npm 全局根——CI 里 `npm install -g @deepseek-ai/dsh@…` 装出来的那棵树就是可用依赖源。
+function resolveDepsSource() {
+  const cands = [path.join(WEB_PROFILE, 'node_modules')];
+  if (process.env.APPDATA) cands.push(path.join(process.env.APPDATA, 'npm', 'node_modules'));
+  const root = npmGlobalRoot();
+  if (root) cands.push(root);
+  return cands.find((p) => { try { return fs.existsSync(path.join(p, 'undici')); } catch { return false; } }) ?? null;
+}
 const NODE_RUNTIME = path.join(REPO, 'DSH-Client', 'node-runtime', 'node.exe');
 const BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'];
 const EXPECTED_TOOLS = ['learn_propose', 'learn_review', 'learn_recall', 'learn_promote', 'learn_verify', 'learn_status'];
@@ -77,6 +105,10 @@ const PORT = Number(opt('port', '3099'));
 const TIMEOUT = Number(opt('timeout', '90'));
 const SLUG = opt('slug', 'candidate').replace(/[^a-zA-Z0-9_-]/g, '');
 const KEEP = flag('keep');
+
+// DSH_BIN 真实解析（必须在 argv 之后；--dsh-bin 优先，其次 $env:DSH_BIN，最后本机默认布局）。
+const DSH_BIN_CANDIDATES = resolveDshBin();
+const DSH_BIN = DSH_BIN_CANDIDATES.find((p) => { try { return p && fs.existsSync(p); } catch { return false; } }) ?? DSH_BIN_CANDIDATES[0];
 
 const say = (...a) => console.log(...a);
 const sha256 = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
@@ -141,9 +173,11 @@ fs.writeFileSync(path.join(profileDir, 'package.json'), JSON.stringify({
   dsh: { profile: { bundles: BUNDLES } },
 }, null, 2) + '\n', 'utf8');
 {
-  const src = path.join(WEB_PROFILE, 'node_modules');
-  if (fs.existsSync(path.join(src, 'undici'))) {
-    try { fs.symlinkSync(src, path.join(profileDir, 'node_modules'), 'junction'); say('  deps        : junction -> real web/node_modules (只借依赖，不 boot 生产 profile)'); } catch (e) { say('  deps        : junction 失败 ' + e.message); }
+  const src = resolveDepsSource();
+  if (src) {
+    try { fs.symlinkSync(src, path.join(profileDir, 'node_modules'), 'junction'); say(`  deps        : junction -> ${src} (只借依赖，不 boot 生产 profile)`); } catch (e) { say('  deps        : junction 失败 ' + e.message); }
+  } else {
+    say('  deps        : 未找到含 undici 的依赖源（真实 web profile / npm 全局根都没有）');
   }
 }
 

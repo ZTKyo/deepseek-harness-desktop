@@ -236,8 +236,22 @@ export function apply(ctx, cfg) {
 `, 'utf8');
 
 const yml = [
-  '# mount gate generated patch (isolated profile): probe first, then the candidate',
+  '# mount gate generated patch (isolated profile): HMR first, then probe, then the candidate',
+  '#',
+  '# Why the HMR row is explicit (AC6 cold-runner root cause, 2026-09-29): a profile that',
+  '# carries ANY patch layer makes dsh auto-create the HMR service and use it in the SAME',
+  '# tick -- profile-boot awaits the plugin\'s create() (which resolves once the entry is',
+  '# enrolled, state=1) and then watchUserPatches reads ctx.get(\'hmr\') before the plugin is',
+  '# ready (state=2, ~300 ms later on a cold runner), so boot dies with',
+  '#   "user patch-layer watching requires the Cordis HMR service".',
+  '# Composing the row here makes the normal boot await the service instead of racing it.',
+  '# Same fix, same shape as the release gate (ci-level3.yml boot step) and the supervisor',
+  '# isolated E2E (tests/supervisor/run-supervisor-ci-e2e.mjs).',
   '- insert:',
+  '    - id: mountgate-hmr',
+  "      name: '@deepseek-ai/cordis-plugin-hmr'",
+  '      config:',
+  '        root: []',
   '    - id: mountgate-probe',
   "      name: './_mountgate-probe.mjs'",
   '      config:',

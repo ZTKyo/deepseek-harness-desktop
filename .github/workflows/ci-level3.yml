@@ -137,6 +137,44 @@ jobs:
               Write-Host "--- $($_.FullName) ---"
               Get-Content $_.FullName -Tail 25 -ErrorAction SilentlyContinue
             }
+            # AC10 RELEASE GATE (2026-09-29): the boot crash on the runner is
+            # "user patch-layer watching requires the Cordis HMR service", which
+            # means `ctx.get('hmr')` stayed undefined after dsh auto-created the
+            # HMR plugin. dsh resolves in-box plugins through the flat module
+            # fallback `$DSH_HOME/profiles/node_modules` (one junction per package
+            # of the installation closure, maintained by dsh-app-boot). Dump that
+            # fallback and run Node's own resolution walk from both anchors, so
+            # "fallback never built" is distinguishable from "built but
+            # unresolvable" without another round trip.
+            Write-Host "=== AC10 diag: dsh installation layout ==="
+            $dshRoot = Join-Path (Split-Path $dshCmd) 'node_modules'
+            $install = Join-Path $dshRoot '@deepseek-ai\dsh'
+            Write-Host "dshRoot:  $dshRoot"
+            Write-Host "install:  $install (package.json=$(Test-Path (Join-Path $install 'package.json')))"
+            Write-Host "install-level hmr:   $(Test-Path (Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-hmr'))"
+            Write-Host "install-level timer: $(Test-Path (Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-timer'))"
+            Write-Host "root-level hmr:      $(Test-Path (Join-Path $dshRoot '@deepseek-ai\cordis-plugin-hmr'))"
+            Write-Host "root-level timer:    $(Test-Path (Join-Path $dshRoot '@deepseek-ai\cordis-plugin-timer'))"
+            Write-Host "=== AC10 diag: profiles module fallback ==="
+            $farm = Join-Path $env:DSH_HOME 'profiles\node_modules'
+            Write-Host "farm: $farm (exists=$(Test-Path $farm))"
+            if (Test-Path $farm) {
+              Write-Host "farm entry count: $((Get-ChildItem $farm -Force -ErrorAction SilentlyContinue).Count)"
+              Write-Host "farm top10: $((Get-ChildItem $farm -Force -ErrorAction SilentlyContinue | Select-Object -First 10 | ForEach-Object { $_.Name }) -join ', ')"
+              foreach ($rel in '@deepseek-ai\cordis-plugin-hmr', '@deepseek-ai\cordis-plugin-timer') {
+                $link = Join-Path $farm $rel
+                if (Test-Path $link) {
+                  $item = Get-Item $link -Force
+                  Write-Host "farm $rel => linkType=$($item.LinkType) target=$($item.Target)"
+                } else { Write-Host "farm $rel => MISSING" }
+              }
+            }
+            Write-Host "=== AC10 diag: node resolution walk (the walk the loader takes) ==="
+            foreach ($anchor in @((Join-Path $env:DSH_HOME 'profiles\web\package.json'), (Join-Path $install 'package.json'))) {
+              if (Test-Path $anchor) {
+                node tests\ci\profile-module-resolution-probe.cjs $anchor '@deepseek-ai/cordis-plugin-hmr' '@deepseek-ai/cordis-plugin-timer'
+              } else { Write-Host "anchor missing: $anchor" }
+            }
             Write-Host "FAIL: dsh smoke did not reach api_ready on CI runner (lastErr=$lastErr)"
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
             exit 1

@@ -33,6 +33,16 @@ jobs:
     name: DSH boot + readiness smoke
     runs-on: windows-latest
     steps:
+      # ---------------------------------------------------------------------------
+      # TEMPORARY - branch `ac10-gate-proof` / PR #100 only, never to be merged.
+      # Purpose: make the AC10-containing L3 job FAIL FAST so we can observe whether
+      # main's required status checks really block the merge while L1 and L2 are green.
+      # ---------------------------------------------------------------------------
+      - name: AC10 required-gate enforcement proof (INTENTIONAL FAILURE, temporary)
+        shell: pwsh
+        run: |
+          Write-Host "::error::intentional failure - proving that the AC10-containing L3 job really gates merges into main"
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

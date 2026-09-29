@@ -83,6 +83,73 @@ jobs:
           node --expose-internals tests\ci\loader-internal-probe.cjs $anchor
           Write-Host "probe(--expose-internals) exit: $LASTEXITCODE"
 
+      - name: AC10 diag - HMR entry tree on the runner (never gates)
+        # AC10 RELEASE GATE (2026-09-29): the boot step below dies with
+        # "user patch-layer watching requires the Cordis HMR service".
+        # profile-boot's fallback calls loader.create() for the HMR plugin, and
+        # loader.create() RE-THROWS its own failures - so a failing HMR plugin
+        # would have been the reported error. It is not, which means create()
+        # resolved while ctx.get('hmr') stayed undefined: the entry is pending or
+        # its fiber failed after start. This step boots the same sanitized
+        # manifest with an entry-diag plugin inserted first (it wraps
+        # loader.create and prints the entry tree, fiber state and service
+        # presence), plus two variants: the dsh-base `hmr` row re-enabled
+        # (dsh-web-app disables it - "TODO: Re-enable shared HMR for Web"), and
+        # the same boot under --expose-internals (HMR's other supported path).
+        # Diagnostic only: continue-on-error keeps it from gating the job.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $gatePlugins = @(
+            'completion-notify.mjs','keepalive-patch.mjs',
+            'model-selection-guard.mjs','execution-continuity.mjs',
+            'context-memory.mjs','supervisor-bridge.mjs'
+          )
+          function Boot-Variant {
+            param([string]$Name, [int]$Port, [string[]]$ExtraRows, [switch]$ExposeInternals)
+            $home = Join-Path $env:RUNNER_TEMP "dsh-home-$Name"
+            Remove-Item $home -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path (Join-Path $home 'profiles\web') | Out-Null
+            Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $home 'profiles\web') -Force }
+            $rows = @("- insert:`n    - id: ac10-entry-diag`n      name: './ac10-entry-diag.mjs'`n      config: {}")
+            foreach ($pn in $gatePlugins) {
+              if (Test-Path (Join-Path 'plugins' $pn)) { $rows += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}" }
+            }
+            foreach ($row in $ExtraRows) { $rows += $row }
+            Set-Content -Path (Join-Path $home 'profiles\web\cordis.patch.yml') -Value ($rows -join "`n") -Encoding UTF8
+            Set-Content -Path (Join-Path $home 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
+            $env:DSH_HOME = $home
+            $out = Join-Path $env:RUNNER_TEMP "$Name.out.txt"
+            $err = Join-Path $env:RUNNER_TEMP "$Name.err.txt"
+            Remove-Item $out, $err -Force -ErrorAction SilentlyContinue
+            $dshCmd = Join-Path (Split-Path (Get-Command dsh).Source) 'dsh.cmd'
+            $install = Join-Path (Split-Path (Get-Command dsh).Source) 'node_modules\@deepseek-ai\dsh'
+            if ($ExposeInternals) {
+              Write-Host "launch: node --expose-internals $install\lib\bin.js"
+              $proc = Start-Process -FilePath 'node' -ArgumentList "--expose-internals `"$(Join-Path $install 'lib\bin.js')`" web --port $Port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+            } else {
+              $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $Port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+            }
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited -and $i -gt 2) { break }
+              try {
+                $r = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/host.describe" -Method Post -Body '{"type":"client-request","rpcId":"smoke","method":"host.describe","payload":{}}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction Stop
+                if ($r.result.ok) { $ready = $true; break }
+              } catch { }
+            }
+            Write-Host "---------- variant '$Name' : ready=$ready exited=$($proc.HasExited) exit=$(if ($proc.HasExited) { $proc.ExitCode } else { '-' }) ----------"
+            Write-Host "--- child stdout ---"
+            if (Test-Path $out) { Get-Content $out | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
+            Write-Host "--- child stderr (tail) ---"
+            if (Test-Path $err) { Get-Content $err -Tail 25 | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
+            if (-not $proc.HasExited) { taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
+          }
+          Boot-Variant -Name 'hmr-tree' -Port 33124 -ExtraRows @()
+          Boot-Variant -Name 'hmr-explicit' -Port 33125 -ExtraRows @("- id: hmr`n  disabled: false")
+          Boot-Variant -Name 'hmr-expose' -Port 33126 -ExtraRows @() -ExposeInternals
+
       - name: Boot dsh web on ephemeral port with sanitized ACTIVE plugin manifest
         shell: pwsh
         run: |

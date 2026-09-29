@@ -12,7 +12,7 @@
 // 运行：node tests/supervisor/run-supervisor-ci-e2e.mjs
 
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readdirSync, copyFileSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, copyFileSync, writeFileSync, existsSync, rmSync, readFileSync, openSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,10 +61,22 @@ function buildHome(withSupervisor) {
 		copyFileSync(join(PLUGIN_DIR, f), join(profileDir, f));
 	}
 	const active = withSupervisor ? SMOKE_PLUGINS : SMOKE_PLUGINS.filter((p) => p !== 'supervisor-bridge.mjs');
-	const manifest = active
-		.filter((p) => existsSync(join(PLUGIN_DIR, p)))
-		.map((p) => `- insert:\n    - id: sb-${p.replace('.mjs', '')}\n      name: './${p}'\n      config: {}`)
-		.join('\n');
+	// Compose the HMR row explicitly, exactly like the AC10 release gate does. With a
+	// patch layer present dsh would otherwise auto-create the HMR service and use it in
+	// the SAME tick: profile-boot awaits create() (which resolves when the entry is
+	// enrolled, fiber state=1) and then watchUserPatches reads ctx.get('hmr') before the
+	// plugin is ready (state=2, ~300 ms later on a cold runner) -> boot dies with
+	// "user patch-layer watching requires the Cordis HMR service". A warm host wins that
+	// race, a cold CI runner loses it (the boot gate died of it in run 36581738576, and
+	// this orchestrator's phase-1 instance timed out with the same symptom in run
+	// 36605471445, where the boot gate itself passed once the row was composed).
+	// Composing the row makes the normal boot await the service instead.
+	const manifest = [
+		`- insert:\n    - id: sb-hmr\n      name: '@deepseek-ai/cordis-plugin-hmr'\n      config:\n        root: []`,
+		...active
+			.filter((p) => existsSync(join(PLUGIN_DIR, p)))
+			.map((p) => `- insert:\n    - id: sb-${p.replace('.mjs', '')}\n      name: './${p}'\n      config: {}`),
+	].join('\n');
 	writeFileSync(join(profileDir, 'cordis.patch.yml'), manifest || '[]', 'utf8');
 	writeFileSync(join(profileDir, 'cordis.yml'), '[]', 'utf8');
 	// full 模式：让隔离 home 拥有真实模型配置（本地同用户临时目录，结束即清理）
@@ -81,17 +93,37 @@ function buildHome(withSupervisor) {
 }
 
 function boot(port, home) {
+	// Capture the child's real output. With stdio:'ignore' a boot crash surfaced only as
+	// "did not become ready", the same diagnostic blind spot the AC10 gate had before it
+	// started capturing stdout/stderr. dumpChild() prints these files when readiness
+	// fails; KEEP=1 leaves them on disk for inspection.
+	const outPath = join(home, `dsh-${port}.out.log`);
+	const errPath = join(home, `dsh-${port}.err.log`);
 	const child = spawn('cmd.exe', ['/c', DSH, 'web', '--port', String(port), '--no-open'], {
 		env: { ...process.env, DSH_HOME: home },
-		stdio: 'ignore',
+		stdio: ['ignore', openSync(outPath, 'w'), openSync(errPath, 'w')],
 	});
+	child.__outPath = outPath;
+	child.__errPath = errPath;
 	return child;
+}
+function dumpChild(child, label) {
+	for (const [name, p] of [['stdout', child?.__outPath], ['stderr', child?.__errPath]]) {
+		if (!p) continue;
+		let text = '';
+		try { text = readFileSync(p, 'utf8').trim(); } catch (e) {
+			console.error(`[orch] ${label}: child ${name} unreadable (${p}): ${e.message}`);
+			continue;
+		}
+		console.error(`[orch] ${label}: child ${name} -> ${p}`);
+		console.error(text ? text.split('\n').map((l) => `  ${l}`).join('\n') : '  (empty)');
+	}
 }
 function stop(child) {
 	if (!child?.pid) return;
 	spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
 }
-async function waitReady(port, label) {
+async function waitReady(port, label, child) {
 	const url = `http://127.0.0.1:${port}/api/host.describe`;
 	for (let i = 0; i < 90; i++) {
 		await new Promise((r) => setTimeout(r, 1000));
@@ -105,6 +137,7 @@ async function waitReady(port, label) {
 			if (j?.result?.ok) return true;
 		} catch { /* retry */ }
 	}
+	dumpChild(child, label);
 	throw new Error(`dsh did not become ready (${label}) on port ${port}`);
 }
 
@@ -137,7 +170,7 @@ try {
 	homes.push(homeA);
 	log(`homeA=${homeA} port=${portA}`);
 	let child = boot(portA, homeA);
-	await waitReady(portA, 'phase1');
+	await waitReady(portA, 'phase1', child);
 	log('phase 1: negatives + dispatch/correction/cancel/review on live instance');
 	failed = !runPhase(1, {
 		SB_BASE: `http://127.0.0.1:${portA}`,
@@ -153,7 +186,7 @@ try {
 
 	log('restarting same DSH_HOME (bridge restart semantics)');
 	child = boot(portA, homeA);
-	await waitReady(portA, 'phase2');
+	await waitReady(portA, 'phase2', child);
 	log('phase 2: replay → zero second side effects + corrupt-ledger fail-closed');
 	failed = !runPhase(2, {
 		SB_BASE: `http://127.0.0.1:${portA}`,
@@ -172,7 +205,7 @@ try {
 	homes.push(homeB);
 	log(`homeB=${homeB} port=${portB} (no supervisor plugin)`);
 	child = boot(portB, homeB);
-	await waitReady(portB, 'phase3');
+	await waitReady(portB, 'phase3', child);
 	failed = !runPhase(3, {
 		SB_BASE: `http://127.0.0.1:${portB}`,
 		SB_PHASE: '3',

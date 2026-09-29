@@ -47,6 +47,50 @@ jobs:
           npm install -g "@deepseek-ai/dsh@$ver" 2>&1 | Select-Object -Last 2
           dsh --version
 
+          # ==========================================================================
+          # AC10 ROOT CAUSE (2026-09-29, proven by the diag step below):
+          # dsh@0.1.1-rc.2 declares "@deepseek-ai/cordis-plugin-hmr": "^1.0.16".
+          # A FRESH install on a cold runner therefore resolves the newest 1.x —
+          # and 1.0.18 (a PATCH release) removed `Hmr.registerConfig`, while
+          # 1.0.19 keeps it removed. Verified against the published tarballs:
+          #   1.0.16 -> registerConfig present | 1.0.17 -> present
+          #   1.0.18 -> REMOVED                | 1.0.19 -> REMOVED
+          # dsh-app-boot still calls `hmr.registerConfig(filename, refresh)`, so on
+          # the runner the boot dies with
+          #   TypeError: hmr.registerConfig is not a function
+          #     at watchUserPatches (dsh-app-boot/lib/index.js:767 -> profile-boot)
+          # and, when the auto-created service is not registered in time, with
+          #   "user patch-layer watching requires the Cordis HMR service".
+          # The working host runs 1.0.16, which is why the same dsh + node + profile
+          # boots fine locally and only the runner fails.
+          # The gate must test rc.2 against the plugin API rc.2 was built for, so pin
+          # the plugin to the last compatible version and FAIL LOUDLY if that API is
+          # missing: a future drift must never again look like a mysterious boot crash.
+          # ==========================================================================
+          $prefix = Split-Path (Get-Command dsh).Source
+          $hmrDir = Join-Path $prefix 'node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\cordis-plugin-hmr'
+          if (-not (Test-Path $hmrDir)) { throw "AC10: HMR plugin dir not found: $hmrDir" }
+          $pin = Join-Path $env:RUNNER_TEMP 'hmr-pin'
+          Remove-Item $pin -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $pin | Out-Null
+          # cmd /c does the redirection: PowerShell 5.1 turns native stderr into a
+          # terminating error when `2>&1`/`*>` is used, which would abort this step
+          # even though npm pack succeeded.
+          $packLog = Join-Path $pin 'pack.log'
+          cmd /c "npm pack @deepseek-ai/cordis-plugin-hmr@1.0.16 --pack-destination `"$pin`" > `"$packLog`" 2>&1"
+          if ($LASTEXITCODE -ne 0) { Get-Content $packLog | Write-Host; throw 'AC10: npm pack failed for @deepseek-ai/cordis-plugin-hmr@1.0.16' }
+          $tgz = Get-ChildItem $pin -Filter '*.tgz' | Select-Object -First 1
+          if (-not $tgz) { throw 'AC10: could not download @deepseek-ai/cordis-plugin-hmr@1.0.16' }
+          tar -xzf $tgz.FullName -C $pin
+          if (-not (Test-Path (Join-Path $pin 'package\lib\index.js'))) { throw 'AC10: unexpected hmr tarball layout' }
+          Remove-Item (Join-Path $hmrDir 'lib\index.js') -Force
+          Copy-Item (Join-Path $pin 'package\lib\index.js') (Join-Path $hmrDir 'lib\index.js') -Force
+          Copy-Item (Join-Path $pin 'package\package.json') (Join-Path $hmrDir 'package.json') -Force
+          $hmrVer = [regex]::Match((Get-Content -Raw (Join-Path $hmrDir 'package.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value
+          $hmrApi = (Get-Content -Raw (Join-Path $hmrDir 'lib\index.js')).Contains('registerConfig')
+          Write-Host "AC10: hmr plugin pinned to $hmrVer (registerConfig=$hmrApi)"
+          if ($hmrApi -ne $true) { throw "AC10: HMR plugin API mismatch: $hmrVer has no Hmr.registerConfig, which dsh-app-boot requires" }
+
       - name: AC10 diag - native internal-loader addon probe (never gates)
         # AC10 RELEASE GATE (2026-09-29): the runner boot dies with
         # "user patch-layer watching requires the Cordis HMR service", i.e. the HMR
@@ -147,18 +191,18 @@ jobs:
             if (Test-Path $err) { Get-Content $err -Tail 25 | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
             if (-not $proc.HasExited) { taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
           }
-          # AC10 RELEASE GATE (2026-09-29): two variants, one cycle, both non-gating.
+          # AC10 ROOT CAUSE (2026-09-29): two variants, one cycle, both non-gating.
           #  A) hmr-plain = exactly the gate's manifest: relies on dsh's boot-time HMR
-          #     auto-create. It fails on this runner; the v3 diag plugin now records WHY
-          #     (loader entry store, fiber state + fiber error, unhandled rejections).
-          #  B) hmr-row   = dsh-base's own hmr row restated in the user patch layer
-          #     (id hmr / name @deepseek-ai/cordis-plugin-hmr / config.root ['.'];
-          #     the web bundle disables that row). If B boots, the fix is to DECLARE
-          #     HMR in the sanitized manifest instead of relying on the auto-create.
-          $hmrRow = "- id: hmr`n  name: '@deepseek-ai/cordis-plugin-hmr'`n  disabled: false`n  config:`n    root: ['.']"
+          #     auto-create. This is what the gate runs.
+          #  B) hmr-early = the diag plugin creates the HMR entry itself from apply(),
+          #     which prints the entry store, fiber state + fiber error, the resolved
+          #     plugin path, and `ctx.get('hmr')` after the create resolves.
+          # That diag is what found the real cause: the resolved plugin had NO
+          # `Hmr.registerConfig` (its ownKeys lacked configs/refreshTasks), i.e. the
+          # runner install resolved cordis-plugin-hmr 1.0.19, which dropped the method
+          # dsh-app-boot calls. See the pin + assertion in the install step above.
           Boot-Variant -Name 'hmr-plain' -Port 33124 -ExtraRows @()
           Boot-Variant -Name 'hmr-early' -Port 33125 -ExtraRows @() -DiagConfig '{ earlyHmr: true }'
-          Boot-Variant -Name 'hmr-row' -Port 33126 -ExtraRows @($hmrRow)
 
       - name: Boot dsh web on ephemeral port with sanitized ACTIVE plugin manifest
         shell: pwsh
@@ -190,19 +234,14 @@ jobs:
                 $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}"
               }
             }
-            # AC10 RELEASE GATE (2026-09-29): DECLARE HMR in the sanitized user patch
-            # layer. dsh-base already carries this row; the web bundle turns it off
-            # ("TODO: Re-enable shared HMR for Web after its reload lifecycle is
-            # tested") and dsh then auto-creates it during boot. On a cold CI runner
-            # that auto-create does not leave an active service, and dsh aborts with
-            # "user patch-layer watching requires the Cordis HMR service" — so the
-            # gate was failing on a boot path that cannot start there, not on the
-            # repo's plugins. Restating the base row (name + config; the last write
-            # wins per row) makes HMR part of the initial composition, which is also
-            # the state a working host ends up in (auto-create there succeeds and HMR
-            # is live). No secrets, no plugin changes: the profile stays a real
-            # sanitized user patch layer.
-            $manifest += "- id: hmr`n  name: '@deepseek-ai/cordis-plugin-hmr'`n  disabled: false`n  config:`n    root: ['.']"
+            # AC10 RELEASE GATE (2026-09-29): the manifest is the REAL sanitized user
+            # patch layer (repo plugins only). An earlier hypothesis restated dsh-base's
+            # HMR row here; that was wrong — declaring the row only turns dsh's
+            # swallowed auto-create failure into a hard "TypeError:
+            # hmr.registerConfig is not a function" crash, because the real cause is
+            # the plugin version resolved on the runner (see the pin in the install
+            # step). The gate now runs the honest boot path: dsh brings up HMR itself
+            # from the version-aligned install.
             $patchContent = $manifest -join "`n"
             if (-not $patchContent) { $patchContent = '[]' }            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
           } else {
@@ -246,6 +285,18 @@ jobs:
             Write-Host "=== runtime facts ==="
             Write-Host "node: $(node --version 2>&1)"
             Write-Host "dsh:  $((& dsh --version 2>&1 | Out-String).Trim())"
+            # AC10 ROOT CAUSE (2026-09-29): the HMR plugin version decides whether the
+            # boot can watch the user patch layer at all. Report its version and whether
+            # it still exposes Hmr.registerConfig (dropped upstream in 1.0.18).
+            $hmrPkgPath = Join-Path (Split-Path $dshCmd) 'node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\cordis-plugin-hmr\package.json'
+            if (Test-Path $hmrPkgPath) {
+              $hmrDirPath = Split-Path $hmrPkgPath
+              $hmrVer = [regex]::Match((Get-Content -Raw $hmrPkgPath), '"version"\s*:\s*"([^"]+)"').Groups[1].Value
+              $hmrApi = (Get-Content -Raw (Join-Path $hmrDirPath 'lib\index.js')).Contains('registerConfig')
+              Write-Host "hmr plugin: $hmrVer (registerConfig=$hmrApi)"
+            } else {
+              Write-Host "hmr plugin: NOT FOUND at $hmrPkgPath"
+            }
             Write-Host "dshCmd: $dshCmd (exists=$(Test-Path $dshCmd))"
             Write-Host "DSH_HOME: $env:DSH_HOME"
             Write-Host "child exit code: $(if ($proc.HasExited) { $proc.ExitCode } else { 'still-running' })"

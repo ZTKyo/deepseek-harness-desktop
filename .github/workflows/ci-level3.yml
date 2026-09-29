@@ -47,6 +47,231 @@ jobs:
           npm install -g "@deepseek-ai/dsh@$ver" 2>&1 | Select-Object -Last 2
           dsh --version
 
+          # ==========================================================================
+          # AC10 ROOT CAUSE (2026-09-29, proven by the diag step below):
+          # dsh@0.1.1-rc.2 declares "@deepseek-ai/cordis-plugin-hmr": "^1.0.16".
+          # A FRESH install on a cold runner therefore resolves the newest 1.x —
+          # and 1.0.18 (a PATCH release) removed `Hmr.registerConfig`, while
+          # 1.0.19 keeps it removed. Verified against the published tarballs:
+          #   1.0.16 -> registerConfig present | 1.0.17 -> present
+          #   1.0.18 -> REMOVED                | 1.0.19 -> REMOVED
+          # dsh-app-boot still calls `hmr.registerConfig(filename, refresh)`, so on
+          # the runner the boot dies with
+          #   TypeError: hmr.registerConfig is not a function
+          #     at watchUserPatches (dsh-app-boot/lib/index.js:767 -> profile-boot)
+          # and, when the auto-created service is not registered in time, with
+          #   "user patch-layer watching requires the Cordis HMR service".
+          # The working host runs 1.0.16, which is why the same dsh + node + profile
+          # boots fine locally and only the runner fails.
+          # The gate must test rc.2 against the plugin API rc.2 was built for, so pin
+          # the plugin to the last compatible version and FAIL LOUDLY if that API is
+          # missing: a future drift must never again look like a mysterious boot crash.
+          # ==========================================================================
+          $prefix = Split-Path (Get-Command dsh).Source
+          $hmrDir = Join-Path $prefix 'node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\cordis-plugin-hmr'
+          if (-not (Test-Path $hmrDir)) { throw "AC10: HMR plugin dir not found: $hmrDir" }
+          $pin = Join-Path $env:RUNNER_TEMP 'hmr-pin'
+          Remove-Item $pin -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $pin | Out-Null
+          # cmd /c does the redirection: PowerShell 5.1 turns native stderr into a
+          # terminating error when `2>&1`/`*>` is used, which would abort this step
+          # even though npm pack succeeded.
+          $packLog = Join-Path $pin 'pack.log'
+          cmd /c "npm pack @deepseek-ai/cordis-plugin-hmr@1.0.16 --pack-destination `"$pin`" > `"$packLog`" 2>&1"
+          if ($LASTEXITCODE -ne 0) { Get-Content $packLog | Write-Host; throw 'AC10: npm pack failed for @deepseek-ai/cordis-plugin-hmr@1.0.16' }
+          $tgz = Get-ChildItem $pin -Filter '*.tgz' | Select-Object -First 1
+          if (-not $tgz) { throw 'AC10: could not download @deepseek-ai/cordis-plugin-hmr@1.0.16' }
+          tar -xzf $tgz.FullName -C $pin
+          if (-not (Test-Path (Join-Path $pin 'package\lib\index.js'))) { throw 'AC10: unexpected hmr tarball layout' }
+          Remove-Item (Join-Path $hmrDir 'lib\index.js') -Force
+          Copy-Item (Join-Path $pin 'package\lib\index.js') (Join-Path $hmrDir 'lib\index.js') -Force
+          Copy-Item (Join-Path $pin 'package\package.json') (Join-Path $hmrDir 'package.json') -Force
+          $hmrVer = [regex]::Match((Get-Content -Raw (Join-Path $hmrDir 'package.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value
+          $hmrApi = (Get-Content -Raw (Join-Path $hmrDir 'lib\index.js')).Contains('registerConfig')
+          Write-Host "AC10: hmr plugin pinned to $hmrVer (registerConfig=$hmrApi)"
+          if ($hmrApi -ne $true) { throw "AC10: HMR plugin API mismatch: $hmrVer has no Hmr.registerConfig, which dsh-app-boot requires" }
+
+      - name: AC10 RELEASE BLOCKER canary - fresh-install HMR resolution (gates on state change)
+        # AC10 RELEASE GATE (2026-09-29, added after the independent adversarial review).
+        # The pin above deliberately makes the runner reproduce the API pair rc.2 was
+        # BUILT for (hmr 1.0.16) -- which is the right thing to test for rc.2's own
+        # logic, but it must never let anyone read a green run as
+        # "a fresh `npm i -g @deepseek-ai/dsh@0.1.1-rc.2` works for users".
+        # It does NOT: rc.2 declares "@deepseek-ai/cordis-plugin-hmr": "^1.0.16"
+        # (caret), so a fresh install resolves the newest 1.x (1.0.19 today), which has
+        # NO `Hmr.registerConfig` while dsh-app-boot calls it unconditionally -> boot
+        # dies on any profile that has a patch layer, i.e. the standard install shape.
+        # That is an UPSTREAM release blocker, tracked in the workspace KNOWN_ISSUES.md,
+        # and it is OUT OF SCOPE for this repo to fix (no upstream fork/authority: this
+        # repo owns its own plugins/gates only).
+        # This step is a canary on that known state in BOTH directions:
+        #   * drift still present -> PASS, plus a loud ::warning:: + job summary banner
+        #     so the green run states its own scope and never implies "releasable";
+        #   * drift GONE (upstream restored the API or narrowed the range) -> FAIL,
+        #     because the pin must then be revisited and the blocker closed.
+        # It also FAILS if the registry cannot be read, so the state can never be
+        # silently unknown (a comment cannot fail; this can).
+        shell: pwsh
+        run: |
+          $pkg = '@deepseek-ai/dsh@0.1.1-rc.2'
+          $canary = Join-Path $env:RUNNER_TEMP 'hmr-canary'
+          Remove-Item $canary -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $canary | Out-Null
+          $depsFile = Join-Path $canary 'deps.json'
+          $depsErr = Join-Path $canary 'deps.err'
+          # cmd /c does the redirection (PowerShell 5.1 turns native stderr into a
+          # terminating error with 2>&1), and stderr goes to its own file so it can
+          # never corrupt the JSON we parse.
+          cmd /c "npm view `"$pkg`" dependencies --json > `"$depsFile`" 2>`"$depsErr`""
+          if (-not (Test-Path $depsFile) -or -not (Get-Content -Raw $depsFile)) {
+            Get-Content $depsErr -ErrorAction SilentlyContinue | Write-Host
+            throw "AC10 canary: could not read the dependencies of $pkg from the registry (refusing to report 'unknown')"
+          }
+          $deps = Get-Content -Raw $depsFile | ConvertFrom-Json
+          $range = ($deps.PSObject.Properties | Where-Object { $_.Name -eq '@deepseek-ai/cordis-plugin-hmr' } | Select-Object -First 1).Value
+          if (-not $range) { throw "AC10 canary: $pkg declares no @deepseek-ai/cordis-plugin-hmr dependency any more" }
+
+          $verFile = Join-Path $canary 'fresh.json'
+          $verErr = Join-Path $canary 'fresh.err'
+          cmd /c "npm view `"@deepseek-ai/cordis-plugin-hmr@$range`" version --json > `"$verFile`" 2>`"$verErr`""
+          $fresh = @(Get-Content -Raw $verFile | ConvertFrom-Json)[-1]
+          if (-not $fresh) {
+            Get-Content $verErr -ErrorAction SilentlyContinue | Write-Host
+            throw "AC10 canary: could not resolve the newest hmr version matching '$range' (refusing to report 'unknown')"
+          }
+
+          $freshPin = Join-Path $canary 'fresh-pin'
+          New-Item -ItemType Directory -Force -Path $freshPin | Out-Null
+          $freshLog = Join-Path $freshPin 'pack.log'
+          cmd /c "npm pack `"@deepseek-ai/cordis-plugin-hmr@$fresh`" --pack-destination `"$freshPin`" > `"$freshLog`" 2>&1"
+          if ($LASTEXITCODE -ne 0) { Get-Content $freshLog | Write-Host; throw "AC10 canary: npm pack failed for @deepseek-ai/cordis-plugin-hmr@$fresh" }
+          $freshTgz = Get-ChildItem $freshPin -Filter '*.tgz' | Select-Object -First 1
+          if (-not $freshTgz) { throw "AC10 canary: could not download @deepseek-ai/cordis-plugin-hmr@$fresh" }
+          tar -xzf $freshTgz.FullName -C $freshPin
+          $freshApi = (Get-Content -Raw (Join-Path $freshPin 'package\lib\index.js')).Contains('registerConfig')
+          Write-Host "AC10 CANARY: declared range=$range ; fresh resolution=$fresh ; registerConfig=$freshApi"
+          if ($freshApi -eq $true) {
+            throw "AC10 canary: the upstream drift is GONE (a fresh install of $pkg now resolves hmr $fresh, which HAS Hmr.registerConfig). Revisit the 1.0.16 pin in this workflow, close the KNOWN_ISSUES entry, and re-run."
+          }
+          $banner = "fresh install of $pkg resolves hmr $fresh (declared range '$range'), which has NO Hmr.registerConfig while dsh-app-boot calls it unconditionally (dsh-app-boot/lib/index.js watchUserPatches) -> boot dies on any profile with a patch layer. Upstream blocker, out of scope for this repo; tracked in KNOWN_ISSUES.md. This lane tests rc.2 against hmr 1.0.16 (the API pair rc.2 was built for)."
+          Write-Host "::warning title=AC10 RELEASE BLOCKER (upstream, tracked)::$banner"
+          if ($env:GITHUB_STEP_SUMMARY) {
+            Add-Content $env:GITHUB_STEP_SUMMARY "## AC10 release gate: scope + upstream blocker`n`n- This lane tests ``dsh@0.1.1-rc.2`` against **hmr 1.0.16** (the API pair rc.2 was built for); that is what makes its green verdict meaningful for rc.2's own logic.`n- **A green run here does NOT mean a fresh install works for users**: a fresh ``npm i -g @deepseek-ai/dsh@0.1.1-rc.2`` resolves hmr **$fresh** (declared range ``$range``), which lacks ``Hmr.registerConfig`` while dsh-app-boot calls it unconditionally -> boot dies on any profile with a patch layer.`n- Status: **UPSTREAM RELEASE BLOCKER, tracked in KNOWN_ISSUES.md** (this repo has no upstream authority to fix it; the canary step above fails if this state ever changes).`n"
+          }
+
+      - name: AC10 diag - native internal-loader addon probe (never gates)
+        # AC10 RELEASE GATE (2026-09-29): the runner boot dies with
+        # "user patch-layer watching requires the Cordis HMR service", i.e. the HMR
+        # plugin never registered its service. The HMR plugin refuses to register
+        # without loader.internal, which cordis-plugin-loader obtains either from
+        # `--expose-internals` (absent here, exactly as dsh runs it) or from the
+        # OPTIONAL native package node-addon-require-builtin-<platform>. This step
+        # reports which path this runner has, plus the resolved platform package and
+        # its prebuilt binary. Diagnostic only: continue-on-error keeps it from
+        # gating the job (the boot step below still fails the job on its own).
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "=== runner npm/node facts ==="
+          Write-Host "node: $(node --version)"
+          Write-Host "npm:  $(npm --version)"
+          Write-Host "omit: [$((npm config get omit 2>&1) -join '')]"
+          Write-Host "optional: [$((npm config get optional 2>&1) -join '')]"
+          Write-Host "registry: $((npm config get registry 2>&1) -join '')"
+          $dshCmd = (Get-Command dsh).Source
+          $dshRoot = Join-Path (Split-Path $dshCmd) 'node_modules'
+          $install = Join-Path $dshRoot '@deepseek-ai\dsh'
+          Write-Host "=== installed node-addon-* packages ==="
+          foreach ($dir in @($dshRoot, (Join-Path $install 'node_modules'))) {
+            Get-ChildItem $dir -Directory -Filter 'node-addon-*' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
+          }
+          Write-Host "=== native binaries under the dsh install ==="
+          Get-ChildItem (Join-Path $install 'node_modules') -Recurse -Filter '*.node' -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
+          Write-Host "=== the exact call cordis-plugin-loader makes ==="
+          $anchor = Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-loader\lib\index.js'
+          node tests\ci\loader-internal-probe.cjs $anchor
+          Write-Host "probe exit: $LASTEXITCODE (0 = loader.internal available, 1 = undefined)"
+          Write-Host "=== same probe with --expose-internals ==="
+          node --expose-internals tests\ci\loader-internal-probe.cjs $anchor
+          Write-Host "probe(--expose-internals) exit: $LASTEXITCODE"
+
+      - name: AC10 diag - HMR entry tree on the runner (never gates)
+        # AC10 RELEASE GATE (2026-09-29): the boot step below dies with
+        # "user patch-layer watching requires the Cordis HMR service".
+        # profile-boot's fallback calls loader.create() for the HMR plugin, and
+        # loader.create() RE-THROWS its own failures - so a failing HMR plugin
+        # would have been the reported error. It is not, which means create()
+        # resolved while ctx.get('hmr') stayed undefined: the entry is pending or
+        # its fiber failed after start. This step boots the same sanitized
+        # manifest with an entry-diag plugin inserted first (it wraps
+        # loader.create and prints the entry tree, fiber state and service
+        # presence), plus two variants: the dsh-base `hmr` row re-enabled
+        # (dsh-web-app disables it - "TODO: Re-enable shared HMR for Web"), and
+        # the same boot under --expose-internals (HMR's other supported path).
+        # Diagnostic only: continue-on-error keeps it from gating the job.
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $gatePlugins = @(
+            'completion-notify.mjs','keepalive-patch.mjs',
+            'model-selection-guard.mjs','execution-continuity.mjs',
+            'context-memory.mjs','supervisor-bridge.mjs'
+          )
+          function Boot-Variant {
+            param([string]$Name, [int]$Port, [string[]]$ExtraRows, [switch]$ExposeInternals, [string]$DiagConfig = '{}')
+            # NB: $home is read-only in PowerShell (it aliases $HOME); use a distinct name.
+            $variantHome = Join-Path $env:RUNNER_TEMP "dsh-home-$Name"
+            Remove-Item $variantHome -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path (Join-Path $variantHome 'profiles\web') | Out-Null
+            Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $variantHome 'profiles\web') -Force }
+            $rows = @("- insert:`n    - id: ac10-entry-diag`n      name: './ac10-entry-diag.mjs'`n      config: $DiagConfig")
+            foreach ($pn in $gatePlugins) {
+              if (Test-Path (Join-Path 'plugins' $pn)) { $rows += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}" }
+            }
+            foreach ($row in $ExtraRows) { $rows += $row }
+            Set-Content -Path (Join-Path $variantHome 'profiles\web\cordis.patch.yml') -Value ($rows -join "`n") -Encoding UTF8
+            Set-Content -Path (Join-Path $variantHome 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
+            $env:DSH_HOME = $variantHome
+            $out = Join-Path $env:RUNNER_TEMP "$Name.out.txt"
+            $err = Join-Path $env:RUNNER_TEMP "$Name.err.txt"
+            Remove-Item $out, $err -Force -ErrorAction SilentlyContinue
+            $dshCmd = Join-Path (Split-Path (Get-Command dsh).Source) 'dsh.cmd'
+            $install = Join-Path (Split-Path (Get-Command dsh).Source) 'node_modules\@deepseek-ai\dsh'
+            if ($ExposeInternals) {
+              Write-Host "launch: node --expose-internals $install\lib\bin.js"
+              $proc = Start-Process -FilePath 'node' -ArgumentList "--expose-internals `"$(Join-Path $install 'lib\bin.js')`" web --port $Port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+            } else {
+              $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $Port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+            }
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited -and $i -gt 2) { break }
+              try {
+                $r = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/host.describe" -Method Post -Body '{"type":"client-request","rpcId":"smoke","method":"host.describe","payload":{}}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction Stop
+                if ($r.result.ok) { $ready = $true; break }
+              } catch { }
+            }
+            Write-Host "---------- variant '$Name' : ready=$ready exited=$($proc.HasExited) exit=$(if ($proc.HasExited) { $proc.ExitCode } else { '-' }) ----------"
+            Write-Host "--- child stdout ---"
+            if (Test-Path $out) { Get-Content $out | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
+            Write-Host "--- child stderr (tail) ---"
+            if (Test-Path $err) { Get-Content $err -Tail 25 | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
+            if (-not $proc.HasExited) { taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
+          }
+          # AC10 ROOT CAUSE (2026-09-29): two variants, one cycle, both non-gating.
+          #  A) hmr-plain = exactly the gate's manifest: relies on dsh's boot-time HMR
+          #     auto-create. This is what the gate runs.
+          #  B) hmr-early = the diag plugin creates the HMR entry itself from apply(),
+          #     which prints the entry store, fiber state + fiber error, the resolved
+          #     plugin path, and `ctx.get('hmr')` after the create resolves.
+          # That diag is what found the real cause: the resolved plugin had NO
+          # `Hmr.registerConfig` (its ownKeys lacked configs/refreshTasks), i.e. the
+          # runner install resolved cordis-plugin-hmr 1.0.19, which dropped the method
+          # dsh-app-boot calls. See the pin + assertion in the install step above.
+          Boot-Variant -Name 'hmr-plain' -Port 33124 -ExtraRows @()
+          Boot-Variant -Name 'hmr-early' -Port 33125 -ExtraRows @() -DiagConfig '{ earlyHmr: true }'
+
       - name: Boot dsh web on ephemeral port with sanitized ACTIVE plugin manifest
         shell: pwsh
         run: |
@@ -72,14 +297,32 @@ jobs:
             # imports resolve inside the profile dir
             Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:DSH_HOME 'profiles\web') -Force }
             $manifest = @()
+            # AC10 RELEASE GATE (2026-09-30): compose the HMR row explicitly.
+            # PROVEN race, captured by the diag in run 36581738576 (variant hmr-plain):
+            # dsh's profile boot awaits
+            #   ctx.loader.create({ name: '@deepseek-ai/cordis-plugin-hmr', config: { root: [] } })
+            # and then calls watchUserPatches IN THE SAME TICK. create() resolves when the
+            # entry is enrolled (fiber state=1), NOT when the plugin is ready (state=2,
+            # measured ~300 ms later on a cold runner), so dsh-app-boot/lib/index.js:762
+            # still reads ctx.get('hmr') === undefined and the boot dies with
+            #   "dsh: user patch-layer watching requires the Cordis HMR service"
+            # even though the very same run prints hmr=object ctor=Hmr typeofRegisterConfig=function
+            # 300 ms later. A warm host wins that race, a cold runner loses it — which is
+            # why this failure only ever reproduced in CI (verified: the same manifest
+            # booted fine locally on v22.22.2 AND on the runner's v22.23.2).
+            # Composing the row makes the normal boot await the HMR service, so no ad-hoc
+            # create and no race; the ad-hoc create path stays observable in the
+            # non-gating 'AC10 diag - HMR entry tree' step.
+            # The plugin must still be the version dsh-app-boot was built for
+            # (Hmr.registerConfig) — see the pin + loud assertion in the install step.
+            $manifest += "- insert:`n    - id: ci-hmr`n      name: '@deepseek-ai/cordis-plugin-hmr'`n      config:`n        root: []"
             foreach ($pn in $active) {
               if (Test-Path (Join-Path 'plugins' $pn)) {
                 $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}"
               }
             }
             $patchContent = $manifest -join "`n"
-            if (-not $patchContent) { $patchContent = '[]' }
-            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
+            if (-not $patchContent) { $patchContent = '[]' }            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
           } else {
             Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value '[]' -Encoding UTF8
           }
@@ -87,13 +330,27 @@ jobs:
           # Phase 02 R4: launch via cmd /c dsh so the npm .cmd wrapper resolves
           # (Start-Process on (Get-Command dsh).Source can hit the .ps1 shim
           # which Start-Process cannot execute directly).
+          # AC10 RELEASE GATE (2026-09-29): the previous shape launched the child
+          # with NO stdio capture, so a boot crash surfaced only as
+          # "no connection could be made" and the REAL cause was invisible in CI
+          # (the log dump looked at %LOCALAPPDATA%\DSHHarness\logs, which is the
+          # desktop launcher's directory and never exists on a clean runner).
+          # Now the child's stdout/stderr are captured to files, its exit code is
+          # reported, and the real runtime facts are dumped on failure. The gate
+          # stays STRICT: readiness failure still exits 1.
           $dshCmd = Join-Path (Split-Path (Get-Command dsh).Source) 'dsh.cmd'
           if (-not (Test-Path $dshCmd)) { $dshCmd = (Get-Command dsh).Source }
-          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $port --no-open" -PassThru -WindowStyle Hidden
+          $bootOut = Join-Path $env:RUNNER_TEMP 'dsh-boot.out.txt'
+          $bootErr = Join-Path $env:RUNNER_TEMP 'dsh-boot.err.txt'
+          Remove-Item $bootOut, $bootErr -Force -ErrorAction SilentlyContinue
+          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $bootOut -RedirectStandardError $bootErr
           $ready = $false
           $lastErr = ''
           for ($i = 0; $i -lt 60; $i++) {
             Start-Sleep -Seconds 1
+            # fail fast (with the captured cause) when the child already died —
+            # a crashed boot must not burn the full readiness budget
+            if ($proc.HasExited -and $i -gt 2) { break }
             try {
               $r = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/host.describe" -Method Post -Body '{"type":"client-request","rpcId":"smoke","method":"host.describe","payload":{}}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction Stop
               if ($r.result.ok) { $ready = $true; break }
@@ -104,10 +361,74 @@ jobs:
             # "partial" pass hides boot regressions. Dump diagnostics first.
             Write-Host "=== manifest ==="
             Get-Content (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml')
+            Write-Host "=== runtime facts ==="
+            Write-Host "node: $(node --version 2>&1)"
+            Write-Host "dsh:  $((& dsh --version 2>&1 | Out-String).Trim())"
+            # AC10 ROOT CAUSE (2026-09-29): the HMR plugin version decides whether the
+            # boot can watch the user patch layer at all. Report its version and whether
+            # it still exposes Hmr.registerConfig (dropped upstream in 1.0.18).
+            $hmrPkgPath = Join-Path (Split-Path $dshCmd) 'node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\cordis-plugin-hmr\package.json'
+            if (Test-Path $hmrPkgPath) {
+              $hmrDirPath = Split-Path $hmrPkgPath
+              $hmrVer = [regex]::Match((Get-Content -Raw $hmrPkgPath), '"version"\s*:\s*"([^"]+)"').Groups[1].Value
+              $hmrApi = (Get-Content -Raw (Join-Path $hmrDirPath 'lib\index.js')).Contains('registerConfig')
+              Write-Host "hmr plugin: $hmrVer (registerConfig=$hmrApi)"
+            } else {
+              Write-Host "hmr plugin: NOT FOUND at $hmrPkgPath"
+            }
+            Write-Host "dshCmd: $dshCmd (exists=$(Test-Path $dshCmd))"
+            Write-Host "DSH_HOME: $env:DSH_HOME"
+            Write-Host "child exit code: $(if ($proc.HasExited) { $proc.ExitCode } else { 'still-running' })"
+            Write-Host "=== child stdout ==="
+            if (Test-Path $bootOut) { Get-Content $bootOut -Tail 80 } else { Write-Host '(no stdout file)' }
+            Write-Host "=== child stderr ==="
+            if (Test-Path $bootErr) { Get-Content $bootErr -Tail 80 } else { Write-Host '(no stderr file)' }
+            Write-Host "=== port state ==="
+            Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Out-String | Write-Host
+            Write-Host "=== dsh home tree ==="
+            Get-ChildItem -Path $env:DSH_HOME -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 60 FullName, Length | Out-String | Write-Host
             Write-Host "=== dsh logs ==="
-            Get-ChildItem (Join-Path $env:LOCALAPPDATA 'DSHHarness\logs') -Filter 'dsh-server-*.log' -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "--- $($_.Name) ---"
+            Get-ChildItem -Path $env:DSH_HOME, (Join-Path $env:APPDATA 'dsh'), (Join-Path $env:LOCALAPPDATA 'DSHHarness\logs') -Recurse -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
               Get-Content $_.FullName -Tail 25 -ErrorAction SilentlyContinue
+            }
+            # AC10 RELEASE GATE (2026-09-29): the boot crash on the runner is
+            # "user patch-layer watching requires the Cordis HMR service", which
+            # means `ctx.get('hmr')` stayed undefined after dsh auto-created the
+            # HMR plugin. dsh resolves in-box plugins through the flat module
+            # fallback `$DSH_HOME/profiles/node_modules` (one junction per package
+            # of the installation closure, maintained by dsh-app-boot). Dump that
+            # fallback and run Node's own resolution walk from both anchors, so
+            # "fallback never built" is distinguishable from "built but
+            # unresolvable" without another round trip.
+            Write-Host "=== AC10 diag: dsh installation layout ==="
+            $dshRoot = Join-Path (Split-Path $dshCmd) 'node_modules'
+            $install = Join-Path $dshRoot '@deepseek-ai\dsh'
+            Write-Host "dshRoot:  $dshRoot"
+            Write-Host "install:  $install (package.json=$(Test-Path (Join-Path $install 'package.json')))"
+            Write-Host "install-level hmr:   $(Test-Path (Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-hmr'))"
+            Write-Host "install-level timer: $(Test-Path (Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-timer'))"
+            Write-Host "root-level hmr:      $(Test-Path (Join-Path $dshRoot '@deepseek-ai\cordis-plugin-hmr'))"
+            Write-Host "root-level timer:    $(Test-Path (Join-Path $dshRoot '@deepseek-ai\cordis-plugin-timer'))"
+            Write-Host "=== AC10 diag: profiles module fallback ==="
+            $farm = Join-Path $env:DSH_HOME 'profiles\node_modules'
+            Write-Host "farm: $farm (exists=$(Test-Path $farm))"
+            if (Test-Path $farm) {
+              Write-Host "farm entry count: $((Get-ChildItem $farm -Force -ErrorAction SilentlyContinue).Count)"
+              Write-Host "farm top10: $((Get-ChildItem $farm -Force -ErrorAction SilentlyContinue | Select-Object -First 10 | ForEach-Object { $_.Name }) -join ', ')"
+              foreach ($rel in '@deepseek-ai\cordis-plugin-hmr', '@deepseek-ai\cordis-plugin-timer') {
+                $link = Join-Path $farm $rel
+                if (Test-Path $link) {
+                  $item = Get-Item $link -Force
+                  Write-Host "farm $rel => linkType=$($item.LinkType) target=$($item.Target)"
+                } else { Write-Host "farm $rel => MISSING" }
+              }
+            }
+            Write-Host "=== AC10 diag: node resolution walk (the walk the loader takes) ==="
+            foreach ($anchor in @((Join-Path $env:DSH_HOME 'profiles\web\package.json'), (Join-Path $install 'package.json'))) {
+              if (Test-Path $anchor) {
+                node tests\ci\profile-module-resolution-probe.cjs $anchor '@deepseek-ai/cordis-plugin-hmr' '@deepseek-ai/cordis-plugin-timer'
+              } else { Write-Host "anchor missing: $anchor" }
             }
             Write-Host "FAIL: dsh smoke did not reach api_ready on CI runner (lastErr=$lastErr)"
             Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
@@ -269,6 +590,10 @@ jobs:
           git config --global user.email 'ci@dsh.invalid'
           git config --global user.name 'dsh ci'
           Write-Host "AC6 DSH_BIN=$env:DSH_BIN"
+          # runMode label (independent adversarial review, 2026-09-29): the "CI legs" of this
+          # gate REPLAY ci-level2.yml's job commands locally inside the isolated worktree;
+          # they are not an external GitHub run (promotion receipts carry runUrl:'' on purpose).
+          $env:AC6_RUN_MODE = 'local-replay (ci-level2 job commands, not an external GitHub run)'
           node tests\learn\test-learn-ac6-real-promotion-e2e.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host 'AC6 REAL PROMOTION E2E FAIL'; exit 1 }
-          Write-Host 'PASS: AC6 real promotion e2e (isolated host 3099, production 3080 untouched)'
+          Write-Host 'PASS: AC6 real promotion e2e (isolated host 3099). Production 3080: untouched-assertions apply where a production service exists; the leak assertion is the DURING-host snapshot; the external CI legs are a local replay of the ci-level2 job commands (see runMode).'

@@ -48,10 +48,22 @@ const REPORT_ARCHIVE = path.join(os.tmpdir(), 'ac6-real-e2e-reports');
 const ARCHIVED_REPORT = path.join(REPORT_ARCHIVE, `${STAMP}-report.json`);
 const BLOCKED_REPORT = path.join(REPORT_ARCHIVE, `blocked-${STAMP}-${process.pid}.json`);
 
-let pass = 0; let fail = 0; const failures = [];
+// 运行模式标注（对抗评审 2026-09-29，LOW 项）：本门的「CI 腿」是**本地重放** ci-level2.yml 的
+// job 命令（cwd = 隔离 worktree@commit），不是外部 GitHub run（收据里 runUrl 为空即为诚实标注）。
+// 显式记 mode=local-replay，避免本报告被当作「真实 GitHub CI 已通过」的证据使用。
+const RUN_MODE = process.env.AC6_RUN_MODE || 'local-replay';
+
+let pass = 0; let fail = 0; let na = 0; const failures = []; const notApplicable = [];
 function check(name, fn) {
   try { const v = fn(); pass += 1; console.log(`  PASS  ${name}${v === undefined ? '' : ` — ${v}`}`); return v; }
   catch (e) { fail += 1; failures.push(`${name} :: ${e.message}`); console.log(`  FAIL  ${name}\n        ${e.message}`); return null; }
+}
+// 显式 NA（对抗评审 2026-09-29 修复）：某条腿在本环境下**没有断言对象**时（例如干净 CI runner
+// 上本机没有生产服务），记 NA 而不是 PASS ——「空 == 空」不构成断言，记 PASS 属虚报。
+function checkNA(name, reason) {
+  na += 1; notApplicable.push(`${name} :: ${reason}`);
+  console.log(`  NA    ${name} — ${reason}`);
+  return null;
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 function assertEq(a, b, msg) { if (a !== b) throw new Error(`${msg || 'not equal'} — got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`); }
@@ -431,6 +443,18 @@ check('隔离宿主保活就绪（port/pid/hold-state.json 且插件哈希一致
   return `port=${hold.port} pid=${hold.pid} pluginSha=${String(st.pluginSha256).slice(0, 12)}`;
 });
 
+// ── 真实泄漏断言（对抗评审 2026-09-29 修复）：在隔离宿主**运行中**取 3080 快照。
+//    此前「未被扰动」只在宿主关停之后取前/后快照 —— 干净 runner 上是「空==空」，属同义反复
+//    （门禁若把监听者泄到 3080，关停后也已消失，照样 PASS）。运行中快照让这条腿真正有断言对象。
+const prodListenersDuring = listenAll(3080);
+const prodPidDuring = listenPid(3080);
+check('隔离宿主运行期间未向生产 3080 泄漏监听者（运行中快照，真实断言）', () => {
+  assertEq(prodPidDuring, prodBefore, 'production 3080 loopback owner changed while the isolated host was up');
+  assertEq(prodListenersDuring.join(';'), prodListenersBefore.join(';'),
+    'production 3080 listener set changed while the isolated host was up');
+  return `宿主运行中 3080 监听者 ${prodListenersDuring.length} 项与运行前逐字一致`;
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\n=== 4. CI 腿（真跑 ci-level2.yml 的 job 命令，cwd=隔离 worktree@commit）===');
 const CI_SUITES = (() => {
@@ -547,13 +571,24 @@ if (hold) {
 const portFree = listenPid(HOST_PORT);
 const prodAfter = listenPid(3080);
 const prodListenersAfter = listenAll(3080);
-check('隔离宿主已关停、端口释放、生产 3080 未被扰动', () => {
+check('隔离宿主已关停 + 3099 端口已释放', () => {
   assertEq(portFree, '', '3099 still listening');
-  assert(prodBefore !== '', '生产 3080 在 127.0.0.1 上无监听者（服务未运行 ⇒ 无法断言"未扰动"）');
-  assertEq(prodAfter, prodBefore, 'production loopback 3080 owner pid changed');
-  assertEq(prodListenersAfter.join(';'), prodListenersBefore.join(';'), 'production 3080 full listener set changed');
-  return `3099=FREE, 3080(127.0.0.1 node) pid=${prodAfter} 前后一致，且 3080 全部监听者 ${prodListenersAfter.length} 项不变`;
+  return '3099=FREE（隔离宿主已退）';
 });
+// 生产 3080「未被扰动」的两段式判定（对抗评审 2026-09-29 修复）：
+//   ① 本机确有生产服务监听 3080 ⇒ 身份 pid + 完整监听者集必须逐字一致（真断言）；
+//   ② 本机没有生产服务（干净 CI runner）⇒ **没有断言对象**，记 NA 而不是 PASS。
+//      「未泄漏监听者」这件事由上面的**运行中快照**腿真实承担（宿主还活着时就比对）。
+if (prodBefore || prodListenersBefore.length) {
+  check('生产 3080 未被扰动（前后身份 pid 一致 + 完整监听者集逐字一致）', () => {
+    assertEq(prodAfter, prodBefore, 'production loopback 3080 owner pid changed');
+    assertEq(prodListenersAfter.join(';'), prodListenersBefore.join(';'), 'production 3080 full listener set changed');
+    return `3080(127.0.0.1 node) pid=${prodAfter} 前后一致，且全部监听者 ${prodListenersAfter.length} 项不变`;
+  });
+} else {
+  checkNA('生产 3080 未被扰动（前后快照）',
+    '运行本门时本机无生产服务监听 3080 ⇒ 无断言对象（空==空不构成断言）；泄漏检测见运行中快照腿');
+}
 const gateTail = fs.existsSync(GATE_LOG) ? fs.readFileSync(GATE_LOG, 'utf8') : '';
 check('mount-gate 自身判定 PASS（A1–A5 全过）', () => {
   assert(gate.exitCode === 0, `gate exit=${gate.exitCode}; tail: ` + gateTail.split(/\r?\n/).slice(-10).join(' | '));
@@ -686,34 +721,52 @@ check('临时 checkpoint 目录不含生产 profile 拷贝（隔离生效）', (
 
 // ─────────────────────────────────────────────────────────────────────────────
 evidence.finishedAt = new Date().toISOString();
-evidence.pass = pass; evidence.fail = fail; evidence.failures = failures;
+evidence.pass = pass; evidence.fail = fail; evidence.na = na;
+evidence.failures = failures; evidence.notApplicable = notApplicable;
+evidence.runMode = RUN_MODE;
 evidence.lock = { dir: LOCK.lockDir, staleTakenOver: LOCK.staleTakenOver === true };
 evidence.reportArchived = ARCHIVED_REPORT;
 fs.writeFileSync(REPORT, JSON.stringify(evidence, null, 2), 'utf8');
 
 // 收尾最后一跳：归档报告 → 删临时根 → 释放跨 worktree 锁；并把「只有收尾后才知道的真值」
 // （临时根真删否、锁真释放否、锁目录在哪）补写进归档副本。
+// 对抗评审 2026-09-29 修复：这两跳原先整块包在 try/catch 里 —— 归档读取一旦抛错，收尾 check
+// 根本不执行、fail 不增，脚本仍打印 PASS 并 exit 0（可静默跳过的假绿）。现在归档读取失败
+// **记为该 check 的失败**，check 无论如何都会执行；只有「回写归档副本」这一美化动作仍尽力而为。
 const fin = finalize();
-try {
-  const rep = JSON.parse(fs.readFileSync(ARCHIVED_REPORT, 'utf8'));
-  rep.cleanup = {
-    ...(rep.cleanup || {}),
-    tempRootRemoved: fin.tempRootRemoved, tempRoot: ROOT,
-    lockDir: fin.lockDir, lockReleased: fin.lockReleased, lockReleaseDetail: fin.lockReleaseDetail ?? null,
-    archivedReport: ARCHIVED_REPORT, archivedAt: new Date().toISOString(), finalizeErrors: fin.errors,
-  };
-  check('清理干净：临时根目录已删 + 跨 worktree 锁已释放（并发安全）', () => {
-    assert(fin.tempRootRemoved, `temp root still present: ${ROOT}`);
-    assert(fin.lockReleased, `lock not released: ${JSON.stringify(fin.lockReleaseDetail ?? null)}`);
-    return `root removed=${ROOT}；lock released=${fin.lockDir}`;
-  });
-  rep.pass = pass; rep.fail = fail; rep.failures = failures; rep.finishedAt = new Date().toISOString();
-  fs.writeFileSync(ARCHIVED_REPORT, JSON.stringify(rep, null, 2), 'utf8');
-} catch (e) { console.log('  WARN  归档补写失败：' + e.message); }
+let archiveReadError = null;
+let rep = null;
+try { rep = JSON.parse(fs.readFileSync(ARCHIVED_REPORT, 'utf8')); }
+catch (e) { archiveReadError = e.message; }
+check('清理干净：临时根目录已删 + 跨 worktree 锁已释放（并发安全）', () => {
+  assert(archiveReadError === null, `归档报告不可读（收尾证据缺失）: ${archiveReadError}`);
+  assert(fin.tempRootRemoved, `temp root still present: ${ROOT}`);
+  assert(fin.lockReleased, `lock not released: ${JSON.stringify(fin.lockReleaseDetail ?? null)}`);
+  return `root removed=${ROOT}；lock released=${fin.lockDir}`;
+});
+if (rep) {
+  try {
+    rep.cleanup = {
+      ...(rep.cleanup || {}),
+      tempRootRemoved: fin.tempRootRemoved, tempRoot: ROOT,
+      lockDir: fin.lockDir, lockReleased: fin.lockReleased, lockReleaseDetail: fin.lockReleaseDetail ?? null,
+      archivedReport: ARCHIVED_REPORT, archivedAt: new Date().toISOString(), finalizeErrors: fin.errors,
+    };
+    rep.runMode = RUN_MODE;
+    rep.pass = pass; rep.fail = fail; rep.na = na;
+    rep.failures = failures; rep.notApplicable = notApplicable;
+    rep.cleanupChecked = true; rep.finishedAt = new Date().toISOString();
+    fs.writeFileSync(ARCHIVED_REPORT, JSON.stringify(rep, null, 2), 'utf8');
+  } catch (e) { console.log('  WARN  归档副本回写失败（不影响判定）：' + e.message); }
+} else {
+  console.log('  WARN  归档副本不可读 —— 已按 FAIL 计入上方 check（不做静默跳过）');
+}
 
 console.log('\n=== 汇总 ===');
-console.log(`  AC6 真实端到端: ${pass} PASS / ${fail} FAIL`);
-if (fail === 0) console.log('  PASS AC6 real promotion e2e (real git worktree/commit + real ci-level2 job run + real transaction journal)');
+console.log(`  AC6 真实端到端: ${pass} PASS / ${na} NA / ${fail} FAIL`);
+if (na) console.log(`  NA（本环境无断言对象，未计入 PASS）: ${notApplicable.join(' ; ')}`);
+console.log(`  runMode=${RUN_MODE}（CI 腿 = 本地重放 ci-level2.yml 的 job 命令；非外部 GitHub run）`);
+if (fail === 0) console.log('  PASS AC6 real promotion e2e (real git worktree/commit + ci-level2 job commands replayed in the isolated worktree + real transaction journal)');
 else console.log('  FAIL AC6 real promotion e2e — ' + failures.join(' ; '));
 console.log(`  report（归档；临时根已清理）: ${ARCHIVED_REPORT}`);
 process.exit(fail === 0 ? 0 : 1);

@@ -106,13 +106,13 @@ jobs:
             'context-memory.mjs','supervisor-bridge.mjs'
           )
           function Boot-Variant {
-            param([string]$Name, [int]$Port, [string[]]$ExtraRows, [switch]$ExposeInternals)
+            param([string]$Name, [int]$Port, [string[]]$ExtraRows, [switch]$ExposeInternals, [string]$DiagConfig = '{}')
             # NB: $home is read-only in PowerShell (it aliases $HOME); use a distinct name.
             $variantHome = Join-Path $env:RUNNER_TEMP "dsh-home-$Name"
             Remove-Item $variantHome -Recurse -Force -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force -Path (Join-Path $variantHome 'profiles\web') | Out-Null
             Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $variantHome 'profiles\web') -Force }
-            $rows = @("- insert:`n    - id: ac10-entry-diag`n      name: './ac10-entry-diag.mjs'`n      config: {}")
+            $rows = @("- insert:`n    - id: ac10-entry-diag`n      name: './ac10-entry-diag.mjs'`n      config: $DiagConfig")
             foreach ($pn in $gatePlugins) {
               if (Test-Path (Join-Path 'plugins' $pn)) { $rows += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}" }
             }
@@ -147,9 +147,18 @@ jobs:
             if (Test-Path $err) { Get-Content $err -Tail 25 | ForEach-Object { Write-Host "  $_" } } else { Write-Host '  (none)' }
             if (-not $proc.HasExited) { taskkill /PID $proc.Id /T /F 2>&1 | Out-Null }
           }
-          Boot-Variant -Name 'hmr-tree' -Port 33124 -ExtraRows @()
-          Boot-Variant -Name 'hmr-explicit' -Port 33125 -ExtraRows @("- id: hmr`n  disabled: false")
-          Boot-Variant -Name 'hmr-expose' -Port 33126 -ExtraRows @() -ExposeInternals
+          # AC10 RELEASE GATE (2026-09-29): two variants, one cycle, both non-gating.
+          #  A) hmr-plain = exactly the gate's manifest: relies on dsh's boot-time HMR
+          #     auto-create. It fails on this runner; the v3 diag plugin now records WHY
+          #     (loader entry store, fiber state + fiber error, unhandled rejections).
+          #  B) hmr-row   = dsh-base's own hmr row restated in the user patch layer
+          #     (id hmr / name @deepseek-ai/cordis-plugin-hmr / config.root ['.'];
+          #     the web bundle disables that row). If B boots, the fix is to DECLARE
+          #     HMR in the sanitized manifest instead of relying on the auto-create.
+          $hmrRow = "- id: hmr`n  name: '@deepseek-ai/cordis-plugin-hmr'`n  disabled: false`n  config:`n    root: ['.']"
+          Boot-Variant -Name 'hmr-plain' -Port 33124 -ExtraRows @()
+          Boot-Variant -Name 'hmr-early' -Port 33125 -ExtraRows @() -DiagConfig '{ earlyHmr: true }'
+          Boot-Variant -Name 'hmr-row' -Port 33126 -ExtraRows @($hmrRow)
 
       - name: Boot dsh web on ephemeral port with sanitized ACTIVE plugin manifest
         shell: pwsh
@@ -181,9 +190,21 @@ jobs:
                 $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}"
               }
             }
+            # AC10 RELEASE GATE (2026-09-29): DECLARE HMR in the sanitized user patch
+            # layer. dsh-base already carries this row; the web bundle turns it off
+            # ("TODO: Re-enable shared HMR for Web after its reload lifecycle is
+            # tested") and dsh then auto-creates it during boot. On a cold CI runner
+            # that auto-create does not leave an active service, and dsh aborts with
+            # "user patch-layer watching requires the Cordis HMR service" — so the
+            # gate was failing on a boot path that cannot start there, not on the
+            # repo's plugins. Restating the base row (name + config; the last write
+            # wins per row) makes HMR part of the initial composition, which is also
+            # the state a working host ends up in (auto-create there succeeds and HMR
+            # is live). No secrets, no plugin changes: the profile stays a real
+            # sanitized user patch layer.
+            $manifest += "- id: hmr`n  name: '@deepseek-ai/cordis-plugin-hmr'`n  disabled: false`n  config:`n    root: ['.']"
             $patchContent = $manifest -join "`n"
-            if (-not $patchContent) { $patchContent = '[]' }
-            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
+            if (-not $patchContent) { $patchContent = '[]' }            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
           } else {
             Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value '[]' -Encoding UTF8
           }

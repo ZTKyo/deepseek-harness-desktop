@@ -107,18 +107,19 @@ jobs:
           )
           function Boot-Variant {
             param([string]$Name, [int]$Port, [string[]]$ExtraRows, [switch]$ExposeInternals)
-            $home = Join-Path $env:RUNNER_TEMP "dsh-home-$Name"
-            Remove-Item $home -Recurse -Force -ErrorAction SilentlyContinue
-            New-Item -ItemType Directory -Force -Path (Join-Path $home 'profiles\web') | Out-Null
-            Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $home 'profiles\web') -Force }
+            # NB: $home is read-only in PowerShell (it aliases $HOME); use a distinct name.
+            $variantHome = Join-Path $env:RUNNER_TEMP "dsh-home-$Name"
+            Remove-Item $variantHome -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path (Join-Path $variantHome 'profiles\web') | Out-Null
+            Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $variantHome 'profiles\web') -Force }
             $rows = @("- insert:`n    - id: ac10-entry-diag`n      name: './ac10-entry-diag.mjs'`n      config: {}")
             foreach ($pn in $gatePlugins) {
               if (Test-Path (Join-Path 'plugins' $pn)) { $rows += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}" }
             }
             foreach ($row in $ExtraRows) { $rows += $row }
-            Set-Content -Path (Join-Path $home 'profiles\web\cordis.patch.yml') -Value ($rows -join "`n") -Encoding UTF8
-            Set-Content -Path (Join-Path $home 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
-            $env:DSH_HOME = $home
+            Set-Content -Path (Join-Path $variantHome 'profiles\web\cordis.patch.yml') -Value ($rows -join "`n") -Encoding UTF8
+            Set-Content -Path (Join-Path $variantHome 'profiles\web\cordis.yml') -Value '[]' -Encoding UTF8
+            $env:DSH_HOME = $variantHome
             $out = Join-Path $env:RUNNER_TEMP "$Name.out.txt"
             $err = Join-Path $env:RUNNER_TEMP "$Name.err.txt"
             Remove-Item $out, $err -Force -ErrorAction SilentlyContinue

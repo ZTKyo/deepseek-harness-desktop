@@ -89,9 +89,32 @@ function main() {
     console.log(`path B (native addon requireBuiltin) => FAIL ${error.code ?? '?'} ${firstLine(error)}`);
   }
 
+  // The loader does NOT stop at "the function exists" — it CALLS it:
+  //   const raw = requireInternal('internal/modules/esm/loader')?.getOrInitializeCascadedLoader()
+  //   if (raw) return Object.assign(raw, { version: 'v1' })
+  // A getter that exists but THROWS (or returns undefined) on this Node build
+  // leaves loader.internal undefined in the real boot, so the probe must make the
+  // same call instead of only probing the property.
   const loader = byAddon ?? byExpose;
-  const available = typeof (loader && loader.getOrInitializeCascadedLoader) === 'function';
-  console.log(`VERDICT: loader.internal would be ${available ? 'AVAILABLE' : 'UNDEFINED'} on this host`);
+  let cascaded;
+  let callOutcome = 'not attempted';
+  if (typeof (loader && loader.getOrInitializeCascadedLoader) === 'function') {
+    try {
+      cascaded = loader.getOrInitializeCascadedLoader();
+      callOutcome = cascaded ? `RETURNED (${typeof cascaded}, keys: ${Object.keys(cascaded).slice(0, 10).join(',')})` : 'RETURNED undefined/null';
+      console.log(`call getOrInitializeCascadedLoader() => ${callOutcome}`);
+    } catch (error) {
+      callOutcome = `THREW ${error.code ?? '?'} ${firstLine(error)}`;
+      console.log(`call getOrInitializeCascadedLoader() => ${callOutcome}`);
+      const line2 = String(error.stack ?? '').split('\n')[1];
+      if (line2) console.log(`  at ${line2.trim()}`);
+    }
+  } else {
+    console.log('call getOrInitializeCascadedLoader() => skipped (not a function)');
+  }
+
+  const available = Boolean(cascaded);
+  console.log(`VERDICT: loader.internal would be ${available ? 'AVAILABLE' : 'UNDEFINED'} on this host (${callOutcome})`);
   console.log(`VERDICT: HMR service can register = ${available}`);
   return available ? 0 : 1;
 }

@@ -229,19 +229,30 @@ jobs:
             # imports resolve inside the profile dir
             Get-ChildItem 'plugins' -Filter '*.mjs' | Where-Object { $_.Name -notmatch 'test' } | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:DSH_HOME 'profiles\web') -Force }
             $manifest = @()
+            # AC10 RELEASE GATE (2026-09-30): compose the HMR row explicitly.
+            # PROVEN race, captured by the diag in run 36581738576 (variant hmr-plain):
+            # dsh's profile boot awaits
+            #   ctx.loader.create({ name: '@deepseek-ai/cordis-plugin-hmr', config: { root: [] } })
+            # and then calls watchUserPatches IN THE SAME TICK. create() resolves when the
+            # entry is enrolled (fiber state=1), NOT when the plugin is ready (state=2,
+            # measured ~300 ms later on a cold runner), so dsh-app-boot/lib/index.js:762
+            # still reads ctx.get('hmr') === undefined and the boot dies with
+            #   "dsh: user patch-layer watching requires the Cordis HMR service"
+            # even though the very same run prints hmr=object ctor=Hmr typeofRegisterConfig=function
+            # 300 ms later. A warm host wins that race, a cold runner loses it — which is
+            # why this failure only ever reproduced in CI (verified: the same manifest
+            # booted fine locally on v22.22.2 AND on the runner's v22.23.2).
+            # Composing the row makes the normal boot await the HMR service, so no ad-hoc
+            # create and no race; the ad-hoc create path stays observable in the
+            # non-gating 'AC10 diag - HMR entry tree' step.
+            # The plugin must still be the version dsh-app-boot was built for
+            # (Hmr.registerConfig) — see the pin + loud assertion in the install step.
+            $manifest += "- insert:`n    - id: ci-hmr`n      name: '@deepseek-ai/cordis-plugin-hmr'`n      config:`n        root: []"
             foreach ($pn in $active) {
               if (Test-Path (Join-Path 'plugins' $pn)) {
                 $manifest += "- insert:`n    - id: ci-$($pn.Replace('.mjs',''))`n      name: './$pn'`n      config: {}"
               }
             }
-            # AC10 RELEASE GATE (2026-09-29): the manifest is the REAL sanitized user
-            # patch layer (repo plugins only). An earlier hypothesis restated dsh-base's
-            # HMR row here; that was wrong — declaring the row only turns dsh's
-            # swallowed auto-create failure into a hard "TypeError:
-            # hmr.registerConfig is not a function" crash, because the real cause is
-            # the plugin version resolved on the runner (see the pin in the install
-            # step). The gate now runs the honest boot path: dsh brings up HMR itself
-            # from the version-aligned install.
             $patchContent = $manifest -join "`n"
             if (-not $patchContent) { $patchContent = '[]' }            Set-Content -Path (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml') -Value $patchContent -Encoding UTF8
           } else {

@@ -91,6 +91,74 @@ jobs:
           Write-Host "AC10: hmr plugin pinned to $hmrVer (registerConfig=$hmrApi)"
           if ($hmrApi -ne $true) { throw "AC10: HMR plugin API mismatch: $hmrVer has no Hmr.registerConfig, which dsh-app-boot requires" }
 
+      - name: AC10 RELEASE BLOCKER canary - fresh-install HMR resolution (gates on state change)
+        # AC10 RELEASE GATE (2026-09-29, added after the independent adversarial review).
+        # The pin above deliberately makes the runner reproduce the API pair rc.2 was
+        # BUILT for (hmr 1.0.16) -- which is the right thing to test for rc.2's own
+        # logic, but it must never let anyone read a green run as
+        # "a fresh `npm i -g @deepseek-ai/dsh@0.1.1-rc.2` works for users".
+        # It does NOT: rc.2 declares "@deepseek-ai/cordis-plugin-hmr": "^1.0.16"
+        # (caret), so a fresh install resolves the newest 1.x (1.0.19 today), which has
+        # NO `Hmr.registerConfig` while dsh-app-boot calls it unconditionally -> boot
+        # dies on any profile that has a patch layer, i.e. the standard install shape.
+        # That is an UPSTREAM release blocker, tracked in the workspace KNOWN_ISSUES.md,
+        # and it is OUT OF SCOPE for this repo to fix (no upstream fork/authority: this
+        # repo owns its own plugins/gates only).
+        # This step is a canary on that known state in BOTH directions:
+        #   * drift still present -> PASS, plus a loud ::warning:: + job summary banner
+        #     so the green run states its own scope and never implies "releasable";
+        #   * drift GONE (upstream restored the API or narrowed the range) -> FAIL,
+        #     because the pin must then be revisited and the blocker closed.
+        # It also FAILS if the registry cannot be read, so the state can never be
+        # silently unknown (a comment cannot fail; this can).
+        shell: pwsh
+        run: |
+          $pkg = '@deepseek-ai/dsh@0.1.1-rc.2'
+          $canary = Join-Path $env:RUNNER_TEMP 'hmr-canary'
+          Remove-Item $canary -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $canary | Out-Null
+          $depsFile = Join-Path $canary 'deps.json'
+          $depsErr = Join-Path $canary 'deps.err'
+          # cmd /c does the redirection (PowerShell 5.1 turns native stderr into a
+          # terminating error with 2>&1), and stderr goes to its own file so it can
+          # never corrupt the JSON we parse.
+          cmd /c "npm view `"$pkg`" dependencies --json > `"$depsFile`" 2>`"$depsErr`""
+          if (-not (Test-Path $depsFile) -or -not (Get-Content -Raw $depsFile)) {
+            Get-Content $depsErr -ErrorAction SilentlyContinue | Write-Host
+            throw "AC10 canary: could not read the dependencies of $pkg from the registry (refusing to report 'unknown')"
+          }
+          $deps = Get-Content -Raw $depsFile | ConvertFrom-Json
+          $range = ($deps.PSObject.Properties | Where-Object { $_.Name -eq '@deepseek-ai/cordis-plugin-hmr' } | Select-Object -First 1).Value
+          if (-not $range) { throw "AC10 canary: $pkg declares no @deepseek-ai/cordis-plugin-hmr dependency any more" }
+
+          $verFile = Join-Path $canary 'fresh.json'
+          $verErr = Join-Path $canary 'fresh.err'
+          cmd /c "npm view `"@deepseek-ai/cordis-plugin-hmr@$range`" version --json > `"$verFile`" 2>`"$verErr`""
+          $fresh = @(Get-Content -Raw $verFile | ConvertFrom-Json)[-1]
+          if (-not $fresh) {
+            Get-Content $verErr -ErrorAction SilentlyContinue | Write-Host
+            throw "AC10 canary: could not resolve the newest hmr version matching '$range' (refusing to report 'unknown')"
+          }
+
+          $freshPin = Join-Path $canary 'fresh-pin'
+          New-Item -ItemType Directory -Force -Path $freshPin | Out-Null
+          $freshLog = Join-Path $freshPin 'pack.log'
+          cmd /c "npm pack `"@deepseek-ai/cordis-plugin-hmr@$fresh`" --pack-destination `"$freshPin`" > `"$freshLog`" 2>&1"
+          if ($LASTEXITCODE -ne 0) { Get-Content $freshLog | Write-Host; throw "AC10 canary: npm pack failed for @deepseek-ai/cordis-plugin-hmr@$fresh" }
+          $freshTgz = Get-ChildItem $freshPin -Filter '*.tgz' | Select-Object -First 1
+          if (-not $freshTgz) { throw "AC10 canary: could not download @deepseek-ai/cordis-plugin-hmr@$fresh" }
+          tar -xzf $freshTgz.FullName -C $freshPin
+          $freshApi = (Get-Content -Raw (Join-Path $freshPin 'package\lib\index.js')).Contains('registerConfig')
+          Write-Host "AC10 CANARY: declared range=$range ; fresh resolution=$fresh ; registerConfig=$freshApi"
+          if ($freshApi -eq $true) {
+            throw "AC10 canary: the upstream drift is GONE (a fresh install of $pkg now resolves hmr $fresh, which HAS Hmr.registerConfig). Revisit the 1.0.16 pin in this workflow, close the KNOWN_ISSUES entry, and re-run."
+          }
+          $banner = "fresh install of $pkg resolves hmr $fresh (declared range '$range'), which has NO Hmr.registerConfig while dsh-app-boot calls it unconditionally (dsh-app-boot/lib/index.js watchUserPatches) -> boot dies on any profile with a patch layer. Upstream blocker, out of scope for this repo; tracked in KNOWN_ISSUES.md. This lane tests rc.2 against hmr 1.0.16 (the API pair rc.2 was built for)."
+          Write-Host "::warning title=AC10 RELEASE BLOCKER (upstream, tracked)::$banner"
+          if ($env:GITHUB_STEP_SUMMARY) {
+            Add-Content $env:GITHUB_STEP_SUMMARY "## AC10 release gate: scope + upstream blocker`n`n- This lane tests ``dsh@0.1.1-rc.2`` against **hmr 1.0.16** (the API pair rc.2 was built for); that is what makes its green verdict meaningful for rc.2's own logic.`n- **A green run here does NOT mean a fresh install works for users**: a fresh ``npm i -g @deepseek-ai/dsh@0.1.1-rc.2`` resolves hmr **$fresh** (declared range ``$range``), which lacks ``Hmr.registerConfig`` while dsh-app-boot calls it unconditionally -> boot dies on any profile with a patch layer.`n- Status: **UPSTREAM RELEASE BLOCKER, tracked in KNOWN_ISSUES.md** (this repo has no upstream authority to fix it; the canary step above fails if this state ever changes).`n"
+          }
+
       - name: AC10 diag - native internal-loader addon probe (never gates)
         # AC10 RELEASE GATE (2026-09-29): the runner boot dies with
         # "user patch-layer watching requires the Cordis HMR service", i.e. the HMR
@@ -522,6 +590,10 @@ jobs:
           git config --global user.email 'ci@dsh.invalid'
           git config --global user.name 'dsh ci'
           Write-Host "AC6 DSH_BIN=$env:DSH_BIN"
+          # runMode label (independent adversarial review, 2026-09-29): the "CI legs" of this
+          # gate REPLAY ci-level2.yml's job commands locally inside the isolated worktree;
+          # they are not an external GitHub run (promotion receipts carry runUrl:'' on purpose).
+          $env:AC6_RUN_MODE = 'local-replay (ci-level2 job commands, not an external GitHub run)'
           node tests\learn\test-learn-ac6-real-promotion-e2e.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host 'AC6 REAL PROMOTION E2E FAIL'; exit 1 }
-          Write-Host 'PASS: AC6 real promotion e2e (isolated host 3099, production 3080 untouched)'
+          Write-Host 'PASS: AC6 real promotion e2e (isolated host 3099). Production 3080: untouched-assertions apply where a production service exists; the leak assertion is the DURING-host snapshot; the external CI legs are a local replay of the ci-level2 job commands (see runMode).'

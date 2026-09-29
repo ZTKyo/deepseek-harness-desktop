@@ -47,6 +47,42 @@ jobs:
           npm install -g "@deepseek-ai/dsh@$ver" 2>&1 | Select-Object -Last 2
           dsh --version
 
+      - name: AC10 diag - native internal-loader addon probe (never gates)
+        # AC10 RELEASE GATE (2026-09-29): the runner boot dies with
+        # "user patch-layer watching requires the Cordis HMR service", i.e. the HMR
+        # plugin never registered its service. The HMR plugin refuses to register
+        # without loader.internal, which cordis-plugin-loader obtains either from
+        # `--expose-internals` (absent here, exactly as dsh runs it) or from the
+        # OPTIONAL native package node-addon-require-builtin-<platform>. This step
+        # reports which path this runner has, plus the resolved platform package and
+        # its prebuilt binary. Diagnostic only: continue-on-error keeps it from
+        # gating the job (the boot step below still fails the job on its own).
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Write-Host "=== runner npm/node facts ==="
+          Write-Host "node: $(node --version)"
+          Write-Host "npm:  $(npm --version)"
+          Write-Host "omit: [$((npm config get omit 2>&1) -join '')]"
+          Write-Host "optional: [$((npm config get optional 2>&1) -join '')]"
+          Write-Host "registry: $((npm config get registry 2>&1) -join '')"
+          $dshCmd = (Get-Command dsh).Source
+          $dshRoot = Join-Path (Split-Path $dshCmd) 'node_modules'
+          $install = Join-Path $dshRoot '@deepseek-ai\dsh'
+          Write-Host "=== installed node-addon-* packages ==="
+          foreach ($dir in @($dshRoot, (Join-Path $install 'node_modules'))) {
+            Get-ChildItem $dir -Directory -Filter 'node-addon-*' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
+          }
+          Write-Host "=== native binaries under the dsh install ==="
+          Get-ChildItem (Join-Path $install 'node_modules') -Recurse -Filter '*.node' -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
+          Write-Host "=== the exact call cordis-plugin-loader makes ==="
+          $anchor = Join-Path $install 'node_modules\@deepseek-ai\cordis-plugin-loader\lib\index.js'
+          node tests\ci\loader-internal-probe.cjs $anchor
+          Write-Host "probe exit: $LASTEXITCODE (0 = loader.internal available, 1 = undefined)"
+          Write-Host "=== same probe with --expose-internals ==="
+          node --expose-internals tests\ci\loader-internal-probe.cjs $anchor
+          Write-Host "probe(--expose-internals) exit: $LASTEXITCODE"
+
       - name: Boot dsh web on ephemeral port with sanitized ACTIVE plugin manifest
         shell: pwsh
         run: |

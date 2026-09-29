@@ -87,13 +87,27 @@ jobs:
           # Phase 02 R4: launch via cmd /c dsh so the npm .cmd wrapper resolves
           # (Start-Process on (Get-Command dsh).Source can hit the .ps1 shim
           # which Start-Process cannot execute directly).
+          # AC10 RELEASE GATE (2026-09-29): the previous shape launched the child
+          # with NO stdio capture, so a boot crash surfaced only as
+          # "no connection could be made" and the REAL cause was invisible in CI
+          # (the log dump looked at %LOCALAPPDATA%\DSHHarness\logs, which is the
+          # desktop launcher's directory and never exists on a clean runner).
+          # Now the child's stdout/stderr are captured to files, its exit code is
+          # reported, and the real runtime facts are dumped on failure. The gate
+          # stays STRICT: readiness failure still exits 1.
           $dshCmd = Join-Path (Split-Path (Get-Command dsh).Source) 'dsh.cmd'
           if (-not (Test-Path $dshCmd)) { $dshCmd = (Get-Command dsh).Source }
-          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $port --no-open" -PassThru -WindowStyle Hidden
+          $bootOut = Join-Path $env:RUNNER_TEMP 'dsh-boot.out.txt'
+          $bootErr = Join-Path $env:RUNNER_TEMP 'dsh-boot.err.txt'
+          Remove-Item $bootOut, $bootErr -Force -ErrorAction SilentlyContinue
+          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList "/c `"$dshCmd`" web --port $port --no-open" -PassThru -WindowStyle Hidden -RedirectStandardOutput $bootOut -RedirectStandardError $bootErr
           $ready = $false
           $lastErr = ''
           for ($i = 0; $i -lt 60; $i++) {
             Start-Sleep -Seconds 1
+            # fail fast (with the captured cause) when the child already died —
+            # a crashed boot must not burn the full readiness budget
+            if ($proc.HasExited -and $i -gt 2) { break }
             try {
               $r = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/host.describe" -Method Post -Body '{"type":"client-request","rpcId":"smoke","method":"host.describe","payload":{}}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction Stop
               if ($r.result.ok) { $ready = $true; break }
@@ -104,9 +118,23 @@ jobs:
             # "partial" pass hides boot regressions. Dump diagnostics first.
             Write-Host "=== manifest ==="
             Get-Content (Join-Path $env:DSH_HOME 'profiles\web\cordis.patch.yml')
+            Write-Host "=== runtime facts ==="
+            Write-Host "node: $(node --version 2>&1)"
+            Write-Host "dsh:  $((& dsh --version 2>&1 | Out-String).Trim())"
+            Write-Host "dshCmd: $dshCmd (exists=$(Test-Path $dshCmd))"
+            Write-Host "DSH_HOME: $env:DSH_HOME"
+            Write-Host "child exit code: $(if ($proc.HasExited) { $proc.ExitCode } else { 'still-running' })"
+            Write-Host "=== child stdout ==="
+            if (Test-Path $bootOut) { Get-Content $bootOut -Tail 80 } else { Write-Host '(no stdout file)' }
+            Write-Host "=== child stderr ==="
+            if (Test-Path $bootErr) { Get-Content $bootErr -Tail 80 } else { Write-Host '(no stderr file)' }
+            Write-Host "=== port state ==="
+            Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Out-String | Write-Host
+            Write-Host "=== dsh home tree ==="
+            Get-ChildItem -Path $env:DSH_HOME -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 60 FullName, Length | Out-String | Write-Host
             Write-Host "=== dsh logs ==="
-            Get-ChildItem (Join-Path $env:LOCALAPPDATA 'DSHHarness\logs') -Filter 'dsh-server-*.log' -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "--- $($_.Name) ---"
+            Get-ChildItem -Path $env:DSH_HOME, (Join-Path $env:APPDATA 'dsh'), (Join-Path $env:LOCALAPPDATA 'DSHHarness\logs') -Recurse -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
               Get-Content $_.FullName -Tail 25 -ErrorAction SilentlyContinue
             }
             Write-Host "FAIL: dsh smoke did not reach api_ready on CI runner (lastErr=$lastErr)"

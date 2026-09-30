@@ -242,3 +242,54 @@ NEXT = P4 CONTRACT FINALIZATION TRANSACTION
 ```
 （在**下一任务**中执行：finalize governance artifact → mark P4 CONTRACT VERIFIED → complete P4 goal
 → formally start P4.5）。**本任务到此为止，不做任何状态变更。**
+
+---
+
+## 9. EXTERNAL REVIEW OUTCOME — 唯一裁决：`CHANGES_REQUIRED`
+
+> 本节为**评审完成之后**追加的文档记录（docs-only 提交）。**REVIEW_SHA `74adf93` 的字节未被改动。**
+> 时序诚实说明：评审**在途期间**曾有一次 docs-only 纠错提交 `a7703b2`（把 §3 GATE 7 的表述从笼统
+> 转述改为审计**实测事实**，并新增 CI 证据节）。REVIEW_SHA 自始至终未变（非 manifest 差异 = 0）。
+
+**裁决：`CHANGES_REQUIRED`** —— 依据评审者原话：工件、CI 承载、AC10 线上证据**"都站得住"**，
+但明确**"不建议升级为 COMPLETE"**，并给出 2 条**封条前应修**项（A、B）与 4 条精度问题（C–F）。
+**不是 APPROVED**（存在自家新门/新工具的判据缺陷）；**不是 BLOCKED**（无结构性阻塞、无安全事故）。
+
+### 9.1 评审者逐条判定（对 REVIEW_SHA 独立只读复核）
+
+| 被核实主张 | 判定 | 独立证据（评审者） |
+|---|---|---|
+| 两道 D1 门真实存在且已接线进**必需门** | VERIFIED | `ci-level1.yml:327-331`（必需 job 第 29/30 步）；run `36773829409` 该步 `success` |
+| 门**真的会红**（6 例负控） | VERIFIED | 抹掉时效标注 → D2/D3 红；中段改写历史行 → history 门 `exit=1`；未登记文档复述旧判定 → D5 红 |
+| 「没有真正的合并门」 | **FALSE** | 现场 3 必需 context + `enforce_admins=true` + `strict=true`（与封条方独立读数一致） |
+| AC10：红灯**真实拦下合并** | VERIFIED | PR #100 必需门 `failure` → 未合并；PR #99 三门全绿 → 并入 `3ba3511` |
+| D4：L3 `paths` 清单缺口 | VERIFIED（是"**误堵**"而非"漏放"） | 独立复算 tracked 709 / OUTSIDE 215（30.3%）；包内 638/211 系更早基线，差额 = 本 PR 新增 4 个清单外文件 |
+| 交付物"两个哈希互相矛盾" | **假矛盾** | LF 规范形 `478BCF2A…D7B9` vs 本机 CRLF 字节 `73A9C1CF…B476`，正文逐字节相同 |
+| D11 生产审计 / D13 源==生产 / 各 AC 套件计数 | VERIFIED | 生产 `RAW=4 / PLACEHOLDER=4 / REAL SECRET=0`；4 件 learn 插件 sha256 逐字节相同；各套件逐套实跑 |
+| A10「L23 指针失效」原话 | **NOT-REPRODUCED** | 其指向的「当前状态」就在同文件 **L11**，指针解析得通；真正的问题是**行号偏移**（见 D） |
+
+### 9.2 评审者新发现 —— 本轮**一律未修**（任务边界：Do NOT fix review findings）
+
+- **A【建议封条前修】D1 门对「逐条 AC 裁决」不设防。** `P4_STATUS.json` 的 `acVerdicts.AC10` 改成 `FAIL`
+  而权威文档仍写"全 PASS"时，门依旧 `45 PASS / exit 0`；全仓无任何消费 `acVerdicts` 的地方。
+  **封条方已独立复现**：`git archive 74adf93` → 基线 `45 PASS/0 FAIL exit 0` → 仅改该字段 → 仍 `45 PASS/0 FAIL exit 0`。
+- **B【建议封条前修】`tools/verify-release-artifact.mjs` 判决随换行符配置翻转。** 同一个 `74adf93`：
+  CRLF 检出 → `problems: header-hash-stale` / **DRIFT exit=1**；LF 检出 → **IDENTICAL exit=0**（正文一字不差）。
+  本文 §3 已把该判定口径**提前披露**；评审者独立复现并建议改为对 LF 归一化字节（或 git blob）求哈希。
+  该工具**未接入任何 workflow**（不会误拦 CI），但"IDENTICAL"这一凭据只在 LF 检出下成立。
+- **C** 权威文档数字自述陈旧（`43 断言 / 1420 行 / 55 豁免`）vs 门实测（`45 / 1934 / 59`），且无门钉住这些数字。
+- **D** A10 文首标注的行号指针**整体偏移 +34**（标注写 L60 → 实际 L94）。**封条方已抽查确认**：
+  L55/58/60 现为空白行/`## 一、AC1–AC10（canonical）` 标题/表头行，L94 才是被引用的判定行。
+- **E** D12 括号内描述过宽：机制成立（旧库确未被批量扫掠），但"3 个旧库 / 含标记库 mtime 未变"在封条时点数字对不上。
+- **F** D11 掩码未削弱检测能力（对抗性检查通过）：只会"造出"命中而非删除命中；结论是"门是**防误提交**的回归门，不是防恶意提交者"。
+
+### 9.3 评审者自述的未复验边界（如实登记）
+
+3 个真实数据门（`run-learn-real-e2e.mjs`、`run-learn-real-gap-e2e.mjs`、`redteam-r3-metrics.mjs`）与运行时
+装载探针（`NEW_CODE_LOADED`）**未复跑**；外部 Reviewer 99 裁决与 D2/D3 的业主授权属**政策/授权事实**，
+非技术可证；原始外部评审报告全文不在其手（故 A10 相关只能判"主张是否可复现"）。评审者自评完成度 **95%**。
+
+### 9.4 本轮对这些发现的处置 = **无（不修）**
+
+A/B/C/D/E/F 全部**留给下一授权任务**。**P4.5 未启动、P5 未启动、生产未触碰、
+ruleset/branch protection 未修改、PR #103 保持 OPEN 未合并、REVIEW_SHA 未改动。**

@@ -1,0 +1,31 @@
+########## SUITE: tests/learn/validate-gate-registry.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.38
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== P4 LEARN AC10 gate registry validation ===
+  repo        : C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+  registry    : C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\tests\learn\gate-registry.json
+  candidate   : C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\plugins\learn-candidate.mjs
+  PASS  0 js-yaml 可用（workflow YAML 真解析，非文本猜测）
+  PASS  1 登记表 JSON 可解析 — 43 个条目 / 4 条航道
+  PASS  2 每个条目字段完整且合法（suite/kind/requires/localCommand/lastVerified） — 43 个条目字段合法
+  PASS  3 覆盖性：tests/learn/*.mjs 全部登记（防"门悄悄消失"） — 43 个文件全部在登记表内
+  PASS  4 无幽灵条目：登记表里的每个路径都真实存在 — 43 个条目均指向真实文件
+  PASS  5 无重复登记 — 唯一
+  PASS  6 未进 CI 的条目必须写明 requires + exclusionReason + localCommand（helper 必须被真实 import） — 20 个未进 CI 条目均写明原因（2 个 helper 已核实被真实 import；0 个静默排除）
+  PASS  7 登记表里声明的每条 workflow 都能被 js-yaml 解析（YAML 改动不会带病进 CI） — 4 条航道 YAML 合法
+  PASS  8 CI 门：workflow 存在 + step 名真实存在 + run 里真实调用该套件 — 23 个 CI 门均经"workflow+step+run 调用"三连核验
+  PASS  9 接线双向为真：run 脚本里真实出现的套件必须登记，且登记的车道必须与事实相符（防"偷偷接线"/"谎报排除"） — 23 条接线与登记表双向一致
+  PASS  10 候选模块存在且可 import（STAGE_DELEGATION 指针核验的前提） — plugins\learn-candidate.mjs
+  PASS  10a 候选模块导出 STAGE_DELEGATION 且每个阶段都有 system/entry/file — 4 个阶段
+  PASS  10b 每个登记了 stage 的门，其 ci.workflow 必须与该阶段声明的 file 逐字一致（防假绿灯指针） — ISOLATED_TESTS -> .github/workflows/ci-level3.yml
+  PASS  11 CI-safe 车道语义：ci-level2 上的门不得依赖"宿主已安装包"（否则在 runner 上必红） — 20 个 CI-safe 车道门均不含宿主安装包解析
+  PASS  12 证据分级：每个 ci 条目必须写明 ciSafeEvidence 且标记「CI 实证」/「本地实测」 — 23 个 ci 条目证据齐全（21 条 CI 实证 / 2 条本地实测）
+
+AC10 gate registry: 15 PASS / 0 FAIL
+  PASS AC10 gate registry (每个套件都有归宿：真跑 / 有据排除 / 元门)
+
+########## ---- STDERR ----
+

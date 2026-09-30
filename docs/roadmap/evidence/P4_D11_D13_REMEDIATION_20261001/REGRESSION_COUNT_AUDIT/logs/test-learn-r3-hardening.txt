@@ -1,0 +1,47 @@
+########## SUITE: tests/learn/test-learn-r3-hardening.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.51
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+=== H1 幂等 / 确定性（idempotency & determinism） ===
+  PASS  H1.1 同一 draft 连续提案 3 次 → 只产生 1 条，id 稳定
+  PASS  H1.2 重复提案标记 deduped=true（不产生新条目）
+  PASS  H1.3 sourceEventSeqs 乱序/重复不影响 id（规范化幂等）
+  PASS  H1.4 提案顺序不影响最终库内容（顺序无关）
+  PASS  H1.5 stableHash 确定性（1000 次同输入同输出）
+  PASS  H1.6 recordRecall 同一批 id 应用两次 → recallCount 精确为 2
+  PASS  H1.7 真实插件：同一会话重复驱动不重复学习（水位防抖）
+  PASS  H1.8 确定性：两个独立 stateDir 同场景 → 除时间字段外逐字节一致
+
+=== H2 畸形输入（malformed input，绝不抛出） ===
+  PASS  H2.1 buildLearnDigest 对任意畸形参数不抛异常
+  PASS  H2.2 learningSignals 对任意畸形 digest 不抛异常
+  PASS  H2.3 propose / makeExperience 对畸形 draft 返回结构化错误
+  PASS  H2.4 propose 对畸形 store 不抛异常（返回 ok:false 或安全结果）
+  PASS  H2.13 approve/reject/retire 对畸形 store 返回结构化错误，绝不抛 TypeError
+  PASS  H2.14 approve/reject/retire 对合法 store 但 id 不存在 → experience_not_found（非抛错）
+  PASS  H2.15 库满 + createdAt 缺失时，新提案必须仍在库中（淘汰最旧而非丢弃最新）
+  PASS  H2.16 R-6 修复后仍保持确定性（同输入 → 同输出，逐字节一致）
+  PASS  H2.5 sanitizeExperience / validateStore 拒绝畸形且不抛
+  PASS  H2.6 recall / tokenize 对畸形查询不抛异常
+  PASS  H2.7 脱敏函数对畸形输入不抛异常
+  PASS  H2.8 超限输入被安全钳制（不产生超长/超量字段）
+  PASS  H2.9 normalizeSourceSeqs 只接受非负整数（拒绝 NaN/负数/小数/字符串）
+  PASS  H2.10 原型污染尝试不污染全局原型
+  PASS  H2.12 recordRecall 对畸形 store/ids 不抛异常（且正常路径仍递增）
+  PASS  H2.11 validateStore 拒绝超过 MAX_EXPERIENCES 的库
+
+=== H3 会话隔离（session isolation） ===
+  PASS  H3.1 两个真实形状 sessionId → 两个独立库文件、各自归属正确
+  PASS  H3.2 跨会话召回不成立：B 的库召回不到 A 的经验
+  PASS  H3.3 撞名已消除：清洗会改变 sid 时文件名不再相撞，各自归属正确
+  PASS  H3.4 超长 sessionId 截断不再撞名：两个独立文件、无互相覆盖
+  PASS  H3.5 归属守卫兜底直测：伪造他人归属的库必须被拒绝载入并记 STORE_REBUILT
+  PASS  H3.6 会话隔离不受 store 版本号/遥测影响（重载后仍归属正确）
+
+=== R3 加固回归: 30 PASS / 0 FAIL ===
+
+########## ---- STDERR ----
+

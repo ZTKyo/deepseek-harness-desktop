@@ -1,0 +1,29 @@
+########## SUITE: tests/learn/test-learn-ac6-e2e-mutex.mjs
+########## EXIT: 0
+########## ELAPSED_S: 4.18
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== AC6 重 E2E 并发互斥专项门 ===
+仓库 : C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+共享 git 目录（全 worktree 共同 refs 空间）: C:\Users\Administrator\Desktop\sdeepseek harness\deepseek-harness-desktop\.git
+锁目录: C:\Users\Administrator\Desktop\sdeepseek harness\deepseek-harness-desktop\.git\ac6-real-e2e.lock
+
+  PASS  M1 锁目录位于共享 git 目录（跨 worktree 可见，而非本 worktree 私有） — C:\Users\Administrator\Desktop\sdeepseek harness\deepseek-harness-desktop\.git
+  PASS  M2 首次取锁成功，且锁内记录了本进程 pid（可诊断"谁在跑"） — pid=29380 startedAt=2026-09-30T19:49:36.205Z
+  PASS  M2 已持有 → 第二次取锁被拒（held，绝不静默并行） — held by pid=29380, age=0s
+  PASS  M3 持锁时真跑 E2E → exit 3 快速失败（不是 1：不是缺陷；不是 2：不是环境不满足） — exit=3, 1006ms
+  PASS  M3 stdout 明确报"另一个 AC6 运行持有锁"并给出锁目录/持有者 — blocked 原因/锁目录/持有者 pid 均已打印
+  PASS  M3 git 零副作用：无新 worktree / 无新分支 / HEAD 不变 / 无新临时残骸目录 — 无新 worktree/分支/残骸，HEAD=63bf5585c647
+  PASS  M3 阻塞留痕：写入 blocked 报告（含锁持有者与理由），路径可从 stdout 复算 — C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-reports\blocked-20260930194936-27492.json
+  PASS  M4 释放后可再取 + 释放是幂等的（锁非一次性，也不会自我死锁） — release → re-acquire → release 全通
+  PASS  M5 非持有者不得释放他人锁（owner.pid 非本进程 → 拒绝且锁目录仍在） — 他人锁：release 拒绝 + acquire 被拒 + 假锁已清
+  PASS  M6 陈旧锁（>20 分钟）可被抢占，并留下前持有者信息；未过期锁不许抢 — stale(pid=999998, age=21min) 被抢占；未过期锁不可抢
+  PASS  M7 零泄漏：锁目录已清除 + git 状态与本门开始前逐字一致（含无新残骸） — 锁无泄漏、git 无副作用
+
+=== 汇总 ===
+  AC6 E2E 并发互斥门: 11 PASS / 0 FAIL
+  PASS AC6 real-E2E mutex (shared-git-dir lock: fast-fail, zero git side effects, stale takeover)
+
+########## ---- STDERR ----
+

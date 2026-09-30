@@ -1,0 +1,72 @@
+﻿=== HEADLINE ===
+  registryEntries = 43
+  wiredInCi = 23
+  excludedWithReason = 20
+  logsAnalysed = 44
+  suitesWithOwnAssertionLines = 31
+  suitesExitOnly = 7
+  suitesGreenVacuous = 3
+  suitesExitOnlyButCanFail = 4
+  suitesThatCannotTurnRed = 4
+  nonZeroExitRuns = 3
+  totalOwnAssertPassLines = 1286
+  totalForeignAssertLines = 19
+  countBasisSelfReport = 31
+  countBasisPerLine = 1
+
+=== 计数依据分布 ===
+  test-learn-plugin-contract.mjs                 kind=gate           ci=Y basis=self-report  pass=8     canRed=true 
+  test-learn-core.mjs                            kind=gate           ci=Y basis=self-report  pass=505   canRed=true 
+  test-learn-candidate.mjs                       kind=gate           ci=Y basis=self-report  pass=40    canRed=true 
+  test-learn-ac5-e2e.mjs                         kind=gate           ci=Y basis=self-report  pass=13    canRed=true 
+  test-learn-stage85-twins.mjs                   kind=gate           ci=Y basis=self-report  pass=22    canRed=true 
+  test-learn-real-topology-tool-events.mjs       kind=gate           ci=Y basis=self-report  pass=22    canRed=true 
+  test-learn-candidate-receipts.mjs              kind=gate           ci=Y basis=self-report  pass=33    canRed=true 
+  test-learn-ac2-research-leg.mjs                kind=gate           ci=Y basis=self-report  pass=27    canRed=true 
+  test-learn-r3-fixes.mjs                        kind=gate           ci=Y basis=self-report  pass=30    canRed=true 
+  test-learn-r3-hardening.mjs                    kind=gate           ci=Y basis=self-report  pass=30    canRed=true 
+  test-learn-r3-secrets.mjs                      kind=gate           ci=Y basis=self-report  pass=65    canRed=true 
+  redteam-r3-contamination.mjs                   kind=gate           ci=Y basis=self-report  pass=9     canRed=true 
+  redteam-r3-isolation.mjs                       kind=gate           ci=Y basis=self-report  pass=13    canRed=true 
+  redteam-r3-labels.mjs                          kind=gate           ci=Y basis=exit-only    pass=0     canRed=false <<< 空转
+  redteam-r3-probe.mjs                           kind=gate           ci=Y basis=exit-only    pass=0     canRed=false <<< 空转
+  test-learn-b1-session-access.mjs               kind=gate           ci=n basis=self-report  pass=22    canRed=true 
+  test-learn-b2-verify-output-contract.mjs       kind=gate           ci=Y basis=self-report  pass=21    canRed=true 
+  test-learn-r2-f2-store-min.mjs                 kind=gate           ci=Y basis=self-report  pass=19    canRed=true 
+  redteam-r3-injection-positions.mjs             kind=gate           ci=Y basis=exit-only    pass=0     canRed=false <<< 空转
+  test-learn-ac6-real-promotion-e2e.mjs          kind=gate           ci=Y basis=self-report  pass=27    canRed=true 
+  _ac2-mutation-proof.mjs                        kind=mutation-proof ci=Y basis=self-report  pass=27    canRed=true 
+  validate-gate-registry.mjs                     kind=registry-gate  ci=Y basis=self-report  pass=15    canRed=true 
+  _ac10-registry-mutation-proof.mjs              kind=mutation-proof ci=Y basis=self-report  pass=15    canRed=true 
+  test-learn-ac1-secret-families.mjs             kind=gate           ci=n basis=self-report  pass=43    canRed=true 
+  test-learn-ac5-gap-veto.mjs                    kind=gate           ci=n basis=self-report  pass=44    canRed=true 
+  test-learn-r2-b1-approval-gate.mjs             kind=gate           ci=n basis=self-report  pass=19    canRed=true 
+  test-learn-r2-b2-bounds.mjs                    kind=gate           ci=n basis=self-report  pass=45    canRed=true 
+  test-learn-r3-approval-forgery.mjs             kind=gate           ci=n basis=self-report  pass=27    canRed=true 
+  test-learn-stage2-schema-and-negative-lock.mjs kind=gate           ci=n basis=self-report  pass=23    canRed=true 
+  run-learn-contract-scenarios.mjs               kind=gate           ci=n basis=self-report  pass=36    canRed=true 
+  run-learn-real-e2e.mjs                         kind=gate           ci=n basis=self-report  pass=65    canRed=true 
+  run-learn-real-gap-e2e.mjs                     kind=gate           ci=n basis=self-report  pass=20    canRed=true 
+  redteam-r3-metrics.mjs                         kind=gate           ci=n basis=exit-only    pass=0     canRed=true 
+  redteam-r3-quality.mjs                         kind=gate           ci=n basis=exit-only    pass=0     canRed=true 
+  production-load-probe.mjs                      kind=tool           ci=n basis=not-run      pass=null  canRed=true 
+  mount-gate.mjs                                 kind=tool           ci=n basis=per-line     pass=4     canRed=true 
+  deploy-preflight.mjs                           kind=tool           ci=n basis=exit-only    pass=0     canRed=true 
+  run-learn-all-tests.mjs                        kind=runner         ci=n basis=not-run      pass=null  canRed=true 
+  _real-session-harness.mjs                      kind=helper         ci=n basis=not-run      pass=null  canRed=true 
+  test-learn-ac6-candidate-durability.mjs        kind=gate           ci=Y basis=self-report  pass=10    canRed=true 
+  test-learn-ac6-e2e-mutex.mjs                   kind=gate           ci=n basis=self-report  pass=11    canRed=true 
+  ac6-e2e-lock.mjs                               kind=helper         ci=n basis=not-run      pass=null  canRed=false 
+  audit-merge-enforcement.mjs                    kind=tool           ci=n basis=exit-only    pass=0     canRed=true 
+
+=== 多跑/变体套件 ===
+  test-learn-ac2-research-leg.mjs  test-learn-ac2-repo-target=exit0/27p self27  |  test-learn-ac2-research-leg=exit0/27p self27
+  test-learn-ac1-secret-families.mjs  test-learn-ac1-repo-target=exit0/0p self43  |  test-learn-ac1-secret-families=exit0/0p self43
+  run-learn-contract-scenarios.mjs  run-learn-contract-scenarios-retry=exit0/36p self36  |  run-learn-contract-scenarios=exit1/14p
+  mount-gate.mjs  mount-gate-pass=exit0/4p  |  mount-gate=exit2/0p
+  deploy-preflight.mjs  deploy-preflight-real=exit0/0p  |  deploy-preflight=exit2/0p
+
+=== 非零退出 / 崩溃 ===
+  run-learn-contract-scenarios.txt  exit=1  stderr=node:internal/modules/run_main:123 ||     triggerUncaughtException(
+  mount-gate.txt  exit=2  stderr=(none)
+  deploy-preflight.txt  exit=2  stderr=[env error] 缺少 --deploy <file1,file2,...>（显式列出本轮要部署的文件；不支持"全部同步"）

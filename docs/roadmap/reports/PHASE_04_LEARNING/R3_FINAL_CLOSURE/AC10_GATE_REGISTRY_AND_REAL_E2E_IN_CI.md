@@ -1,11 +1,17 @@
 # AC10 — 门存在性可机器判定 + CI 内真跑真实 E2E（关闭记录）
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 - 日期：2026-09-29（本机）
 - 分支 / 提交：`p4-ci-real-gates` @ `422c08f`（主改动）+ `d75640a`（AC6 中断自愈）
 - 合同原文：`docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md:122-132`
   —— **AC10 = 「真实 E2E 证据 PASS」**（canonical Acceptance Criteria 第 10 条）。
 - 关闭前的缺口（`A10_CONTRACT_MATRIX.md` AC10 行逐字）：
-  「本地真实门 PASS；**CI 内无真实 E2E 门**」= PARTIAL。
+  「本地真实门 PASS；**CI 内无真实 E2E 门**」= PARTIAL。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
   更深一层的缺陷：**门的"存在性"只写在文字里**——某个套件可以悄悄不再被任何人运行
   （或从来没被接上），而报告仍把它列为"要求门"；`plugins/learn-candidate.mjs`
   的 `STAGE_DELEGATION.ISOLATED_TESTS` 甚至指向 `ci-level1.yml`（一条**根本不运行隔离面**的航道）。

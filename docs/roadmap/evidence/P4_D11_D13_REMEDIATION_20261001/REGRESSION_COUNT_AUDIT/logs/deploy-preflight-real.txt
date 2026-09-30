@@ -1,0 +1,68 @@
+########## SUITE: deploy-preflight-real
+########## CMD: node tests/learn/deploy-preflight.mjs --deploy learn.mjs,learn-core.mjs,learn-candidate.mjs --repo-plugins "C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\plugins" --port 3097 --slug aud
+########## EXIT: 0
+########## ELAPSED_S: 28.2
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== deploy pre-flight ===
+  repo plugins : C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\plugins
+  production   : C:\Users\Administrator\.dsh\profiles\web
+  entry        : learn.mjs   闭包 6 个文件
+  deploy set   : learn.mjs, learn-core.mjs, learn-candidate.mjs
+
+  SAME(计划部署但内容相同→空操作)                      learn.mjs
+      repo=5c4ee78ca2de  prod=5c4ee78ca2de
+  SAME(计划部署但内容相同→空操作)                      learn-core.mjs
+      repo=dcf2a2ae05e1  prod=dcf2a2ae05e1
+  SAME                                     context-memory-core.mjs
+      repo=e68fbd173340  prod=e68fbd173340
+  SAME                                     learn-gap-veto.mjs
+      repo=b7623cedf87e  prod=b7623cedf87e
+  STALE_BY_DESIGN(有差异但范围外，不部署)             failure-classifier-core.mjs
+      repo=f780150783a1  prod=2a00a17f463a
+      最近改动来源: f44e822 P2.6 R1.2/R3: CI lane integration (T-R3-1..7 in L3, R1.2 in L2) + closure artifacts   ← 请人工确认与本轮无关
+  SAME(计划部署但内容相同→空操作)                      learn-candidate.mjs
+      repo=2b4d38532300  prod=2b4d38532300
+
+  candidate    : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-deploypf-aud-2026-09-30T20-02-49-111Z-wJrh39\candidate  （临时目录；只读生产，绝不写生产）
+  --- 候选逐字节来源核对 ---
+    OK   learn.mjs                          5c4ee78ca2de  期望=5c4ee78ca2de (repo)
+    OK   learn-core.mjs                     dcf2a2ae05e1  期望=dcf2a2ae05e1 (repo)
+    OK   context-memory-core.mjs            e68fbd173340  期望=e68fbd173340 (prod)
+    OK   learn-gap-veto.mjs                 b7623cedf87e  期望=b7623cedf87e (prod)
+    OK   failure-classifier-core.mjs        2a00a17f463a  期望=2a00a17f463a (prod)
+    OK   learn-candidate.mjs                2b4d38532300  期望=2b4d38532300 (repo)
+  ⇒ 候选哈希核对: PASS
+
+  --- 真实 loader 挂载门禁（既有 tests/learn/mount-gate.mjs，隔离 DSH_HOME）---
+    | === mount gate (isolated profile) ===
+    |   plugin      : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-deploypf-aud-2026-09-30T20-02-49-111Z-wJrh39\candidate\learn.mjs
+    |   sha256      : 5c4ee78ca2de68162f4e3832a40b10a39ac43442a6139f827654b0f2b5b6176d
+    |   expect      : pass
+    |   port        : 3097   (production 127.0.0.1:3080 listener before = 8272:node)
+    |   scratch     : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-aud-pf-2026-09-30T20-02-50-194Z
+    |   DSH_HOME    : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-aud-pf-2026-09-30T20-02-50-194Z\home   (隔离：宿主只读写这个临时 home)
+    |   deps        : junction -> C:\Users\Administrator\.dsh\profiles\web\node_modules (只借依赖，不 boot 生产 profile)
+    |   launch      : node.exe bin.js --profile web --port 3097 --no-open  (6 个插件文件已就位；DSH_HOME=临时 home)
+    |   child pid   : 26448
+    |   readiness   : HTTP 200
+    |   signal      : probe-recorded
+    |   kill guard  : pid=26448 safeToKill=true
+    | --- checks ---
+    |   PASS  A1  no loader failure signature
+    |   PASS  A2  probe captured exactly 6 learn_* tools, no duplicates (got 6)
+    |   PASS  A3  host sessions service resolvable via ctx.get in this profile ctx (got resolved)
+    |   PASS  A4  no tool-surface warnings in log
+    |   probe.wrapped=true sessionsViaGet=resolved seen=[learn_propose, learn_review, learn_recall, learn_promote, learn_verify, learn_status]
+    |   injectSignature(事故签名) = false
+    |   production 127.0.0.1:3080 listener: before=8272:node after=8272:node untouched=true (pid:proc 形式；勿用 tailscaled 的 5648 误判)
+    | --- verdict: PASS (expect=pass) ---
+    |   result json : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-mountgate-aud-pf-2026-09-30T20-02-50-194Z\result.json
+
+  --- verdict: PASS ---   (hashCheck=PASS, mountGate exit=0)
+  candidate kept at: C:\Users\ADMINI~1\AppData\Local\Temp\dsh-deploypf-aud-2026-09-30T20-02-49-111Z-wJrh39\candidate
+  report json : C:\Users\ADMINI~1\AppData\Local\Temp\dsh-deploypf-aud-2026-09-30T20-02-49-111Z-wJrh39\deploy-preflight.json
+
+########## ---- STDERR ----
+

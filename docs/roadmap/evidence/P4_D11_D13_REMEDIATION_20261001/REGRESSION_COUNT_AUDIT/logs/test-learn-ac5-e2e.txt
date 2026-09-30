@@ -1,0 +1,36 @@
+########## SUITE: tests/learn/test-learn-ac5-e2e.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.27
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== 装载真实插件 plugins/learn.mjs ===
+  stateDir = C:\Users\ADMINI~1\AppData\Local\Temp\learn-ac5-e2e-BFXhJY
+  PASS  E0 插件暴露真实工具面（合同闭环 6 个）且钩子已注册
+
+=== A 组：硬否决失败必须阻止候选产出（AC5 核心）===
+  PASS  E1 首次进入只记录水位、不学习（基线）
+  PASS  E2 ★ 硬否决失败后**没有**产出任何候选（AC5 主断言）
+  PASS  E3 ★ 必须记录 GAP_VETOED 遥测（可观测，不是静默丢弃）
+  PASS  E4 否决后**不得**出现 PROPOSED 遥测（证明真的没学）
+
+=== B 组：无分类失败时**必须**正常学习（防闸门焊死）===
+  PASS  E5 ★ 对照组：无 P2.6 失败证据时正常产出候选（闸门非焊死）
+  PASS  E6 对照组候选仍带真实出处（AC6 未被本次改动破坏）
+  PASS  E7 对照组不得出现 GAP_VETOED（否决必须只由真实失败触发）
+
+=== C 组：失败对象缺失时 fail-closed ===
+  PASS  E8 ★ 失败对象缺失 → fail-closed 否决（宁可漏学不可误学）
+
+=== D 组：决策来自 P2.6 Authority（非第二套分类逻辑）===
+  PASS  E9 ★ 插件记录的分类 == P2.6 权威对同一 failure 的分类（单源一致）
+  PASS  E12 telemetryEvent 字段白名单事实被锁（防再有人加字段被静默丢弃）
+  PASS  E10 ★ learn-core 中不存在任何 failure 关键词（单一 Failure Authority 静态锁）
+  PASS  E11 learn.mjs 的失败观测与 P2.6 使用同一事件名
+
+=== 汇总 ===
+  AC5 E2E: 13 PASS / 0 FAIL
+  PASS AC5 end-to-end gate (wrong learning is actually blocked)
+
+########## ---- STDERR ----
+

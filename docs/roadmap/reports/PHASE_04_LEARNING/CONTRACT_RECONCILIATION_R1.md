@@ -1,5 +1,13 @@
 # P4 LEARN — 合同逐字重建 + 合同对照表 + Delta 清单（Stage A）
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
+（本文件 §「Acceptance Criteria」的 AC1–AC10 是 canonical 合同原文，未过时；本文其它处的 PARTIAL 判定已过时。）
+
 - 生成时间：2026-09-21
 - 性质：只读重建（本文件不修改任何实现代码）
 - 合同来源（canonical，Notion，fresh-fetch）：
@@ -207,7 +215,7 @@ docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md
 | C20 | 必须真实验证 #2：第二次相似任务成功检索复用 + 重新验证 | E2E 的「复用」查询串**直接等于候选自己的标题**（近乎同义反复）；无第二个任务、无应用、无重新验证 | **FAIL** |
 | C21 | 必须真实验证 #3：伪能力缺口（网络/Provider 故障）正确分类、**不生成 Candidate** | **实测反证**：`provider returned 502…`、`网络请求超时，连接失败`、`模型服务不可用导致报错` 均 `hasSignal=true, kinds=["failure"]` ⇒ **照样生成 PROPOSED 候选**，行为与要求相反 | **FAIL（行为相反）** |
 | C22 | 必须真实验证 #4：重复真实缺口受控案例→生成 Candidate→测试→证明 Stable 未被覆盖 | 缺失 | **FAIL** |
-| C23 | AC1：Experience compact、结构化、无 Secret | 结构化有上限、脱敏链路有测试；但 Secret 可反证、契约字段缺 9 项 | **PARTIAL** |
+| C23 | AC1：Experience compact、结构化、无 Secret | 结构化有上限、脱敏链路有测试；但 Secret 可反证、契约字段缺 9 项 | **PARTIAL** | 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 | C24 | AC2：不会的问题不第一时间失败/问用户，低风险会自主研究 | 无实现、无测试 | **FAIL** |
 | C25 | AC3：经验只有验证成功后进入 verified | 无 `verified` 状态 | **FAIL** |
 | C26 | AC4：复用时做环境/version check | 无 | **FAIL** |
@@ -230,7 +238,7 @@ docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md
 | FAIL | 20 | C4、C5、C6、C7、C8、C9、C10、C12、C13、C14、C18、C19、C20、C21、C22、C24、C25、C26、C27、C28 |
 | 硬前置未满足 | 1 | C1 |
 
-**合同口径结论：`PARTIAL`。** 交付物本身工程质量高（真跑真过、隔离有效、fail-closed、无自动激活、无夸大完成度），但合同的核心闭环——**自主研究循环、验证后才进 verified、复用前环境检查、失败分类、Capability Gap → Candidate 生命周期、CI/Transaction 复用、4 次规定真实执行**——未交付；且 **AC5 对应行为被实测反证为与合同要求相反**。
+**合同口径结论：`PARTIAL`。** 交付物本身工程质量高（真跑真过、隔离有效、fail-closed、无自动激活、无夸大完成度），但合同的核心闭环——**自主研究循环、验证后才进 verified、复用前环境检查、失败分类、Capability Gap → Candidate 生命周期、CI/Transaction 复用、4 次规定真实执行**——未交付；且 **AC5 对应行为被实测反证为与合同要求相反**。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 ---
 

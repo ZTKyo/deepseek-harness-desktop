@@ -1,0 +1,52 @@
+﻿total=43  canTurnRed=39  cannotTurnRed=4  dataLike(无exit无throw)=3
+
+suite                                          kind            inCi  exit args                  observed runs(exIT/printed)
+test-learn-plugin-contract.mjs                 gate            true  1|0                        0/8p*
+test-learn-core.mjs                            gate            true  1                          0/505p*
+test-learn-candidate.mjs                       gate            true  fail === 0 ? 0 : 1         0/40p*
+test-learn-ac5-e2e.mjs                         gate            true  1|0                        0/13p*
+test-learn-stage85-twins.mjs                   gate            true  fail === 0 ? 0 : 1         0/22p*
+test-learn-real-topology-tool-events.mjs       gate            true  fail ? 1 : 0               0/22p*
+test-learn-candidate-receipts.mjs              gate            true  fail === 0 ? 0 : 1         0/33p*
+test-learn-ac2-research-leg.mjs                gate            true  fail > 0 ? 1 : 0           0/27p 0/27p*
+test-learn-r3-fixes.mjs                        gate            true  fail ? 1 : 0               0/30p*
+test-learn-r3-hardening.mjs                    gate            true  FAIL > 0 ? 1 : 0           0/30p*
+test-learn-r3-secrets.mjs                      gate            true  fail === 0 ? 0 : 1         0/65p*
+redteam-r3-contamination.mjs                   gate            true  FAIL ? 1 : 0               0/9p*
+redteam-r3-isolation.mjs                       gate            true  FAIL ? 2 : 0               0/13p*
+redteam-r3-labels.mjs                          gate            true  (none)                     0/0p*   <<< CANNOT TURN RED
+redteam-r3-probe.mjs                           gate            true  (none)                     0/0p*   <<< CANNOT TURN RED
+test-learn-b1-session-access.mjs               gate            false 1                          0/22p*
+test-learn-b2-verify-output-contract.mjs       gate            true  1|0                        0/21p*
+test-learn-r2-f2-store-min.mjs                 gate            true  fail === 0 ? 0 : 1         0/19p*
+redteam-r3-injection-positions.mjs             gate            true  (none)                     0/0p*   <<< CANNOT TURN RED
+test-learn-ac6-real-promotion-e2e.mjs          gate            true  3|2|fail === 0 ? 0 : 1     0/46p*
+_ac2-mutation-proof.mjs                        mutation-proof  true  fail > 0 ? 1 : 0           0/10p*
+validate-gate-registry.mjs                     registry-gate   true  1|fail === 0 ? 0 : 1       0/15p*
+_ac10-registry-mutation-proof.mjs              mutation-proof  true  fail === 0 ? 0 : 1         0/10p*
+test-learn-ac1-secret-families.mjs             gate            false 3|fail === 0 ? 0 : 1       0/0p* 0/0p*
+test-learn-ac5-gap-veto.mjs                    gate            false fail === 0 ? 0 : 1         0/44p*
+test-learn-r2-b1-approval-gate.mjs             gate            false fail === 0 ? 0 : 1         0/19p*
+test-learn-r2-b2-bounds.mjs                    gate            false fail === 0 ? 0 : 1         0/45p*
+test-learn-r3-approval-forgery.mjs             gate            false fail === 0 ? 0 : 1         0/27p*
+test-learn-stage2-schema-and-negative-lock.mjs gate            false 0|1                        0/23p*
+run-learn-contract-scenarios.mjs               gate            false 1|fail ? 1 : 0             0/36p 1/14p*
+run-learn-real-e2e.mjs                         gate            false 1|fail ? 1 : 0             0/65p*
+run-learn-real-gap-e2e.mjs                     gate            false 1|fail ? 1 : 0             0/20p*
+redteam-r3-metrics.mjs                         gate            false 1                          0/0p*
+redteam-r3-quality.mjs                         gate            false 1                          0/0p*
+production-load-probe.mjs                      tool            false 2|verdict === 'NEW_CODE_   —
+mount-gate.mjs                                 tool            false 2|verdict === 'PASS' ? 0   0/4p* 2/0p*
+deploy-preflight.mjs                           tool            false 2|verdict === 'PASS' ? 0   0/0p* 2/0p*
+run-learn-all-tests.mjs                        runner          false bad.length ? 1 : 0         —
+_real-session-harness.mjs                      helper          false 2                          —
+test-learn-ac6-candidate-durability.mjs        gate            true  1                          0/10p*
+test-learn-ac6-e2e-mutex.mjs                   gate            false fail === 0 ? 0 : 1         0/11p*
+ac6-e2e-lock.mjs                               helper          false (none)                     —   <<< CANNOT TURN RED
+audit-merge-enforcement.mjs                    tool            false 0|1                        0/0p*
+
+--- 无任何失败路径的套件（exit 0 不代表任何断言成立）---
+  redteam-r3-labels.mjs  [gate]  inCi=true  dataLike=true
+  redteam-r3-probe.mjs  [gate]  inCi=true  dataLike=true
+  redteam-r3-injection-positions.mjs  [gate]  inCi=true  dataLike=true
+  ac6-e2e-lock.mjs  [helper]  inCi=false  dataLike=false

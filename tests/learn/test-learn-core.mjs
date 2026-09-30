@@ -1,5 +1,14 @@
 // test-learn-core.mjs —— P4 LEARN R1 纯逻辑单测（repo 直连，无外部依赖）
 //
+// 【⚠ AC 编号声明（2026-10-01，P4 External Review remediation D8）】
+// 本文件注释里的 (AC1)(AC2)(AC3)(AC4)(AC5)(AC8)(AC10)(AC11) 全部指向
+// **R1 自定 AC1–AC12**（自定 AC 表见 docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md），
+// **不是** canonical 合同 AC1–AC10。两者**同号不同义**（例：合同 AC10 = 真实 E2E 证据，
+// 本文件 (AC10) = assertWriteAllowed 写入守卫；合同 AC1 = 无 Secret，本文件 (AC1) = 共享提取器）。
+// ⇒ **禁止**按合同号读本文件的注释；需要合同口径时以
+// docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md 的「Acceptance Criteria」段原文为准
+// （该段是 canonical 合同 AC1–AC10 的逐字原文）。本次仅补声明，未改动任何断言与编号。
+//
 // 覆盖 learn-core.mjs：
 //   C1  emptyStore 默认形状 + schema 版本
 //   C2  密钥脱敏：9 个规范家族全覆盖 + 通用形态 + 确定性（AC3）

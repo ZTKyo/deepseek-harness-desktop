@@ -1,0 +1,45 @@
+########## SUITE: tests/learn/test-learn-r2-f2-store-min.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.81
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+==========================================================================
+F2 回归门：sessionStoreMaxFiles 下限 = 真实 config validation（63 拒绝 / 64,65 接受）
+最小受支持值 = 64｜规范锚点 = "minimum supported sessionStoreMaxFiles is 64"
+==========================================================================
+
+[A] 纯函数层（validateSessionStoreMaxFiles；无副作用，config 载入层与测试共用）
+  PASS  A1 锚点常量与最小受支持值自洽（64 与诊断文本同源，不得各写一份）
+  PASS  A2 63 判为失败（below_minimum）且诊断逐字含锚点
+  PASS  A3 64 / 65 判为通过（合法值不得被误伤）
+  PASS  A4 边界外非法形态一律失败（0 / 负数 / 小数 / 文本 / 布尔 / null / undefined）
+  PASS  A5 字符串数字 "63" 同样被拒（env 来的值本来就是字符串，不得漏判）
+
+[B] 插件真实路径（设 env → 真实 apply() → 真实可观测面）
+  PASS  B1-装载 LEARN_SESSION_STORE_MAX_FILES=63
+  PASS  B2-装载 LEARN_SESSION_STORE_MAX_FILES=64
+  PASS  B3-装载 LEARN_SESSION_STORE_MAX_FILES=65
+  PASS  B4 【核心】63 ⇒ 存在真实 config validation 失败（不是静默接受）
+  PASS  B5 【核心】63 ⇒ 请求值未被当作生效值（拒绝 ≠ 悄悄钳制）
+  PASS  B6 63 ⇒ 诊断真的进入了 ctx.logger.warn（生产日志面也看得到，不只在 API 里）
+  PASS  B7 【反-空断言对照】64 ⇒ 被接受：无诊断、生效值 = 64
+  PASS  B8 65 ⇒ 被接受：无诊断、生效值 = 65（上限方向不受影响）
+
+[C] 非回归（默认值、TTL 语义、非法形态的插件层行为）
+  PASS  C1 默认（不设 env）仍是 200，且不产生任何校验失败
+  PASS  C2 TTL 语义未被本次改动影响（env=30 生效）
+  PASS  C3 非法形态在插件层同样 fail-loud 且生效值落到 64
+  PASS  C4 校验面是**只读快照**：外部改不动内部状态
+
+[D] 磁盘面（生效值真的被保留策略执行，而不是只写在报告里）
+  PASS  D1 【核心】env=63 被拒后，prune 真的按 64 执行（kept === 64，而非 63/200）
+  PASS  D2 对照：env=65（合法值）prune 按 65 执行（kept === 65）——证明 D1 的 64 是"被拒后的 64"而非硬编码
+
+==========================================================================
+RESULT: 19 PASS / 0 FAIL
+（临时目录自清理：10/10 个已删除，未在 %TEMP% 留垃圾）
+==========================================================================
+
+########## ---- STDERR ----
+

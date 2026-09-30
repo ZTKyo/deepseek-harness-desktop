@@ -1,0 +1,1436 @@
+{
+  "generatedAt": "2026-09-30T20:11:32.320Z",
+  "worktree": "C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4rem-closure\\regression-count-audit\\wt",
+  "registry": {
+    "entries": 43,
+    "version": 1
+  },
+  "logs": 44,
+  "headline": {
+    "registryEntries": 43,
+    "wiredInCi": 23,
+    "excludedWithReason": 20,
+    "logsAnalysed": 44,
+    "suitesWithOwnAssertionLines": 31,
+    "suitesExitOnly": 7,
+    "suitesGreenVacuous": 3,
+    "suitesExitOnlyButCanFail": 4,
+    "suitesThatCannotTurnRed": 4,
+    "nonZeroExitRuns": 3,
+    "totalOwnAssertPassLines": 1286,
+    "totalForeignAssertLines": 19,
+    "countBasisSelfReport": 31,
+    "countBasisPerLine": 1
+  },
+  "table": [
+    {
+      "suite": "tests/learn/test-learn-plugin-contract.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 8,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-plugin-contract.txt",
+          "exit": "0",
+          "elapsed": "0.18",
+          "ownAsserts": 8,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 8,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 15,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-core.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 505,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-core.txt",
+          "exit": "0",
+          "elapsed": "0.26",
+          "ownAsserts": 505,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 505,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 541,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-candidate.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 40,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-candidate.txt",
+          "exit": "0",
+          "elapsed": "0.21",
+          "ownAsserts": 40,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 40,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 58,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac5-e2e.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 13,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac5-e2e.txt",
+          "exit": "0",
+          "elapsed": "0.27",
+          "ownAsserts": 13,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 13,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 28,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-stage85-twins.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 22,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-stage85-twins.txt",
+          "exit": "0",
+          "elapsed": "0.27",
+          "ownAsserts": 22,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 22,
+            "fail": 0,
+            "pattern": "np, mf"
+          },
+          "stdoutLines": 37,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-real-topology-tool-events.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 22,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-real-topology-tool-events.txt",
+          "exit": "0",
+          "elapsed": "0.22",
+          "ownAsserts": 22,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 22,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 39,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-candidate-receipts.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 33,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-candidate-receipts.txt",
+          "exit": "0",
+          "elapsed": "0.23",
+          "ownAsserts": 33,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 33,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 45,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac2-research-leg.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 27,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac2-repo-target.txt",
+          "exit": "0",
+          "elapsed": "0.82",
+          "ownAsserts": 27,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 27,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 49,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        },
+        {
+          "log": "test-learn-ac2-research-leg.txt",
+          "exit": "0",
+          "elapsed": "0.92",
+          "ownAsserts": 27,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 27,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 49,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-fixes.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 30,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-fixes.txt",
+          "exit": "0",
+          "elapsed": "0.17",
+          "ownAsserts": 30,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 30,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 37,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-hardening.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 30,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-hardening.txt",
+          "exit": "0",
+          "elapsed": "0.51",
+          "ownAsserts": 30,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 30,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 39,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-secrets.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 65,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-secrets.txt",
+          "exit": "0",
+          "elapsed": "0.24",
+          "ownAsserts": 65,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 65,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 80,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-contamination.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 9,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "redteam-r3-contamination.txt",
+          "exit": "0",
+          "elapsed": "6.25",
+          "ownAsserts": 9,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 9,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 42,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-isolation.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 13,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "redteam-r3-isolation.txt",
+          "exit": "0",
+          "elapsed": "0.37",
+          "ownAsserts": 13,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 13,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 41,
+          "stderrHead": "",
+          "dialect": [
+            "[PASS]"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-labels.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": false,
+      "isDataLike": true,
+      "verdictGreen": "GREEN — 空转（无法变红且无自证）",
+      "vacuous": true,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "redteam-r3-labels.txt",
+          "exit": "0",
+          "elapsed": "0.16",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 1,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-probe.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": false,
+      "isDataLike": true,
+      "verdictGreen": "GREEN — 空转（无法变红且无自证）",
+      "vacuous": true,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "redteam-r3-probe.txt",
+          "exit": "0",
+          "elapsed": "0.3",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 116,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-b1-session-access.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 22,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-b1-session-access.txt",
+          "exit": "0",
+          "elapsed": "1.02",
+          "ownAsserts": 22,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 22,
+            "fail": 0,
+            "pattern": "PASS n / FAIL m (中文结果行)"
+          },
+          "stdoutLines": 28,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-b2-verify-output-contract.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 21,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-b2-verify-output-contract.txt",
+          "exit": "0",
+          "elapsed": "0.27",
+          "ownAsserts": 21,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 21,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 39,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-f2-store-min.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 19,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-f2-store-min.txt",
+          "exit": "0",
+          "elapsed": "0.81",
+          "ownAsserts": 19,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 19,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 37,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-injection-positions.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": false,
+      "isDataLike": true,
+      "verdictGreen": "GREEN — 空转（无法变红且无自证）",
+      "vacuous": true,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "redteam-r3-injection-positions.txt",
+          "exit": "0",
+          "elapsed": "32.92",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 30,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-real-promotion-e2e.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 27,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-real-promotion-e2e.txt",
+          "exit": "0",
+          "elapsed": "156.9",
+          "ownAsserts": 27,
+          "foreign": 19,
+          "selfReport": {
+            "pass": 27,
+            "fail": 0,
+            "pattern": "nPASS/mNA/mFAIL"
+          },
+          "stdoutLines": 84,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/_ac2-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "inCi": true,
+      "authoritative": {
+        "pass": 27,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "_ac2-mutation-proof.txt",
+          "exit": "0",
+          "elapsed": "9.1",
+          "ownAsserts": 10,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 27,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 37,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/validate-gate-registry.mjs",
+      "kind": "registry-gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 15,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "validate-gate-registry.txt",
+          "exit": "0",
+          "elapsed": "0.38",
+          "ownAsserts": 15,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 15,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 23,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/_ac10-registry-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "inCi": true,
+      "authoritative": {
+        "pass": 15,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "_ac10-registry-mutation-proof.txt",
+          "exit": "0",
+          "elapsed": "4.19",
+          "ownAsserts": 10,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 15,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 18,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac1-secret-families.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 43,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac1-repo-target.txt",
+          "exit": "0",
+          "elapsed": "0.21",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 43,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 5,
+          "stderrHead": "",
+          "dialect": []
+        },
+        {
+          "log": "test-learn-ac1-secret-families.txt",
+          "exit": "0",
+          "elapsed": "0.18",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 43,
+            "fail": 0,
+            "pattern": "PASS=n FAIL=m"
+          },
+          "stdoutLines": 5,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac5-gap-veto.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 44,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac5-gap-veto.txt",
+          "exit": "0",
+          "elapsed": "0.17",
+          "ownAsserts": 44,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 44,
+            "fail": 0,
+            "pattern": "np, mf"
+          },
+          "stdoutLines": 63,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-b1-approval-gate.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 19,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-b1-approval-gate.txt",
+          "exit": "0",
+          "elapsed": "1.13",
+          "ownAsserts": 19,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 19,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 35,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-b2-bounds.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 45,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-b2-bounds.txt",
+          "exit": "0",
+          "elapsed": "8.72",
+          "ownAsserts": 45,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 45,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 90,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-approval-forgery.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 27,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-approval-forgery.txt",
+          "exit": "0",
+          "elapsed": "1.66",
+          "ownAsserts": 27,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 27,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 62,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-stage2-schema-and-negative-lock.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 23,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-stage2-schema-and-negative-lock.txt",
+          "exit": "0",
+          "elapsed": "1.98",
+          "ownAsserts": 23,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 23,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 39,
+          "stderrHead": "",
+          "dialect": [
+            "✓"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/run-learn-contract-scenarios.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 36,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "run-learn-contract-scenarios-retry.txt",
+          "exit": "0",
+          "elapsed": "118.74",
+          "ownAsserts": 36,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 36,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 100,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        },
+        {
+          "log": "run-learn-contract-scenarios.txt",
+          "exit": "1",
+          "elapsed": "27.03",
+          "ownAsserts": 14,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 26,
+          "stderrHead": "node:internal/modules/run_main:123 ||     triggerUncaughtException(",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/run-learn-real-e2e.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 65,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "run-learn-real-e2e.txt",
+          "exit": "0",
+          "elapsed": "398.91",
+          "ownAsserts": 65,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 65,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 88,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/run-learn-real-gap-e2e.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 20,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "run-learn-real-gap-e2e.txt",
+          "exit": "0",
+          "elapsed": "5.56",
+          "ownAsserts": 20,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 20,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 61,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-metrics.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN — 只有 exit 码（无逐条计数，但有真实失败路径）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": true,
+      "runs": [
+        {
+          "log": "redteam-r3-metrics.txt",
+          "exit": "0",
+          "elapsed": "0.17",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 58,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-quality.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN — 只有 exit 码（无逐条计数，但有真实失败路径）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": true,
+      "runs": [
+        {
+          "log": "redteam-r3-quality.txt",
+          "exit": "0",
+          "elapsed": "34.9",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 60,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/production-load-probe.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "authoritative": {
+        "pass": null,
+        "fail": 0,
+        "basis": "not-run"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "未运行",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": []
+    },
+    {
+      "suite": "tests/learn/mount-gate.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "authoritative": {
+        "pass": 4,
+        "fail": 0,
+        "basis": "per-line"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "mount-gate-pass.txt",
+          "exit": "0",
+          "elapsed": "32.46",
+          "ownAsserts": 4,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 24,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        },
+        {
+          "log": "mount-gate.txt",
+          "exit": "2",
+          "elapsed": "0.96",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 2,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/deploy-preflight.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN — 只有 exit 码（无逐条计数，但有真实失败路径）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": true,
+      "runs": [
+        {
+          "log": "deploy-preflight-real.txt",
+          "exit": "0",
+          "elapsed": "28.2",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 59,
+          "stderrHead": "",
+          "dialect": []
+        },
+        {
+          "log": "deploy-preflight.txt",
+          "exit": "2",
+          "elapsed": "0.2",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 1,
+          "stderrHead": "[env error] 缺少 --deploy <file1,file2,...>（显式列出本轮要部署的文件；不支持\"全部同步\"）",
+          "dialect": []
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/run-learn-all-tests.mjs",
+      "kind": "runner",
+      "inCi": false,
+      "authoritative": {
+        "pass": null,
+        "fail": 0,
+        "basis": "not-run"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "未运行",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": []
+    },
+    {
+      "suite": "tests/learn/_real-session-harness.mjs",
+      "kind": "helper",
+      "inCi": false,
+      "authoritative": {
+        "pass": null,
+        "fail": 0,
+        "basis": "not-run"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "未运行",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": []
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-candidate-durability.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "authoritative": {
+        "pass": 10,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-candidate-durability.txt",
+          "exit": "0",
+          "elapsed": "0.31",
+          "ownAsserts": 10,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 10,
+            "fail": 0,
+            "pattern": "RESULT:nPASS/mFAIL"
+          },
+          "stdoutLines": 22,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-e2e-mutex.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "authoritative": {
+        "pass": 11,
+        "fail": 0,
+        "basis": "self-report"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN（有逐条或自报计数）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-e2e-mutex.txt",
+          "exit": "0",
+          "elapsed": "4.18",
+          "ownAsserts": 11,
+          "foreign": 0,
+          "selfReport": {
+            "pass": 11,
+            "fail": 0,
+            "pattern": "nPASS/mFAIL"
+          },
+          "stdoutLines": 21,
+          "stderrHead": "",
+          "dialect": [
+            "PASS"
+          ]
+        }
+      ]
+    },
+    {
+      "suite": "tests/learn/ac6-e2e-lock.mjs",
+      "kind": "helper",
+      "inCi": false,
+      "authoritative": {
+        "pass": null,
+        "fail": 0,
+        "basis": "not-run"
+      },
+      "canTurnRed": false,
+      "isDataLike": false,
+      "verdictGreen": "未运行",
+      "vacuous": false,
+      "exitOnlyWithFailPath": false,
+      "runs": []
+    },
+    {
+      "suite": "tests/learn/audit-merge-enforcement.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "authoritative": {
+        "pass": 0,
+        "fail": 0,
+        "basis": "exit-only"
+      },
+      "canTurnRed": true,
+      "isDataLike": false,
+      "verdictGreen": "GREEN — 只有 exit 码（无逐条计数，但有真实失败路径）",
+      "vacuous": false,
+      "exitOnlyWithFailPath": true,
+      "runs": [
+        {
+          "log": "audit-merge-enforcement.txt",
+          "exit": "0",
+          "elapsed": "6.99",
+          "ownAsserts": 0,
+          "foreign": 0,
+          "selfReport": null,
+          "stdoutLines": 211,
+          "stderrHead": "",
+          "dialect": []
+        }
+      ]
+    }
+  ]
+}

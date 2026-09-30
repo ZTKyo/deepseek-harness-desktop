@@ -1,5 +1,11 @@
 # POST_RESTART_LOAD_AND_REGRESSION.md
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 > 目的：给出 **重启之后**（新字节已装载）的 P4 终局证据：`source == deployed == loaded`、
 > 生产健康与安全扫描、工具面、全量回归。**本文件之前取到的所有"生产证据"，其对象都是旧字节**，
 > 因此不作为"修复已在生产生效"的判据（该规则见 `~/.dsh/AGENTS.md` 与本目录 P4_FINAL_VERDICT.md）。
@@ -127,7 +133,7 @@ import 一次，本机**没有**插件/patch 的文件监视器（2026-09-28 已
    复核器已按此修正，不把 404 当作不健康。
 2. 重启台账 `restart-attempts` 的 JSON 带 BOM，复核器 `ConvertFrom-Json` 读取失败（**只影响台账展示，
    不影响本文件任何结论**）；该不足已记录，未修改台账内容。
-3. 本文件不覆盖 STAGE B（P4.5 只读审计）的任何结论——STAGE B 仅在 P4 = VERIFIED 之后另行开展。
+3. 本文件不覆盖 STAGE B（P4.5 只读审计）的任何结论——STAGE B 仅在 P4 = VERIFIED 之后另行开展。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 4. "恰好 6 个 learn 工具、无重复"的**主证据**来自真实加载器 mount 门（同一字节、隔离宿主）；
    生产进程侧的证据是"日志无重复注册/无加载失败" + 本会话工具面恰好 6 个 + 行为探针成功。
    未在生产进程内直接枚举工具注册表（该服务未提供相应只读接口）。

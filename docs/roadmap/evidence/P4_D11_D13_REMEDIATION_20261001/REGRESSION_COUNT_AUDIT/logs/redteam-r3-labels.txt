@@ -1,0 +1,9 @@
+########## SUITE: tests/learn/redteam-r3-labels.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.16
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+########## ---- STDERR ----
+

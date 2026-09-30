@@ -1,0 +1,45 @@
+########## SUITE: tests/learn/_ac2-mutation-proof.mjs
+########## EXIT: 0
+########## ELAPSED_S: 9.1
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== AC2 研究腿门 · 突变验证（反空转证明）===
+  门 = C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\tests\learn\test-learn-ac2-research-leg.mjs
+  基线对照：未突变时该门必须全绿（下面第 0 步先证）
+
+  PASS  0 基线：未突变时门全绿（AC2 研究腿专项门：PASS=27  FAIL=0）
+  PASS  M1 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        ★A10 药丸 2 场景：researchPlan 的**真实调用点**被删除（字面量还在，执行点没了）
+        变红检查（部分）：0.7
+  PASS  M2 突变被抓住（AC2 研究腿专项门：PASS=10  FAIL=17）
+        AC2 主能力被摘掉：研究腿永不打开（openResearchLeg 直接失能）
+        变红检查（部分）：A1、A3、A4、A5、A6、B1、B2、B3 …共 17 条
+  PASS  M3 突变被抓住（AC2 研究腿专项门：PASS=22  FAIL=5）
+        有界被换成自留硬编码上限：研究腿上报 maxAttempts=999（不再复用候选面唯一权威）
+        变红检查（部分）：A1、A3、A5、B1、D2
+  PASS  M4 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        输出契约被破坏：schema 不再声明 researchDirective（宿主会整条拒绝该工具输出）
+        变红检查（部分）：A2
+  PASS  M5 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        可审计性被摘掉：无覆盖请求不再记 EXPERIENCE_LOOKUP_MISS 遥测
+        变红检查（部分）：B4
+  PASS  M6 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        ★假接线（比 M1 更隐蔽）：researchPlan 照样被调用，但返回值被丢弃、不再并入账本
+        变红检查（部分）：0.7
+  PASS  M7 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        ★P0-2 回退：研究腿重新用**伪造的**阶梯入参（三个输入都报"否"）⇒ 谎称走过阶梯判断
+        变红检查（部分）：A3
+  PASS  M8 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        ★P0-5 回退：status 不再声明"有界"的语义（只留数字，读者会以为它约束研究动作次数）
+        变红检查（部分）：A5
+  PASS  M9 突变被抓住（AC2 研究腿专项门：PASS=26  FAIL=1）
+        ★P0-3 回退：闭环不再做**主体绑定**判定（回到"只按时间就宣布因果"的旧实现 ⇒ 多报 RESEARCH_FULFILLED）
+        变红检查（部分）：C3
+
+══════════════════════════════════════════
+突变验证：PASS=10  FAIL=0
+══════════════════════════════════════════
+
+########## ---- STDERR ----
+

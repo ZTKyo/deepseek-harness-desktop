@@ -7,6 +7,15 @@
 >
 > **状态口径（不因本文件改变）**：P4 = `NOT VERIFIED / ROLLED BACK / AWAITING REDESIGN`（`docs/roadmap/CURRENT_STATUS.md` P4 行）。
 > 本文件**不构成** "P4 完成"、"生产已批准"、或任何治理状态回填。
+>
+> 〔⚠ 2026-10-01 时效标注：**本行口径已过时**。本行引用的 P4 状态串是 2026-09-24（Reviewer OPTION 2 / ROLLBACK ACTIVATION）期的口径；
+> 其**自己指定的权威来源** `docs/roadmap/CURRENT_STATUS.md` 的 P4 行此后已两次更新——2026-09-28 (`P4 ≠ VERIFIED`) 与
+> **2026-09-30 canonical 封条 `P4 = VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW`**。
+> ⇒ 缺陷性质：**指向失效的"让位声明"（broken deference）**——本文件用"不因本文件改变"把口径让位给 CURRENT_STATUS，
+> 却把被让位方的旧值逐字抄进了本行，于是让位目标更新后本行成了自相矛盾的残留。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段；
+> 本行以下正文**逐字保留历史原样**，未作改写或删除。〕
+>
 
 ---
 

@@ -1,0 +1,12 @@
+########## SUITE: tests/learn/deploy-preflight.mjs
+########## EXIT: 2
+########## ELAPSED_S: 0.2
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+########## ---- STDERR ----
+
+[env error] 缺少 --deploy <file1,file2,...>（显式列出本轮要部署的文件；不支持"全部同步"）
+
+

@@ -1,0 +1,70 @@
+########## SUITE: tests/learn/test-learn-r3-approval-forgery.mjs
+########## EXIT: 0
+########## ELAPSED_S: 1.66
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== F1 R1 §6：agent 能否自铸 approval authority？（伪造台账回归门）===
+  插件 = file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/plugins/learn.mjs
+  真实会话 = session-9961b384-2b94-4d82-ad01-99a5ebfd21a7 nodes=61
+
+--- S1 合法基线：真批准必须放行 + 信任锚在岗可观测 ---
+  PASS  S1.0 真实宿主批准通道可用（否则本套件无意义）
+  PASS  S1.1 ★ 生产姿态可观测：复验器必须挂在 ctx.sessions 上（被摘掉即失败）
+  PASS  S1.2 合法批准 ⇒ validHumanApproval/canPublish/isRecallable 全部放行
+        · 真台账字节=883｜锚点 = forgery-legit-session / a2089833-174d-415b-ba10-054fade4e8c4
+  PASS  S1.3 台账确实把 grant 绑定到**宿主会话 id + 宿主批准 ref**（伪造者要仿的就是这两样）
+
+--- S2 ★ 差分实验：同一实例 / 同一本链自洽台账 / 同形状两条经验，只换锚点 ---
+  PASS  S2.0 伪造物**结构上完全自洽**（结构/链/绑定都挡不住它 —— 所以必须靠更强的锚）
+  PASS  S2.1 台账被插件真的读到了伪造内容（否则后面即使 DENY 也没有意义）
+        · 伪造锚点拒绝原因 = approval_host_fact_approval_ref_not_in_host_log
+  PASS  S2.2 ★★ 差分判定：真锚点放行、伪造锚点 DENY，且原因是宿主事实类
+        · 拒绝原因 = approval_host_fact_approval_ref_not_in_host_log
+  PASS  S2.3 换成更"像真的"伪造锚点（**真实**会话 id + 编造 ref）仍 DENY
+  PASS  S2.4 台账句柄**没挂复验器**时必须判"不可复验"（fail-closed 的最后一层）
+
+--- S3 ★ 复制一条**真实**批准（grant 字节级拷贝）改锚点 ---
+  PASS  S3.0 前置：真实 grant 的三个锚点齐备（会话 id / ref / 内容摘要）
+        · 拒绝原因 = approval_host_fact_session_unavailable
+  PASS  S3.1 ★ 真 grant 改锚到**不存在**的会话 ⇒ DENY（宿主取不到该会话）
+        · 拒绝原因 = approval_host_fact_approval_ref_not_in_host_log
+  PASS  S3.2 ★ 换成**真实批准会话**仍 DENY（ref 不在那次批准的日志里）
+  PASS  S3.3 反向对照：真锚点在同口径下必须放行 —— 复验器不是无脑拒绝
+
+--- S4 ★ 攻击：把宿主服务摘掉，看闸门会不会"因为没有检查器而放行" ---
+  PASS  S4.0 降级实例（ctx.sessions=null）姿态可观测：service_absent
+        · 拒绝原因 = approval_host_fact_session_unavailable
+  PASS  S4.1 ★ 同一份真台账 + 真批准，宿主服务缺失 ⇒ DENY（fail-closed）
+  PASS  S4.2 "服务对象存在但没有 get"同样 DENY（不是有对象就算在岗）
+
+--- S5 ★ 生产后果：手写"全局库 + 台账"两份文件 ⇒ 新会话不得跨会话召回 ---
+  PASS  S5a 正例对照：真实批准的经验经"全局库拷贝"确实能跨会话召回
+        · 全局库载入后条目数 = 0｜召回命中 = []
+        · 拒绝原因 = approval_host_fact_approval_ref_not_in_host_log
+  PASS  S5b ★ 攻击：伪造条目即使写进全局库 + 台账，也不得跨会话召回
+
+--- S6 ★ 静态面：不存在"第二个铸造面" ---
+  PASS  S6.0 插件从不写宿主批准事件（approval/* 只能由宿主 ApprovalService 写）
+  PASS  S6.1 宿主事实复验器确实在生产代码里挂载（删掉这行即失败）
+  PASS  S6.2 插件不暴露任何"直接铸造授权"的 API
+
+--- S7 ★ 信任边界刻画：复验器要求的最小事实集（逐项拆开）---
+  PASS  S7.0 基线：四项齐备且自洽时才被认作宿主事实（锚的"最小充分集"）
+  PASS  S7.1 缺 `approval/asked` ⇒ DENY（只写一条 decided 不算批准）
+  PASS  S7.2 asked.toolName 不是 learn_review ⇒ DENY（别处的人类确认不能借用）
+  PASS  S7.3 缺 `approval/decided` 或 outcome≠grant ⇒ DENY（问了不等于批了）
+  PASS  S7.4 asked.reason 里没有内容摘要 ⇒ DENY（"批的是哪份内容"不可缺）
+  PASS  S7.5 插件不调用任何"宿主会话写入"API（信任锚的写面不在插件侧）
+        · 残余风险（必须随交付报告声明，不得隐瞒）：
+          复验器信任的是**宿主会话存储的完整性**。若某个调用方具备宿主会话存储
+          的原始文件写权限（例如直接改 ~/.dsh/sessions 下的会话 jsonl 后由宿主
+          重新载入），它可以植入上面那套四项齐备的事件对 ⇒ 复验会成立。
+          该边界**不在 learn 插件权限面内**：插件从不写 approval/* 事件（S6.0/S7.5），
+          工作区红线亦禁止直接改 ~/.dsh/sessions；生产实证未做（红线文件只读，
+          且规格禁止触碰生产状态）—— 由宿主/运维负责该存储完整性。
+
+RESULT: 27 PASS / 0 FAIL
+
+########## ---- STDERR ----
+

@@ -1,0 +1,47 @@
+########## SUITE: tests/learn/test-learn-real-topology-tool-events.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.22
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+=== RT0 夹具自检：必须是真实拓扑（节点与工具事件零交集） ===
+  PASS  nodes contain only user/assistant messages
+  PASS  tool events exist in the event stream
+  PASS  ★ tool event seqs ∩ node seqs = ∅ (真实拓扑)
+
+=== RT1 真实拓扑下抽取结构化失败事实（旧实现恒为空 = 死代码） ===
+  PASS  calls extracted from real topology
+  PASS  ★ failures extracted from real topology (2)
+  PASS  failures carry toolName
+  PASS  failures carry structured errorCode
+  PASS  failures carry official isError=true
+  PASS  capability observation is directly consumable
+  PASS  no success recorded (both failed)
+
+=== RT2 真实拓扑下的"已解决"判定（后续成功 ⇒ 不再是缺口） ===
+  PASS  one failure + one success extracted
+  PASS  ★ later success on same tool ⇒ failure is RESOLVED (not a gap)
+
+=== RT3 观察上界：surface 尚未覆盖到的工具事件不得被计入 ===
+  PASS  observation horizon bounds the scan (0 failures before any tool ran)
+  PASS  horizon up to turn-1 assistant message sees exactly 1 failure
+
+=== RT4 端到端活性：真实拓扑驱动插件 ⇒ 重复真实缺口产出候选（证明非死代码） ===
+  PASS  telemetry proves the gap path is LIVE (saw a capability-gap diag)
+  PASS  no tool-name-missing veto (toolName present in real topology)
+  PASS  ★ candidate produced from REAL topology repeated gap
+  PASS  candidate state is PROPOSED (never auto-active)
+  PASS  candidate taskType is tool-origin
+  PASS  stable experience store NOT overwritten
+
+=== RT5 真实拓扑下的否决：无 toolName 的工具失败不得产出候选（fail-closed） ===
+  PASS  orphan failures have empty toolName
+  PASS  ★ unresolvedToolFailures drops tool-name-missing facts (fail-closed)
+
+================================================================
+P4 LEARN R2 REAL-TOPOLOGY REGRESSION: 22 PASS / 0 FAIL
+================================================================
+
+########## ---- STDERR ----
+

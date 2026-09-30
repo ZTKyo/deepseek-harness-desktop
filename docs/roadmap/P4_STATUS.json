@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "_purpose": "P4 状态一致性 PARITY INDEX（不是权威面）。权威面 = authorityRequirements.authorityDoc。本文件只供 tests/roadmap/validate-p4-status-consistency.mjs 做 fail-closed 校验，防止 P4 判定与逐条 AC 状态在同一 commit tree 内再次出现互相矛盾的声明。",
+  "_remediation": "P4 External Review remediation, D1（2026-10-01）",
+  "auditedBaseline": "63bf5585c64742169c8b66ddfc2938e7de936343",
+  "authorityRequirements": {
+    "authorityDoc": "docs/roadmap/CURRENT_STATUS.md",
+    "p4Status": "VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW",
+    "canonicalSealHeading": "## 2026-09-30 P4 canonical 封条",
+    "remediationSectionMarker": "2026-10-01 External Review remediation",
+    "overviewRowPrefix": "| 04 |",
+    "acStatusSentence": "AC1–AC10 全部 PASS"
+  },
+  "stalenessMarkerToken": "2026-10-01 时效标注",
+  "sweepExemptDocs": [
+    {
+      "path": "docs/roadmap/CURRENT_STATUS.md",
+      "reason": "权威面本体：按设计逐字保留 2026-09-23 回滚记录与旧判定原文（历史不得删除），其自身一致性由本校验器 C1–C8 断言保证。"
+    }
+  ],
+  "acVerdicts": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS",
+    "AC8": "PASS",
+    "AC9": "PASS",
+    "AC10": "PASS"
+  },
+  "postP4State": {
+    "postP4VerifiedGoldenFrozen": false,
+    "p4ProductionActivated": false,
+    "phase05Started": false,
+    "p4_5Started": false
+  },
+  "supersededDocs": [
+    {
+      "path": "RELIABILITY_HOTFIX_RH2_R1_REPORT.md",
+      "staleStrings": ["P4 = LOCKED"],
+      "note": "RH2 热修报告（仓库根）：其 `P4 = LOCKED` 属封条前历史口径，已加时效标注。"
+    },
+    {
+      "path": "RELIABILITY_RH2_R11_OVERNIGHT_REPORT.md",
+      "staleStrings": ["P4=LOCKED"],
+      "note": "RH2 R11 隔夜报告（仓库根）：同上。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "staleStrings": ["AC6 / AC10 = PARTIAL", "P4 ≠ VERIFIED"],
+      "note": "C1：同文件内 L33(AC6=PASS) 与 §三 汇总行(AC6/AC10=PARTIAL) 自相矛盾；根因=2026-09-28 01:41 AC6 关闭只改了逐条行、漏改汇总行。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/P4_FINAL_VERDICT.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "C2 最严重实例：被取代的判定就是本文件标题 L1。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R2/RELEASE_EVIDENCE_INDEX.md",
+      "staleStrings": ["NOT VERIFIED / ROLLED BACK / AWAITING REDESIGN"],
+      "note": "C3 指向失效的让位声明：本行把「不因本文件改变」让位给的 CURRENT_STATUS P4 行旧值逐字抄下，让位目标更新后本行成为残留。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC2_RESEARCH_LEG_CLOSURE.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "下游继承被取代总判定。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "C5：L23 指向 A10_CONTRACT_MATRIX.md:33 并称裁决 PARTIAL，该行自 2026-09-28 起已是 PASS ⇒ 指针不再解析到所引原文。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC10_GATE_REGISTRY_AND_REAL_E2E_IN_CI.md",
+      "staleStrings": ["CI 内无真实 E2E 门"],
+      "note": "AC10 已于 2026-09-30 客观闭合（真实 E2E 进入必需门）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/PRE_DEPLOY_PREFLIGHT.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "部署前预检的旧口径。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/POST_RESTART_STATE_AND_READINESS.md",
+      "staleStrings": ["P4 = NOT_VERIFIED"],
+      "note": "重启后就绪度证据（历史实证，保留原样 + 标注）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/POST_RESTART_LOAD_AND_REGRESSION.md",
+      "staleStrings": ["P4 = VERIFIED"],
+      "note": "STAGE B 前置条件表述（历史实证，保留原样 + 标注）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md",
+      "staleStrings": ["合同口径结论", "PARTIAL"],
+      "note": "R1 期合同对齐（历史口径）；本文件 §「Acceptance Criteria」仍是 canonical 合同 AC1–AC10 逐字原文，未过时。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/INDEPENDENT_DELTA_REVIEW_R1.md",
+      "staleStrings": ["整体终裁", "PARTIAL"],
+      "note": "独立增量评审旧终裁。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md",
+      "staleStrings": ["AC1-AC12", "all satisfied"],
+      "note": "REPORT_R1 使用 R1 自定 AC1–AC12（与合同 AC1–AC10 同号不同义）。"
+    }
+  ],
+  "numberingDisambiguated": [
+    {
+      "path": "tests/learn/test-learn-core.mjs",
+      "requiredToken": "AC 编号声明",
+      "note": "D8：本文件注释里的 (ACn) 指向 R1 自定 AC1–AC12，不是合同 AC1–AC10。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md",
+      "requiredToken": "编号声明（2026-10-01）",
+      "note": "D8：自定编号表本身必须声明其编号体系。"
+    }
+  ]
+}

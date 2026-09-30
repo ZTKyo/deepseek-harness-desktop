@@ -1,10 +1,16 @@
 # AC6 缺口关闭报告 —— Candidate 真实三腿晋升 E2E（2026-09-28）
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 > 本报告**只关闭 AC6 一处**。~~AC2（研究腿未接线）与~~ AC10（CI 内无真实 E2E 门）**仍未关闭**，
 > **更新（2026-09-28 02:xx）**：**AC2 已随后单独关闭**（研究腿接线 + 25P/0 接线锁 + 突变负控 7/7 + CI 内 exit 0；
 > 见 `AC2_RESEARCH_LEG_CLOSURE.md`）。本报告正文 §5/§6 中「AC2 未接线」的表述**已过时**，仅作当时记录保留。
 > A8 真人审批边界**未被触碰**（细节见 §6「诚实的范围边界」）。
-> 上游文档：`P4_FINAL_VERDICT.md`（A11 终局判定 = P4 ≠ VERIFIED）、`A10_CONTRACT_MATRIX.md`（AC1–AC10 逐条）。
+> 上游文档：`P4_FINAL_VERDICT.md`（A11 终局判定 = P4 ≠ VERIFIED）、`A10_CONTRACT_MATRIX.md`（AC1–AC10 逐条）。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 ---
 
@@ -20,7 +26,7 @@
 | 来源 | 原文 |
 |---|---|
 | `P4_FINAL_VERDICT.md:50` | **AC6**：Candidate 的 **Transaction/canary/deploy 腿仅声明、零调用**；`tests/learn` 中 `Transaction` 引用 = **0**；`ci-level1.yml:191` 把 `dsh-plugin-transaction.ps1` 列入 `$skip` |
-| `A10_CONTRACT_MATRIX.md:33` | 裁决 **PARTIAL**（CI 腿真；**Transaction/canary/deploy 腿仅声明、零调用**） |
+| `A10_CONTRACT_MATRIX.md:33` | 裁决 **PARTIAL**（CI 腿真；**Transaction/canary/deploy 腿仅声明、零调用**） | 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕（注：`A10_CONTRACT_MATRIX.md` 该行自 2026-09-28 01:41 起已为 PASS，本处指针不再解析到所引原文。）
 
 「声明」指 `learn-candidate.mjs:85-110 STAGE_DELEGATION` 里写着要委托 ci-level1 / dsh-transaction.ps1 / reliability-lab / plugin-transaction，
 但**没有任何测试真实驱动过这些腿**，`verifyPromotionReceipts` 的 transaction 腿因此在真实调用下拿不到真收据。

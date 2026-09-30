@@ -1,0 +1,66 @@
+########## SUITE: tests/learn/test-learn-candidate.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.21
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== STAGE 6-7 验收：Candidate Lifecycle + Autonomous Research ===
+
+=== A 组：AC7 — Candidate 无法直接覆盖 Stable（核心）===
+  PASS  A1 ★ 非 Stable 目标放行（对照组：证明守卫不是一律拒绝）
+  PASS  A2 ★ direct 模式覆盖 Stable → 一律拒绝（AC7 主断言）
+  PASS  A3 ★ 即使候选已走完全部阶段 + 有人批准，direct 仍必须拒绝
+  PASS  A4 ★ Stable 路径变体不可绕过（大小写 / 中间段 / 前缀）
+  PASS  A5 走正规通道但候选未走完管线 → 拒绝
+  PASS  A6 ★ 管线走完但**无人工批准** → 拒绝（HUMAN APPROVAL 是必要条件）
+  PASS  A7 ★ 管线走完 + 人工批准 → 放行（对照组：证明 A6 不是焊死）
+
+=== B 组：AC6 — 复用既有系统，不造第二套（实证文件存在）===
+  PASS  B1 ★ 委托表指向的既有系统文件**真实存在**（非纸面声明）
+  PASS  B2 ★ 委托目标覆盖全部 4 个执行阶段，且无自建系统
+  PASS  B3 ★ 静态锁：learn-candidate.mjs 内不得有任何进程/网络/git 执行（禁第二套引擎）
+  PASS  B4 ★ delegationPlan 声明的待执行阶段都带既有系统入口，且 buildsSecondSystem=false
+
+=== C 组：AC8 — 无常驻 daemon，研究有界 ===
+  PASS  C1 ★ 静态锁：模块内无定时器 / 无事件循环（AC8 无常驻 daemon）
+  PASS  C2 ★ 研究次数达上限后拒绝继续（禁无限重试）
+  PASS  C3 ★ 对照组：未达上限时研究**必须**被允许（证明 C2 不是焊死）
+  PASS  C4 研究计划显式声明 daemon=false 且带上限
+  PASS  C5 未合格 gap 不得生成研究计划（AC5 闸门不可绕过）
+
+=== D 组：候选形态阶梯（Rule > Extend Skill > New Skill > New Plugin）===
+  PASS  D1 ★ 可规则化 → RULE（最优先，绝不跳到 Plugin）
+  PASS  D2 ★ 已有 skill 覆盖 → EXTEND_SKILL（不新建）
+  PASS  D3 ★ 无既有 skill 且无需新运行时能力 → NEW_SKILL
+  PASS  D4 ★ 确实需要新运行时能力 → NEW_PLUGIN（最后手段）
+  PASS  D5 ★ 阶梯单调性：逐级放宽条件，形态只能变重不能变轻
+  PASS  D6 ★ P0-2：无依据时理由必须如实说"无依据"，不得断言"不存在既有 skill"
+
+=== E 组：生命周期状态机（isolated tests → regression/holdout → canary）===
+  PASS  E1 ★ 不得跳阶段（PROPOSED → CANARY 非法）
+  PASS  E2 ★ 每个阶段都必须有证据（无证据不得前进）
+  PASS  E3 ★ 完整正路径：三段推进全部成功且证据留档
+  PASS  E4 ★ 未走完管线不得晋升（PROMOTED 必须经 CANARY）
+  PASS  E5 ★ 走完管线但无人工批准 → 不得晋升
+  PASS  E6 ★ 走完管线 + 人工批准 → 晋升成功（对照组）
+  PASS  E7 ★ advanceCandidate 不得用于 PROMOTED（必须走带批准的 promoteCandidate）
+  PASS  E8 ★ 终态不可复活（PROMOTED / REJECTED 无出边）
+  PASS  E9 ★ 拒绝候选只保留**最小失败记录**（不含候选正文，不挂载 Runtime）
+
+=== F 组：与 AC5 闸门集成 + 确定性 / 幂等 / fail-closed ===
+  PASS  F1 ★ 未合格 gap 不得建候选（AC5 闸门不可绕过）
+  PASS  F2 ★ 对照组：合格 gap 必须能建候选（证明 F1 不是焊死）
+  PASS  F3 ★ 被硬否决的失败观测**不可能**通过 qualifyGap（AC5 → AC7 链路闭合）
+  PASS  F4 ★ 确定性：同一 dedupKey 永远得到同一 candidate id；重复提案幂等
+  PASS  F5 ★ fail-closed：损坏 store 必须判废（绝不部分信任）
+  PASS  F6 ★ 含 secret 的阶段证据必须被拒（AC1 同纪律）
+  PASS  F7 ★ AC9 有界：候选数超上限时**保留刚写入的这条**（不静默丢失）
+  PASS  F8 遥测：候选事件真实记录且可观察（AC8）
+  PASS  F9 ★ 候选 store 与 experience store 分层（AC 不混用 authority）
+
+=== 汇总 ===
+  STAGE 6-7: 40 PASS / 0 FAIL
+  PASS STAGE 6-7 candidate lifecycle + bounded research
+
+########## ---- STDERR ----
+

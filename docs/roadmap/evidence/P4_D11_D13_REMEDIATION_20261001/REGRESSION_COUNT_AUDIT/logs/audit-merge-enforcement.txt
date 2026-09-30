@@ -1,0 +1,219 @@
+########## SUITE: tests/learn/audit-merge-enforcement.mjs
+########## EXIT: 0
+########## ELAPSED_S: 6.99
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+{
+  "repo": "ZTKyo/deepseek-harness-desktop",
+  "requiredContexts": [
+    "Static + secret + syntax gate",
+    "Reliability state machine tests",
+    "DSH boot + readiness smoke"
+  ],
+  "enforceAdmins": true,
+  "strictUpToDate": true,
+  "mainRulesets": [],
+  "learnGateCarriers": [
+    {
+      "step": "P4 LEARN gate registry (no silently-missing / silently-excluded gate)",
+      "context": "Static + secret + syntax gate",
+      "required": true,
+      "file": ".github/workflows/ci-level1.yml"
+    },
+    {
+      "step": "P4 LEARN AC10 registry mutation proof (registry gate must turn RED)",
+      "context": "Static + secret + syntax gate",
+      "required": true,
+      "file": ".github/workflows/ci-level1.yml"
+    },
+    {
+      "step": "P4 LEARN plugin host-contract gate",
+      "context": "Reliability state machine tests",
+      "required": true,
+      "file": ".github/workflows/ci-level2.yml"
+    },
+    {
+      "step": "P4 LEARN R2 contract-closure gates (CI-safe subset)",
+      "context": "Reliability state machine tests",
+      "required": true,
+      "file": ".github/workflows/ci-level2.yml"
+    },
+    {
+      "step": "P4 LEARN AC2 mutation proof (gate must turn RED)",
+      "context": "Reliability state machine tests",
+      "required": true,
+      "file": ".github/workflows/ci-level2.yml"
+    },
+    {
+      "step": "P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)",
+      "context": "DSH boot + readiness smoke",
+      "required": true,
+      "file": ".github/workflows/ci-level3.yml"
+    }
+  ],
+  "pathVerdicts": [
+    {
+      "path": "PR → main（门：P4 LEARN gate registry (no silently-missing / silently-excluded gate)）",
+      "carrier": ".github/workflows/ci-level1.yml job=static-gate context=\"Static + secret + syntax gate\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN gate registry (no silently-missing / silently-excluded gate)）",
+      "carrier": ".github/workflows/ci-level1.yml job=static-gate context=\"Static + secret + syntax gate\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    },
+    {
+      "path": "PR → main（门：P4 LEARN AC10 registry mutation proof (registry gate must turn RED)）",
+      "carrier": ".github/workflows/ci-level1.yml job=static-gate context=\"Static + secret + syntax gate\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN AC10 registry mutation proof (registry gate must turn RED)）",
+      "carrier": ".github/workflows/ci-level1.yml job=static-gate context=\"Static + secret + syntax gate\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    },
+    {
+      "path": "PR → main（门：P4 LEARN plugin host-contract gate）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN plugin host-contract gate）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    },
+    {
+      "path": "PR → main（门：P4 LEARN R2 contract-closure gates (CI-safe subset)）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN R2 contract-closure gates (CI-safe subset)）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    },
+    {
+      "path": "PR → main（门：P4 LEARN AC2 mutation proof (gate must turn RED)）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN AC2 mutation proof (gate must turn RED)）",
+      "carrier": ".github/workflows/ci-level2.yml job=state-machine-tests context=\"Reliability state machine tests\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    },
+    {
+      "path": "PR → main（门：P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)）",
+      "carrier": ".github/workflows/ci-level3.yml job=smoke context=\"DSH boot + readiness smoke\"",
+      "blocked": true,
+      "reasons": [
+        "context required=是",
+        "跑在 PR 路径=是",
+        "enforce_admins=true",
+        "无 main ruleset"
+      ]
+    },
+    {
+      "path": "直推 → main（门：P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)）",
+      "carrier": ".github/workflows/ci-level3.yml job=smoke context=\"DSH boot + readiness smoke\"",
+      "blocked": false,
+      "reasons": [
+        "该 workflow 在 push→main 触发=**否**",
+        "ruleset 强制 PR（可堵死直推）=**否**",
+        "ruleset 必需检查且无 bypass=否"
+      ]
+    }
+  ],
+  "requiredChecksOnDirectPush": {
+    "Static + secret + syntax gate": false,
+    "Reliability state machine tests": false,
+    "DSH boot + readiness smoke": false
+  },
+  "redCanReachMain": {
+    "prPath": [],
+    "directPushPath": [
+      "直推 → main（门：P4 LEARN gate registry (no silently-missing / silently-excluded gate)）",
+      "直推 → main（门：P4 LEARN AC10 registry mutation proof (registry gate must turn RED)）",
+      "直推 → main（门：P4 LEARN plugin host-contract gate）",
+      "直推 → main（门：P4 LEARN R2 contract-closure gates (CI-safe subset)）",
+      "直推 → main（门：P4 LEARN AC2 mutation proof (gate must turn RED)）",
+      "直推 → main（门：P4 LEARN AC6 real promotion e2e (real git + real CI job commands + real transaction)）"
+    ],
+    "adminBypass": false
+  },
+  "accident": {
+    "pr": 97,
+    "merged": true,
+    "mergedAt": "2026-09-26T16:46:07Z",
+    "mergedBy": "ZTKyo",
+    "mergeCommit": "171f1b4055042b1fe23a64b948be6a9e95d680aa",
+    "checks": [
+      {
+        "name": "DSH boot + readiness smoke",
+        "conclusion": "failure",
+        "required": true
+      }
+    ]
+  },
+  "gitHead": "63bf5585c647",
+  "generatedAt": "2026-09-30T20:03:10.936Z"
+}
+
+########## ---- STDERR ----
+

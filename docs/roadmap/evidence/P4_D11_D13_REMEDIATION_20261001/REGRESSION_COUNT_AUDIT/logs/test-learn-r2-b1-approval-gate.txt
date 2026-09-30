@@ -1,0 +1,43 @@
+########## SUITE: tests/learn/test-learn-r2-b1-approval-gate.mjs
+########## EXIT: 0
+########## ELAPSED_S: 1.13
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== R2 BLOCKER-1 回归门：人工审批是跨会话传播的唯一途径 ===
+  插件 = file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/plugins/learn.mjs
+  真实会话 = session-9961b384-2b94-4d82-ad01-99a5ebfd21a7 nodes=61（证据驱动选定；已扫描 1 个候选）
+
+--- A 组：未审批 + 机器验证通过 ⇒ 必须 DENY（BLOCKER-1 漏洞面）---
+  PASS  A0 真实会话驱动产出自动候选（PROPOSED，零审批）
+  PASS  A1 learn_verify 本身 PASS（攻击成立的前提：证据是真的）
+  PASS  A2 ★ 未审批 ⇒ publication 必须是 denied:not_human_approved（不得是 published）
+  PASS  A3 ★ 全局库**不落盘**该条目（跨会话库零污染）
+  PASS  A4 ★ 另一个会话**召回不到**它（"人工审批是唯一可召回途径"成立）
+  PASS  A5 被拒必须**留痕**（GLOBAL_PUBLISH_DENIED，不得静默跳过）
+  PASS  A6 非回归：本会话 Layer A 仍可召回该 VERIFIED_EXPERIENCE（合同实现原则 3 未被误杀）
+
+--- B 组：人工审批 ⇒ 必须放行且**跨会话真的召回得到**（防焊死）---
+  PASS  B0 真实会话驱动产出自动候选
+  PASS  B1 learn_review approve ⇒ publication=published（合法路径通，且**真的**走了宿主人类通道）
+  PASS  B2 落盘条目带完整人工审批来源 + APPROVED + VERIFIED
+  PASS  B3 ★ 另一个会话**召回到了**这条已审批经验（AC4 正向要求成立）
+  PASS  B4 工具面一致：learn_recall 在另一会话同样可见（测试路径 == 生产路径）
+  PASS  B5 审批后再验证一次：授权**不被撤销**（根因修复的核心断言）
+
+--- C 组：存量污染库必须整体判废（fail-closed 隔离，不部分信任）---
+  PASS  C0 取 A 组真实攻击产物作为"旧格式条目"
+  PASS  C1 该旧格式条目**确实**过不了 canPublish（这就是旧库的病）
+  PASS  C2 含该条目的存量全局库被整体判废 + 记 GLOBAL_REJECTED（不部分信任）
+  PASS  C3 存量污染条目跨会话召回不到（隔离生效）
+
+--- D 组：状态机不变量 —— 审批粘性（根因锁）---
+  PASS  D1 APPROVED --确定性验证 PASS--> 仍为 APPROVED（授权不被重新验证撤销）
+  PASS  D2 PROPOSED --确定性验证 PASS--> VERIFIED_EXPERIENCE（晋升路径未被粘性逻辑破坏）
+
+==========================================================================
+RESULT: 19 PASS / 0 FAIL
+==========================================================================
+
+########## ---- STDERR ----
+

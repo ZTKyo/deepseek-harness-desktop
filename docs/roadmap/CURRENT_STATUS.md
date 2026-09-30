@@ -769,3 +769,178 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       **更正**：`docs/roadmap/**` 属清单内路径 ⇒ roadmap 文档 PR 会正常触发 L3（本封条 PR #102 实测三必需检查全部排队）；
       处置 = 对文档分支 `workflow_dispatch` L3 使必需检查在该 SHA 报告，或把必需门改为 always-run 占位门。
     - 封条与证据索引：`_p4r2-final-closure/POST_P4_FINAL_GOLDEN_20260930.md`（工作区）。
+
+  - **2026-10-01 External Review remediation（D1–D13）——审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`**：
+
+    > 本段是**唯一当前状态口径**。凡本仓库内其它文档（尤其 2026-09-28 及更早的历史报告）与本节冲突，
+    > **一律以本节为准**；历史文档保留原样，冲突以"时效标注"消解（见 D1）。
+
+    - **① 当前 AC 状态（唯一口径）**：**AC1–AC10 全部 PASS**。
+      判定字符串 = `VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW`。
+      `POST_P4_VERIFIED_GOLDEN` **未冻结**；`P4_PRODUCTION_ACTIVATED = NO`；`PHASE_05_STARTED = NO`。
+      合同来源（canonical 逐字）：`docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md:122-132`；
+      4 个 mandatory 场景逐字：同文件 `:115-120`。
+
+      | AC | 合同要求（逐字摘要） | 当前状态 | 仓库内可复算的当前证据 |
+      |---|---|---|---|
+      | AC1 | Experience compact、结构化、无 Secret | **PASS** | `tests/learn/test-learn-ac1-secret-families.mjs`（19 家族 + 库级幂等）；`tests/reliability/secret-scan-check.mjs`；**2026-10-01 口径更正见 §③** |
+      | AC2 | 不会的问题不第一时间失败/问用户，低风险会自主研究 | **PASS** | `tests/learn/test-learn-ac2-research-leg.mjs`（接线锁）+ `_ac2-mutation-proof.mjs`（7 突变负控）+ `ci-level2.yml` 内 exit 0 |
+      | AC3 | 经验只有验证成功后进入 verified | **PASS** | `tests/learn/test-learn-stage2-schema-and-negative-lock.mjs`、`test-learn-r2-b1-approval-gate.mjs`、`test-learn-b2-verify-output-contract.mjs` |
+      | AC4 | 复用时做环境/version check | **PASS** | `tests/learn/run-learn-contract-scenarios.mjs`（场景②） |
+      | AC5 | Failure Classification 能阻止错误学习 | **PASS** | `tests/learn/test-learn-ac5-gap-veto.mjs`、`test-learn-ac5-e2e.mjs` |
+      | AC6 | Candidate 复用现有 CI/Transaction，不造第二套 promotion engine | **PASS** | `tests/learn/test-learn-ac6-real-promotion-e2e.mjs`（真三腿 E2E）+ `ci-level2.yml` 三腿接线 |
+      | AC7 | Candidate 无法直接覆盖 Stable | **PASS** | `test-learn-stage2-schema-and-negative-lock.mjs` 的 Stable 守卫断言 |
+      | AC8 | 无常驻学习 daemon / vector DB / 自训练平台 | **PASS** | `plugins/learn*.mjs` 全为按需事件钩子，无 daemon/DB 依赖（静态可核） |
+      | AC9 | Learning 不导致插件数量无界增长 | **PASS** | `tests/learn/validate-gate-registry.mjs`；learn 插件集固定 4 件 |
+      | AC10 | 真实 E2E 证据 PASS | **PASS** | 2026-09-30 客观闭合：required contexts 三项 + `enforce_admins=true` + `strict=true`；红灯 PR #100 = BLOCKED / 绿灯 PR #99 = MERGED（`3ba3511`）；工作流 `.github/workflows/ci-level2.yml`、`ci-level3.yml` |
+
+      **mandatory 场景（合同原文「至少设计并执行」）**：4 个场景**全部已执行**（① 合成+真 CI；
+      ② 合成门 + 真实跨会话复用受真人审批门正确保护；③ 真实生产遥测 `GAP_VETOED=4`；
+      ④ 真 E2E 受控案例 + 篡改负向全拒）。**诚实边界**：②④① 的"**生产自然实例**"仍缺
+      （① 未在无经验的生产任务上自然发生；② 生产自然跨会话复用 = 0 次，被"无真人审批"正确拒绝；
+      ④ Candidate 生产自然晋升 = 0 次）。这是**已知边界**而非"达成与否"之争。
+
+    - **② D1 历史文档时效标注索引（矛盾以标注消解，不删不改历史）**：
+
+      **标注规范（单一 token，机器可核）**：全部替换性标注共用同一 token「**2026-10-01 时效标注**」，
+      且一律**追加在历史行的行尾**（保证历史行原文仍是该行的严格前缀 ⇒ "一字未改"可被机器证明，
+      而非只靠人工比对 diff）。
+
+      **配套门（本轮新增，均可重复运行）**：
+      - `docs/roadmap/P4_STATUS.json` —— **parity index（不是权威面；权威面 = 本文件）**；
+      - `node tests/roadmap/validate-p4-status-consistency.mjs` —— **43 项断言**：本文件与索引**双向**平价、
+        全部已登记历史文档必须带标注、**仓库级扫掠**（任何**未登记**文档复述被取代结论即红灯）、
+        post-P4 四项锁（GOLDEN 未冻结 / 未上生产 / P5 未开 / P4.5 未开）；
+      - `node tests/roadmap/verify-history-preserved.mjs` —— **逐行证明历史未被改写**：对每个已登记文档，
+        HEAD 修订的**每一非空行**都必须仍以工作树某行为严格前缀。
+        本轮回执：**14/14 文档、1420 行全部通过**（含 55 行表格分隔行豁免）。
+
+      | # | 文档（仓库内路径） | 其历史结论（正文逐字保留） | 标注 |
+      |---|---|---|---|
+      | 1 | `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md` | `AC6 / AC10 = PARTIAL`、`P4 ≠ VERIFIED`、场景 ①未达成/②半达成/④部分达成 | 文首标注 + 5 处行尾标注 |
+      | 2 | `…/R3_FINAL_CLOSURE/P4_FINAL_VERDICT.md` | **标题即** `P4 ≠ VERIFIED` | 文首标注 + 3 处行尾标注 |
+      | 3 | `…/R3_FINAL_CLOSURE/AC2_RESEARCH_LEG_CLOSURE.md` | 继承被取代的总判定 | 文首标注 + 2 处行尾标注 |
+      | 4 | `…/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md` | L23 指向 `A10_CONTRACT_MATRIX.md:33` 并称裁决 PARTIAL（**指针已不再解析到所引原文**） | 文首标注 + 2 处行尾标注 + 指针失效说明 |
+      | 5 | `…/R3_FINAL_CLOSURE/AC10_GATE_REGISTRY_AND_REAL_E2E_IN_CI.md` | "CI 内无真实 E2E 门"（AC10 已于 2026-09-30 客观闭合） | 文首标注 + 1 处行尾标注 |
+      | 6 | `…/R3_FINAL_CLOSURE/PRE_DEPLOY_PREFLIGHT.md` | 部署前旧口径 `P4 ≠ VERIFIED` | 文首标注 + 1 处行尾标注 |
+      | 7 | `…/R3_FINAL_CLOSURE/evidence/POST_RESTART_STATE_AND_READINESS.md` | 重启后就绪度证据 `P4 = NOT VERIFIED` | 文首标注 + 1 处行尾标注 |
+      | 8 | `…/R3_FINAL_CLOSURE/evidence/POST_RESTART_LOAD_AND_REGRESSION.md` | STAGE B 前置条件表述 | 文首标注 + 1 处行尾标注 |
+      | 9 | `…/PHASE_04_LEARNING/R2/RELEASE_EVIDENCE_INDEX.md` | 把 `NOT VERIFIED / ROLLED BACK / AWAITING REDESIGN` 逐字抄为"让位"目标（**让位对象本身已更新 ⇒ 该行成为残留**） | 文首标注 + 1 处行尾标注 |
+      | 10 | `…/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md` | R1 期合同口径（`合同口径结论：PARTIAL`） | 文首标注 + 2 处行尾标注 + 备注行 |
+      | 11 | `…/PHASE_04_LEARNING/INDEPENDENT_DELTA_REVIEW_R1.md` | 独立增量评审旧终裁 | 文首标注 + 2 处行尾标注 |
+      | 12 | `…/PHASE_04_LEARNING/REPORT_R1.md` | 使用**自定 AC1–AC12 编号**（与 canonical AC1–AC10 语义不同） | 文首标注 + 编号声明行 + 1 处行尾标注 |
+      | 13 | `RELIABILITY_HOTFIX_RH2_R1_REPORT.md`（根） | `P4 = LOCKED`（封条前口径） | 文首标注 + 1 处行尾标注 |
+      | 14 | `RELIABILITY_RH2_R11_OVERNIGHT_REPORT.md`（根） | `P4=LOCKED`（封条前口径） | 文首标注 + 1 处行尾标注 |
+
+      **D8 编号消歧（与上表同批，独立登记）**：`tests/learn/test-learn-core.mjs`（注释中的 `(ACn)` 指向
+      R1 自定编号）与 `REPORT_R1.md` 的自定编号表，均已加**编号体系声明**，防止"同号不同义"被误读为矛盾。
+      该两项由 `P4_STATUS.json` 的 `numberingDisambiguated` 登记并受同一门校验。
+
+      **不列入上表的"非矛盾"项**：更早的 2026-09-23 **回滚**记录
+      （`P4 = NOT VERIFIED` / 旧插件副本）**属不同时间基线**，其执行事实在本文件内**原样保留**；
+      按定义它不构成"同一基线自相矛盾"，故不标注、不修改（`validate-p4-status-consistency.mjs` 的
+      **C8 断言**专门锁住"该回滚记录仍然存在"，防止后续被"顺手清理"）。
+
+      → 同一 audited baseline（`main@63bf558`）在仓库内**只承认 ①** 这一个 AC 状态。
+
+
+    - **③ D2 封条证据可得性（如实声明；D2 采纳"索引处明写"方案）**：
+      - 2026-09-30 封条引用的证据目录 **`_p4r2-final-closure/`** 与 **`_ac10/p4seal-evidence/`**
+        **不在仓库内**：`gh api repos/ZTKyo/deepseek-harness-desktop/contents/_p4r2-final-closure?ref=main`
+        与 `.../_ac10/p4seal-evidence?ref=main` 均返回 **`Not Found`**。它们**仅存于操作者工作区**
+        `C:\Users\Administrator\Desktop\sdeepseek harness\` 下。
+      - **⇒ 外部 Reviewer 仅凭 `main` 无法复核封条中"生产侧/证据目录"那部分**；复核需操作者另行提供该目录，
+        或由操作者按下列仓库内可复算项目自行重建。
+      - **仓库内可独立复算（不依赖上述目录）**：`.github/workflows/ci-level1..4.yml`、`tests/learn/**`、
+        `tests/reliability/**`、`docs/roadmap/evidence/**`、`plugins/learn*.mjs`（含 SHA256）；
+        分支保护/合并约束类结论可用 **只读** `gh api repos/<slug>/branches/main/protection` 与
+        `gh api repos/<slug>/rulesets` 现场重取。
+      - **为何不把证据目录"入库"**：该目录含**与现行生产配置同值的凭据副本**（`AC1_ARTIFACT_REDACTION.md`
+        记载就地脱敏过 3 个文件）以及生产 store 快照 —— 批量入库会把凭据面搬进长期版本历史，
+        **风险高于收益**。故采纳评审给出的替代方案（索引处明写），并在此**明确标注该项复核的外部依赖**。
+
+    - **④ D11 密钥审计口径更正（度量假阳性 ⇒ REAL SECRET = 0）**：
+      - **根因**：插件自身的脱敏占位符 `[REDACTED:uri-credential]` 处在 `postgres://…@host` 形态内时，
+        会被 `uri-credential` 家族正则**再次命中**（占位符含 `:`，形似 `user:pass@`）。
+        即"扫描器把自己的输出再报成新泄漏"。
+      - **复算**：对同一文本，剥掉 `[REDACTED:<family>]` 标记后 `containsSecret` = **false**、命中 = **0**。
+        ⇒ 此前 AC1 记的「存量 2 命中（google=1 / stripe=1）」中，**uri-credential 形态的那部分为度量假阳性**；
+        真实密钥计数 = **0**。
+      - **口径（自 2026-10-01 起强制）**：任何密钥审计输出必须**分开报告三个数** ——
+        `RAW MATCH` / `REDACTION PLACEHOLDER` / `REAL SECRET`；**只允许把 `REAL SECRET` 当作泄漏结论**，
+        `RAW MATCH` 单独出现时不得表述为"发现泄漏"。
+      - **边界（不降低灵敏度）**：占位符豁免**仅**对 `[REDACTED:<family>]` 这一种由本插件生成的标记生效
+        （标记被剔除后重新扫描，而非"整行跳过"），**不新增**任何跨结构白名单；
+        含密钥形态的**真实**文本仍必须被判为 `REAL SECRET`。回归用例 A–D：
+        `tests/reliability/test-redaction-aware-audit.mjs`（A 干净=0/0/0；B 单条脱敏 ⇒ REAL=0；
+        C 真实密钥仍被抓 ⇒ exit 非 0；D 生产只读审计分列三数）。
+      - 实现：`tests/reliability/redaction-aware-secret-audit.mjs`（审计层新增，**learning 插件未改字节**）。
+
+    - **⑤ D12 脱敏自愈作用域更正**：
+      - **实现事实**（`plugins/learn.mjs:594` → `learn-core.mjs:542 redactStore`）：自愈在
+        **`loadStore(sid)` 成功之后**执行，作用域 = **该次被载入的那一个会话库**；
+        命中即 `saveStore` 落盘；`heal.skipped` 非空时**保守保留原值**并上报 `STORE_REDACT_SKIPPED`。
+      - **⇒ 准确表述**：「**当前已加载会话的库已自愈；历史库未扫掠**」。
+        **不**表述为"历史存量已全部清除"或"全库扫描完成"。
+      - **依据（生产实测，2026-10-01 只读复核）**：`%LOCALAPPDATA%\DSHHarness\state\learn\` 下
+        3 个 `schemaVersion=1` 旧库与含 `[REDACTED:` 标记的历史库 **mtime 全部早于** 2026-09-28 重启
+        ⇒ 未被扫掠；会话库写入时点与该会话被载入的时点一致。
+      - **正确性上无问题**（AC1 只要求"进入 Experience 的内容无 Secret"）；此处**只更正描述口径**，
+        并把"历史库不批量扫掠"登记为**已接受的设计边界**（如需全库扫掠，应作为独立维护动作另行授权）。
+
+    - **⑥ D13 `source == production == loaded` 的准确作用域**：
+      - **成立的部分**：`plugins/learn.mjs`、`learn-core.mjs`、`learn-candidate.mjs`、`learn-gap-veto.mjs`
+        **4 件 learn 插件**：源（`main` blob，LF 归一化 sha256）== 生产挂载位字节；装载由
+        **运行时行为探针**判定（不以 mtime 作装载证据 —— profile 插件有 HMR 热挂载，mtime 与装载无因果）。
+      - **不成立 / 曾被过度概括的部分（如实登记为已知分歧，本轮不修）**：生产 profile 与 `main`
+        在**非 learning** 插件上存在分歧，共 **5 件**：
+        `openrouter-router-core.mjs`、`model-registry.mjs`、`provider-registry-core.mjs`、
+        `model-selection-guard-core.mjs`、`provider-registry.mjs`；差异集中在 **model-id 级别**
+        （`provider-registry-core.mjs` 27 行 / `model-selection-guard-core.mjs` 6 行等）。
+      - **⇒ 口径**：今后只能说「**learn 4 件插件 source == production == loaded**」，
+        **不得**推广为"整个插件面与 main 一致"。
+      - **处置**：这 5 件的分歧归属 = **用户本机模型接入面决策**，**不在 P4 范围**；
+        本轮**只登记、不修改、不部署**（改它们会动生产模型路由 = 高风险且与 P4 无关）。
+        需用户单独裁决后再动。
+
+    - **⑦ D3 / D4 合并门根因分类（只读复核；本轮**未修**，需业主授权）**：
+      - **专档（根因分类 A–G / BEFORE-AFTER / 修复蓝图 / 未判定项 / 复现命令）**：
+        `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/D3_D4_MERGE_GATE_GOVERNANCE_20261001.md`
+      - **`--strict` BEFORE/AFTER（禁造假）**：`node tests/learn/audit-merge-enforcement.mjs --strict`
+        **BEFORE = exit 1、AFTER = exit 1（未变）**。原因：根因全在 **GitHub 设置 + workflow 触发**
+        层面，本轮**未**触碰它们；**未**加 exit-0 硬编码、**未**删规则、**未**把红灯包成"总是成功"。
+        三道防伪证明：① `git diff --quiet HEAD -- tests/learn/audit-merge-enforcement.mjs` → **0（字节未变）**；
+        ② 本轮未创建/删除任何 GitHub 规则；③ 本轮新增的 `tests/roadmap/*` 与
+        `tools/check-l3-paths-coverage.mjs` 都是**独立新门/只读分析器**，不参与该审计器的判定。
+      - **根因分类**：
+        **A** 无任何 workflow 在 `push → main` 触发（L1/L2 仅 `push[reliability-v1]`，L3 无 push，L4 仅手动/定时）；
+        **B** `required_pull_request_reviews=null` 且 **rulesets = 0** ⇒ 无规则禁止直推 main；
+        **C** 必需检查语义不覆盖直推（依赖 ruleset；含 1 个未判定前提，可用一次可逆实验定案）；
+        **D** **L3 被 workflow 级 `paths:` 过滤 ⇒ 211/638 文件 = 33.1% 的 PR 必需 context 永不报告、
+        永久卡在 "Waiting for status to be reported"**（含生产代码 `src/DSHHarness.cs`、
+        `plugins/cordis.patch.yml`、`supervisor-mcp-adapter/server.mjs`）；
+        **E** 审计器把"无 ruleset"本身视为直推路径的绕过承载；
+        **F** `main` HEAD 的 `check-runs = 0`（证据可得性，独立事实）；
+        **G** canonical 合同与执行 Prompt **全文无** ruleset / branch protection / `push:main` / 直推字样
+        ⇒ **D3 不构成 AC10 失败、不推翻 2026-09-30 封条**，属**超合同加固项**（此前未登记，本轮补登）。
+      - **本轮独立复算（不依赖任何自述）**：
+        `node tools/check-l3-paths-coverage.mjs` → `tracked = 638`、`OUTSIDE the filter = 211 (33.1%)`；
+        `git grep -n 'reliability-v1' -- .github/workflows/` → 仅 `ci-level1.yml:7`、`ci-level2.yml:7`。
+      - **口径纠正（防后续踩坑）**：评审给出的"加 ruleset **或** 加 `push:main` 触发，**二者任一**即可让
+        审计器转绿"**不成立**；把审计器布尔式按线上值逐式代入后，**只有**「含 `pull_request` 规则、
+        `bypass_actors` 为空的 main ruleset」能**单独**转绿（audit exit 0）。且**顺序铁律 = 先修 D4
+        （paths 死锁）再修 D3**，否则清单外 211 个文件从"可绕行"变成"彻底无路"。
+      - **处置**：**本轮未修**。改 D4 = 变更**必需门语义**（有"命中清单却不真跑 E2E"的假绿风险，
+        须配断言兜底 + PR 探针验证）；改 D3 = 变更**仓库能力边界**（业主将永久失去直推 main 的能力）。
+        二者均超出"修 bug"授权 ⇒ 登记为**待授权**项并附最小蓝图；若后续执行，D3 的
+        `required_approving_review_count` **必须 = 0**（否则单操作员仓库永远无法合并任何 PR）。
+
+    - **边界（本段只做治理/口径更正）**：本轮**未**改任何 learning 插件字节（4 件 learn 插件
+      SHA256 与基线逐一相同 ⇒ **无需重启、未重启**）、**未**改 `cordis.patch.yml`、**未**动生产凭据、
+      **未**改任何 GitHub 规则/分支保护、**未**改任何 workflow 触发、**未** dispatch/建/关 PR、
+      **未**启动 P4.5（`PHASE_05_STARTED = NO`、P4.5 未开）、**未**冻结 GOLDEN、
+      **未**代外部评审出 verdict。本轮新增内容**只**是：独立新门（`tests/roadmap/*`）、
+      只读分析器（`tools/check-l3-paths-coverage.mjs`）、parity index（`docs/roadmap/P4_STATUS.json`）、
+      历史文档的**行尾**时效标注、以及本段的治理记录。
+
+

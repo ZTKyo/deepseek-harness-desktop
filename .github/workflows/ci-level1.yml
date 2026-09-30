@@ -304,3 +304,34 @@ jobs:
           node plugins\supervisor-bridge-test.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR CORE TEST FAIL"; exit 1 }
           Write-Host 'P2.75 supervisor core/tool-surface unit tests: PASS'
+
+      # ─── P4 EXTERNAL REVIEW D1 GATES (2026-10-01) ─────────────────────────────
+      # D1 turned "one current status per audited baseline" into two machine
+      # checks instead of a prose promise:
+      #   (a) parity -- the roadmap status index (docs/roadmap/P4_STATUS.json)
+      #       must agree with the authority document in BOTH directions, every
+      #       registered historical document must carry the staleness marker,
+      #       and no unregistered document may repeat a superseded headline;
+      #   (b) verbatim history -- for every registered document, each non-empty
+      #       line of the HEAD revision must still be a strict PREFIX of a
+      #       working-tree line ("annotate, never rewrite").
+      # Both are pure node, repo-relative and read-only (no network, no creds).
+      # Authority on conflict: docs/roadmap/CURRENT_STATUS.md.
+      #
+      # NOTE (D4, recorded not fixed): tests/roadmap is NOT listed in the
+      # ci-level3 `paths:` filter, and plugins/*.mjs only matches one level.
+      # A pull request touching ONLY such files would never start L3, so the
+      # required context "DSH boot + readiness smoke" would never be reported.
+      # See docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/
+      # D3_D4_MERGE_GATE_GOVERNANCE_20261001.md.
+      - name: P4 roadmap status parity gate (D1)
+        shell: pwsh
+        run: |
+          node tests\roadmap\validate-p4-status-consistency.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P4 STATUS CONSISTENCY FAIL"; exit 1 }
+
+      - name: P4 history preservation gate (D1)
+        shell: pwsh
+        run: |
+          node tests\roadmap\verify-history-preserved.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "HISTORY PRESERVATION FAIL"; exit 1 }

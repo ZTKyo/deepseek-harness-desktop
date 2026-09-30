@@ -1,0 +1,53 @@
+########## SUITE: tests/learn/run-learn-contract-scenarios.mjs
+########## EXIT: 1
+########## ELAPSED_S: 27.03
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+temp stateDir: C:\Users\ADMINI~1\AppData\Local\Temp\p4-contract-scen-9XHUTQ
+sessions dir : C:\Users\Administrator\.dsh\sessions
+
+=== C0 合同口径基线：schema / 状态机 / 失败分类 ===
+  OBS   EXPERIENCE_STATES = ["PROPOSED","VERIFIED_EXPERIENCE","APPROVED","REJECTED","RETIRED"]
+  PASS  合同【实现原则 3】要求存在 VERIFIED_EXPERIENCE 终态
+  OBS   ALLOWED_TRANSITIONS = {"PROPOSED":["VERIFIED_EXPERIENCE","APPROVED","REJECTED"],"VERIFIED_EXPERIENCE":["VERIFIED_EXPERIENCE","APPROVED","RETIRED"],"APPROVED":["VERIFIED_EXPERIENCE","RETIRED"],"REJECTED":[],"RETIRED":[]}
+  PASS  合同要求"复用后重新验证"存在可表达的状态迁移
+  OBS   FAILURE_CLASS (provider 面) = ["PROTOCOL_MISMATCH","CONTEXT_LIMIT","QUOTA_EXHAUSTED","PROVIDER_OVERLOADED","SHORT_WINDOW_RATE_LIMIT","AUTH_PERMISSION_FAILURE","MODEL_ROUTE_UNAVAILABLE","NETWORK_TIMEOUT_5XX","UNKNOWN_PROVIDER_FAILURE"]
+  OBS   FAILURE_ORIGIN (合同 Failure Class) = ["environment","provider","network","user","website","tool","skill","model","unknown"]
+  PASS  合同【Failure Class】点名的 9 类来源逐类具备
+  OBS   experience record fields = ["id","state","title","body","tags","sourceEventSeqs","originSessionId","createdAt","approvedAt","approvedBy","approvalEvidence","rejectedAt","rejectedBy","rejectionReason","retiredAt","promotion","promotionEvidence","recallCount","lastRecalledAt","taskType","trigger","symptoms","applicableVersions","applicableEnvironment","rootCause","successfulMethod","failedOrUnsafeMethods","verificationEvidence","rollback","sourceLinks","sourceCommit","staleConditions","expiresAt","lastVerifiedAt","verification","reuseCount","reuseSuccessCount","reuseFailCount","successRate","lastUsedAt","verificationHistory","migratedFromV1"]
+  PASS  合同字段「id/title」在经验记录中可表达
+  PASS  合同字段「taskType/trigger/symptoms」在经验记录中可表达
+  PASS  合同字段「applicable versions/environment」在经验记录中可表达
+  PASS  合同字段「rootCause」在经验记录中可表达
+  PASS  合同字段「successfulMethod」在经验记录中可表达
+  PASS  合同字段「failedOrUnsafeMethods」在经验记录中可表达
+  PASS  合同字段「verificationEvidence」在经验记录中可表达
+  PASS  合同字段「rollback」在经验记录中可表达
+  PASS  合同字段「source links/commit」在经验记录中可表达
+  PASS  合同字段「stale/expiry conditions」在经验记录中可表达
+  PASS  合同字段「lastVerifiedAt」在经验记录中可表达
+
+=== C0b 真实会话选材 ===
+
+########## ---- STDERR ----
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+Error: Allocation error : not enough memory
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at ZstdDecompress.zlibOnError [as onerror] (node:zlib:191:17)
+    at processChunkSync (node:zlib:430:12)
+    at zlibBufferSync (node:zlib:180:12)
+    at syncBufferWrapper (node:zlib:790:14)
+    at decodeLines (file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/docs/roadmap/evidence/cm-r4-log-decoder.mjs:59:40)
+    at loadRealSession (file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/tests/learn/_real-session-harness.mjs:25:29)
+    at file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/tests/learn/run-learn-contract-scenarios.mjs:106:15 {
+  errno: 64,
+  code: 'ZSTD_error_memory_allocation'
+}
+
+Node.js v22.22.2
+

@@ -1,0 +1,109 @@
+########## SUITE: run-learn-contract-scenarios-retry
+########## CMD: node tests/learn/run-learn-contract-scenarios.mjs
+########## EXIT: 0
+########## ELAPSED_S: 118.74
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+temp stateDir: C:\Users\ADMINI~1\AppData\Local\Temp\p4-contract-scen-HkuRLQ
+sessions dir : C:\Users\Administrator\.dsh\sessions
+
+=== C0 合同口径基线：schema / 状态机 / 失败分类 ===
+  OBS   EXPERIENCE_STATES = ["PROPOSED","VERIFIED_EXPERIENCE","APPROVED","REJECTED","RETIRED"]
+  PASS  合同【实现原则 3】要求存在 VERIFIED_EXPERIENCE 终态
+  OBS   ALLOWED_TRANSITIONS = {"PROPOSED":["VERIFIED_EXPERIENCE","APPROVED","REJECTED"],"VERIFIED_EXPERIENCE":["VERIFIED_EXPERIENCE","APPROVED","RETIRED"],"APPROVED":["VERIFIED_EXPERIENCE","RETIRED"],"REJECTED":[],"RETIRED":[]}
+  PASS  合同要求"复用后重新验证"存在可表达的状态迁移
+  OBS   FAILURE_CLASS (provider 面) = ["PROTOCOL_MISMATCH","CONTEXT_LIMIT","QUOTA_EXHAUSTED","PROVIDER_OVERLOADED","SHORT_WINDOW_RATE_LIMIT","AUTH_PERMISSION_FAILURE","MODEL_ROUTE_UNAVAILABLE","NETWORK_TIMEOUT_5XX","UNKNOWN_PROVIDER_FAILURE"]
+  OBS   FAILURE_ORIGIN (合同 Failure Class) = ["environment","provider","network","user","website","tool","skill","model","unknown"]
+  PASS  合同【Failure Class】点名的 9 类来源逐类具备
+  OBS   experience record fields = ["id","state","title","body","tags","sourceEventSeqs","originSessionId","createdAt","approvedAt","approvedBy","approvalEvidence","rejectedAt","rejectedBy","rejectionReason","retiredAt","promotion","promotionEvidence","recallCount","lastRecalledAt","taskType","trigger","symptoms","applicableVersions","applicableEnvironment","rootCause","successfulMethod","failedOrUnsafeMethods","verificationEvidence","rollback","sourceLinks","sourceCommit","staleConditions","expiresAt","lastVerifiedAt","verification","reuseCount","reuseSuccessCount","reuseFailCount","successRate","lastUsedAt","verificationHistory","migratedFromV1"]
+  PASS  合同字段「id/title」在经验记录中可表达
+  PASS  合同字段「taskType/trigger/symptoms」在经验记录中可表达
+  PASS  合同字段「applicable versions/environment」在经验记录中可表达
+  PASS  合同字段「rootCause」在经验记录中可表达
+  PASS  合同字段「successfulMethod」在经验记录中可表达
+  PASS  合同字段「failedOrUnsafeMethods」在经验记录中可表达
+  PASS  合同字段「verificationEvidence」在经验记录中可表达
+  PASS  合同字段「rollback」在经验记录中可表达
+  PASS  合同字段「source links/commit」在经验记录中可表达
+  PASS  合同字段「stale/expiry conditions」在经验记录中可表达
+  PASS  合同字段「lastVerifiedAt」在经验记录中可表达
+
+=== C0b 真实会话选材 ===
+  OBS   session A = session.jsonl.zstd events=116496 nodes=9465
+  OBS   session B = session.jsonl.zstd events=46888 nodes=3956
+  PASS  两会话确为不同真实文件（跨会话复用的前提）
+
+=== C1 场景 1 真实学习：真实会话 → PROPOSED 经验（真实出处，绝不自动生效） ===
+  PASS  首轮只建水位（不回填历史）
+  OBS   session A auto-proposed experiences = 1 (pre-step calls=4)
+  PASS  [场景1] 真实会话自动产出经验条目
+  PASS  [场景1] 出生即 PROPOSED（学习≠生效）
+  PASS  [场景1] 携带真实回源锚点 seq
+  PASS  [场景1] 每个锚点指向真实事件
+  PASS  [场景1] 归属会话正确
+  PASS  [场景1] 未经审批不可召回（提案≠激活）
+
+=== C2 场景 2 真实复用（合同【复用规则】相似任务 → 检索 → 检查适用性 → 复用 → 重新验证） ===
+  PASS  [场景2] 人类批准走的是宿主通道（非调用方自称）
+  OBS   [场景2] 审批结果 = state=APPROVED verified=true verificationStatus=VERIFIED publication=published
+  PASS  [场景2] 审批后成为 APPROVED（唯一激活通道）
+  OBS   同会话（A 内）召回条数 = 1
+  PASS  同会话召回成立（这正是上一轮被判"近乎同义反复"的那条路径）
+  PASS  [场景2] 召回结果携带合同要求的"适用性"信息（版本/环境）
+  PASS  [场景2] 召回结果携带合同要求的"重新验证"信息（lastVerifiedAt）
+  OBS   session B experience count = 1
+  OBS   storePath 形态 = stateDir/<sid>.json（每会话一库）
+  OBS   跨会话（B 检索 A 的经验）召回条数 = 1
+  OBS   Layer B 全局库条数（A 视角 / B 视角） = 1 / 1
+  OBS   全局库中的条目状态 = [{"id":"exp-d9c2d58e","state":"APPROVED","v":"VERIFIED","appr":true,"rec":true}]
+  PASS  [场景2] 合同核心闭环「下次复用」成立：B 会话可检索到 A 会话已批准的经验
+  OBS   session B telemetry counts = {"PROPOSED":1,"APPROVED":0,"REJECTED":0,"RECALLED":0,"PROMOTION_BLOCKED":0,"PROMOTION_ELIGIBLE":0,"STORE_REBUILT":0,"WRITE_DENIED":0,"GAP_VETOED":0,"CANDIDATE_PROPOSED":0,"CANDIDATE_STAGE":0,"CANDIDATE_REJECTED":0,"CANDIDATE_PROMOTED":0,"STABLE_OVERWRITE_DENIED":0,"RESEARCH_BOUNDED_EXHAUSTED":0,"CAPABILITY_GAP_OBSERVED":0,"CAPABILITY_GAP_QUALIFIED":0,"CAPABILITY_GAP_VETOED":0,"CAPABILITY_GAP_RESOLVED":0,"VERIFIED":0,"VERIFICATION_FAILED":0,"REVALIDATED":0,"REVALIDATION_REQUIRED":0,"APPLICABILITY_BLOCKED":0,"GLOBAL_PUBLISHED":0,"GLOBAL_PUBLISH_DENIED":0,"GLOBAL_REJECTED":0,"GLOBAL_RECALLED":0,"HUMAN_APPROVAL_REQUESTED":0,"HUMAN_APPROVAL_GRANTED":0,"HUMAN_APPROVAL_DENIED":0,"HUMAN_APPROVAL_UNAVAILABLE":0,"APPROVAL_EXPIRED":0,"EXPERIENCE_LOOKUP_MISS":0,"RESEARCH_REQUESTED":0,"RESEARCH_FULFILLED":0,"RESEARCH_LEG_CLOSED_TIME_ONLY":0,"CANDIDATE_PROMOTION_DENIED":0,"CANDIDATE_RECEIPTS_ACCEPTED":0}
+  OBS   TELEMETRY_KINDS = ["PROPOSED","APPROVED","REJECTED","RECALLED","PROMOTION_BLOCKED","PROMOTION_ELIGIBLE","STORE_REBUILT","WRITE_DENIED","GAP_VETOED","CANDIDATE_PROPOSED","CANDIDATE_STAGE","CANDIDATE_REJECTED","CANDIDATE_PROMOTED","STABLE_OVERWRITE_DENIED","RESEARCH_BOUNDED_EXHAUSTED","CAPABILITY_GAP_OBSERVED","CAPABILITY_GAP_QUALIFIED","CAPABILITY_GAP_VETOED","CAPABILITY_GAP_RESOLVED","VERIFIED","VERIFICATION_FAILED","REVALIDATED","REVALIDATION_REQUIRED","APPLICABILITY_BLOCKED","GLOBAL_PUBLISHED","GLOBAL_PUBLISH_DENIED","GLOBAL_REJECTED","GLOBAL_RECALLED","HUMAN_APPROVAL_REQUESTED","HUMAN_APPROVAL_GRANTED","HUMAN_APPROVAL_DENIED","HUMAN_APPROVAL_UNAVAILABLE","APPROVAL_EXPIRED","EXPERIENCE_LOOKUP_MISS","RESEARCH_REQUESTED","RESEARCH_FULFILLED","RESEARCH_LEG_CLOSED_TIME_ONLY","CANDIDATE_PROMOTION_DENIED","CANDIDATE_RECEIPTS_ACCEPTED"]
+  PASS  [场景2] 存在"重新验证"的遥测种类（复用后可审计）
+  PASS  [场景2] 存在可执行的"适用性检查"入口（工具面或核心函数）
+
+=== C3 场景 3 真实能力缺口：重复阈值 → 候选（且非可学来源必须被否决） ===
+  OBS   REPEAT_THRESHOLD = 2
+  OBS   HARD_VETO_CLASSES = ["SHORT_WINDOW_RATE_LIMIT","NETWORK_TIMEOUT_5XX","PROVIDER_OVERLOADED","QUOTA_EXHAUSTED","AUTH_PERMISSION_FAILURE","MODEL_ROUTE_UNAVAILABLE","CONTEXT_LIMIT"]
+  PASS  [场景3] 重复阈值存在且 >1（缺口必须重复才固化）
+  PASS  [场景3] 存在硬否决类别（网络/Provider 等环境故障不得误学）
+  OBS   session A candidate store = null
+  PASS  [场景3] 插件暴露候选库读取面（有界、可审计）
+  PASS  [场景3] 候选库条目数有上限（有界，不无限增长）
+
+=== C4 场景 4 真实治理：审批边界 / 不泄漏 / 会话隔离 ===
+  PASS  [场景4] 密钥形态内容不得持久化进经验库
+  PASS  [场景4] 会话隔离：B 库不包含 A 的条目（隔离成立的另一面）
+
+================================================================================================
+合同符合性：36 PASS / 0 FAIL
+================================================================================================
+
+实测观测值：
+  · EXPERIENCE_STATES = ["PROPOSED","VERIFIED_EXPERIENCE","APPROVED","REJECTED","RETIRED"]
+  · ALLOWED_TRANSITIONS = {"PROPOSED":["VERIFIED_EXPERIENCE","APPROVED","REJECTED"],"VERIFIED_EXPERIENCE":["VERIFIED_EXPERIENCE","APPROVED","RETIRED"],"APPROVED":["VERIFIED_EXPERIENCE","RETIRED"],"REJECTED":[],"RETIRED":[]}
+  · FAILURE_CLASS (provider 面) = ["PROTOCOL_MISMATCH","CONTEXT_LIMIT","QUOTA_EXHAUSTED","PROVIDER_OVERLOADED","SHORT_WINDOW_RATE_LIMIT","AUTH_PERMISSION_FAILURE","MODEL_ROUTE_UNAVAILABLE","NETWORK_TIMEOUT_5XX","UNKNOWN_PROVIDER_FAILURE"]
+  · FAILURE_ORIGIN (合同 Failure Class) = ["environment","provider","network","user","website","tool","skill","model","unknown"]
+  · experience record fields = ["id","state","title","body","tags","sourceEventSeqs","originSessionId","createdAt","approvedAt","approvedBy","approvalEvidence","rejectedAt","rejectedBy","rejectionReason","retiredAt","promotion","promotionEvidence","recallCount","lastRecalledAt","taskType","trigger","symptoms","applicableVersions","applicableEnvironment","rootCause","successfulMethod","failedOrUnsafeMethods","verificationEvidence","rollback","sourceLinks","sourceCommit","staleConditions","expiresAt","lastVerifiedAt","verification","reuseCount","reuseSuccessCount","reuseFailCount","successRate","lastUsedAt","verificationHistory","migratedFromV1"]
+  · session A = session.jsonl.zstd events=116496 nodes=9465
+  · session B = session.jsonl.zstd events=46888 nodes=3956
+  · session A auto-proposed experiences = 1 (pre-step calls=4)
+  · [场景2] 审批结果 = state=APPROVED verified=true verificationStatus=VERIFIED publication=published
+  · 同会话（A 内）召回条数 = 1
+  · session B experience count = 1
+  · storePath 形态 = stateDir/<sid>.json（每会话一库）
+  · 跨会话（B 检索 A 的经验）召回条数 = 1
+  · Layer B 全局库条数（A 视角 / B 视角） = 1 / 1
+  · 全局库中的条目状态 = [{"id":"exp-d9c2d58e","state":"APPROVED","v":"VERIFIED","appr":true,"rec":true}]
+  · session B telemetry counts = {"PROPOSED":1,"APPROVED":0,"REJECTED":0,"RECALLED":0,"PROMOTION_BLOCKED":0,"PROMOTION_ELIGIBLE":0,"STORE_REBUILT":0,"WRITE_DENIED":0,"GAP_VETOED":0,"CANDIDATE_PROPOSED":0,"CANDIDATE_STAGE":0,"CANDIDATE_REJECTED":0,"CANDIDATE_PROMOTED":0,"STABLE_OVERWRITE_DENIED":0,"RESEARCH_BOUNDED_EXHAUSTED":0,"CAPABILITY_GAP_OBSERVED":0,"CAPABILITY_GAP_QUALIFIED":0,"CAPABILITY_GAP_VETOED":0,"CAPABILITY_GAP_RESOLVED":0,"VERIFIED":0,"VERIFICATION_FAILED":0,"REVALIDATED":0,"REVALIDATION_REQUIRED":0,"APPLICABILITY_BLOCKED":0,"GLOBAL_PUBLISHED":0,"GLOBAL_PUBLISH_DENIED":0,"GLOBAL_REJECTED":0,"GLOBAL_RECALLED":0,"HUMAN_APPROVAL_REQUESTED":0,"HUMAN_APPROVAL_GRANTED":0,"HUMAN_APPROVAL_DENIED":0,"HUMAN_APPROVAL_UNAVAILABLE":0,"APPROVAL_EXPIRED":0,"EXPERIENCE_LOOKUP_MISS":0,"RESEARCH_REQUESTED":0,"RESEARCH_FULFILLED":0,"RESEARCH_LEG_CLOSED_TIME_ONLY":0,"CANDIDATE_PROMOTION_DENIED":0,"CANDIDATE_RECEIPTS_ACCEPTED":0}
+  · TELEMETRY_KINDS = ["PROPOSED","APPROVED","REJECTED","RECALLED","PROMOTION_BLOCKED","PROMOTION_ELIGIBLE","STORE_REBUILT","WRITE_DENIED","GAP_VETOED","CANDIDATE_PROPOSED","CANDIDATE_STAGE","CANDIDATE_REJECTED","CANDIDATE_PROMOTED","STABLE_OVERWRITE_DENIED","RESEARCH_BOUNDED_EXHAUSTED","CAPABILITY_GAP_OBSERVED","CAPABILITY_GAP_QUALIFIED","CAPABILITY_GAP_VETOED","CAPABILITY_GAP_RESOLVED","VERIFIED","VERIFICATION_FAILED","REVALIDATED","REVALIDATION_REQUIRED","APPLICABILITY_BLOCKED","GLOBAL_PUBLISHED","GLOBAL_PUBLISH_DENIED","GLOBAL_REJECTED","GLOBAL_RECALLED","HUMAN_APPROVAL_REQUESTED","HUMAN_APPROVAL_GRANTED","HUMAN_APPROVAL_DENIED","HUMAN_APPROVAL_UNAVAILABLE","APPROVAL_EXPIRED","EXPERIENCE_LOOKUP_MISS","RESEARCH_REQUESTED","RESEARCH_FULFILLED","RESEARCH_LEG_CLOSED_TIME_ONLY","CANDIDATE_PROMOTION_DENIED","CANDIDATE_RECEIPTS_ACCEPTED"]
+  · REPEAT_THRESHOLD = 2
+  · HARD_VETO_CLASSES = ["SHORT_WINDOW_RATE_LIMIT","NETWORK_TIMEOUT_5XX","PROVIDER_OVERLOADED","QUOTA_EXHAUSTED","AUTH_PERMISSION_FAILURE","MODEL_ROUTE_UNAVAILABLE","CONTEXT_LIMIT"]
+  · session A candidate store = null
+
+结论口径：本探针按**合同原文条款**求证，不按 R2 自定 AC 编号。
+未成立条款清单即为「合同要求的机制在实现中不存在或不可达」的可复现证据。
+
+########## ---- STDERR ----
+

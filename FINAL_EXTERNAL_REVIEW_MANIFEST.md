@@ -85,8 +85,28 @@ git worktree add <tmpdir> 74adf9351c2af2f63035abdbdfa502090ad1af7e   # 只读检
 ```text
 --strict：存在能让红门到达 main 的路径 ⇒ exit 1
 ```
-含义（来自该审计自身输出）：缺口**不在「门是假的」**（门确实在跑、变异证明也证明它会变红），
-而在**承载（required 列表）与绕过（enforce_admins、无 ruleset）**没堵住。
+**审计自身测到的事实（来自其 JSON 输出，非转述）**：
+```json
+"redCanReachMain": { "prPath": [], "directPushPath": [ ...6 条 P4 LEARN 门... ], "adminBypass": false }
+"requiredChecksOnDirectPush": { "Static…": false, "Reliability…": false, "DSH boot…": false }
+"accident": { "pr": 97, "merged": true, "mergedAt": "2026-09-26T16:46:07Z", "mergedBy": "ZTKyo",
+              "mergeCommit": "171f1b4055042b1fe23a64b948be6a9e95d680aa",
+              "checks": [{ "name": "DSH boot + readiness smoke", "conclusion": "failure", "required": true }] }
+```
+即：**缺口不在「门是假的」**（门在跑、变异证明证明它会变红），而在
+**① 直推 → main 无检查承载**（`requiredChecksOnDirectPush` 三项全 false、无 main ruleset），
+且 **② 历史事故确实发生过**（PR #97 在必需检查 FAILURE 的情况下被合并）。`adminBypass` 实测为 **false**。
+
+**本任务独立复核（只读，2026-10-01）**：
+- PR #97：`state=MERGED`、`mergedBy=ZTKyo`、`mergedAt=2026-09-26T16:46:07Z`，其
+  `statusCheckRollup` 中 **`DSH boot + readiness smoke` = FAILURE**（另两项 SUCCESS）；
+  merge commit `171f1b4` 经 `git merge-base --is-ancestor` 确认**已在 origin/main 上** ⇒ 事故为真。
+- 现场保护状态：required contexts = 3 项、`strict=true`、**`enforce_admins=true`**、
+  `allow_force_pushes=false`、`allow_deletions=false`、仓库 rulesets = `[]`。
+- **留给外部评审裁决的判别点**：在「经典分支保护 + required status checks」下，`直推 → main`
+  究竟是否真被阻断（审计模型判为**无检查盲区**）。该点无法在不执行**被本任务明令禁止**的直推动作
+  的前提下实测，故**不作断言**，交由评审者依 canonical contract 判定。
+
 本任务**未**将其改为 warning / skip / exclude，**未**修改 aggregator 使其返回 0。
 
 ### GATE 8 明细（诚实标注）
@@ -96,6 +116,25 @@ git worktree add <tmpdir> 74adf9351c2af2f63035abdbdfa502090ad1af7e   # 只读检
   `if (p.re.test(probe)) {` → 被替换为 D11 的红acted-aware 计数逻辑（`rawHits/placeholderHits`）。
   **这是代码行，不是治理/历史文档**；「annotate-never-rewrite」规则适用于文档，文档违规数 = **0**。
 - 仓库内正式门 `verify-history-preserved.mjs` 独立判定：**14/14 PASS**。
+
+### CI 证据 @ REVIEW_SHA（评审用，独立于本地门）
+
+评审 PR #103 触发（`pull_request` 事件），**两个 SHA 全部绿**：
+
+```text
+74adf93  completed/success  CI Level 1 - Static Gate (every PR)                 -> "Static + secret + syntax gate"
+74adf93  completed/success  CI Level 2 - Windows Reliability State Machines     -> "Reliability state machine tests"
+74adf93  completed/success  CI Level 3 - Harness Smoke (current version + …)    -> "DSH boot + readiness smoke"
+afbff28  completed/success  （同上三条）
+PR #103 : state=OPEN, isDraft=false, mergedAt=null, mergeable=MERGEABLE
+```
+
+**附录 / 不要误读**：`ci-level3.yml` 的 `paths:` 过滤**包含** `docs/roadmap/**`、`tests/learn/*`、
+`tests/reliability/*`、`.github/workflows/**`（本 PR 因此触发了 L3，其必需上下文被真实上报）。
+**不包含** `tests/roadmap/*`、`tools/*.mjs`（除 `tools/install-plugin.mjs`）。
+本次 CI 全绿**不**推翻 D4：D4 说的是**只改到未列出路径**的 PR——该场景下 L3 不启动、必需上下文
+永不上报（历史治理记录 commit `dbdaa5f` 记载此类 PR 为「永久 blocked」，而非放行）。
+两种情形的并存关系请评审者一并裁决。
 
 ---
 

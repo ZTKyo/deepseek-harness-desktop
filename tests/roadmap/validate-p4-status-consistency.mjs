@@ -392,11 +392,12 @@ check('H5 the E correction states category + timestamped-and-timezoned instant +
 check('H6 A10 carries the same E correction, and the evidence artifact exists on disk',
   /E 更正（2026-10-01/.test(a10Doc) && fs.existsSync(eEvidencePath),
   `a10=${/E 更正（2026-10-01/.test(a10Doc)} evidence=${fs.existsSync(eEvidencePath)}`);
-// H7：**控制套件必须"有归宿"**。三个 R2 控制（Finding A 的逐 AC 一致性、Finding B 的发布件
-// 判定、E 的点值口径）若只躺在 tests/roadmap/ 而没有任何 CI 航道调用，就是"写了一堆不会跑的门"——
+// H7：**控制套件必须"有归宿"**。五个 R2 控制（Finding A 的逐 AC 一致性、Finding B 的发布件
+// 判定、E 的点值口径、C 的数字钉住、D 的行号禁令）若只躺在 tests/roadmap/ 而没有任何 CI 航道
+// 调用，就是"写了一堆不会跑的门"——
 // 上一轮实测确实如此：A/B 两个控制当时**未被任何 workflow 引用**（本文档所在地 tests/roadmap
 // 也不在 ci-level3 的 paths 过滤内，见 D4），评审无法从 CI 侧看到它们存在。故此处断言：
-// 这四个控制文件**存在**，且**至少被某个 workflow 真实调用**（扫全部 .github/workflows/*.yml，
+// 这五个控制文件**存在**，且**至少被某个 workflow 真实调用**（扫全部 .github/workflows/*.yml，
 // 不绑定具体航道，允许后续迁移）。注意**不**在这里 spawn 它们——E 控制会跑本校验器（在临时副本里），
 // 若本校验器再 spawn 控制就形成递归；实际执行由 ci-level1.yml 的独立步骤负责。
 const controlSuites = [
@@ -404,6 +405,7 @@ const controlSuites = [
   ['test-p4-status-per-ac-consistency.mjs', 'Finding A 的逐 AC 一致性负控'],
   ['test-release-artifact-verifier.mjs', 'Finding B 的发布件判定负控'],
   ['test-finding-e-negative-control.mjs', 'E 的点值口径负控'],
+  ['test-finding-c-number-pinning.mjs', 'Finding C 的数字钉住负控'],
 ];
 const wfDir = path.join(ROOT, '.github', 'workflows');
 const wfText = fs.existsSync(wfDir)
@@ -414,6 +416,52 @@ const unownedControl = controlSuites.filter(([f]) => !wfText.includes(f));
 check('H7 every roadmap control suite exists AND is invoked by some CI workflow (no unowned control)',
   missingControl.length === 0 && unownedControl.length === 0,
   `missing=[${missingControl.map(([f]) => f).join(',')}] unowned=[${unownedControl.map(([f]) => f).join(',')}]`);
+
+// ── I：Finding C（权威文档的"自述数字"必须被门钉住，而不是靠人记得同步）────────────────
+// R1 外部评审 Finding C 原文：权威文档自述「43 断言 / 1420 行 / 55 豁免」与门**实测**
+// 「45 / 1934 / 59」不符，**且没有任何门钉住这些数字**。把 43 改成 86 并不解决它——那仍然是
+// 人工维护，下一次有人再加一条断言，数字又会过期。故这里把数字变成**门当场重算**的对象：
+//   I1 权威文档必须存在**恰好一行**机器可核的数字口径行（形状缺失或重复 ⇒ RED，不猜）
+//   I2 该行声明的**断言数** = 本门运行时的断言总数（本组自身恰好贡献 ASSERTION_GROUP_SIZE 条）
+//   I3 该行声明的**历史文档数 / HEAD 行数 / 表格分隔行豁免数** = `verify-history-preserved.mjs`
+//      **当场跑出来**的三个数（不读缓存、不读历史报告、不读人写的第二份数字）
+// 任何一侧单独改动而另一侧未改 ⇒ RED。历史值（43 / 1420 / 55）作为"曾如此自述"的记录保留在
+// 文档中，但**不参与比对**——否则人一改历史记录就红，等于逼人删历史（违反 D1「只标注不改写」）。
+const assertionsBeforeI = pass + fail;   // 必须在 I 组之前读取（本组自己也会 +N）
+const ASSERTION_GROUP_SIZE = 3;
+const NUMERIC_MARKER = '【数字口径·机器可核】';
+const markerHits = statusDoc.split(NUMERIC_MARKER).length - 1;
+const numericDecl = statusDoc.match(
+  /【数字口径·机器可核】断言数 (\d+) \/ 历史文档 (\d+)\/(\d+) \/ HEAD 行 (\d+) \/ 表格分隔行豁免 (\d+)/);
+check('I1 authority document carries exactly one machine-checkable numeric declaration line (fail-closed shape)',
+  markerHits === 1 && numericDecl !== null,
+  `markerCount=${markerHits} parsed=${numericDecl !== null}`);
+check('I2 the declared assertion count equals THIS gate\'s runtime assertion total (Finding C: pinned, not hand-maintained)',
+  numericDecl !== null && Number(numericDecl[1]) === assertionsBeforeI + ASSERTION_GROUP_SIZE,
+  numericDecl === null
+    ? 'declaration line missing'
+    : `declared=${numericDecl[1]} runtime=${assertionsBeforeI + ASSERTION_GROUP_SIZE}`);
+
+const histGate = path.join(ROOT, 'tests', 'roadmap', 'verify-history-preserved.mjs');
+const histRun = fs.existsSync(histGate)
+  ? spawnSync(process.execPath, [histGate], { cwd: ROOT, encoding: 'utf8' })
+  : null;
+const histOut = histRun ? `${histRun.stdout || ''}${histRun.stderr || ''}` : '';
+const histDocs = histOut.match(/DOCUMENTS:\s*(\d+)\s+PASS:\s*(\d+)\s+FAIL:\s*(\d+)\s+HEAD LINES CHECKED:\s*(\d+)/);
+// 该 NOTES 行只在豁免数 > 0 时打印 ⇒ 缺失按 0 处理（在 detail 里显式给出，不静默）。
+const histExemptMatch = histOut.match(/NOTES:\s*(\d+)\s+table-separator row\(s\) exempted/);
+const histExempt = histExemptMatch ? Number(histExemptMatch[1]) : 0;
+const histShapeOk = histRun !== null && histRun.status === 0 && histDocs !== null;
+check('I3 the declared history-preservation numbers equal a freshly re-run history gate (documents / HEAD lines / exemptions)',
+  histShapeOk && numericDecl !== null
+    && Number(numericDecl[2]) === Number(histDocs[2])    // PASS documents
+    && Number(numericDecl[3]) === Number(histDocs[1])    // total documents
+    && Number(numericDecl[4]) === Number(histDocs[4])    // HEAD lines checked
+    && Number(numericDecl[5]) === histExempt,
+  histShapeOk
+    ? `declared=${numericDecl ? `${numericDecl[2]}/${numericDecl[3]} lines=${numericDecl[4]} exempt=${numericDecl[5]}` : 'n/a'} `
+      + `measured=${histDocs[2]}/${histDocs[1]} lines=${histDocs[4]} exempt=${histExempt}`
+    : `history gate did not report (exit=${histRun ? histRun.status : 'not-run'})`);
 
 // ── summary ─────────────────────────────────────────────────────────────────
 console.log(`\nASSERTIONS: ${pass + fail}  PASS: ${pass}  FAIL: ${fail}`);

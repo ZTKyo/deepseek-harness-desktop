@@ -1,11 +1,12 @@
-<!-- 发布命名版（release-named artifact）｜生成时间 2026-09-30T20:26:41.842Z -->
+<!-- 发布命名版（release-named artifact）｜内容重新生成于 2026-10-01T06:00:47.192Z（R2 收口；文件名保留 R1 生成时间戳以维持既有引用稳定，改名会使 R1 报告与本件负控测试中的引用失效） -->
 <!-- 权威正文 = docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md -->
-<!-- 权威正文 SHA256 = 478BCF2A5154649C87ED35631FD944BB87108B00096FECF6F06FF7B48ED8D7B9（本文件正文与之逐字节相同；前 4 行注释头不计入正文） -->
+<!-- 权威正文 SHA256 = F805CFA8E50D2A8F4DEA2D9F34E28A4121FFA957455D92A1E80F5C8FF2DFE2E4（本文件正文与之**规范化后**相同；注释头不计入正文） -->
 <!-- 命名依据：任务要求交付 P4_REMEDIATION_CLOSURE_<timestamp>.md；内容与权威正文一致，避免双份漂移 -->
 <!-- R2（2026-10-01，外部评审 Finding B）：判定依据 = CANONICAL_BODY_SHA256，即把行尾规范化（CRLF → LF、单独 CR → LF）后计算的权威正文哈希；行尾风格本身不改变判定。 -->
-<!-- CANONICAL_BODY_SHA256 = 478BCF2A5154649C87ED35631FD944BB87108B00096FECF6F06FF7B48ED8D7B9 -->
-<!-- R2（2026-10-01，外部评审 Finding D）：本文与权威正文中**历史行的手写行号指针原样保留**（D1 纪律：只标注、不改写），但定位一律改由**锚点**承担（注册表 = docs/roadmap/P4_STATUS.json → docAnchors；真实行号由 `node tools/check-doc-anchors.mjs` 当场算出，本文件不抄录任何行号）。新写入的行号式定位被 linePointerBans 阻断，负控见 tests/roadmap/test-anchor-gate-negative-control.mjs；本 R2 说明写在注释头内，不改变正文哈希。 -->
-<!-- 说明：原头部「权威正文 SHA256 = …（本文件正文与之逐字节相同…）」中的「逐字节相同」表述仅在 LF 检出下成立（CRLF 检出时原始字节不同、规范化后的语义正文仍相同）；该表述由本 R2 注释取代为「规范化后正文一致」，原始字节身份由 `tools/verify-release-artifact.mjs` 以 `rawFileSha256` 单独报告，**不参与判定**。注释头行数由校验器按「开头连续注释行」推导（不再硬编码 4 行），正文 = 注释头之后的内容。 -->
+<!-- CANONICAL_BODY_SHA256 = F805CFA8E50D2A8F4DEA2D9F34E28A4121FFA957455D92A1E80F5C8FF2DFE2E4 -->
+<!-- R2（2026-10-01，外部评审 Finding D）：本文与权威正文中**历史行的手写行号指针原样保留**（D1 纪律：只标注、不改写），但定位一律改由**锚点**承担（注册表 = docs/roadmap/P4_STATUS.json → docAnchors；真实行号由 `node tools/check-doc-anchors.mjs` 当场算出，本文件不抄录任何行号）。新写入的行号式定位被 linePointerBans 阻断，负控见 tests/roadmap/test-anchor-gate-negative-control.mjs；本说明写在注释头内，不改变正文哈希。 -->
+<!-- 说明：原头部「权威正文 SHA256 = …（本文件正文与之逐字节相同…）」中的「逐字节相同」表述仅在 LF 检出下成立（CRLF 检出时原始字节不同、规范化后的语义正文仍相同）；该表述由 R2 注释取代为「规范化后正文一致」，原始字节身份由 `tools/verify-release-artifact.mjs` 以 `rawFileSha256` 单独报告，**不参与判定**。注释头行数由校验器按「开头连续注释行」推导（不硬编码），正文 = 注释头之后的内容。 -->
+<!-- R2 收口（2026-10-01）：权威正文新增 §21「R2 附录」（逐条处置表 / 数字钉住四基线对账表 / L23 口径更正 / 复验台账 / 未覆盖边界 / 改动清单），故本命名版随之重新生成；正文哈希见上。 -->
 # P4 外部评审整改闭合报告 R1（D1–D13）
 
 - 轮次：`p4-ext-review-remediation-r1`
@@ -22,7 +23,7 @@
 
 | D 项 | 结论 | 一句话依据 |
 |---|---|---|
-| **D1**（同一基线多个"当前状态"） | **已修复** | 11 个历史文档加失效标记 + 新增机读索引；校验器 **45/45 PASS**，历史保全 **14/14 文档、1800 行 PASS** |
+| **D1**（同一基线多个"当前状态"） | **已修复** | 11 个历史文档加失效标记 + 新增机读索引；校验器 **45/45 PASS**，历史保全 **14/14 文档、1800 行 PASS** | 〔⚠ **2026-10-01 R2 数字口径更正（Finding C）**：本行的 `45/45`、`1800` 是**本报告作者期**的实测值，在当前基线上**已过期**（当前数字由门当场重算，见 §21.2 对账表与 `CURRENT_STATUS.md` 的机器可核数字行）〕 |
 | **D2**（"3/2/0" 数字矛盾） | **记录为需扩展 scope** | 三数字属不同时点/不同对象，非自相矛盾；未改任何 GitHub 设置 |
 | **D3**（直推 main 不被拦） | **记录，未修** | 需 GitHub 侧授权（ruleset/分支保护），超出本轮授权边界；`--strict` 实测仍红（§6.2） |
 | **D4**（`audit --strict` 红灯 / L3 `paths:` 死锁） | **记录，未修** | `audit-merge-enforcement --strict` **BEFORE=AFTER=exit 1**（独立重跑复现，§6.2）；L3 `paths:` 33.1%（211/638）文件在清单外，已给修复蓝图 |
@@ -113,6 +114,11 @@ tag p4rem-baseline-63bf558          = 63bf5585c64742169c8b66ddfc2938e7de936343
 ```
 
 **判定：PASS。** 而且"历史没有被改写"不是承诺，是**逐行机检**的结果（1800 行）。
+
+〔⚠ **2026-10-01 R2 数字口径更正（Finding C）**：上面这个 fenced 块是**当时**的原始输出，**逐字保留**；
+其中 `ASSERTIONS: 45` 与 `HEAD LINES CHECKED: 1800` 属**本报告作者期基线**，在当前基线上已过期
+（原因：D1 时效标注按纪律追加在历史行行尾 ⇒ HEAD 行数增加；R2 新增断言 ⇒ 断言数增加）。
+当前数字**不在文档里手写**，而由 I1–I3 当场重算——判据与对账表见 §21.2。〕
 
 ---
 
@@ -616,3 +622,167 @@ node tests/reliability/secret-scan-check.mjs .             # 0 raw / 0 real, exi
 node tests/learn/validate-gate-registry.mjs                # 15 PASS / 0 FAIL
 node tools/check-l3-paths-coverage.mjs                     # D4 量化, exit 0
 ```
+
+---
+
+# 21. R2 附录 —— 第二轮整改（外部评审 Round 3 后，2026-10-01）
+
+> **本节定位**：§1–§20 是 **R1 封条报告原文**，**逐字保留、未改写**；本节是 R2 的**追加式**整改记录（只增不改）。
+> **本节不含"当前数字"**：唯一当前数字口径在 `docs/roadmap/CURRENT_STATUS.md` 的「【数字口径·机器可核】」行，
+> 由校验器 I1–I3 当场重算比对（原因见 §21.2）。
+> **冻结对象**：R2 的评审对象 = 分支 `p4-final-remediation-r2` 上的冻结提交，其 SHA 由
+> `FINAL_EXTERNAL_REVIEW_MANIFEST.md` 的 Round 4 节固定（本节写入时该 SHA 尚未产生，故不在此处写死）。
+
+## 21.0 一句话结论
+
+Round 3 评审的 **2 条"封条前应修"（A、B）**、**4 条精度问题（C/D/E/F）**、**1 条"写了但没人跑"（G）**
+已全部闭环；**每条整改都配一个可被证伪的负控**，且**每条控制都有 CI 归属**（由断言 H7 要求"存在 **且** 被某 workflow 调用"）。
+**D2 / D3 / D4 仍未修**（均需 GitHub 侧授权或扩权，超出本任务授权范围）；
+`tests/learn/audit-merge-enforcement.mjs --strict` 仍**诚实 exit 1**（不洗绿）。
+
+## 21.1 逐条处置
+
+| 发现 | 评审定性 | R2 处置 | 机检证据（可重复运行） | 可证伪性（负控） |
+|---|---|---|---|---|
+| **A** | 封条前应修：D1 门对"逐条 AC 裁决"不设防 | 新增**逐条 AC 裁决平价**：权威文档的逐条 AC 表 ↔ `P4_STATUS.json` 的 `acVerdicts` **双向**比对 | `validate-p4-status-consistency.mjs` 的 H1–H4；把 `acVerdicts.AC10` 篡改为 `FAIL` ⇒ 门红 | `tests/roadmap/test-p4-status-per-ac-consistency.mjs`（11 断言，临时镜像注入） |
+| **B** | 封条前应修：交付物校验器判决随换行符配置翻转 | 判决改为**对 LF 归一化字节**求哈希（CRLF 检出不再翻转判决） | `tools/verify-release-artifact.mjs`：同一内容 LF/CRLF 两检出均 `IDENTICAL`/exit 0；正文漂移 ⇒ `DRIFT`/exit 1 | `tests/roadmap/test-release-artifact-verifier.mjs`（14 断言：漂移 / 过期哈希 / CRLF / LF / 还原） |
+| **C** | 精度：自述数字陈旧且无门钉住 | **钉住数字**：文档只留一行机器可核声明；由 **I1/I2/I3** 当场重算比对（删声明行 ⇒ fail-closed 红） | 断言数 90 = 门**运行时**断言总数；14 / 1961 / 59 = `verify-history-preserved.mjs` 当场重算 | `tests/roadmap/test-finding-c-number-pinning.mjs`（17 断言：过期断言数 / 过期行数 / 删除声明行） |
+| **D** | 精度：A10 文首标注的手写行号**整体偏移 +34** | **锚点取代手写行号**：注册锚点表（19 个）+ 行号指针**封禁块**（历史行按 `git show HEAD:<file>` 冻结豁免） | `tools/check-doc-anchors.mjs` → `DOC ANCHORS: 19 RESOLVED: 19 BANS: 2 FAIL: 0` | `tests/roadmap/test-anchor-gate-negative-control.mjs`（3 断言：裸新行号 ⇒ 红 / 带锚点 ⇒ 绿 / 块外 ⇒ 不误报） |
+| **E** | 精度：D12 括号描述过宽（数字对不上） | 描述改为**点值 + 可比对照**；并给出可复算的 store census；A10 的 AC1「存量 2 命中」经复算判定为**度量假阳性**并更正 | `tools/learn-store-census.mjs --self-test`（14 断言）；`evidence/E_D12_STORE_CENSUS_20261001.md` 原始输出 | `tests/roadmap/test-finding-e-negative-control.mjs`（14 断言：去掉"非常数"限定 ⇒ H5 红；伪造 census 期望 ⇒ H2 红） |
+| **F** | 精度（对抗检查通过）：D11 掩码未削弱检测能力 | **不加码**：如实声明该门是"防**误**提交的回归门"，不是"防恶意提交者"的门 | `evidence/` 内的对抗检查记录 | 结论为"无需修改"，故**不新增控制**（该判定已在 Round 3 台账登记，避免默认它需要一个假控制来自证） |
+| **G** | 无 CI 归属：交付物校验器"写了但没有任何航道会跑" | 交付物校验器 + 其负控 **以及** A/B/C/E 四套控制**全部接入** required workflow | H7 断言"每个控制存在 **且** 被某 workflow 调用"；`.github/workflows/ci-level1.yml` 内的步骤名可现场核对 | E 负控的**注入 C**：删掉某一接线行 ⇒ H7 PASS→FAIL；还原 ⇒ 绿 |
+
+**"控制"总台账（5 套，全部有 CI 归属）**：
+`test-p4-status-per-ac-consistency.mjs`（A，11 断言）、`test-release-artifact-verifier.mjs`（B，14）、
+`test-finding-c-number-pinning.mjs`（C，17）、`test-anchor-gate-negative-control.mjs`（D，3）、
+`test-finding-e-negative-control.mjs`（E，14）。
+
+## 21.2 Finding C 详述：数字为什么"不写"而"算"
+
+**评审原话**：权威文档自述 `43 断言 / 1420 行 / 55 豁免`，门实测 `45 / 1934 / 59`，**且无门钉住这三个数字**。
+
+R2 **没有**把 `43` 改成 `45`（那只是把"过期日期"往后推一次）。R2 消灭的是**"手写数字"这一类别**：
+
+1. 文档只保留**一行**数字声明（`CURRENT_STATUS.md` 的「【数字口径·机器可核】」行）；
+2. **I1** = 该行必须存在且形状合法（**删除该行 ⇒ fail-closed 直接红**）；
+3. **I2** = 声明的断言数 == **本门运行时断言总数**（不是 `check()` 调用点个数——D3/H7 这类断言按行/按套件展开）；
+4. **I3** = 声明的历史保全数字 == **当场重跑** `verify-history-preserved.mjs` 得到的三个数。
+
+**四个基线的对账表（本节数字均为封条方实测，不是转述）**：
+
+| # | 基线 | 断言数 | HEAD 行数 | 表格分隔行豁免 | 判定 |
+|---|---|---|---|---|---|
+| 1 | 权威文档 R2 前的自述（更早基线） | 43 | 1420 | 55 | **过期**（无门钉住 ⇒ Finding C 的原始现象） |
+| 2 | 本 R1 报告内自述（§1/§5 等处 `45/45`、`1800`） | 45 | 1800 | 59 | 断言数与豁免数在其**作者期**成立；**行数在封条时已过期** |
+| 3 | Round 3 评审实测（对象 `74adf93`） | 45 | 1934 | 59 | **正确**；封条方在 `74adf93` 逐项复现（同为 45 / 1934 / 59） |
+| 4 | **R2 当前基线**（`main@63bf558` + R2 整改） | **90** | **1961** | **59** | 由 I1–I3 **当场重算** = 唯一当前口径 |
+
+**行数 1800 → 1934（+134）的原因**：D1 时效标注按纪律**追加在历史行行尾**（保证历史行原文仍是该行严格前缀），
+这些新增非空行计入 HEAD 行数 ⇒ 本报告里的 `1800` 在写下时是真的、在封条时已过期。
+**这正是 Finding C 的普遍规律**：文档自身被追加内容也会让手写数字过期。
+
+**断言数 45 → 90 的原因**：R2 新增 I1–I3、H7 泛化（控制存在 **且** 有 CI 归属）、逐条 AC 裁决平价等断言。
+因为 I2 认的是**运行时总数**，"写代码时顺手加断言"**不会再让文档过期**。
+
+**一次现场验证（本轮自证）**：R2 收口时新增锚点 `doc.cNumberPinning`（锚点表 +1 ⇒ 运行时断言总数 89→90），
+`validate-p4-status-consistency.mjs` 立刻红：`FAIL I2 … declared=89 runtime=90`。
+把声明值更正为 90 后回绿（`ASSERTIONS: 90  PASS: 90  FAIL: 0`）。
+⇒ 这**不是**事故，正是该机制的设计意图：**数字一旦漂移，门当场说话，而不是等人发现**。
+（本条与 §21.5 的台账一并记录，避免把"门抓到自己"当成没发生。）
+
+⇒ 本节**因此不复述任何当前数字**，只给基线与判据；当前数字请运行本文档 §21.5 的两条命令当场取。
+
+## 21.3 Finding G 详述：控制不能"写了没人跑"
+
+评审发现 B 附带指出：`tools/verify-release-artifact.mjs` 是"交付物与权威正文一致"这一结论的**唯一凭据**，
+但它**没有接入任何 workflow** ⇒ 该结论当时**只在本地成立**。
+R2 的处置：把"交付物校验器 + 它的负控"与"A/B/C/E 四套控制"**一并接入 required workflow**，
+并把断言 **H7 泛化**为"每个控制文件**存在** **且** 被**某个** workflow 调用"（存在但没人跑 ⇒ 红）。
+
+## 21.4 口径更正：关于「L23 指针失效」这句话（诚实登记）
+
+Round 3 的一份评审记录里出现过一句「`AC6_REAL_PROMOTION_CLOSURE.md` **L23** 指向 `A10_CONTRACT_MATRIX.md:33` 并称裁决 PARTIAL（**指针已不再解析到所引原文**）」。
+封条方对这**两层意思分别复算**，结论**不合并**，而是分开登记：
+
+1. **"L23"这个行号定位只在旧修订成立。** 实测：在 `main@63bf558`（加时效标注前）该行确在**第 23 行**；
+   在本轮评审对象 `74adf93`（加了 6 行时效标注后）该行已移到**第 29 行**。
+   ⇒ **"L23"作为定位已经在文档中停止使用**，改用锚点 `AC6.a10pointer`（真实行号由 `tools/check-doc-anchors.mjs` 当场算出）。
+2. **"指针不再解析到所引原文"这一层成立，但性质是 D（行号定位不可靠），不是"结论丢了"。**
+   被引目标 `A10_CONTRACT_MATRIX.md` 自身在加标注后**整体偏移 +34**，因此它那个**行号式**指针
+   已不再落在 AC6 的 PARTIAL 裁决行上；该文件里的"当前状态"块（锚点 `A10.currentStatus`）本身解析正常。
+3. **而"该指针失效 ⇒ 结论无从复核"这一更强版本不成立**（不可复现）：被引的裁决原文与它的取代事实
+   都在仓库内可定位（锚点解析通过），所以这是**定位方式**的问题，不是**证据缺失**的问题。
+
+⇒ 处置：`docs/roadmap/CURRENT_STATUS.md` 的 D1 索引第 4 行原话**逐字保留**（D1 纪律），
+但在表后新增一段 **R2 更正**，写明上面三点；`P4_STATUS.json` 的对应 `note` 同步更正。
+**这条更正不改任何裁决，只改"这句话该怎么读"。**
+
+## 21.5 复验台账（R2；命令 + 实际结果）
+
+**A 组——门与控制的完整电池**（`_p4rem-closure/probes/_r2-full-gate-battery.mjs`，日志 `_p4rem-closure/r2-regression/gate-battery.log`）：
+
+```
+PASS  GATE  p4-status-consistency            exit=0
+PASS  GATE  history-preserved                exit=0
+PASS  GATE  doc-anchors                      exit=0
+PASS  GATE  l3-paths-coverage                exit=0
+PASS  GATE  learn-store-census --self-test   exit=0    (14 assertions  PASS: 14  FAIL: 0)
+PASS  GATE  verify-release-artifact          exit=0
+PASS  CTRL  anchor-gate-negative-control     exit=0    (the ban is falsifiable, not decorative)
+PASS  CTRL  finding-b-release-artifact       exit=0    (EOL style never changes the verdict; real content drift always does)
+PASS  CTRL  finding-e-negative-control       exit=0    (14 assertions  PASS: 14  FAIL: 0)
+PASS  CTRL  p4-status-per-ac-consistency     exit=0    (Finding A controls 11/11)
+PASS  CTRL  finding-c-number-pinning         exit=0    (17 assertions  PASS: 17  FAIL: 0)
+VERDICT: ALL GATES GREEN
+```
+
+**B 组——与 R2 改动相关的回归面**（`_p4rem-closure/probes/_r2-regression-battery-b.mjs`，日志 `_p4rem-closure/r2-regression/gate-battery-b.log`）：
+
+```
+PASS            redaction-aware-secret-audit (REAL SECRET = 0)      exit=0
+PASS            test-redaction-aware-audit  (116 PASS / 0 FAIL)      exit=0
+PASS            secret-scan-check . (0 raw match / 0 real secret)    exit=0
+EXPECTED-RED    audit-merge-enforcement --strict (D4 未修 = 诚实红)   exit=1
+PASS            validate-gate-registry (AC10 registry)               exit=0
+PASS            test-learn-core (505 PASS / 0 FAIL)                  exit=0
+PASS            YAML syntax (6/6 files parse ok)                     exit=0
+PASS            node --check (changed .mjs)                           exit=0
+VERDICT: ALL GREEN (with 1 honestly-expected RED recorded)
+```
+
+**C 组——learn 全量回归 + 真实数据门 + 运行时装载探针**：
+对象 = **本冻结提交的干净工作树**；原始输出入库为
+`evidence/R2_POSTFREEZE_REGRESSION_20261001.md`（在 R2 冻结提交内，与该提交同字节对象）。
+
+**刻意保留的红**：`tests/learn/audit-merge-enforcement.mjs --strict` = **exit 1**（D4 未修，需 GitHub 扩权），
+本附录**不把它写成 PASS**，也不为它加任何"豁免"。
+
+## 21.6 诚实边界（本轮**没有**做到的事）
+
+1. **D2 / D3 / D4 未修**：分别需要 GitHub 侧的"证据目录入库决策 / 分支保护与 ruleset 变更授权 / L3 门 `paths` 清单扩权"，
+   均超出本任务授权。`--strict` 因此**仍红**。
+2. **R2 的改动面不触碰运行时**：`plugins/**`、`tests/learn/**` 的运行时逻辑、审批架构、经验库、goal 恢复、
+   非 learn 插件漂移均未改动；因此本轮的"相关回归"不以"生产重启"为前提。
+3. **I 组断言防的是"无意漂移"，不是"两侧同时被改成同一个错值"的对抗性篡改**——后者由仓库层评审与分支保护承担。
+4. **控制套件的执行环境**：全部为本地/CI 可重复运行；其中 B/C/E 三套通过**临时镜像**注入，
+   保证"注入缺陷"不会污染仓库本身（也因此它们能在只读 CI 环境里跑）。
+
+## 21.7 本轮改动清单（相对 `main@63bf558`）
+
+| 文件 | 性质 | 说明 |
+|---|---|---|
+| `tests/roadmap/validate-p4-status-consistency.mjs` | 修改 | 新增 I1–I3（数字钉住）、H7 泛化（控制存在 **且** 有 CI 归属）、逐条 AC 裁决平价 |
+| `tests/roadmap/test-p4-status-per-ac-consistency.mjs` | 新增 | Finding A 负控（11 断言） |
+| `tests/roadmap/test-release-artifact-verifier.mjs` | 新增 | Finding B 负控（14 断言） |
+| `tests/roadmap/test-finding-c-number-pinning.mjs` | 新增 | Finding C 负控（17 断言） |
+| `tests/roadmap/test-anchor-gate-negative-control.mjs` | 新增 | Finding D 负控（3 断言） |
+| `tests/roadmap/test-finding-e-negative-control.mjs` | 新增 | Finding E 负控（14 断言） |
+| `tools/check-doc-anchors.mjs` | 新增 | 锚点解析 + 手写行号封禁（19 锚点 / 2 封禁块） |
+| `tools/verify-release-artifact.mjs` | 修改 | 判决改为 LF 归一化（Finding B） |
+| `tools/learn-store-census.mjs` | 新增 | 可复算的 store census（Finding E） |
+| `.github/workflows/ci-level1.yml` | 修改 | 5 套控制 + 交付物校验器 + 其负控接入 required workflow（Finding G） |
+| `docs/roadmap/P4_STATUS.json` | 修改 | `docAnchors` / `linePointerBans` / `_r2Remediation` / `supersededDocs` note 更正 |
+| `docs/roadmap/CURRENT_STATUS.md` | 修改 | 追加 R2 数字口径更正段 + 数字声明行 + D1 索引第 4 行 R2 更正段 |
+| `docs/roadmap/reports/.../evidence/{D_DOC_ANCHORS,E_D12_STORE_CENSUS,R2_CONTROL_HARDENING,C_NUMBER_PINNING}_20261001.md` | 新增 | 四份原始输出证据 |
+| `docs/roadmap/reports/.../P4_REMEDIATION_CLOSURE_<ts>.md` | 重新生成 | 发布命名版（正文 = 本文件，含本节；哈希可在文件头核对） |
+| `FINAL_EXTERNAL_REVIEW_MANIFEST.md` | 修改 | Round 3 原记录**逐字保留**于附录 A，正文改写为 Round 4 评审要点 |

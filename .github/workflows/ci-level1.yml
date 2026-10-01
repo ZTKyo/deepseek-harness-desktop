@@ -397,3 +397,39 @@ jobs:
           # requires H5 / H2 to flip PASS -> FAIL, then restore and require them green again.
           node tests\roadmap\test-finding-e-negative-control.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "FINDING E NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Finding C NEGATIVE CONTROL (the question answered with 43) must be able to turn red
+        shell: pwsh
+        run: |
+          # External Review Finding C was: the authority document's self-reported numbers
+          # (43 assertions / 1420 lines / 55 exemptions) were stale AND no gate pinned them.
+          # The fix (validator I1/I2/I3) makes the numbers machine-recomputed. This control proves
+          # those assertions are falsifiable WITHOUT touching repo files: it mirrors the tree to a
+          # temp dir (git init + one commit), requires a green baseline, then injects three defect
+          # forms one at a time - stale assertion count (I2), stale HEAD-line count (I3), and the
+          # declaration line deleted outright (I1 fail-closed) - and requires the matching
+          # assertion to flip PASS -> FAIL, then restore and require green again.
+          node tests\roadmap\test-finding-c-number-pinning.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING C NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Release artifact integrity (named copy must equal the authoritative body)
+        shell: pwsh
+        run: |
+          # External Review Finding G: this verifier was the ONLY credential behind the
+          # "release artifact is identical" claim, yet no workflow invoked it - the claim was
+          # local-only. It is read-only and sub-second, so it belongs in the required gate.
+          # Verdict is EOL-normalised (Finding B): the same content judged IDENTICAL on LF and
+          # CRLF checkouts; real content drift still reports DRIFT and exits 1.
+          node tools\verify-release-artifact.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "RELEASE ARTIFACT DRIFT"; exit 1 }
+
+      - name: Release artifact verifier NEGATIVE CONTROL (the verdict must be able to turn red)
+        shell: pwsh
+        run: |
+          # Finding G, control half: the verifier must be falsifiable, and it must NOT be
+          # falsifiable by line-ending configuration alone (that was Finding B's blocker).
+          # The control runs against temp copies only: body drift => DRIFT/exit 1,
+          # stale header hash => DRIFT/exit 1, LF vs CRLF of identical content => IDENTICAL/exit 0,
+          # restore => IDENTICAL/exit 0.
+          node tests\roadmap\test-release-artifact-verifier.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "RELEASE ARTIFACT VERIFIER CONTROL FAIL"; exit 1 }

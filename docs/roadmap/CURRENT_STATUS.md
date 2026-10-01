@@ -808,12 +808,25 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
 
       **配套门（本轮新增，均可重复运行）**：
       - `docs/roadmap/P4_STATUS.json` —— **parity index（不是权威面；权威面 = 本文件）**；
-      - `node tests/roadmap/validate-p4-status-consistency.mjs` —— **43 项断言**：本文件与索引**双向**平价、
+      - `node tests/roadmap/validate-p4-status-consistency.mjs` —— **断言总数见下方「数字口径」行（由该门自检，不在此手写）**：本文件与索引**双向**平价（含**逐条 AC 裁决**平价，见 Finding A 整改）、
         全部已登记历史文档必须带标注、**仓库级扫掠**（任何**未登记**文档复述被取代结论即红灯）、
-        post-P4 四项锁（GOLDEN 未冻结 / 未上生产 / P5 未开 / P4.5 未开）；
+        post-P4 四项锁（GOLDEN 未冻结 / 未上生产 / P5 未开 / P4.5 未开）、
+        以及 **I1–I3：本段自述数字必须等于门当场重算的结果**；
       - `node tests/roadmap/verify-history-preserved.mjs` —— **逐行证明历史未被改写**：对每个已登记文档，
         HEAD 修订的**每一非空行**都必须仍以工作树某行为严格前缀。
-        本轮回执：**14/14 文档、1420 行全部通过**（含 55 行表格分隔行豁免）。
+
+      **【数字口径·机器可核】断言数 90 / 历史文档 14/14 / HEAD 行 1961 / 表格分隔行豁免 59**
+
+      〔**2026-10-01 R2 数字口径更正（External Review Finding C）**〕本段此前自述
+      「**43 项断言 / 1420 行 / 55 行豁免**」——评审实测为「45 / 1934 / 59」，且**当时仓库内没有任何门
+      钉住这三个数字**（只能靠人记得同步 ⇒ 必然再次过期）。处置分两步：
+      ① 上行给出**当前基线**（本工作树 = `main@63bf558` + R2 整改）的**唯一**数字口径行；
+      ② 该行由本校验器的 **I1–I3** 断言**当场重算并逐字比对**——断言数 = 该门**运行时**断言总数
+      （不是 `check()` 调用点个数：D3/H7 等断言按行/按套件展开）；历史文档数 / HEAD 行数 /
+      表格分隔行豁免数 = `verify-history-preserved.mjs` **当场跑出来**的三个数。
+      ⇒ 任一侧单独改动而另一侧未改，门立刻变红，不再依赖人工记忆。
+      **历史自述值（43 / 1420 / 55）在此保留为"曾如此自述"的记录**，按 D1「只标注不改写」纪律不删除，
+      且**不参与比对**（否则一改历史记录就红，等于逼人删历史）。
 
       | # | 文档（仓库内路径） | 其历史结论（正文逐字保留） | 标注 |
       |---|---|---|---|
@@ -831,6 +844,19 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       | 12 | `…/PHASE_04_LEARNING/REPORT_R1.md` | 使用**自定 AC1–AC12 编号**（与 canonical AC1–AC10 语义不同） | 文首标注 + 编号声明行 + 1 处行尾标注 |
       | 13 | `RELIABILITY_HOTFIX_RH2_R1_REPORT.md`（根） | `P4 = LOCKED`（封条前口径） | 文首标注 + 1 处行尾标注 |
       | 14 | `RELIABILITY_RH2_R11_OVERNIGHT_REPORT.md`（根） | `P4=LOCKED`（封条前口径） | 文首标注 + 1 处行尾标注 |
+
+      〔**2026-10-01 R2 口径更正（针对评审记录里的「L23 指针失效」原话）**〕
+      上表第 4 行的 **`L23` 行号定位只在旧修订成立**：实测该行在 `main@63bf558`（加时效标注前）
+      位于该文件第 23 行，在本轮评审对象 `74adf93`（加 6 行标注后）已后移到第 29 行。
+      ⇒ **该行号已停止使用**：定位一律改用锚点 `AC6.a10pointer` / `AC6.gapSection`
+      （真实行号由 `node tools/check-doc-anchors.mjs` 当场算出），并由 `linePointerBans`
+      阻断**新写入**的行号指针。
+      **另一层意思必须分开读**：那句话里"指针不再解析到所引原文"**成立**，但性质是
+      **D（行号式定位不可靠）**——被引目标 `A10_CONTRACT_MATRIX.md` 自身整体偏移，
+      其**行号式**指针已不落在所引裁决行上；而"该指针失效 ⇒ 结论无从复核"这一更强版本
+      **不可复现**（所引原文与取代事实都能按锚点定位）。
+      **本条只更正读法，不改任何裁决**；完整登记见
+      `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md` §21.4。
 
       **D8 编号消歧（与上表同批，独立登记）**：`tests/learn/test-learn-core.mjs`（注释中的 `(ACn)` 指向
       R1 自定编号）与 `REPORT_R1.md` 的自定编号表，均已加**编号体系声明**，防止"同号不同义"被误读为矛盾。

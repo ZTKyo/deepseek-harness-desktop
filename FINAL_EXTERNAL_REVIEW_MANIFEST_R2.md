@@ -134,6 +134,12 @@ YAML 6/6 parse ok；`TOTAL: 8 checks  GREEN: 8  PROBLEM: 0`。
 > 该 REVIEW_SHA 上**共 6 个 run = 两套**（首次 + 冻结后重跑：`36826690775` / `36826690827` /
 > `36826690726`），**两套结论全部 success，非成功 = 0**（独立经 GitHub API 复核）。
 > 冻结支线 `7cb59dd` 另有 3 个 run（`36826784674` / `36826784682` / `36826784760`），亦全部 success。
+>
+> **结论级别升级（逐步骤，不再是"仅整体绿"）**：REVIEW_SHA 的 6 个 run 各含 1 个 job，
+> 逐 job 的 steps 数 = **41 / 32 / 21（L1/L2/L3，两套相同）**，其中 **`notSuccess = 0`**；
+> `7cb59dd` 的 3 个 run steps = 32 / 21 / 41，同样 `notSuccess = 0`。
+> ⇒ **整体绿 且 逐步骤绿，共 9 个 run 全部 step success**（本机 `CI_EVIDENCE.txt` 全量抓取，
+> 且已由独立只读评审者经 GitHub API 单独复核）。
 
 Level 1 日志中与评审直接相关的 step 全为 success：Finding A controls、**Finding A controls EOL matrix**、
 Finding B controls、anchor gate（含负控）、Finding E / Finding C 负控、release artifact integrity（含负控）、
@@ -147,8 +153,8 @@ D1 parity、D1 history。
 | # | 事实（已独立复核） | 为什么不修 | 建议判定 |
 |---|---|---|---|
 | 1 | `ci-level1.yml` 中 **B verifier 步骤出现两次**：`:377` 与 `:449`，**同一命令、同一 job** | 删除重复步骤属控制流改动（非 docs-only）⇒ 会改变评审对象 | **非阻断**：重复执行不改变结论，仅多花数秒；留待合并后治理轮去重 |
-| 2 | **EOL 矩阵只覆盖 Finding A 控制**：`:365` 用 `tools/run-control-in-eol.mjs … lf` 建 LF 第二环境；**E 控制（`:413`）与 C 控制（`:427`）各只有一次（CRLF 检出）运行** | 为 E/C 增加步骤同属工作流改动 | **非阻断**，但**不得**主张"E/C 也有 LF/CRLF 两套运行"；本文件中已无此主张 |
-| 3 | D1 行号封锁的**覆盖面边界**：`ban.STATUS.d1row` 的模式只拦 **2 位**行号指针（`foo.md:33` 命中；`learn-core.mjs:594` **不命中**，实测）。`check-doc-anchors.mjs` 另有 2–4 位普查正则，但**普查 ≠ 封锁** | 放宽模式属索引改动（非 docs-only）；且 D 档 §5/§7 已如实登记"只覆盖 2 个区块、318 处候选未逐个判定" | **非阻断**：本轮**不主张**"全仓已无行号指针"，只主张"两个封锁区块内新写入的 2 位指针必须带锚点" |
+| 2 | **EOL 矩阵只覆盖 Finding A 控制**：`:365` 用 `tools/run-control-in-eol.mjs … lf` 建 LF 第二环境；**E 控制（`:413`）与 C 控制（`:427`）各只有一次（CRLF 检出）运行**。括注口径说明：三个 workflow 全部 `runs-on: windows-latest`（L1:12 / L2:12 / L3:34），而仓库内 blob 是 **LF**（706/708 个文本文件纯 LF、无 `.gitattributes`）⇒ CI 检出侧为 CRLF，`:365` 的 `… lf` 才构成"另一套环境" | 为 E/C 增加步骤同属工作流改动（非 docs-only） | **非阻断，且实质风险 = 0 —— 已补测证明（C1）**：独立只读评审者用与 `run-control-in-eol.mjs` **同一算法**（tracked 树 + 真 commit + `core.autocrlf=false`）造 CRLF 检出副本后真跑 → **E `14 PASS:14 FAIL:0`、C `17 PASS:17 FAIL:0`、A `11 AS-REQUIRED:11`，全 exit 0**；LF 快照内此前亦为 **E 14/14、C 17/17**（执行方本地电池，日志 `_p4rem-closure\r2-regression\gate-battery.log`）⇒ **E/C 在 CRLF 与 LF 两种行尾风格下都已被证明**，缺的只是 CI 里的对称步骤。本文件**不主张**"E/C 有两套 CI 运行" |
+| 3 | D1 行号封锁的**覆盖面边界**：`ban.STATUS.d1row` 的模式只拦 **2 位**行号指针（`foo.md:33` 命中；`learn-core.mjs:594` **不命中**，实测）。`check-doc-anchors.mjs` 另有 2–4 位普查正则，但**普查 ≠ 封锁**。（C2 补：豁免语义 = 该处含"锚点"字样，或含**不带连字符**的反引号文件名 ⇒ `` `learn.mjs:594` `` 会被豁免，而 `` `learn-core.mjs:594` `` 因文件名含连字符**不被**豁免；A10 的 `L` 形式不要求反引号、STATUS 的必须带反引号。） | 放宽模式属索引改动（非 docs-only）；且 D 档 §5/§7 已如实登记"只覆盖 2 个区块、318 处候选未逐个判定" | **非阻断**：本轮**不主张**"全仓已无行号指针"，只主张"两个封锁区块内新写入的 2 位指针必须带锚点" |
 | 4 | 门电池中 G2/G4/I3 依赖 `git show HEAD:`：在**无 `.git` 的纯解压目录**里必然变红（3 条 FAIL），`learn-store-census` 报 0 文档，`verify-history-preserved.mjs` exit 1 | 这是 **fail-closed（不假绿）**，不是缺陷 | **非阻断**：评审者请按 §1 的 `git fetch` + `git worktree add` 取得评审对象；纯解压目录**不是**受支持的评审环境 |
 
 被封锁模式原文（供核对）：

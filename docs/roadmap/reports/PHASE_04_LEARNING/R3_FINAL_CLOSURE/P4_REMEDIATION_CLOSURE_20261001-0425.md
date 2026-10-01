@@ -2,6 +2,10 @@
 <!-- 权威正文 = docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md -->
 <!-- 权威正文 SHA256 = 478BCF2A5154649C87ED35631FD944BB87108B00096FECF6F06FF7B48ED8D7B9（本文件正文与之逐字节相同；前 4 行注释头不计入正文） -->
 <!-- 命名依据：任务要求交付 P4_REMEDIATION_CLOSURE_<timestamp>.md；内容与权威正文一致，避免双份漂移 -->
+<!-- R2（2026-10-01，外部评审 Finding B）：判定依据 = CANONICAL_BODY_SHA256，即把行尾规范化（CRLF → LF、单独 CR → LF）后计算的权威正文哈希；行尾风格本身不改变判定。 -->
+<!-- CANONICAL_BODY_SHA256 = 478BCF2A5154649C87ED35631FD944BB87108B00096FECF6F06FF7B48ED8D7B9 -->
+<!-- R2（2026-10-01，外部评审 Finding D）：本文与权威正文中**历史行的手写行号指针原样保留**（D1 纪律：只标注、不改写），但定位一律改由**锚点**承担（注册表 = docs/roadmap/P4_STATUS.json → docAnchors；真实行号由 `node tools/check-doc-anchors.mjs` 当场算出，本文件不抄录任何行号）。新写入的行号式定位被 linePointerBans 阻断，负控见 tests/roadmap/test-anchor-gate-negative-control.mjs；本 R2 说明写在注释头内，不改变正文哈希。 -->
+<!-- 说明：原头部「权威正文 SHA256 = …（本文件正文与之逐字节相同…）」中的「逐字节相同」表述仅在 LF 检出下成立（CRLF 检出时原始字节不同、规范化后的语义正文仍相同）；该表述由本 R2 注释取代为「规范化后正文一致」，原始字节身份由 `tools/verify-release-artifact.mjs` 以 `rawFileSha256` 单独报告，**不参与判定**。注释头行数由校验器按「开头连续注释行」推导（不再硬编码 4 行），正文 = 注释头之后的内容。 -->
 # P4 外部评审整改闭合报告 R1（D1–D13）
 
 - 轮次：`p4-ext-review-remediation-r1`

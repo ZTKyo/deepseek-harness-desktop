@@ -335,3 +335,65 @@ jobs:
         run: |
           node tests\roadmap\verify-history-preserved.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "HISTORY PRESERVATION FAIL"; exit 1 }
+
+      - name: Finding A controls (per-AC verdict consistency must be enforceable, not decorative)
+        shell: pwsh
+        run: |
+          # Finding A: the per-AC status rows were only a prose promise. This control runs the
+          # REAL parity gate against a throwaway copy of the tree and asserts 11 cases:
+          # a legitimate synchronised change stays GREEN (A0/A7) while ten real tamperings
+          # (index/authority disagree, missing AC row, unknown AC key, illegal verdict token,
+          # summary still claiming all-PASS) each turn it RED on the *specific* numbered check.
+          # The copy is `git init`-ed with one commit on purpose: the anchor gate proves what is
+          # history via `git show HEAD:<file>`, and without a HEAD the baseline would be red for
+          # an unrelated reason — every RED case would then pass for the wrong reason (false green).
+          node tests\roadmap\test-p4-status-per-ac-consistency.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING A PER-AC CONTROLS FAIL"; exit 1 }
+
+      - name: Finding B controls (release-artifact verdict must depend on content, not on the checkout)
+        shell: pwsh
+        run: |
+          # Finding B (R1 external review, reproduced on one commit): the release-artifact
+          # verifier answered IDENTICAL in an LF checkout and DRIFT in a CRLF checkout. This
+          # control runs the REAL verifier against byte-controlled variants of the REAL artifact
+          # in a throwaway copy: LF/CRLF/CR/mixed/cross-file EOL variants must all exit 0, while
+          # nine real content drifts (body, deleted section, non-EOL whitespace, stale/missing/
+          # malformed/self-conflicting header hashes, extra trailing newline) must exit 1.
+          node tests\roadmap\test-release-artifact-verifier.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING B RELEASE-ARTIFACT CONTROLS FAIL"; exit 1 }
+
+      - name: P4 document anchor gate (D - hand-written line pointers must not come back)
+        shell: pwsh
+        run: |
+          # Finding D: a hand-written pointer like `L33` drifts when the document changes
+          # (measured: +34 lines) and nothing notices. Line numbers are derived data.
+          # This gate resolves every registered anchor (fail-closed if one disappears) and
+          # rejects NEW hand-written line pointers inside the registered ban blocks
+          # (append-only history lines are exempt, judged against `git show HEAD:<file>`).
+          node tools\check-doc-anchors.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "DOC ANCHOR GATE FAIL"; exit 1 }
+          # Scope is reported, not hidden: the census is heuristic and informational only.
+          node tools\check-doc-anchors.mjs --census
+
+      - name: P4 document anchor gate NEGATIVE CONTROL (the ban must be able to turn red)
+        shell: pwsh
+        run: |
+          # A gate that can never fail is decoration. This test builds a throwaway fixture
+          # plus a throwaway registry in a temp dir (it never touches repo documents) and
+          # asserts three cases: bare new line pointer => RED, anchor-bearing => GREEN,
+          # pointer outside the banned block => not flagged.
+          node tests\roadmap\test-anchor-gate-negative-control.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "ANCHOR GATE NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Finding E NEGATIVE CONTROL (the "point value, not a constant" rule must be able to turn red)
+        shell: pwsh
+        run: |
+          # External Review Finding E was about an unqualified number, so the fix is a written
+          # qualification plus an assertion (validator H2/H5). This control proves those two
+          # assertions are falsifiable WITHOUT touching repo files: it copies the tree to a temp
+          # mirror (git init + one commit so the anchor gate's frozen-line exemption still works),
+          # checks the mirror baseline is green, then injects the E defect class twice
+          # (drop the "not a constant" qualifier; falsify the census fixture expectation) and
+          # requires H5 / H2 to flip PASS -> FAIL, then restore and require them green again.
+          node tests\roadmap\test-finding-e-negative-control.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING E NEGATIVE CONTROL FAIL"; exit 1 }

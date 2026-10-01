@@ -820,7 +820,7 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       | 1 | `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md` | `AC6 / AC10 = PARTIAL`、`P4 ≠ VERIFIED`、场景 ①未达成/②半达成/④部分达成 | 文首标注 + 5 处行尾标注 |
       | 2 | `…/R3_FINAL_CLOSURE/P4_FINAL_VERDICT.md` | **标题即** `P4 ≠ VERIFIED` | 文首标注 + 3 处行尾标注 |
       | 3 | `…/R3_FINAL_CLOSURE/AC2_RESEARCH_LEG_CLOSURE.md` | 继承被取代的总判定 | 文首标注 + 2 处行尾标注 |
-      | 4 | `…/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md` | L23 指向 `A10_CONTRACT_MATRIX.md:33` 并称裁决 PARTIAL（**指针已不再解析到所引原文**） | 文首标注 + 2 处行尾标注 + 指针失效说明 |
+      | 4 | `…/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md` | L23 指向 `A10_CONTRACT_MATRIX.md:33` 并称裁决 PARTIAL（**指针已不再解析到所引原文**） | 文首标注 + 2 处行尾标注 + 指针失效说明 | 〔**2026-10-01 D 修复**：本行的行号式引用只作历史描述；该文件的定位改用锚点 `AC6.gapSection` / `AC6.a10pointer`，真实行号由 `node tools/check-doc-anchors.mjs` 当场算出〕 |
       | 5 | `…/R3_FINAL_CLOSURE/AC10_GATE_REGISTRY_AND_REAL_E2E_IN_CI.md` | "CI 内无真实 E2E 门"（AC10 已于 2026-09-30 客观闭合） | 文首标注 + 1 处行尾标注 |
       | 6 | `…/R3_FINAL_CLOSURE/PRE_DEPLOY_PREFLIGHT.md` | 部署前旧口径 `P4 ≠ VERIFIED` | 文首标注 + 1 处行尾标注 |
       | 7 | `…/R3_FINAL_CLOSURE/evidence/POST_RESTART_STATE_AND_READINESS.md` | 重启后就绪度证据 `P4 = NOT VERIFIED` | 文首标注 + 1 处行尾标注 |
@@ -875,6 +875,11 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
         `tests/reliability/test-redaction-aware-audit.mjs`（A 干净=0/0/0；B 单条脱敏 ⇒ REAL=0；
         C 真实密钥仍被抓 ⇒ exit 非 0；D 生产只读审计分列三数）。
       - 实现：`tests/reliability/redaction-aware-secret-audit.mjs`（审计层新增，**learning 插件未改字节**）。
+      - **F 补记（External Review Finding F，2026-10-01；无需改动、只固定作用域）**：评审的对抗性检查
+        **通过** —— 掩码只会"**造出**"命中（把已脱敏文本再次命中），**不会删除**命中 ⇒ **未削弱**检测能力。
+        其结论为：该掩码是**防误提交的回归门**，**不是**防恶意提交者的安全边界（恶意提交者可绕过工程门）；
+        安全保证来自**真实密钥计数 = 0** 与**逐次审计**。此处把这句作用域**明写固定**，避免后续把工程门
+        误读成安全边界。
 
     - **⑤ D12 脱敏自愈作用域更正**：
       - **实现事实**（`plugins/learn.mjs:594` → `learn-core.mjs:542 redactStore`）：自愈在
@@ -885,6 +890,21 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       - **依据（生产实测，2026-10-01 只读复核）**：`%LOCALAPPDATA%\DSHHarness\state\learn\` 下
         3 个 `schemaVersion=1` 旧库与含 `[REDACTED:` 标记的历史库 **mtime 全部早于** 2026-09-28 重启
         ⇒ 未被扫掠；会话库写入时点与该会话被载入的时点一致。
+      - **E 更正（External Review Finding E，2026-10-01；机制不变、口径收窄）**：上面这条**依据的
+        表述过宽**，现更正为**可当场复算**的点值口径（原句按 append-only 纪律保留在上一行）：
+        ① **「3 个旧库」必须点明是哪一种库**——同目录 `schemaVersion=1` 的文件**共 4 个**：3 个会话期旧库
+        （mtime `2026-09-23 05:27–05:28+08:00`）＋ **1 个全局已验库索引** `_global-verified.json`
+        （mtime `2026-09-29 01:24:49+08:00`）；剔除索引文件才得 3 ⇒ 评审者复算得 4 属**类别歧义**，非数据漂移。
+        ② **删除过宽句「重启后仅当前活动会话库被写入」**：该索引文件 mtime **晚于** 09-28 重启边界，
+        即重启之后确有写入；且它**不在**自愈路径上（`redactStore` 全仓**仅一处**调用点，作用于被载入的会话库）。
+        ③ **「含标记库 mtime 未变」降级为逐文件 + 带时点**：封条时点那个含标记历史库 mtime 确实未变，
+        但测量当日含标记文件共 **5 个**、其中 **3 个是封条之后才被载入**的 `session-*` 会话库
+        ⇒ **不得**写成一般句（"含标记库 mtime 未变"）。
+        ④ **所有计数为点值、非常量**：上列数字是 `2026-10-01 12:23:16+08:00` 的**点值**
+        （同一目录两次测量间最新文件 mtime 即从 `12:21:30` 推进到 `12:22:49`），且**时间戳一律标注时区**
+        （本地 `+08:00` 与 UTC 相差 8 小时，正是"两份清单看起来对不上"的另一个来源）。
+        复算命令 `node tools/learn-store-census.mjs`（只读、离线自检 14 断言、读不到即 fail-closed）；
+        证据档 `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/E_D12_STORE_CENSUS_20261001.md`。
       - **正确性上无问题**（AC1 只要求"进入 Experience 的内容无 Secret"）；此处**只更正描述口径**，
         并把"历史库不批量扫掠"登记为**已接受的设计边界**（如需全库扫掠，应作为独立维护动作另行授权）。
 
@@ -935,11 +955,42 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
         二者均超出"修 bug"授权 ⇒ 登记为**待授权**项并附最小蓝图；若后续执行，D3 的
         `required_approving_review_count` **必须 = 0**（否则单操作员仓库永远无法合并任何 PR）。
 
+    - **⑧ D 修复：文档定位弃用手写行号、改用可机检锚点（R2 2026-10-01；根因级）**：
+      - **根因（实测，非推测）**：「字母 L + 数字」式、或「文件名 + 冒号 + 数字」式的**手写行号指针**
+        属于**派生数据**，文档一改即整体偏移（实测 `A10_CONTRACT_MATRIX.md` 此后整体偏移 **+34 行**），
+        而指针"看着还在"、没有门会响 ⇒ 上文 D1 索引中登记「指针已不再解析到所引原文」的那一行
+        （即 `ban.STATUS.d1row` 锁定的行）才会出现该现象。
+        修法**不是**"把行号改对一次"（下次仍会漂），而是**取消手写这个动作**。
+        （本段刻意不复述那批失效数字，避免在"取消手写"的同时再造出新的行号指针。）
+      - **修法三层**：① 锚点解析（`P4_STATUS.json` → `docAnchors` 13 条，真实行号由
+        `node tools/check-doc-anchors.mjs` **当场算出并打印**；锚点缺失/不唯一 ⇒ FAIL，fail-closed）；
+        ② 回归锁（`linePointerBans` 阻断**新写入**的行号式定位，判据 = 命中禁用式 ∧ 非
+        `git show HEAD:<file>` 的冻结文本 ∧ 未同时给出锚点；历史行按 D1"只标注不改写"纪律豁免）；
+        ③ 证明层（负控测试证明这道门**能真的变红**，不是装饰门）。
+      - **两道负控（原始输出见专档）**：
+        ① 真实文档注入：在 A10 更正表 banner **新写入**一条裸行号 →
+        `ban.A10.banner FAIL :: 1 new hand-written line pointer(s) without an anchor`、**exit 1**
+        （随后逐字节还原，复跑恢复 PASS）；
+        ② 离线 fixture：`node tests/roadmap/test-anchor-gate-negative-control.mjs` →
+        裸行号必须红 / 同带锚点必须绿 / 被禁区块外不误杀 = **3/3 PASS**、exit 0。
+      - **专档（根因 / 修法 / 原始输出 / 范围与边界 / 复现命令 / 未判定项）**：
+        `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/D_DOC_ANCHORS_20261001.md`
+      - **范围与边界（如实登记，不放大结论）**：禁令当前覆盖 **2 处已确认漂移点**；
+        全仓普查（`--census`，启发式）**扫描 124 个文档、候选 318 处、涉及 58 个文件**，
+        多为历史文本/命令输出示例 ⇒ 按 D1 纪律**只标注、不改写**，本轮**未**做全仓改写
+        （全仓改写会与历史保全门"历史行必须仍在"直接冲突，属需另行授权的动作）；
+        且本段**不抄录任何会漂的行号**，需要行号时一律跑门当场打印。
+      - **边界**：本条只做"定位方式"的治理更正——**未**改任何 learning 插件字节、**未**动生产、
+        **未**改 GitHub 规则、**未**新增/关闭 PR、**未**代外部评审出 verdict。
+
+
     - **边界（本段只做治理/口径更正）**：本轮**未**改任何 learning 插件字节（4 件 learn 插件
       SHA256 与基线逐一相同 ⇒ **无需重启、未重启**）、**未**改 `cordis.patch.yml`、**未**动生产凭据、
       **未**改任何 GitHub 规则/分支保护、**未**改任何 workflow 触发、**未** dispatch/建/关 PR、
       **未**启动 P4.5（`PHASE_05_STARTED = NO`、P4.5 未开）、**未**冻结 GOLDEN、
-      **未**代外部评审出 verdict。本轮新增内容**只**是：独立新门（`tests/roadmap/*`）、
+      **未**代外部评审出 verdict。本轮新增内容**只**是：独立新门（`tests/roadmap/*`，含
+      `test-anchor-gate-negative-control.mjs` 负控）、文档锚点门与锚点注册表
+      （`tools/check-doc-anchors.mjs` + `P4_STATUS.json` 的 `docAnchors`/`linePointerBans`）、
       只读分析器（`tools/check-l3-paths-coverage.mjs`）、parity index（`docs/roadmap/P4_STATUS.json`）、
       历史文档的**行尾**时效标注、以及本段的治理记录。
 

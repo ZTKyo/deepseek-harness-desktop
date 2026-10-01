@@ -33,7 +33,11 @@ const INDEX_REL = path.join('docs', 'roadmap', 'P4_STATUS.json');
 const AUTH_REL = path.join('docs', 'roadmap', 'CURRENT_STATUS.md');
 
 const ALL_PASS_SENTENCE = 'AC1–AC10 全部 PASS';
-const VERIFIED_STATUS = 'VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW';
+// NOTE (2026-10-01 R2 finalization): this used to be a hard-coded copy of the canonical
+// status string. A hard-coded copy of derived data breaks on every legitimate status change
+// (the A7 needle then no longer resolves and the control goes red for a reason unrelated to
+// the case under test — the same defect family as Finding C/D). It is now DERIVED from the
+// index below, after the pristine copy is read.
 
 for (const rel of [GATE_REL, INDEX_REL, AUTH_REL]) {
   if (!fs.existsSync(path.join(ROOT, rel))) {
@@ -75,6 +79,10 @@ const writeFile = (rel, text) => {
 };
 
 const pristine = { index: readFile(INDEX_REL), auth: readFile(AUTH_REL) };
+
+// Derived, never hand-synced: the canonical status string lives in the index (single source
+// of truth). A7 uses it as its mutation needle, so it must equal whatever the index says today.
+const VERIFIED_STATUS = JSON.parse(pristine.index).authorityRequirements.p4Status;
 const restore = () => {
   writeFile(INDEX_REL, pristine.index);
   writeFile(AUTH_REL, pristine.auth);

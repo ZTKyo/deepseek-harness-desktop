@@ -350,6 +350,21 @@ jobs:
           node tests\roadmap\test-p4-status-per-ac-consistency.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "FINDING A PER-AC CONTROLS FAIL"; exit 1 }
 
+      - name: Finding A controls EOL matrix (a runner tree is CRLF; prove the LF checkout too)
+        shell: pwsh
+        run: |
+          # Real CI incident (2026-10-01, this workflow): the step above passed on the developer
+          # tree and FAILED on the runner — `A3a: expected pattern not found in
+          # docs\roadmap\P4_STATUS.json`. Cause: the repo's blobs are LF but this job runs on
+          # windows-latest, where the checkout comes out CRLF, and one mutation needle contained a
+          # literal `\n`, so it only matched an LF tree. A control that is green on ONE checkout
+          # style is not proven. `run-control-in-eol.mjs` rebuilds a clean converted checkout
+          # (tracked files only + one real commit) and runs the same suite there, so the opposite
+          # style is exercised on every CI run instead of only by hand.
+          git ls-files --eol docs/roadmap/P4_STATUS.json   # evidence: the real EOL style of this checkout
+          node tools\run-control-in-eol.mjs tests/roadmap/test-p4-status-per-ac-consistency.mjs lf
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING A EOL MATRIX (LF) FAIL"; exit 1 }
+
       - name: Finding B controls (release-artifact verdict must depend on content, not on the checkout)
         shell: pwsh
         run: |

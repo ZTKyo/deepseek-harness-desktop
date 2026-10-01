@@ -55,8 +55,24 @@ fs.cpSync(ROOT, TMP, {
 });
 
 const P = (rel) => path.join(TMP, rel);
-const readFile = (rel) => fs.readFileSync(P(rel), 'utf8');
-const writeFile = (rel, text) => fs.writeFileSync(P(rel), text, 'utf8');
+// EOL-agnostic I/O. The mutation needles below are written with plain `\n`, but the checkout
+// style of a text file varies by environment: the repo's blobs are LF (measured on the raw
+// bytes), the CI job runs on windows-latest where the working tree comes out CRLF, and a
+// developer tree can be either. Without normalising, a needle such as /,\n\s*"AC7": "PASS"/
+// matches in an LF tree and NOT in a CRLF tree — case A3a failed exactly this way on the
+// runner while this whole suite was green locally. So: read normalised to LF, remember the
+// file's own style, write back in that style — the mutations stay honest in both checkouts.
+// Reproduce: node tools/run-control-in-eol.mjs tests/roadmap/test-p4-status-per-ac-consistency.mjs <lf|crlf>
+const EOL_STYLE = new Map();
+const readFile = (rel) => {
+  const raw = fs.readFileSync(P(rel), 'utf8');
+  EOL_STYLE.set(rel, /\r\n/.test(raw) ? '\r\n' : '\n');
+  return raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+};
+const writeFile = (rel, text) => {
+  const eol = EOL_STYLE.get(rel) || '\n';
+  fs.writeFileSync(P(rel), eol === '\n' ? text : text.replace(/\n/g, eol), 'utf8');
+};
 
 const pristine = { index: readFile(INDEX_REL), auth: readFile(AUTH_REL) };
 const restore = () => {

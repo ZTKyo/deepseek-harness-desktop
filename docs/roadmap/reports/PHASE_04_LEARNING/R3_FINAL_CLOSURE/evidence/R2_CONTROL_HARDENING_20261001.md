@@ -188,3 +188,63 @@ FINDING E NEGATIVE CONTROL: 14 assertions  PASS: 14  FAIL: 0
 | `.github/workflows/ci-level1.yml` | 新增 Finding A / Finding B 控制步骤；补齐 E 控制步骤；四处说明"证伪什么" |
 | `docs/roadmap/P4_STATUS.json` | `_r2Remediation` 补记本轮两条发现与修法；登记本档案锚点 `doc.r2ControlHardening` |
 | `docs/roadmap/reports/.../evidence/R2_CONTROL_HARDENING_20261001.md` | 本文件（新增） |
+
+---
+
+## 7. 补记（同日 06:26 UTC）：runner 首跑就暴露了一个真实假红 —— 修掉它，并把两套 EOL 风格钉进 CI
+
+§5 当时写的是"三个控制全部本机实测，**尚未在 GitHub runner 上执行过**；CI 侧证据需下一次工作流运行才能补上"。
+下一次运行确实补上了这份证据，而它**补上的第一件事就是变红**——恰好证明"接线正确 ≠ 已在 runner 上跑过"。
+
+### 7.1 现象（修复前的原始事实）
+- workflow `CI Level 1 - Static Gate`，run `36822834743`，HEAD `766beda`（PR #104）⇒ **failure**
+- 失败步骤：`Finding A controls (per-AC verdict consistency must be enforceable, not decorative)`
+- 报错原文：`A3a: expected pattern not found in docs\roadmap\P4_STATUS.json`
+- 同一套件在本机是绿的（§4 复验台账表的第 5 条）⇒ **同一份代码，两套结论**。
+
+### 7.2 根因（用 runner 自己的输出定死，不靠推测）
+runner 上执行 `git ls-files --eol docs/roadmap/P4_STATUS.json` 得到：
+
+```
+i/lf    w/crlf  attr/                  docs/roadmap/P4_STATUS.json
+```
+
+即**仓库里存的是 LF，而 windows-latest 的检出是 CRLF**（本机 `core.autocrlf=true` 同理会这样）。
+本机工作区里这个文件恰好是 LF（按**原始字节**实测 `CRLF=0 LF-only=291`），
+而 A3a 用的注入针里含**字面 `\n`**，只能匹配 LF 树 ⇒ 在 CRLF 树上"针根本没插进去"，
+负控按设计如实报红（这正是它该做的事：它证明了自己的前提不成立）。
+
+为什么之前统计不到：§4/§5 的账本都是**同一套行尾风格**上的单次测量。本机本身就是**混合风格工作区**
+（§3.1 已记录 `ci-level1.yml` 实测为 CRLF，而本文件与 `P4_STATUS.json` 是 LF），
+所以"本机全绿"这个结论从一开始就带条件。
+（方法坑，已记入工作区记忆：用 PowerShell 文本管道量 EOL 会二次编码行尾，
+**必须先量原始字节**——本轮最初把仓库 blob 量成 CRLF 就是这个坑造成的误读。）
+
+### 7.3 修法（三处）
+| 文件 | 改动 |
+|---|---|
+| `tests/roadmap/test-p4-status-per-ac-consistency.mjs` | 该 `.json` 的读写改为 **EOL 无关**：读入归一化，写回时还原文件**自身**的行尾风格（不再假定 LF） |
+| `tools/run-control-in-eol.mjs`（新增） | 重建一份**干净转换过的**副本检出（仅 tracked 文件 + 一次真实提交），在其中运行指定套件命令；本地与 CI 共用同一实现，避免"同一逻辑两套写法" |
+| `.github/workflows/ci-level1.yml` | 新增步骤 `Finding A controls EOL matrix`：先打印 `git ls-files --eol docs/roadmap/P4_STATUS.json` 作为**本检出真实风格**的证据，再在 LF 副本里跑同一套件——runner 自身是 CRLF，于是**两套风格每次运行都真跑过** |
+
+### 7.4 修复后证据（run `36824590382`，HEAD `f2b910b`）
+- runner 上同一套件**跑了两次**，两次都是 `CONTROLS: 11  AS-REQUIRED: 11  MISBEHAVED: 0`：
+  一次在 runner 原生（CRLF）树上，一次在 LF 副本里；原先失败的用例现为
+  `PASS  A3a  expected=RED actual=RED(exit 1) assert=B1 fired  :: index is missing AC7`。
+- 新步骤自身输出：`i/lf    w/crlf  attr/   docs/roadmap/P4_STATUS.json`（本检出风格证据）
+  与 `run-control-in-eol: PASSED (…behaves identically in a LF checkout)`
+  （该步骤另打印 `707 text files converted`，可核对副本规模）。
+- 该 run 上两个 Finding A 步骤结论均为 `success`。
+- 本机两套风格全量复跑（5 个门 + 5 个控制，每套风格 10 次套件运行）：
+  `ALL GREEN in lf + crlf`，合计 **20/20** 次套件运行通过。
+
+### 7.5 对 §5 的更正
+第 1 条（"尚未在 runner 上执行过"）**已闭环**：下一轮运行补上了 CI 证据，
+并且**这一轮就抓到一个真实的、本机永远看不见的缺陷**（不是装饰性问题：它意味着"控制套件在真实
+CI 树上是否成立"此前**没有任何证据**）。口径随之收紧并固定下来：
+
+> **"本机全绿"永远不等于"CI 绿"。**只有当**另一套行尾风格的树**在 CI 上真实跑过，控制套件的
+> "可跑性"才算被证明。这条现在由 `ci-level1.yml` 的 EOL matrix 步骤**每次运行自动执行**，不再依赖人工记忆。
+
+§5 其余各条（H7 不等于"步骤一定被调度"、副本 `git init` 的耗时与 git 依赖）本轮**未**改变，
+仍按原样保留为未覆盖边界。

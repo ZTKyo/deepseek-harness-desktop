@@ -13,7 +13,7 @@
     "reviewedSha": "2592172699049b9c9f531181140151d6355b6a7c",
     "reviewedTree": "f515bf95eeaacebf7d889a2087dbe04e90e64da6",
     "mergeVehiclePr": 104,
-    "governancePr": null,
+    "governancePr": 106,
     "mergedAt": "2026-10-01 07:28",
     "mainTreeAfterMerge": "f515bf95eeaacebf7d889a2087dbe04e90e64da6",
     "mainTreeIdenticalToReviewedTree": true,

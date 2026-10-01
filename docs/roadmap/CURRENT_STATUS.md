@@ -1034,7 +1034,7 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
         的合并树 = `f515bf95eeaacebf7d889a2087dbe04e90e64da6`（与评审树**逐字节相同**，且 base 是 head 的祖先）；合并后实测
         `git rev-parse origin/main^{tree}` = `f515bf95eeaacebf7d889a2087dbe04e90e64da6`、`git rev-list --parents -n1 origin/main` 的第二父 = `2592172699049b9c9f531181140151d6355b6a7c`
         ⇒ **main 的内容与被评审的内容逐字节同一**（不靠"我们说一致"，靠对象身份）。
-      - **治理面收口**：本文件与 `docs/roadmap/P4_STATUS.json` 的收口变更走**独立**治理 PR #pending
+      - **治理面收口**：本文件与 `docs/roadmap/P4_STATUS.json` 的收口变更走**独立**治理 PR #106
         （只动治理面：状态字符串、本段登记、`p4_5Readiness`），**未**触碰任何 learning 实现字节、**未**动生产。
       - **收口后状态（当前口径；取代本文件此前"等待外部评审"的当前口径，历史原文按 D1「只标注不改写」保留）**：
         `P4 = CONTRACT VERIFIED / GOAL COMPLETED (R2 EXTERNAL REVIEW APPROVED)`；**AC1–AC10 全部 PASS**（逐条证据见 ① 表，本身未变）；

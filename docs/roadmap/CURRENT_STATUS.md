@@ -1040,6 +1040,8 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
         `P4 = CONTRACT VERIFIED / GOAL COMPLETED (R2 EXTERNAL REVIEW APPROVED)`；**AC1–AC10 全部 PASS**（逐条证据见 ① 表，本身未变）；
         `POST_P4_VERIFIED_GOLDEN` **仍未冻结**；`P4_PRODUCTION_ACTIVATED = NO`；`PHASE_05_STARTED = NO`；
         **`P4.5 = READY_TO_START`（就绪，但"未开始"：`p4_5Started` 保持 `false`）**。
+        〔2026-10-02 追加标注：本行是**该时点**的真实状态，按 D1「只标注不改写」保留；**当前口径**已变为
+        `P4.5 = IN_PROGRESS`（经用户明确授权正式启动 P4.5 OFFICIAL BASE ALIGNMENT），见本文件 P4.5 正式启动条目。〕
       - **诚实保留（不因收口而被隐去）**：
         ① D3/D4 的 GitHub 架构缺口**本轮未修**：`node tests/learn/audit-merge-enforcement.mjs --strict` 仍
         **exit 1**（未洗绿：未加 exit-0 硬编码、未删规则、未把红灯包成"总是成功"），根因分类与最小蓝图见 ⑦；
@@ -1058,3 +1060,36 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       - **边界**：本条目只做治理/口径收口——**未**改任何 learning 插件字节、**未**改 `cordis.patch.yml`、
         **未**动生产凭据、**未**重启服务、**未**改任何 GitHub 规则/workflow 触发、**未** create/close PR 之外的仓库动作、
         **未**启动 P4.5 或 P5、**未**冻结 GOLDEN。
+
+
+## 2026-10-02 P4.5 正式启动：OFFICIAL BASE ALIGNMENT（用户明确授权；无人值守；仅隔离环境）
+
+- **启动前置条件（当场复核，不靠记忆；若 P4 权威冲突则只做隔离技术准备、不得伪造启动）**：
+  `docs/roadmap/P4_STATUS.json` 的 `authorityRequirements.p4Status` =
+  `CONTRACT VERIFIED / GOAL COMPLETED (R2 EXTERNAL REVIEW APPROVED)`；`acVerdicts` = AC1–AC10 全部 `PASS`；
+  `p4Finalization.verdict` = `APPROVED`、`mainTreeIdenticalToReviewedTree` = `true`。前置条件成立 ⇒ 正式启动 P4.5。
+- **用户授权范围（逐条登记，防止越权）**：fresh 查询官方发布（GitHub releases/tags、npm dist-tags、source、tests）；
+  创建隔离 worktree 与隔离安装目录；把多个官方候选版本装进隔离目录；复制历史 Session 到隔离测试目录；
+  建立 Session manifest 与 compatibility harness；修改本项目兼容层/adapters/overlays 与测试、CI；
+  修改 dependency pin/lock/override；新增 compatibility canary 与 migration tooling；创建 commit；
+  push 非保护分支；创建 PR；等待 CI（同一阻塞点最多两轮自动修正）；更新 P4.5 roadmap/evidence/status；
+  创建 rollback / migration plan。上述**低风险隔离动作不再逐次询问用户**。
+- **硬边界（本轮任何时刻必须为真，最终报告逐项复核）**：`PRODUCTION_BASE_CHANGED = NO`、
+  `PRODUCTION_DSH_UPGRADED = NO`、`PRODUCTION_PROFILE_CHANGED = NO`、`REAL_SESSION_DATA_MUTATED = NO`、
+  `WINDOWS_REBOOT = NO`、`FORCE_PUSH = NO`、`HISTORY_REWRITE = NO`、`DIRECT_MAIN_PUSH = NO`、
+  `PHASE_05_STARTED = NO`。禁止覆盖生产 `~/.dsh` 底座、禁止把新 DSH 装进生产安装目录、
+  禁止用真实 Session 做原地 migration、禁止删除 Session、禁止改生产 Global Experience Store、
+  禁止启动生产新底座、禁止把隔离沙盒端口指向生产 3080、禁止顺手重开 P4。
+- **治理面变更（仅状态登记，未触碰任何实现字节）**：`p4_5Readiness.state`：`READY_TO_START` → `IN_PROGRESS`；
+  `p4_5Readiness.started`：`false` → `true`（同时登记 `startedAt` / `startedAtUtc` / 授权依据）；
+  `postP4State.p4_5Started`：`false` → `true`；原状态按 D1「只标注不改写」移入 `_p4_5ReadinessHistory` 保留。
+  `postP4State` 其余锁**未**动：`postP4VerifiedGoldenFrozen` 仍为 `false`（GOLDEN 未冻结）、
+  `p4ProductionActivated` 仍为 `false`、`phase05Started` 仍为 `false`。
+- **门控同步（必须如实登记，不藏）**：`tests/roadmap/validate-p4-status-consistency.mjs` 的 F4 原断言
+  `post.p4_5Started === false`（P4 收口时点的相位不变量）。P4.5 正式启动后该断言必然失败，
+  且失败原因与判定正确性无关。修法 = 改为**相位一致性**断言：索引自报 `started` 必须与
+  `p4_5Readiness.started` 一致、`state` 必须属于合法相位集合、且 `phase05Started` 仍必须为 `false`。
+  该改动**收紧**一致性约束（自报与索引状态必须一致 + P5 仍锁死），**未**放宽 P4 的契约判定，
+  **未**触碰任何实现/learning 插件字节。
+- **本轮明确不做**：不替换生产 Base、不升级生产官方版本、不迁移真实 Session 数据、不启动 P5、
+  不冻结 GOLDEN、不把任何改变生产 Base 语义的改动合入 `main`（PR 默认留开、由用户决定）。

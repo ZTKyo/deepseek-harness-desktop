@@ -1,0 +1,14 @@
+########## SUITE: test-learn-ac1-repo-target
+########## CMD: node tests/learn/test-learn-ac1-secret-families.mjs "C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\plugins\learn-core.mjs"
+########## EXIT: 0
+########## ELAPSED_S: 0.21
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+§0 PASS import=C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt\plugins\learn-core.mjs
+
+PASS=43 FAIL=0
+AC1_SECRET_FAMILIES_VERDICT=PASS
+
+########## ---- STDERR ----
+

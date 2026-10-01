@@ -1,0 +1,47 @@
+########## SUITE: tests/learn/test-learn-b2-verify-output-contract.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.27
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== P4 FINAL CLOSURE A2（B2）：learn_verify 输出契约回归门 ===
+  插件 = file:///C:/Users/Administrator/Desktop/sdeepseek%20harness/_p4rem-closure/regression-count-audit/wt/plugins/learn.mjs
+
+  证据文件 = C:\Users\ADMINI~1\AppData\Local\Temp\b2-evidence-OO8vNk\evidence-target.txt  sha256=e984e7d1c23d0011…
+
+--- 0 组：校验器自检（不空转）---
+  PASS  0.1 复刻版能抓到类型不符（"a" must be a string）
+  PASS  0.2 复刻版能抓到 undefined 值键 ⇒ value is not lossless JSON（宿主 L2468 原话）
+  PASS  0.3 复刻版**不**误杀"声明但缺省"的字段（宿主 L457，本修复的合法形态）
+  PASS  0.4 复刻版能抓到未声明字段（additionalProperties:false）
+
+--- A 组：成功路径（error 键必须不存在，method 必须是真方法名）---
+  PASS  A1 成功路径：ok:true + method 为真实方法名 file_hash
+  PASS  A2 成功路径：**不存在** error 键（旧写法 error:undefined ⇒ 整条结果被判非法）
+  PASS  A3 成功路径：返回值通过宿主契约校验（lossless JSON + 类型 + 未声明字段）
+  PASS  A4 成功路径：ok 键存在且为 boolean（per-property required 由调用方显式断言）
+  PASS  A5 成功路径：无人工审批 ⇒ 发布必须 DENY（原因指向 not_human_approved）
+  PASS  A6 成功路径：render 产出合法 JSON 文本（调用方读到的是结构化结果，不是 null）
+
+--- B 组：失败路径（method 键必须不存在，error 必须是真原因）---
+  PASS  B1 失败路径：ok:false + error 为真原因（不冒充 VERIFIED）
+  PASS  B2 失败路径：**不存在** method 键（旧写法 method:null ⇒ 整条结果被判非法）
+  PASS  B3 失败路径：返回值通过宿主契约校验
+  PASS  B4 失败路径：绝不落盘为 VERIFIED，也绝不进入跨会话全局库
+
+--- C 组：负控（旧形态必须被同一校验器拒绝，否则本门是空转）---
+  PASS  C1 旧成功形态 {…, error: undefined} ⇒ value is not lossless JSON（= 生产原话）
+  PASS  C2 旧失败形态 {…, method: null} ⇒ "value.method" must be a string（= 生产原话）
+  PASS  C3 对照组：同一对象去掉 null 字段（本修复形态）⇒ 校验通过
+
+--- D 组：同族工具返回值同样必须 lossless（propose / recall / status / review）---
+  PASS  D1 learn_propose 返回值通过其自身 output 契约
+  PASS  D2 learn_recall 返回值通过其自身 output 契约
+  PASS  D3 learn_status 返回值通过其自身 output 契约
+  PASS  D4 learn_review 返回值通过其自身 output 契约（reject 路径，不需宿主批准通道）
+
+=== 汇总 ===
+  21 PASS / 0 FAIL
+
+########## ---- STDERR ----
+

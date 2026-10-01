@@ -1,0 +1,216 @@
+﻿
+########## test-learn-ac1-secret-families.txt
+  exit=0 elapsed=0.18s timeout=False stdoutLines=5 stderrBytes=0 asserts=0
+  sections: "§0 PASS import=C:\\Users\\Administrator\\.dsh\\profiles\\web\\learn-core.mjs"
+
+########## test-learn-ac1-repo-target.txt
+  exit=0 elapsed=0.21s timeout=False stdoutLines=5 stderrBytes=0 asserts=0
+  sections: "§0 PASS import=C:\\Users\\Administrator\\Desktop\\sdeepseek harness\\_p4rem-closure\\regression-count-audit\\wt\\plugins\\learn-core.mjs"
+
+########## test-learn-ac2-research-leg.txt
+  exit=0 elapsed=0.92s timeout=False stdoutLines=49 stderrBytes=0 asserts=27
+  sections: "=== P4 FINAL CLOSURE R3 · AC2 自主研究腿 专项回归门 ==="
+  assertLabels:
+    - 0.1 复刻版能抓到类型不符（"value.a" must be a string）
+    - 0.2 复刻版能抓到 undefined 值键 ⇒ value is not lossless JSON
+    - 0.3 复刻版能抓到未声明字段（additionalProperties:false）
+    - 0.4 风险分级：普通陌生任务 = LOW（AC2 授权的正是这一类）
+    - 0.5 风险分级：破坏性/凭据类文本 = HIGH（保守方向，宁可误判为高）
+    - 0.6 风险分级：非字符串输入不抛异常，且保守判为 LOW 之外的确定值
+    - 0.7 ★接线锁（A10 药丸 2 的真因）：learn.mjs 里 researchPlan **真的被调用且结果被用上**
+    - 0.8 ★AC8 接线锁：learn.mjs 无定时器 / 无子进程 / 无第二套研究引擎
+    - A1 无经验覆盖 ⇒ ok:true + items 空 + researchDirective.state=OPEN（AC2 主场景）
+    - A2 该返回值能通过宿主输出契约校验（lossless + 声明字段）
+    - A3 同一陌生任务重复触发 ⇒ 同一 legId 续用 + 尝试计数递增（不是新开一条腿）
+    - A4 高风险文本 ⇒ 仍可研究，但 autonomy 收紧为人工门（AC2 只授权低风险自主）
+    - A5 learn_status 暴露研究腿账本 + 有界事实（可审计 + 防刷）
+    - A6 无经验覆盖的召回**不改经验库**：不自动提案、不自动审批、全局库仍空
+    - A7 负控：有经验覆盖（可召回命中）⇒ **不存在** researchDirective 键、腿数 0
+    - B1 同一 subject 连续触发 3 次 ⇒ 第 3 次即 EXHAUSTED
+    - B2 达上限后继续触发 ⇒ 明确拒绝 + 不再增长（AC8 禁无限重试）
+    - B3 会话级防刷：第 (maxLegsPerSession+1) 个不同任务被拒绝，腿数恰好等于上限
+    - B4 留痕口径精确：RESEARCH_REQUESTED = 真实开腿数；拒绝只记 RESEARCH_BOUNDED_EXHAUSTED
+    - C1 前置：无覆盖召回打开研究腿（并记录 openedAt）
+    - C2 负控：更早创建的经验即使验证通过也**不**闭环（时间序硬约束）
+    - C3 正例：晚于研究腿的经验通过确定性验证 ⇒ 闭环 + **如实标注为 time_only**（P0-3 修复）
+    - C4-1 前置：新会话无覆盖召回 ⇒ 打开研究腿（主体词可覆盖）
+    - C4-2 正例：经验文本**完整覆盖**腿主体词 ⇒ binding=subject + RESEARCH_FULFILLED
+    - D1 researchDirective 是纯 JSON 数据（round-trip 相等，无函数/类实例）
+    - D2 有界不是自称：指令上限 === 候选面唯一权威 MAX_RESEARCH_ATTEMPTS
+    - D3 委托去处 = 既有隔离测试腿（AC8：绝不新建第二套 CI/研究系统）
+
+########## test-learn-ac2-repo-target.txt
+  exit=0 elapsed=0.82s timeout=False stdoutLines=49 stderrBytes=0 asserts=27
+  sections: "=== P4 FINAL CLOSURE R3 · AC2 自主研究腿 专项回归门 ==="
+  assertLabels:
+    - 0.1 复刻版能抓到类型不符（"value.a" must be a string）
+    - 0.2 复刻版能抓到 undefined 值键 ⇒ value is not lossless JSON
+    - 0.3 复刻版能抓到未声明字段（additionalProperties:false）
+    - 0.4 风险分级：普通陌生任务 = LOW（AC2 授权的正是这一类）
+    - 0.5 风险分级：破坏性/凭据类文本 = HIGH（保守方向，宁可误判为高）
+    - 0.6 风险分级：非字符串输入不抛异常，且保守判为 LOW 之外的确定值
+    - 0.7 ★接线锁（A10 药丸 2 的真因）：learn.mjs 里 researchPlan **真的被调用且结果被用上**
+    - 0.8 ★AC8 接线锁：learn.mjs 无定时器 / 无子进程 / 无第二套研究引擎
+    - A1 无经验覆盖 ⇒ ok:true + items 空 + researchDirective.state=OPEN（AC2 主场景）
+    - A2 该返回值能通过宿主输出契约校验（lossless + 声明字段）
+    - A3 同一陌生任务重复触发 ⇒ 同一 legId 续用 + 尝试计数递增（不是新开一条腿）
+    - A4 高风险文本 ⇒ 仍可研究，但 autonomy 收紧为人工门（AC2 只授权低风险自主）
+    - A5 learn_status 暴露研究腿账本 + 有界事实（可审计 + 防刷）
+    - A6 无经验覆盖的召回**不改经验库**：不自动提案、不自动审批、全局库仍空
+    - A7 负控：有经验覆盖（可召回命中）⇒ **不存在** researchDirective 键、腿数 0
+    - B1 同一 subject 连续触发 3 次 ⇒ 第 3 次即 EXHAUSTED
+    - B2 达上限后继续触发 ⇒ 明确拒绝 + 不再增长（AC8 禁无限重试）
+    - B3 会话级防刷：第 (maxLegsPerSession+1) 个不同任务被拒绝，腿数恰好等于上限
+    - B4 留痕口径精确：RESEARCH_REQUESTED = 真实开腿数；拒绝只记 RESEARCH_BOUNDED_EXHAUSTED
+    - C1 前置：无覆盖召回打开研究腿（并记录 openedAt）
+    - C2 负控：更早创建的经验即使验证通过也**不**闭环（时间序硬约束）
+    - C3 正例：晚于研究腿的经验通过确定性验证 ⇒ 闭环 + **如实标注为 time_only**（P0-3 修复）
+    - C4-1 前置：新会话无覆盖召回 ⇒ 打开研究腿（主体词可覆盖）
+    - C4-2 正例：经验文本**完整覆盖**腿主体词 ⇒ binding=subject + RESEARCH_FULFILLED
+    - D1 researchDirective 是纯 JSON 数据（round-trip 相等，无函数/类实例）
+    - D2 有界不是自称：指令上限 === 候选面唯一权威 MAX_RESEARCH_ATTEMPTS
+    - D3 委托去处 = 既有隔离测试腿（AC8：绝不新建第二套 CI/研究系统）
+
+########## test-learn-b1-session-access.txt
+  exit=0 elapsed=1.02s timeout=False stdoutLines=28 stderrBytes=0 asserts=22
+  sections: "=== P4 FINAL CLOSURE A1（B1）：宿主会话访问与审批信任锚 ===" | "=== 结果：PASS 22 / FAIL 0 ==="
+  assertLabels:
+    - T1.0 未注入 sessions 的部署形态下，apply 必须不抛（旧实现在此崩）
+    - T1.1 修复后：挂载期对 ctx.sessions 的**裸读次数 = 0**（B1 根因锁）
+    - T1.2 夹具自证：裸读 ctx.sessions 确实抛宿主 guard 错并计数 +1
+    - T1.3 sessions 缺失时必须判为 service_absent（而不是"已验证"）
+    - T1.4 sessions 缺失时插件仍可服务（learn_status 可调用，未变砖）
+    - T2.0 真实宿主 ApprovalService 可用（否则本门无意义 ⇒ 明确失败而非静默跳过）
+    - T2.1 真实验证：file_hash 证据 PASS ⇒ VERIFIED_EXPERIENCE
+    - T2.2 人类在宿主通道答"允许一次" ⇒ 批准 + 发表成功（宿主事实为唯一依据）
+    - T2.3 台账落账 + 信任锚在岗 + 全局库真的收到这条（跨会话通道打开）
+    - T2.4 留痕可审计：APPROVED + HUMAN_APPROVAL_GRANTED 都在会话遥测里
+    - T2− 负控：人类答"拒绝" ⇒ 不批准、不发表（T2.2 非恒真）
+    - T3.0 以 T2 的 stateDir / 全局库起"第二个部署形态"（sessions 未注入）
+    - T3.1 该实例确实看得到那条已批准经验（前置：不是"看不见所以拒绝"）
+    - T3.2 判定点 DENY，且原因指向**宿主事实不可复验**（绝不降级放行）
+    - T3.3 全局库未被这条写入/污染，且留下 GLOBAL_PUBLISH_DENIED 取证
+    - T4.0 起实例（sessions 正常可用 ⇒ 拒绝只能来自"事实不足"，不能归因于服务缺失）
+    - T4a 自述审批（无宿主 attestation）⇒ live 授权为假 + 发表判定点被拒
+    - T4b 批准后篡改内容 ⇒ live 授权失效（判定点重算摘要，不信任缓存字段）
+    - T4c 伪造台账（链式完全自洽）+ 宿主无事件对 ⇒ DENY 且原因只能是 approval_host_fact_*
+    - T5.0 同一 stateDir / 全局库起第三个实例（= 进程重启；sessions 正常可用）
+    - T5.1 重启后：已批准经验的 live 授权与可发布性保持不变（A/C 条款）
+    - T5.2 重启后**另一个会话**仍能召回到该条目（跨会话复用未被重启打断）
+
+########## redteam-r3-isolation.txt
+  exit=0 elapsed=0.37s timeout=False stdoutLines=41 stderrBytes=0 asserts=13
+  sections: "=== A. 正常会话隔离（真实 DSH 形状 sessionId） ===" | "=== B. sanitizeFileId 撞名（R3 根因修复验证：撞名应已消除） ===" | "=== C. 超长 sessionId（>120 字符）截断撞名应已消除 ===" | "=== D. 结论 ==="
+  assertLabels:
+    - A0 真实插件确实产出了候选（前置条件）
+    - A1 两个会话映射到两个不同文件
+    - A2 磁盘上确实两个库文件
+    - A3 两库各自归属正确 sessionId
+    - A4 A/B 候选标题无交集
+    - A5 B 库无 A 的语料痕迹
+    - B1 两个不同 sid 不再映射到同一文件（撞名已消除）
+    - B2 磁盘上两个独立库文件
+    - B3 两库各自归属正确 sessionId（无顶替）
+    - B4 无跨会话污染（后跑方不继承先跑方经验）
+    - B5 守卫直测：伪造他人归属的库必须被拒绝载入并重建
+    - C1 超长 sid 不再撞名（两个独立文件）
+    - C2 超长 sid 两库各自归属正确（无互相覆盖）
+
+########## redteam-r3-labels.txt
+  exit=0 elapsed=0.16s timeout=False stdoutLines=1 stderrBytes=0 asserts=0
+
+########## redteam-r3-probe.txt
+  exit=0 elapsed=0.3s timeout=False stdoutLines=116 stderrBytes=0 asserts=0
+  sections: "=== A. Chinese coverage（R3 规格 §4 要求的 9 个词） ===" | "=== B. Semantic precedence（R3 规格 §4） ===" | "=== C. Failure -> Resolution linkage（规格 A-E） ===" | "=== D. Injection filtering（规格 §4：注入 vs 讨论） ===" | "=== E. Duplicate / ordering determinism（规格 §4） ===" | "=== F. Negation（规格 §9：不能因含关键词就判 failure） ===" | "=== G. Hypothetical（讨论错误 ≠ 实际错误） ===" | "=== H. Documentation（描述错误 ≠ 发生错误） ===" | "=== I. Historical（过去失败 ≠ 当前未解决） ===" | "=== J. Quotation（引用 ≠ 发生） ===" | "=== K. False negatives（无关键词但语义是失败） ===" | "=== L. Source trust / role 是否被区分 ===" | "=== M. Secret / transient / temporary-state 是否进入信号文本 ===" | "=== N. SIGNAL_PATTERNS 真相表 ===" | "=== 探针完成（观测模式，无 pass/fail 门槛）==="
+
+########## run-learn-contract-scenarios.txt
+  exit=1 elapsed=27.03s timeout=False stdoutLines=26 stderrBytes=965 asserts=14
+  sections: "=== C0 合同口径基线：schema / 状态机 / 失败分类 ===" | "=== C0b 真实会话选材 ==="
+  assertLabels:
+    - 合同【实现原则 3】要求存在 VERIFIED_EXPERIENCE 终态
+    - 合同要求"复用后重新验证"存在可表达的状态迁移
+    - 合同【Failure Class】点名的 9 类来源逐类具备
+    - 合同字段「id/title」在经验记录中可表达
+    - 合同字段「taskType/trigger/symptoms」在经验记录中可表达
+    - 合同字段「applicable versions/environment」在经验记录中可表达
+    - 合同字段「rootCause」在经验记录中可表达
+    - 合同字段「successfulMethod」在经验记录中可表达
+    - 合同字段「failedOrUnsafeMethods」在经验记录中可表达
+    - 合同字段「verificationEvidence」在经验记录中可表达
+    - 合同字段「rollback」在经验记录中可表达
+    - 合同字段「source links/commit」在经验记录中可表达
+    - 合同字段「stale/expiry conditions」在经验记录中可表达
+    - 合同字段「lastVerifiedAt」在经验记录中可表达
+  stderr: node:internal/modules/run_main:123 ||     triggerUncaughtException( ||     ^ || Error: Allocation error : not enough memory
+
+########## run-learn-contract-scenarios-retry.txt
+  exit=0 elapsed=118.74s timeout=False stdoutLines=100 stderrBytes=0 asserts=36
+  sections: "=== C0 合同口径基线：schema / 状态机 / 失败分类 ===" | "=== C0b 真实会话选材 ===" | "=== C1 场景 1 真实学习：真实会话 → PROPOSED 经验（真实出处，绝不自动生效） ===" | "=== C2 场景 2 真实复用（合同【复用规则】相似任务 → 检索 → 检查适用性 → 复用 → 重新验证） ===" | "=== C3 场景 3 真实能力缺口：重复阈值 → 候选（且非可学来源必须被否决） ===" | "=== C4 场景 4 真实治理：审批边界 / 不泄漏 / 会话隔离 ===" | "================================================================================================" | "================================================================================================"
+  assertLabels:
+    - 合同【实现原则 3】要求存在 VERIFIED_EXPERIENCE 终态
+    - 合同要求"复用后重新验证"存在可表达的状态迁移
+    - 合同【Failure Class】点名的 9 类来源逐类具备
+    - 合同字段「id/title」在经验记录中可表达
+    - 合同字段「taskType/trigger/symptoms」在经验记录中可表达
+    - 合同字段「applicable versions/environment」在经验记录中可表达
+    - 合同字段「rootCause」在经验记录中可表达
+    - 合同字段「successfulMethod」在经验记录中可表达
+    - 合同字段「failedOrUnsafeMethods」在经验记录中可表达
+    - 合同字段「verificationEvidence」在经验记录中可表达
+    - 合同字段「rollback」在经验记录中可表达
+    - 合同字段「source links/commit」在经验记录中可表达
+    - 合同字段「stale/expiry conditions」在经验记录中可表达
+    - 合同字段「lastVerifiedAt」在经验记录中可表达
+    - 两会话确为不同真实文件（跨会话复用的前提）
+    - 首轮只建水位（不回填历史）
+    - [场景1] 真实会话自动产出经验条目
+    - [场景1] 出生即 PROPOSED（学习≠生效）
+    - [场景1] 携带真实回源锚点 seq
+    - [场景1] 每个锚点指向真实事件
+    - [场景1] 归属会话正确
+    - [场景1] 未经审批不可召回（提案≠激活）
+    - [场景2] 人类批准走的是宿主通道（非调用方自称）
+    - [场景2] 审批后成为 APPROVED（唯一激活通道）
+    - 同会话召回成立（这正是上一轮被判"近乎同义反复"的那条路径）
+    - [场景2] 召回结果携带合同要求的"适用性"信息（版本/环境）
+    - [场景2] 召回结果携带合同要求的"重新验证"信息（lastVerifiedAt）
+    - [场景2] 合同核心闭环「下次复用」成立：B 会话可检索到 A 会话已批准的经验
+    - [场景2] 存在"重新验证"的遥测种类（复用后可审计）
+    - [场景2] 存在可执行的"适用性检查"入口（工具面或核心函数）
+    - [场景3] 重复阈值存在且 >1（缺口必须重复才固化）
+    - [场景3] 存在硬否决类别（网络/Provider 等环境故障不得误学）
+    - [场景3] 插件暴露候选库读取面（有界、可审计）
+    - [场景3] 候选库条目数有上限（有界，不无限增长）
+    - [场景4] 密钥形态内容不得持久化进经验库
+    - [场景4] 会话隔离：B 库不包含 A 的条目（隔离成立的另一面）
+  aggregate lines:
+    合同符合性：36 PASS / 0 FAIL
+
+########## test-learn-stage2-schema-and-negative-lock.txt
+  exit=0 elapsed=1.98s timeout=False stdoutLines=39 stderrBytes=0 asserts=23
+  assertLabels:
+    - S1 ★ 样本量下限：真实工具事实必须真的被读到（call=586 result=657 失败=29）
+    - S2 ★ bring-up：tool/call 官方字段路径 100% 命中（callId / name / arguments）
+    - S3 ★ bring-up：tool/result 官方字段路径 100% 命中（message.source.callId + content[].tool-result）
+    - S4 ★ 结构事实：isError=true 绝大多数带结构化 error 对象（实测例外已记录，不靠文案判失败）
+    - S5 结构不变量：工具成功（isError=false）不得携带结构化错误码
+    - S6 ★★ 核心（防静默 0 候选）：提取器必须逐会话识别全部真实工具事实
+    - S7 ★★ 对照实验：把提取器真正读取的字段改名后必须归零（证明 S6 不是恒真式）
+    - S8 ★ 真实拓扑：tool/call 与 tool/result 一律不落在节点 seq 上（历史死路径根因）
+    - N1 ★ 负例（网络超时/凭据/provider 中断/取消/调用方误用/无关工具失败）逐个不得成为能力候选
+    - N2 ★ 负例：无结构化错误码的失败不得成为能力候选（fail-closed，且防签名塌缩）
+    - N3 ★ 正例（防静默停学）：真实能力码必须仍可成为候选
+    - N4 ★ 否决不静默：码级否决必须给出可读原因码（AC8 可观测性）
+    - N5 ★ 名单卫生：否决表与真能力码互不重叠，且不可变
+    - N6 ★ P2.6 域硬否决不变：provider 中断 / 网络超时 / 凭据失败仍被否决
+    - N7 ★ 负例：工具成功不得产出能力候选（把"做得到"当成"做不到"）
+    - N8 ★★ 负例（端到端）：网络超时 3 次不得产出能力候选
+    - N8-b ★★ 否决不静默：必须在遥测里留下"被否决"的证据（防静默死路径）
+    - N9 ★★ 负例（端到端）：凭据失败 + provider 中断 各达阈值 4 次不得产出候选
+    - N9-b ★★ 否决不静默（多签名）：两个被否决的签名必须各自留痕
+    - N9-c ★ 低于阈值的非能力失败：无候选但必须可见（不得全静默）
+    - N10 ★★ 正例（端到端）：真实能力缺口重复达阈值必须产出候选
+    - N10-b 签名含适配器版本 ⇒ 决策可追溯
+    - N11 ★ 组级否决：混入一条非能力失败 ⇒ 整组不得成立（不得选择性忽略）
+  aggregate lines:
+    STAGE 2 LOCK（Ground Truth Schema + 负例/正例）：23 PASS / 0 FAIL

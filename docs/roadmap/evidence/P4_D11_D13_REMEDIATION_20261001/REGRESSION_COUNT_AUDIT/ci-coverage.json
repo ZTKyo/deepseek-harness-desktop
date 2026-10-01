@@ -1,0 +1,355 @@
+{
+  "generatedAt": "2026-09-30T20:07:55.711Z",
+  "registryVersion": 1,
+  "counts": {
+    "registry": 43,
+    "inCi": 23,
+    "notInCi": 20,
+    "inconsistent": 0
+  },
+  "inconsistent": [],
+  "inCi": [
+    {
+      "suite": "tests/learn/test-learn-plugin-contract.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L142"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-core.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L188"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-candidate.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L189"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac5-e2e.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L191"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-stage85-twins.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L192"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-real-topology-tool-events.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L193"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-candidate-receipts.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L194"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac2-research-leg.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L195"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-fixes.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L196"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-hardening.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L197"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-secrets.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L198"
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-contamination.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L199"
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-isolation.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L200"
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-labels.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L201"
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-probe.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L202"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-b2-verify-output-contract.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L203"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-f2-store-min.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L204"
+      ]
+    },
+    {
+      "suite": "tests/learn/redteam-r3-injection-positions.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L205"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-real-promotion-e2e.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level3.yml:L597"
+      ]
+    },
+    {
+      "suite": "tests/learn/_ac2-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "lanes": [
+        "ci-level2.yml:L225"
+      ]
+    },
+    {
+      "suite": "tests/learn/validate-gate-registry.mjs",
+      "kind": "registry-gate",
+      "lanes": [
+        "ci-level1.yml:L125"
+      ]
+    },
+    {
+      "suite": "tests/learn/_ac10-registry-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "lanes": [
+        "ci-level1.yml:L139"
+      ]
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-candidate-durability.mjs",
+      "kind": "gate",
+      "lanes": [
+        "ci-level2.yml:L190"
+      ]
+    }
+  ],
+  "notInCi": [
+    {
+      "suite": "tests/learn/test-learn-b1-session-access.mjs",
+      "kind": "gate",
+      "requires": [
+        "宿主**已安装**的 @deepseek-ai/dsh 包（mkHostApproval → resolveHarnessPackage 需要 cordis + dsh-user-approval）"
+      ],
+      "why": "CI 实证证伪（不是推断）：GitHub Actions run 36463837981 / job 109068810397 的「P4 LEARN R2 contract-closure gates (CI-safe subset)」步骤中，本套件 §T2.0 打印 SKIP-REASON 后 exit 1 ⇒ 步骤整体红、必需检查「Reliability state machine tests」红。根因不是缺陷而是**判据选错变量**：本套件调 mkHostApproval()/resolveHarnessPackage()，需要宿主已安装的 cordis + dsh-user-approval；『空 profile 重定向实测 22 PASS / 0 FAIL』只清掉了 ~/.dsh 数据，清不掉『包不在 runner 上』。⇒ 退回本地/发布前门（本机实测 22 PASS / 0 FAIL、exit 0）；CI 里的隔离真实门是 ci-level3.yml 的 test-learn-ac6-real-promotion-e2e.mjs。",
+      "localCommand": "node tests\\learn\\test-learn-b1-session-access.mjs（需宿主已安装 @deepseek-ai/dsh）"
+    },
+    {
+      "suite": "tests/learn/test-learn-ac1-secret-families.mjs",
+      "kind": "gate",
+      "requires": [
+        "已部署的 profile：$USERPROFILE\\.dsh\\profiles\\web\\learn-core.mjs（测试直接 import 生产部署字节）"
+      ],
+      "why": "在空 profile 下 §0 直接 FAIL『无法 import 被测模块 …\\.dsh\\profiles\\web\\learn-core.mjs』= 缺部署产物，不是缺陷；只在本机/发布前对着真实部署跑。",
+      "localCommand": "node tests\\learn\\test-learn-ac1-secret-families.mjs（需已部署 profile）"
+    },
+    {
+      "suite": "tests/learn/test-learn-ac5-gap-veto.mjs",
+      "kind": "gate",
+      "requires": [
+        "生产 P2.6 遥测 $USERPROFILE\\.dsh\\p26-failure-classifier.log（D1『evidence stream present』读它）"
+      ],
+      "why": "空环境下 41 PASS / 1 FAIL，唯一失败项是 D1：not found …\\p26-failure-classifier.log —— 缺生产遥测数据，不是门本身缺陷；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\test-learn-ac5-gap-veto.mjs（需真实 p26-failure-classifier.log）"
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-b1-approval-gate.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR 指向播种语料）",
+        "宿主批准事实（approval ledger）"
+      ],
+      "why": "空环境下 exit 2 + 『[env error] 环境不满足：…』= 拿不到真实会话/批准事实就**拒绝判定**（fail-closed 的 env 分支），不是假绿也不是缺陷；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\test-learn-r2-b1-approval-gate.mjs"
+    },
+    {
+      "suite": "tests/learn/test-learn-r2-b2-bounds.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR）"
+      ],
+      "why": "与 r2-b1 同源：空环境下 exit 2 + 『[env error] 环境不满足：…』，属缺数据 fail-closed；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\test-learn-r2-b2-bounds.mjs"
+    },
+    {
+      "suite": "tests/learn/test-learn-r3-approval-forgery.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话候选（machine-checkable 证据面）"
+      ],
+      "why": "空环境下 AssertionError『无真实会话候选（无法建立 machine-checkable 证据面）』——缺真实语料，不是缺陷；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\test-learn-r3-approval-forgery.mjs"
+    },
+    {
+      "suite": "tests/learn/test-learn-stage2-schema-and-negative-lock.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话语料（S1/S6/S7 需要真实 tool/result 事实）"
+      ],
+      "why": "空环境下 20 PASS / 3 FAIL，三条失败全是 S1/S6/S7（样本量下限 + 防静默 0 候选 + 对照实验）——真实工具事实 0 条导致，数据依赖而非缺陷；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\test-learn-stage2-schema-and-negative-lock.mjs"
+    },
+    {
+      "suite": "tests/learn/run-learn-contract-scenarios.mjs",
+      "kind": "gate",
+      "requires": [
+        "≥2 个真实会话文件"
+      ],
+      "why": "空环境下 FATAL『需要 ≥2 个真实会话文件』——裸 runner 上必然失败但失败原因与缺陷无关；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\run-learn-contract-scenarios.mjs"
+    },
+    {
+      "suite": "tests/learn/run-learn-real-e2e.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话文件（默认 ~/.dsh/sessions，可 DSH_SESSIONS_DIR）"
+      ],
+      "why": "空环境下 FATAL『no real session file found under …\\sessions』——纯数据缺失；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\run-learn-real-e2e.mjs"
+    },
+    {
+      "suite": "tests/learn/run-learn-real-gap-e2e.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话语料中确实含『重复未解决工具失败』（≥2 次同签名）"
+      ],
+      "why": "空环境下 1 PASS / 2 FAIL，两条失败都是『含达标签名的会话数=0 / facts=0』——需要真实数据里恰好含有该形态；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\run-learn-real-gap-e2e.mjs"
+    },
+    {
+      "suite": "tests/learn/redteam-r3-metrics.mjs",
+      "kind": "gate",
+      "requires": [
+        "外部审计产物 $USERPROFILE\\Desktop\\sdeepseek harness\\_r3\\r3_quality_sample.json（R3 抽样人工评审结果，不在仓内）"
+      ],
+      "why": "空环境下 ENOENT …\\_r3\\r3_quality_sample.json —— 依赖仓外人工审计产物，CI 里无法生成；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\redteam-r3-metrics.mjs（需 _r3\\r3_quality_sample.json）"
+    },
+    {
+      "suite": "tests/learn/redteam-r3-quality.mjs",
+      "kind": "gate",
+      "requires": [
+        "真实会话语料（candidates ≥1，取体积最大者）"
+      ],
+      "why": "空环境下 real session candidates: 0 → TypeError candidates[0].p —— 纯数据缺失；本机/发布前跑。",
+      "localCommand": "node tests\\learn\\redteam-r3-quality.mjs"
+    },
+    {
+      "suite": "tests/learn/production-load-probe.mjs",
+      "kind": "tool",
+      "requires": [
+        "活的**生产**服务（127.0.0.1:3080）+ 已部署且已装载的 learn.mjs + 真实模型凭据（会发起一次真实对话）"
+      ],
+      "why": "它判定的对象是『生产进程里到底装载了哪版字节』：必须在生产机上对活进程跑，且会花真实 token（CI 无凭据、也不该在 runner 上造生产会话）；只在发布/重启后本机执行（exit 0=新版已装载 / 3=仍旧版 / 2=无法判定）。",
+      "localCommand": "node tests\\learn\\production-load-probe.mjs（生产机、服务在跑）"
+    },
+    {
+      "suite": "tests/learn/mount-gate.mjs",
+      "kind": "tool",
+      "requires": [
+        "显式参数 --plugin <abs path>；已安装的 dsh 包（lib/bin.js）"
+      ],
+      "why": "不是独立门而是**被调用的挂载门禁工具**：无参运行 exit 2（ENV_ERROR 缺少 --plugin）。它作为 AC6 真实端到端第 3 步（--hold）与交付前挂载校验被真实执行，报告落在 tests/learn/mount-gate.mjs 的输出/AC6 报告里。",
+      "localCommand": "node tests\\learn\\mount-gate.mjs --plugin <abs>\\learn.mjs [--port 3099] [--hold]"
+    },
+    {
+      "suite": "tests/learn/deploy-preflight.mjs",
+      "kind": "tool",
+      "requires": [
+        "显式参数 --deploy <file1,file2,...>（禁止『全部同步』）"
+      ],
+      "why": "部署前置检查工具，入参是本轮要部署的文件清单（由部署流程/人工给出，CI 无法推断），无参运行 exit 2。",
+      "localCommand": "node tests\\learn\\deploy-preflight.mjs --deploy <files>"
+    },
+    {
+      "suite": "tests/learn/run-learn-all-tests.mjs",
+      "kind": "runner",
+      "requires": [
+        "本机完整环境（真实会话语料 + 已部署 profile + 生产遥测）——它把全部床子（含数据依赖门）跑一遍"
+      ],
+      "why": "聚合 runner（--filter/--timeout），本身不新增断言；裸 runner 上会因数据依赖门集体失败而无法作为 CI 门。发布前在本机跑它做全量回归。",
+      "localCommand": "node tests\\learn\\run-learn-all-tests.mjs [--filter=<substr>] [--timeout=<ms>]"
+    },
+    {
+      "suite": "tests/learn/_real-session-harness.mjs",
+      "kind": "helper",
+      "requires": [],
+      "why": "夹具模块（loadRealSession / mkCtx / mkHostApproval / growSession …），不是可执行门；被上面各门 import 使用，本身无独立断言。",
+      "localCommand": "（无需运行：被各门 import）"
+    },
+    {
+      "suite": "tests/learn/test-learn-ac6-e2e-mutex.mjs",
+      "kind": "gate",
+      "requires": [
+        "独占运行：该门自身会取 AC6 跨 worktree 互斥锁并驱动真实 E2E（真 worktree + 隔离宿主 3099）"
+      ],
+      "why": "**故意**不进 ci-level2 的 CI-safe 套件清单（理由见提交 ffead48）：它自身要取 AC6 跨 worktree 锁；在同一个 job 内与已持锁的真实 E2E 嵌套运行会因『持锁时再取锁』而假红——属测试编排冲突，不是门缺陷。CI 里真正的隔离真实门是 ci-level3.yml 的 test-learn-ac6-real-promotion-e2e.mjs。",
+      "localCommand": "node tests\\learn\\test-learn-ac6-e2e-mutex.mjs（须在无其它 AC6 运行中进行；本机 11 PASS / 0 FAIL）"
+    },
+    {
+      "suite": "tests/learn/ac6-e2e-lock.mjs",
+      "kind": "helper",
+      "requires": [],
+      "why": "夹具/工具模块（跨 worktree 互斥 acquireAc6Lock/releaseAc6Lock + 归档与收尾），不是可执行门；被 test-learn-ac6-real-promotion-e2e.mjs 与 test-learn-ac6-e2e-mutex.mjs 真实 import 使用，本身无独立断言。",
+      "localCommand": "（无需运行：被上述两门 import）"
+    },
+    {
+      "suite": "tests/learn/audit-merge-enforcement.mjs",
+      "kind": "tool",
+      "requires": [
+        "gh CLI 已登录，且对该仓库有 admin 级**只读**权限（`GET /repos/{owner}/{repo}/branches/main/protection` 需要 admin 才能读到必需检查列表）",
+        "网络可达 api.github.com（只读 GET / 0 写操作）"
+      ],
+      "why": "不是「门」，是「门硬不硬」的只读审计器：它读线上分支保护/ruleset + 事故 PR 的红门证据，判定每条路径（PR→main / 直推→main / 管理员绕过）能不能拦住一个红门。不能进 CI 的理由是**它需要 admin 级只读 token**：GitHub Actions 自带的 GITHUB_TOKEN 没有 administration 权限，读 protection 会 403，若把它当 CI 门就会产生「读不到即判红」的**永久假红**——正是 AC6 那类噪声的来源。故只在发布前/改动仓库设置后在本机跑，用 --strict 得到退出码。",
+      "localCommand": "node tests\\learn\\audit-merge-enforcement.mjs [--strict] [--json] [--repo <path>] [--pr <n>]"
+    }
+  ],
+  "extraRefsNotInRegistry": []
+}

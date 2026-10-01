@@ -1,0 +1,36 @@
+﻿
+=== human-gated runner assessment (2026-10-01) ===
+### tests\learn\run-learn-real-e2e.mjs
+exit=0  elapsed=391.9s
+  PASS  experience-store target allowed
+  PASS  unknown target denied (fail-closed)
+  PASS  null/empty target denied
+  PASS  raw secret NEVER written to disk
+  PASS  secret redaction applied in stored body
+  PASS  kill switch registers NO hooks
+  PASS  LEARN_DISABLED=true registers NO hooks
+  PASS  malformed sessions do not throw (fail-open)
+
+================================================================
+P4 LEARN R1 REAL-SESSION E2E: 65 PASS / 0 FAIL
+main real session: session-76de1ca9-0a7a-4ad4-97b1-750a3dabbaf8 (4407 surface nodes, 82204 zstd frames)
+temp stateDir (safe to delete): C:\Users\ADMINI~1\AppData\Local\Temp\p4-learn-e2e-7Cc8RI
+================================================================
+
+### tests\learn\run-learn-real-gap-e2e.mjs
+exit=0  elapsed=3.4s
+  · 全库达标签名（生产观测形状）: tool 域合格 3 个 / 被否决 2 个
+  · 否决原因样本: vetoed (2/2): MISSING_ERROR_CODE
+  PASS  ★ 真实数据上合格签名可被生产资格判定接受（≥1）
+  PASS  合格签名数不超过达标签名总数（无膨胀）
+  PASS  候选库中无"空签名"泄漏（否决面未被绕过）
+
+=== G6 清理 ===
+  · 已删除临时状态目录 C:\Users\ADMINI~1\AppData\Local\Temp\p4-realgap-b4zsrr
+
+==============================================================================
+P4 LEARN R2 REAL-GAP E2E: 20 PASS / 0 FAIL
+真实会话: session.jsonl.zstd  (nodes=42)
+真实签名: tool:glob::tool|glob|SEARCH_FAILED|v2  ×7
+==============================================================================
+

@@ -1,0 +1,26 @@
+########## SUITE: tests/learn/_ac10-registry-mutation-proof.mjs
+########## EXIT: 0
+########## ELAPSED_S: 4.19
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== AC10 登记表门：突变验证（反空转）===
+  校验器 : tests\learn\validate-gate-registry.mjs
+  临时副本: C:\Users\ADMINI~1\AppData\Local\Temp\ac10-regproof-YeXA86\repo
+  PASS  0 基线：未突变时校验器全绿（否则下面的"变红"是恒真式） — 校验器 15 PASS / 0 FAIL
+  PASS  M1 突变被抓住（套件从登记表里消失） — tests/learn/redteam-r3-probe.mjs 未登记（历史上正是"门还在、没人跑、报告却写要求门"） ⇒ 检查 3 变红
+  PASS  M2 突变被抓住（把数据依赖门谎报成 CI 门） — redteam-r3-quality 登记为 CI 门，但 step 的 run 里根本没有它（声明与事实不符） ⇒ 检查 8 变红
+  PASS  M3 突变被抓住（排除理由被清空） — tests/learn/test-learn-b1-session-access.mjs 的 exclusionReason 被清空（静默排除） ⇒ 检查 6 变红
+  PASS  M4 突变被抓住（STAGE_DELEGATION.ISOLATED_TESTS 指向不跑隔离面的 workflow） — ISOLATED_TESTS.file 被改成并不运行隔离真实实例的 ci-level1.yml（正是历史缺陷形态） ⇒ 检查 10b 变红
+  PASS  M5 突变被抓住（workflow YAML 语法被写坏） — ci-level2.yml 追加了未闭合的 YAML 流式序列（带病 YAML 不许进 CI） ⇒ 检查 7 变红
+  PASS  M6 突变被抓住（workflow 里接了未登记的套件） — ci-level2 多出一条 tests/learn/test-learn-ghost.mjs 调用但登记表里没有它 ⇒ 检查 9 变红
+  PASS  M7 突变被抓住（CI-safe 车道套件里出现宿主包解析调用） — test-learn-core.mjs（登记在 ci-level2 CI-safe 车道）出现 resolveHarnessPackage/@deepseek-ai/dsh 调用 —— 正是 b1 在 runner 上 exit 1 的机制 ⇒ 检查 11 变红
+  PASS  M8 突变被抓住（ci 条目的 ciSafeEvidence 被清空） — tests/learn/test-learn-plugin-contract.mjs 的 ciSafeEvidence 被删除（声称在 CI 跑，却拿不出"CI 实证/本地实测"级证据） ⇒ 检查 12 变红
+  PASS  M9 突变被抓住（被 run 脚本真实调用的套件被标成"未进 CI"） — tests/learn/test-learn-core.mjs 仍挂在 ci-level2 的 run 脚本里，却被改成"未进 CI"（排除声明与事实不符） ⇒ 检查 9 变红
+
+══════════════════════════════════════════
+突变验证：PASS=10  FAIL=0
+══════════════════════════════════════════
+
+########## ---- STDERR ----
+

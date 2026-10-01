@@ -1,8 +1,14 @@
 # AC2 缺口关闭报告 —— 研究腿真接线 + 接线锁（2026-09-28）
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 > 本报告**只关闭 AC2 一处**。AC10（CI 内无真实 E2E 门）**仍未关闭**；A8 真人审批边界**未被触碰**。
 > **本报告不声称"AC2 已生产生效"**：生产 profile 仍运行旧插件副本，部署是待执行动作（见 §6）。
-> 上游文档：`P4_FINAL_VERDICT.md`（总判定 = P4 ≠ VERIFIED）、`A10_CONTRACT_MATRIX.md`（AC1–AC10 逐条，§六为本报告摘要）。
+> 上游文档：`P4_FINAL_VERDICT.md`（总判定 = P4 ≠ VERIFIED）、`A10_CONTRACT_MATRIX.md`（AC1–AC10 逐条，§六为本报告摘要）。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 ---
 
@@ -133,7 +139,7 @@ CI 腿合计 **15 条命令全 exit 0 / 14 套件 + plugin-contract gate**。
 
 **剩余阻塞 = 三项**：**A8 真人审批门**（结构性，需用户）+ **AC10**（CI 内真实 E2E 门，需裁决扩权）
 + **AC2 生产部署**（代码已绿，待用户同意后按 `RUNBOOK.md` 配方执行）。
-**⇒ `P4 ≠ VERIFIED` 的总判定保持不变**，但**理由 B 中只剩 AC10 属"未修的合同缺口"**。
+**⇒ `P4 ≠ VERIFIED` 的总判定保持不变**，但**理由 B 中只剩 AC10 属"未修的合同缺口"**。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 ---
 

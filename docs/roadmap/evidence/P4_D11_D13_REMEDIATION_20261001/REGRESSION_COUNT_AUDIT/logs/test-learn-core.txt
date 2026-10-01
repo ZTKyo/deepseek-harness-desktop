@@ -1,0 +1,549 @@
+########## SUITE: tests/learn/test-learn-core.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.26
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+=== C1: emptyStore default shape ===
+  PASS  schema version is 2
+  PASS  sessionId set
+  PASS  version starts at 0
+  PASS  experiences empty array
+  PASS  telemetry empty array
+  PASS  missing sessionId -> unknown
+
+=== C2: secret redaction covers all canonical families (AC3) ===
+  PASS  notion: raw value removed
+  PASS  notion: redaction token present
+  PASS  notion: containsSecret detects it
+  PASS  notion: family reported
+  PASS  openai: raw value removed
+  PASS  openai: redaction token present
+  PASS  openai: containsSecret detects it
+  PASS  openai: family reported
+  PASS  openrouter: raw value removed
+  PASS  openrouter: redaction token present
+  PASS  openrouter: containsSecret detects it
+  PASS  openrouter: family reported
+  PASS  anthropic: raw value removed
+  PASS  anthropic: redaction token present
+  PASS  anthropic: containsSecret detects it
+  PASS  anthropic: family reported
+  PASS  slack: raw value removed
+  PASS  slack: redaction token present
+  PASS  slack: containsSecret detects it
+  PASS  slack: family reported
+  PASS  github: raw value removed
+  PASS  github: redaction token present
+  PASS  github: containsSecret detects it
+  PASS  github: family reported
+  PASS  jwt: raw value removed
+  PASS  jwt: redaction token present
+  PASS  jwt: containsSecret detects it
+  PASS  jwt: family reported
+  PASS  telegram: raw value removed
+  PASS  telegram: redaction token present
+  PASS  telegram: containsSecret detects it
+  PASS  telegram: family reported
+  PASS  aws: raw value removed
+  PASS  aws: redaction token present
+  PASS  aws: containsSecret detects it
+  PASS  aws: family reported
+  PASS  generic assignment redacted
+  PASS  generic bearer redacted
+  PASS  redaction is deterministic
+  PASS  redaction is idempotent (no double-token)
+  PASS  clean text untouched
+  PASS  containsSecret false on clean text
+  PASS  aws redacted on repeat call #1
+  PASS  aws redacted on repeat call #2
+  PASS  aws redacted on repeat call #3
+  PASS  pattern table includes 9 canonical families + generics
+
+=== C3: makeExperience validation ===
+  PASS  valid draft accepted
+  PASS  empty title rejected
+  PASS  empty body rejected
+  PASS  no provenance rejected
+  PASS  null draft rejected
+  PASS  born PROPOSED
+  PASS  no approval trace at birth
+  PASS  promotion NONE at birth
+  PASS  provenance preserved
+  PASS  stable id for identical evidence
+  PASS  different title -> different id
+  PASS  source seqs deduped/sorted/non-negative
+  PASS  tags normalized + sorted
+
+=== C4: propose is never activation (AC2) ===
+  PASS  propose ok
+  PASS  stored as PROPOSED
+  PASS  first propose not deduped
+  PASS  same evidence -> deduped
+  PASS  no duplicate row
+  PASS  invalid draft rejected at propose
+  PASS  PROPOSED is not recallable
+
+=== C5: 授权边界 = 宿主人类批准事实（F1，AC2） ===
+  PASS  自述审批（无宿主事实）被拒
+  PASS  不存在的 approvalRef 被拒
+  PASS  approval without evidence rejected
+  PASS  secret in evidence rejected
+  PASS  unknown id rejected
+  PASS  未决（缺 approval/decided）被拒
+  PASS  非本工具发起的批准被拒
+  PASS  人类拒绝 ⇒ 绝不放行
+  PASS  畸形 ref 被拒（结构闸门）
+  PASS  宿主事实齐全 ⇒ 批准成立
+  PASS  state APPROVED
+  PASS  approvedAt recorded
+  PASS  approvedBy = 固定宿主标签（不接受调用方自由文本）
+  PASS  evidence 仅作人类可读备注保存
+  PASS  attestation 记录 schema/channel
+  PASS  attestation 绑定被批准对象
+  PASS  attestation 绑定内容摘要
+  PASS  live authority 通过
+  PASS  APPROVED（宿主事实）可召回
+  PASS  original store not mutated (immutable update)
+  PASS  改写后摘要变化（绑定生效）
+  PASS  改写内容 ⇒ live authority 失效
+  PASS  改写后的经验不可召回
+  PASS  改写后的经验在载入/校验边界判废
+  PASS  手写的记录 id 结构上合法（所以必须由台账判定兜住，结构校验不够）
+  PASS  ★ 指向不存在的台账记录 ⇒ 不构成授权
+  PASS  自编账本的链是自洽的（链不防追加式伪造 ⇒ 必须靠逐字段对账）
+  PASS  ★ 记录绑的是别的对象 ⇒ 判废
+  PASS  ★ 只有 grant 没有 consume ⇒ 不构成授权
+  PASS  夹具自检：撤销前该记录确实构成授权
+  PASS  ★ 被撤销的批准立即失效
+  PASS  改写历史记录 ⇒ 链校验必须失败
+  PASS  ★ 断链台账不构成授权
+  PASS  畸形台账文本整本判废（fail-closed）
+  PASS  缺文件 ⇒ 空台账（不是错误，只是没有授权）
+  PASS  手改 approvedBy ⇒ 判废
+  PASS  无 attestation 的 APPROVED（历史自述记录）⇒ 结构性判废
+  PASS  历史自述审批记录在载入边界被判废
+  PASS  attestation 换成别的对象 ⇒ 判废
+  PASS  F1 边界夹具：重新验证通过
+  PASS  ★ 重新验证后仍是 APPROVED（B1：授权不被机器验证撤销）
+  PASS  夹具确实改写了 lastVerifiedAt（否则本回归断言是空的）
+  PASS  ★ lastVerifiedAt/verificationEvidence 不参与对象绑定（摘要不变）
+  PASS  ★ 重新验证后 live authority 仍成立（授权粘性）
+  PASS  夹具确实改写了召回计数
+  PASS  ★ 召回计数写入不影响授权（计数不参与绑定）
+  PASS  ★ 旧批准（摘要对不上）不能给新内容背书
+  PASS  ★ 没有内容摘要的宿主事实不能授权（fail-closed）
+  PASS  ★ 已有 live 授权 ⇒ 拒绝重复批准（幂等）
+  PASS  JSONL 往返后记录数一致（夹具自检）
+  PASS  ★ F1 R1 修复点：重启后同一本台账仍能验证授权（不再「重启即失效」）
+  PASS  ★ 重启后仍可召回（合法批准不因重启作废）
+  PASS  ★ 重启后发布门不再因「台账找不到记录」被拒
+  PASS  ★ 拿不到台账 ⇒ 不构成授权
+  PASS  此时结构性绑定仍成立（所以必须靠台账判定兜住，结构校验不够）
+  PASS  ★ 无台账 ⇒ 不可召回（fail-closed）
+  PASS  ★ 无台账 ⇒ 不可发布到全局库
+  PASS  ★ 内容被改写的记录不能被重新批准（不得洗白）
+  PASS  ★ 台账不在手上时，人类重新批准可恢复授权
+  PASS  重新批准写入新的批准时间
+  PASS  ★ 重新批准产生**新**的宿主事实引用（不复用旧 ref）
+  PASS  ★ 重新批准落的是**新**的台账记录（旧记录不被复用/覆盖）
+  PASS  ★ 重新批准后 live 授权成立
+  PASS  ★ 重新批准后恢复可召回
+  PASS  ★ 重新批准后发布门不再因授权被拒
+  PASS  重启后恢复通道：机器验证可施加
+  PASS  ★ 重启后「重新批准 + 机器验证」⇒ 恢复可发布
+  PASS  重新批准后的记录仍可通过载入边界校验
+  PASS  手写者能完整抄出结构合法的 attestation（所以结构校验必须由台账判定兜住）
+  PASS  ★ 手写 attestation（含自算摘要）不构成授权
+  PASS  ★ 手写 attestation 的拒绝原因可解释
+  PASS  夹具自检：原件（台账中有记录）判定通过
+  PASS  asked+decided+内容摘要 齐全 ⇒ 事实成立
+  PASS  事实返回 ref
+  PASS  ★ 事实带回人类当时被问的内容摘要
+  PASS  无会话日志 ⇒ 不成立
+  PASS  日志里没有该 ref ⇒ 不成立
+  PASS  非字符串 ref ⇒ 不成立
+  PASS  ★ 宿主日志里的批准未点名内容摘要 ⇒ 事实不成立（fail-closed）
+  PASS  该拒绝原因可解释
+
+=== C6: transition whitelist — terminal states cannot be revived ===
+  PASS  PROPOSED->APPROVED allowed
+  PASS  PROPOSED->REJECTED allowed
+  PASS  APPROVED->RETIRED allowed
+  PASS  REJECTED->APPROVED blocked (terminal)
+  PASS  RETIRED->APPROVED blocked (terminal)
+  PASS  APPROVED->REJECTED blocked
+  PASS  reject works
+  PASS  cannot approve a REJECTED entry
+  PASS  rejection requires reason
+  PASS  re-propose does not revive REJECTED
+  PASS  retire works
+  PASS  RETIRED not recallable
+
+=== C7: deterministic recall from APPROVED only (AC4) ===
+  PASS  recall ok
+  PASS  only approved+scoring item returned
+  PASS  correct item recalled
+  PASS  unapproved entry excluded
+  PASS  provenance returned for re-sourcing
+  PASS  approver surfaced（固定宿主标签）
+  PASS  unapproved never recalled (q="Unapproved idea")
+  PASS  unapproved never recalled (q="never be recalled")
+  PASS  unapproved never recalled (q="idea")
+  PASS  recall is deterministic across calls
+  PASS  recall ordering stable
+  PASS  empty query -> no items
+  PASS  no match -> no items
+  PASS  limit respected
+  PASS  limit clamped to MAX_RECALL_LIMIT
+  PASS  recall recorded
+  PASS  recordRecall immutable
+  PASS  tokenize deterministic
+
+=== C8: validateStore is fail-closed (AC5) ===
+  PASS  empty store valid
+  PASS  null -> null
+  PASS  array -> null
+  PASS  wrong schemaVersion -> null
+  PASS  empty sessionId -> null
+  PASS  negative version -> null
+  PASS  non-integer version -> null
+  PASS  non-array experiences -> null
+  PASS  non-array telemetry -> null
+  PASS  over-limit experiences -> null
+  PASS  over-limit telemetry -> null
+  PASS  store with one valid experience valid
+  PASS  one bad entry invalidates whole store (no partial trust)
+  PASS  empty body invalidates store
+  PASS  unknown telemetry kind invalidates store
+  PASS  APPROVED without approver rejected
+  PASS  APPROVED without evidence rejected
+  PASS  PROPOSED with approval trace rejected
+  PASS  PROPOSED carrying promotion rejected
+  PASS  PROMOTED while not APPROVED rejected
+  PASS  PROMOTED while RETIRED rejected
+  PASS  C8 fixture: host-proven APPROVED
+  PASS  PROMOTED without evidence rejected
+
+=== C9: promotion eligibility vs promotion (AC11) ===
+  PASS  PROPOSED not eligible
+  PASS  approved but never recalled -> blocked
+  PASS  eligibility check does not mutate state
+  PASS  approved + recalled -> eligible
+  PASS  eligible is NOT auto-promoted
+  PASS  promotion without evidence rejected
+  PASS  secret in promotion evidence rejected
+  PASS  explicit promotion works
+  PASS  already-promoted reported
+  PASS  cannot promote unapproved
+
+=== C10: write boundary protects runtime state/goals/credentials/policy (AC10) ===
+  PASS  protected target blocked: runtime-state
+  PASS  protected target blocked: session
+  PASS  protected target blocked: sessions
+  PASS  protected target blocked: goal
+  PASS  protected target blocked: goals
+  PASS  protected target blocked: credentials
+  PASS  protected target blocked: policy
+  PASS  protected target blocked: settings
+  PASS  protected target blocked: config
+  PASS  protected target blocked: profile
+  PASS  protected target blocked: profiles
+  PASS  protected target blocked: autonomy-state
+  PASS  protected variant blocked: runtime-state.json
+  PASS  protected variant blocked: GOAL-STORE
+  PASS  protected variant blocked: my-credentials.yaml
+  PASS  protected variant blocked: agent/policy.yml
+  PASS  protected variant blocked: settings.yaml
+  PASS  protected variant blocked: profiles/web/x
+  PASS  experience-store allowed
+  PASS  telemetry allowed
+  PASS  audit-log allowed
+  PASS  non-whitelisted target blocked
+  PASS  empty target blocked
+  PASS  null target blocked
+
+=== C11: telemetry is structured, redacted, bounded (AC8) ===
+  PASS  unknown kind rejected
+  PASS  valid event built
+  PASS  kind + timestamp
+  PASS  telemetry detail redacted
+  PASS  count preserved
+  PASS  telemetry ring buffer bounded
+  PASS  newest kept
+  PASS  bounded store still valid
+  PASS  invalid telemetry ignored
+  PASS  summary counts
+  PASS  summary experience counts
+  PASS  summary includes kind PROPOSED
+  PASS  summary includes kind APPROVED
+  PASS  summary includes kind REJECTED
+  PASS  summary includes kind RECALLED
+  PASS  summary includes kind PROMOTION_BLOCKED
+  PASS  summary includes kind PROMOTION_ELIGIBLE
+  PASS  summary includes kind STORE_REBUILT
+  PASS  summary includes kind WRITE_DENIED
+  PASS  summary includes kind GAP_VETOED
+  PASS  summary includes kind CANDIDATE_PROPOSED
+  PASS  summary includes kind CANDIDATE_STAGE
+  PASS  summary includes kind CANDIDATE_REJECTED
+  PASS  summary includes kind CANDIDATE_PROMOTED
+  PASS  summary includes kind STABLE_OVERWRITE_DENIED
+  PASS  summary includes kind RESEARCH_BOUNDED_EXHAUSTED
+  PASS  summary includes kind CAPABILITY_GAP_OBSERVED
+  PASS  summary includes kind CAPABILITY_GAP_QUALIFIED
+  PASS  summary includes kind CAPABILITY_GAP_VETOED
+  PASS  summary includes kind CAPABILITY_GAP_RESOLVED
+  PASS  summary includes kind VERIFIED
+  PASS  summary includes kind VERIFICATION_FAILED
+  PASS  summary includes kind REVALIDATED
+  PASS  summary includes kind REVALIDATION_REQUIRED
+  PASS  summary includes kind APPLICABILITY_BLOCKED
+  PASS  summary includes kind GLOBAL_PUBLISHED
+  PASS  summary includes kind GLOBAL_PUBLISH_DENIED
+  PASS  summary includes kind GLOBAL_REJECTED
+  PASS  summary includes kind GLOBAL_RECALLED
+  PASS  summary includes kind HUMAN_APPROVAL_REQUESTED
+  PASS  summary includes kind HUMAN_APPROVAL_GRANTED
+  PASS  summary includes kind HUMAN_APPROVAL_DENIED
+  PASS  summary includes kind HUMAN_APPROVAL_UNAVAILABLE
+  PASS  summary includes kind APPROVAL_EXPIRED
+  PASS  summary includes kind EXPERIENCE_LOOKUP_MISS
+  PASS  summary includes kind RESEARCH_REQUESTED
+  PASS  summary includes kind RESEARCH_FULFILLED
+  PASS  summary includes kind RESEARCH_LEG_CLOSED_TIME_ONLY
+  PASS  summary includes kind CANDIDATE_PROMOTION_DENIED
+  PASS  summary includes kind CANDIDATE_RECEIPTS_ACCEPTED
+  PASS  summary includes state PROPOSED
+  PASS  summary includes state VERIFIED_EXPERIENCE
+  PASS  summary includes state APPROVED
+  PASS  summary includes state REJECTED
+  PASS  summary includes state RETIRED
+
+=== C12: buildLearnDigest reuses P2.5 official extractors (AC1) ===
+  PASS  default messageOfEvent IS P2.5's (identity)
+  PASS  default recursiveText IS P2.5's (identity)
+  PASS  default isPluginSourced IS P2.5's (identity)
+  PASS  P25_EXTRACTORS is frozen (cannot be swapped at runtime)
+  PASS  digest built
+  PASS  4 real turns extracted (plugin-injected skipped)
+  PASS  plugin-sourced projection skipped (no feedback loop)
+  PASS  provenance seqs recorded
+  PASS  roles derived
+  PASS  bounds derived
+  PASS  default-path digest built
+  PASS  default path identical to P2.5-extractor path
+  PASS  text extraction byte-identical to P2.5 official path
+  PASS  digest text redacted
+  PASS  null events rejected
+  PASS  null nodes rejected
+  PASS  missing official extractors rejected (no second parser)
+  PASS  null extractors rejected
+  PASS  partial extractors rejected
+  PASS  out-of-range seqs skipped safely
+
+=== C13: learning signals are deterministic (R2 AC5: failure authority moved to P2.6) ===
+  PASS  signals detected
+  PASS  two signals (failure keyword removed by R2 AC5)
+  PASS  kinds classified
+  PASS  keyword path never claims failure (R2 AC5)
+  PASS  no failure evidence without P2.6 injection
+  PASS  failure evidence comes from P2.6 injection
+  PASS  vetoed failure surfaced
+  PASS  vetoedCount reflects vetoed failures
+  PASS  injected failure before resolution -> resolved
+  PASS  signals deterministic
+  PASS  null digest safe
+  PASS  empty turns -> no signal
+
+=== C14: stableHash determinism ===
+  PASS  hash deterministic
+  PASS  hash distinguishes input
+  PASS  hash format is 8 hex chars
+
+=== C15: R2 adversarial-review regressions (proven defects, locked) ===
+  PASS  R2 AC5: keyword path no longer claims failure: 报错
+  PASS  R2 AC5: keyword path no longer claims failure: 失败了
+  PASS  R2 AC5: keyword path no longer claims failure: 这里报错了
+  PASS  R2 AC5: keyword path no longer claims failure: 程序崩溃了
+  PASS  R2 AC5: keyword path no longer claims failure: 无法启动
+  PASS  R2 AC5: keyword path no longer claims failure: 配置错误
+  PASS  P2.6 authority classifies: econnreset
+  PASS  P2.6 authority vetoes gap: econnreset
+  PASS  P2.6 veto reason: econnreset
+  PASS  P2.6 authority classifies: 502
+  PASS  P2.6 authority vetoes gap: 502
+  PASS  P2.6 veto reason: 502
+  PASS  P2.6 authority classifies: 429
+  PASS  P2.6 authority vetoes gap: 429
+  PASS  P2.6 veto reason: 429
+  PASS  P2.6 authority classifies: quota
+  PASS  P2.6 authority vetoes gap: quota
+  PASS  P2.6 veto reason: quota
+  PASS  P2.6 authority classifies: 401
+  PASS  P2.6 authority vetoes gap: 401
+  PASS  P2.6 veto reason: 401
+  PASS  P2.6 authority classifies: model-route
+  PASS  P2.6 authority vetoes gap: model-route
+  PASS  P2.6 veto reason: model-route
+  PASS  P2.6 authority classifies: CN quota
+  PASS  P2.6 authority vetoes gap: CN quota
+  PASS  P2.6 veto reason: CN quota
+  PASS  P2.6 authority classifies: CN overload
+  PASS  P2.6 authority vetoes gap: CN overload
+  PASS  P2.6 veto reason: CN overload
+  PASS  P2.6 authority classifies: ctx-limit
+  PASS  P2.6 authority vetoes gap: ctx-limit
+  PASS  P2.6 veto reason: ctx-limit
+  PASS  P2.6 authority classifies: protocol
+  PASS  P2.6 authority vetoes gap: protocol
+  PASS  P2.6 veto reason: protocol
+  PASS  P2.6 authority classifies: no-object (fail-closed)
+  PASS  P2.6 authority vetoes gap: no-object (fail-closed)
+  PASS  P2.6 veto reason: no-object (fail-closed)
+  PASS  CJK resolution keyword detected: 已修复
+  PASS  CJK resolution keyword detected: 问题解决了
+  PASS  CJK resolution keyword detected: 测试通过
+  PASS  CJK resolution keyword detected: 跑通了
+  PASS  CJK resolution keyword detected: 搞定了
+  PASS  CJK correction keyword detected: 应该改成这样
+  PASS  CJK correction keyword detected: 请纠正这个说法
+  PASS  resolution outranks failure in the same turn
+  PASS  resolved+noun stays resolution
+  PASS  fixed outranks crash
+  PASS  pattern table is resolution-first and contains no failure kind (R2 AC5)
+  PASS  ★ SIGNAL_PATTERNS contains NO failure kind (single Failure Authority = P2.6)
+  PASS  failure followed by a later resolution -> resolved
+  PASS  no open gap when resolved
+  PASS  lone failure -> not resolved
+  PASS  lone failure reported as an open gap
+  PASS  no P2.6 evidence -> no failure claimed (fail-closed)
+  PASS  a resolution BEFORE the failure does not resolve it (seq order matters)
+  PASS  the later failure is the open gap
+  PASS  kinds summary exposes only narrative signals (failure kind removed by R2 AC5)
+  PASS  closed injected block stripped, real speech kept
+  PASS  unterminated injected block stripped (truncated logs, tag alone on its line)
+  PASS  R3 reverse lock: an inline tag is a discussion/quote, its text must survive
+  PASS  R3: a user discussing the tag keeps their whole sentence
+  PASS  injection-only turn becomes empty
+  PASS  plain text untouched
+  PASS  empty/null safe
+  PASS  injection-only turn excluded from digest
+  PASS  injectedSkipped counted
+  PASS  real speech survives stripping
+  PASS  harness-injected reminder text no longer produces a learning signal
+  PASS  duplicate nodeSeqs deduplicated
+  PASS  sourceEventSeqs unique + ascending
+  PASS  out-of-order nodeSeqs canonicalized
+  PASS  signals are independent of caller-supplied ordering
+  PASS  canonicalized digest still pairs injected failure->resolution
+  PASS  R1 latin narrative keyword still detected: "instead"
+  PASS  R1 latin narrative keyword still detected: "rather than"
+  PASS  R1 latin narrative keyword still detected: "should be"
+  PASS  R1 latin narrative keyword still detected: "actually"
+  PASS  R1 latin narrative keyword still detected: "correction"
+  PASS  R1 latin narrative keyword still detected: "fixed"
+  PASS  R1 latin narrative keyword still detected: "resolved"
+  PASS  R1 latin narrative keyword still detected: "works now"
+  PASS  R1 latin narrative keyword still detected: "passing"
+  PASS  R2 AC5: latin failure keyword "error" no longer claims failure
+  PASS  R2 AC5: latin failure keyword "failed" no longer claims failure
+  PASS  R2 AC5: latin failure keyword "failure" no longer claims failure
+  PASS  R2 AC5: latin failure keyword "exception" no longer claims failure
+  PASS  R2 AC5: latin failure keyword "crash" no longer claims failure
+  PASS  R2 AC5: latin failure keyword "rejected" no longer claims failure
+  PASS  every pattern carries both a latin and a cjk regex
+
+=== C16: Layer B 跨会话全局已验证经验库 —— 发布闸门与 fail-closed 校验 ===
+  PASS  C16 fixture: draft created
+  PASS  C16: 刚出生的提案不可发布（提案 ≠ 已验证）
+  PASS  C16 fixture: approved
+  PASS  C16: 人工批准但未经机器验证 ⇒ 仍不可发布
+  PASS  C16 fixture: machine verification passed
+  PASS  C16 fixture: state/verification advanced（审批粘性：APPROVED 不被重新验证撤销）
+  PASS  C16 fixture: lastVerifiedAt stamped
+  PASS  C16 fixture: evidence is machine-checkable
+  PASS  C16: 已验证经验可发布
+  PASS  C16: 正向原因可解释
+  PASS  C16: APPROVED + VERIFIED 同样可发布
+  PASS  C16: 被驳回不可发布
+  PASS  C16: 已退役不可发布
+  PASS  C16: 非对象不可发布（fail-closed）
+  PASS  C16: 缺验证记录不可发布
+  PASS  C16: 未验证状态不可发布
+  PASS  C16: 非机器可校验方法不可发布（模型判断不算证据）
+  PASS  C16: ai_judgment 不在机器可校验方法白名单
+  PASS  C16: 无证据记录不可发布
+  PASS  C16: 无验证时间戳不可发布
+  PASS  C16: 无回源锚点不可发布
+  PASS  C16: 含密钥的经验不可发布（密钥红线）
+  PASS  C16: 超界记录不可发布（有界性）
+  PASS  C16: isPublishable 正向
+  PASS  C16: isPublishable 对非对象/空对象 fail-closed
+  PASS  C16: PROPOSED 不可发布
+  PASS  C16: 未验证不可发布
+  PASS  C16: 无时间戳不可发布
+  PASS  C16: 无锚点不可发布
+  PASS  C16: 非机器可校验方法不可发布
+  PASS  C16: emptyGlobalStore 形状/版本正确
+  PASS  C16: emptyGlobalStore 空数组字段
+  PASS  C16: emptyGlobalStore 接受显式时间戳
+  PASS  C16: 已验证经验成功发布
+  PASS  C16: 发布后版本号 +1 且时间戳写入
+  PASS  C16: 条目落入全局库
+  PASS  C16: 发布产物可被 validateGlobalStore 接受（写/读同构）
+  PASS  C16: 重复发布同一条经验 ⇒ 幂等（不涨版本）
+  PASS  C16: 更新版本覆盖（新时间戳更晚）
+  PASS  C16: 反陈旧覆盖：旧时间戳不得回退全局库
+  PASS  C16: 被拒的发布不改变全局库版本
+  PASS  C16 fixture(publishable): draft created
+  PASS  C16 fixture(publishable): approved
+  PASS  C16 fixture(publishable): machine verification passed
+  PASS  C16: 同义条目按签名去重（不被同义条目淹没）
+  PASS  C16: 去重后条目数不变
+  PASS  C16: 未验证经验发布被拒且原因可解释
+  PASS  C16: 被拒发布不改动全局库
+  PASS  C16: 提案发布被拒（提案 ≠ 激活）
+  PASS  C16: 畸形全局库入参 ⇒ 重建空库而非崩溃
+  PASS  C16: 重建的是合法全局库
+  PASS  C16 fixture(publishable): draft created
+  PASS  C16 fixture(publishable): approved
+  PASS  C16 fixture(publishable): machine verification passed
+  PASS  C16: 全局库按 lastVerifiedAt 降序（最新在前）
+  PASS  C16: 全局库有界（满库拒绝新条目）
+  PASS  C16: 发布签名确定性
+  PASS  C16: 标题不同 ⇒ 签名不同
+  PASS  C16: 非对象签名空串
+  PASS  C16: 合法全局库通过校验
+  PASS  C16: 校验通过时原样返回（不静默改写）
+  PASS  C16: 全局库校验 fail-closed —— null
+  PASS  C16: 全局库校验 fail-closed —— 数组
+  PASS  C16: 全局库校验 fail-closed —— 字符串
+  PASS  C16: 全局库校验 fail-closed —— 空对象
+  PASS  C16: 全局库校验 fail-closed —— schemaVersion 不符
+  PASS  C16: 全局库校验 fail-closed —— kind 不符
+  PASS  C16: 全局库校验 fail-closed —— version 非法
+  PASS  C16: 全局库校验 fail-closed —— experiences 非数组
+  PASS  C16: 全局库校验 fail-closed —— telemetry 非数组
+  PASS  C16: 全局库校验 fail-closed —— experiences 超界
+  PASS  C16: ★ 含未验证/提案条目的全局库整体判废（跨会话污染防线）
+  PASS  C16: 含结构坏条目的全局库整体判废
+  PASS  C16: 重复 id 的全局库整体判废
+  PASS  C16: 含超界条目的全局库整体判废
+  PASS  C16: 含密钥条目的全局库整体判废（密钥红线在全局库同样成立）
+  PASS  C16: 遥测类型不在白名单 ⇒ 整库判废
+  PASS  C16: 合法遥测类型通过
+  PASS  C16: 函数等非对象入参 fail-closed
+  PASS  C16: 无全局库时召回仍可用
+  PASS  C16: 空查询 ⇒ empty_query（不噪声召回）
+  PASS  C16: 全局召回返回结构化结果
+  PASS  C16: 全局条目要么进入可复用结果、要么被适用性检查留痕（绝不静默消失）
+  PASS  C16: 召回条目自带 id/scope/回源锚点
+  PASS  C16: ★ 跨会话（global）召回条目必然处于已验证状态（Layer B 只含已验证经验）
+
+============================================================
+RESULT: 505 PASS / 0 FAIL
+
+########## ---- STDERR ----
+

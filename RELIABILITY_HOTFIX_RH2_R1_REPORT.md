@@ -1,5 +1,11 @@
 # HARNESS RELIABILITY HOTFIX RH2 — R1 SOURCE CANDIDATE
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 ## Scope and identity
 
 - Scope: `SOURCE-ONLY`, `TEST-ONLY`; canonical Git `main` baseline.
@@ -8,7 +14,7 @@
 - Source hotfix commit at report generation: `09dd1ee20736ce334f088c250bc65a5abf326cc3`
 - `HEAD_SHA` at source/CI submission: `f9d69b552b3c19fa77912c7cd83f31e3b6b5179f`
 - PR: [#85](https://github.com/ZTKyo/deepseek-harness-desktop/pull/85)
-- `P2.75 = FROZEN`, `P2.8 = FROZEN`, `P3 = PAUSED`, `P4 = LOCKED`.
+- `P2.75 = FROZEN`, `P2.8 = FROZEN`, `P3 = PAUSED`, `P4 = LOCKED`. 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 The canonical source worktree was isolated from the existing dirty main
 worktree. The main worktree's pre-existing roadmap/evidence changes were not

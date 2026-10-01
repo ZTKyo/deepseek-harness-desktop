@@ -1,0 +1,1010 @@
+{
+  "generatedAt": "2026-09-30T20:09:29.456Z",
+  "rows": [
+    {
+      "base": "test-learn-plugin-contract.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "1",
+        "0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-plugin-contract.txt",
+          "exit": "0",
+          "printed": 8,
+          "stdoutBytes": 457,
+          "variant": "tests/learn/test-learn-plugin-contract.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-core.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "1"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": true,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-core.txt",
+          "exit": "0",
+          "printed": 505,
+          "stdoutBytes": 20324,
+          "variant": "tests/learn/test-learn-core.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-candidate.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 2,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-candidate.txt",
+          "exit": "0",
+          "printed": 40,
+          "stdoutBytes": 2212,
+          "variant": "tests/learn/test-learn-candidate.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac5-e2e.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "1",
+        "0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac5-e2e.txt",
+          "exit": "0",
+          "printed": 13,
+          "stdoutBytes": 907,
+          "variant": "tests/learn/test-learn-ac5-e2e.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-stage85-twins.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-stage85-twins.txt",
+          "exit": "0",
+          "printed": 22,
+          "stdoutBytes": 1277,
+          "variant": "tests/learn/test-learn-stage85-twins.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-real-topology-tool-events.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-real-topology-tool-events.txt",
+          "exit": "0",
+          "printed": 22,
+          "stdoutBytes": 1610,
+          "variant": "tests/learn/test-learn-real-topology-tool-events.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-candidate-receipts.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 2,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-candidate-receipts.txt",
+          "exit": "0",
+          "printed": 33,
+          "stdoutBytes": 1927,
+          "variant": "tests/learn/test-learn-candidate-receipts.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac2-research-leg.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail > 0 ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac2-repo-target.txt",
+          "exit": "0",
+          "printed": 27,
+          "stdoutBytes": 2066,
+          "variant": null
+        },
+        {
+          "log": "test-learn-ac2-research-leg.txt",
+          "exit": "0",
+          "printed": 27,
+          "stdoutBytes": 2066,
+          "variant": "tests/learn/test-learn-ac2-research-leg.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r3-fixes.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-fixes.txt",
+          "exit": "0",
+          "printed": 30,
+          "stdoutBytes": 1343,
+          "variant": "tests/learn/test-learn-r3-fixes.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r3-hardening.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "FAIL > 0 ? 1 : 0"
+      ],
+      "throws": 2,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-hardening.txt",
+          "exit": "0",
+          "printed": 30,
+          "stdoutBytes": 1554,
+          "variant": "tests/learn/test-learn-r3-hardening.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r3-secrets.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 1,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-secrets.txt",
+          "exit": "0",
+          "printed": 65,
+          "stdoutBytes": 2994,
+          "variant": "tests/learn/test-learn-r3-secrets.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-contamination.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "FAIL ? 1 : 0"
+      ],
+      "throws": 1,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "redteam-r3-contamination.txt",
+          "exit": "0",
+          "printed": 9,
+          "stdoutBytes": 1379,
+          "variant": "tests/learn/redteam-r3-contamination.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-isolation.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "FAIL ? 2 : 0"
+      ],
+      "throws": 2,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "redteam-r3-isolation.txt",
+          "exit": "0",
+          "printed": 13,
+          "stdoutBytes": 1468,
+          "variant": "tests/learn/redteam-r3-isolation.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-labels.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": false,
+      "isDataLike": true,
+      "runs": [
+        {
+          "log": "redteam-r3-labels.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 0,
+          "variant": "tests/learn/redteam-r3-labels.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-probe.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": false,
+      "isDataLike": true,
+      "runs": [
+        {
+          "log": "redteam-r3-probe.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 8941,
+          "variant": "tests/learn/redteam-r3-probe.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-b1-session-access.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1"
+      ],
+      "throws": 1,
+      "failAgg": true,
+      "exitCodeVar": true,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-b1-session-access.txt",
+          "exit": "0",
+          "printed": 22,
+          "stdoutBytes": 1408,
+          "variant": "tests/learn/test-learn-b1-session-access.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-b2-verify-output-contract.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "1",
+        "0"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-b2-verify-output-contract.txt",
+          "exit": "0",
+          "printed": 21,
+          "stdoutBytes": 1651,
+          "variant": "tests/learn/test-learn-b2-verify-output-contract.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r2-f2-store-min.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-f2-store-min.txt",
+          "exit": "0",
+          "printed": 19,
+          "stdoutBytes": 1543,
+          "variant": "tests/learn/test-learn-r2-f2-store-min.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-injection-positions.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": false,
+      "isDataLike": true,
+      "runs": [
+        {
+          "log": "redteam-r3-injection-positions.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 1516,
+          "variant": "tests/learn/redteam-r3-injection-positions.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac6-real-promotion-e2e.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "3",
+        "2",
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 4,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-real-promotion-e2e.txt",
+          "exit": "0",
+          "printed": 46,
+          "stdoutBytes": 5093,
+          "variant": "tests/learn/test-learn-ac6-real-promotion-e2e.mjs"
+        }
+      ]
+    },
+    {
+      "base": "_ac2-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "inCi": true,
+      "exits": [
+        "fail > 0 ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "_ac2-mutation-proof.txt",
+          "exit": "0",
+          "printed": 10,
+          "stdoutBytes": 1473,
+          "variant": "tests/learn/_ac2-mutation-proof.mjs"
+        }
+      ]
+    },
+    {
+      "base": "validate-gate-registry.mjs",
+      "kind": "registry-gate",
+      "inCi": true,
+      "exits": [
+        "1",
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 2,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "validate-gate-registry.txt",
+          "exit": "0",
+          "printed": 15,
+          "stdoutBytes": 1657,
+          "variant": "tests/learn/validate-gate-registry.mjs"
+        }
+      ]
+    },
+    {
+      "base": "_ac10-registry-mutation-proof.mjs",
+      "kind": "mutation-proof",
+      "inCi": true,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 3,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "_ac10-registry-mutation-proof.txt",
+          "exit": "0",
+          "printed": 10,
+          "stdoutBytes": 1419,
+          "variant": "tests/learn/_ac10-registry-mutation-proof.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac1-secret-families.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "3",
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac1-repo-target.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 173,
+          "variant": "node tests/learn/test-learn-ac1-secret-families.mjs \"C:\\Users\\Administ"
+        },
+        {
+          "log": "test-learn-ac1-secret-families.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 116,
+          "variant": "tests/learn/test-learn-ac1-secret-families.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac5-gap-veto.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac5-gap-veto.txt",
+          "exit": "0",
+          "printed": 44,
+          "stdoutBytes": 4075,
+          "variant": "tests/learn/test-learn-ac5-gap-veto.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r2-b1-approval-gate.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-b1-approval-gate.txt",
+          "exit": "0",
+          "printed": 19,
+          "stdoutBytes": 1509,
+          "variant": "tests/learn/test-learn-r2-b1-approval-gate.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r2-b2-bounds.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r2-b2-bounds.txt",
+          "exit": "0",
+          "printed": 45,
+          "stdoutBytes": 4391,
+          "variant": "tests/learn/test-learn-r2-b2-bounds.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-r3-approval-forgery.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 1,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-r3-approval-forgery.txt",
+          "exit": "0",
+          "printed": 27,
+          "stdoutBytes": 2723,
+          "variant": "tests/learn/test-learn-r3-approval-forgery.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-stage2-schema-and-negative-lock.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "0",
+        "1"
+      ],
+      "throws": 0,
+      "failAgg": true,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-stage2-schema-and-negative-lock.txt",
+          "exit": "0",
+          "printed": 23,
+          "stdoutBytes": 1752,
+          "variant": "tests/learn/test-learn-stage2-schema-and-negative-lock.mjs"
+        }
+      ]
+    },
+    {
+      "base": "run-learn-contract-scenarios.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1",
+        "fail ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "run-learn-contract-scenarios-retry.txt",
+          "exit": "0",
+          "printed": 36,
+          "stdoutBytes": 9820,
+          "variant": null
+        },
+        {
+          "log": "run-learn-contract-scenarios.txt",
+          "exit": "1",
+          "printed": 14,
+          "stdoutBytes": 2090,
+          "variant": "tests/learn/run-learn-contract-scenarios.mjs"
+        }
+      ]
+    },
+    {
+      "base": "run-learn-real-e2e.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1",
+        "fail ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "run-learn-real-e2e.txt",
+          "exit": "0",
+          "printed": 65,
+          "stdoutBytes": 3928,
+          "variant": "tests/learn/run-learn-real-e2e.mjs"
+        }
+      ]
+    },
+    {
+      "base": "run-learn-real-gap-e2e.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1",
+        "fail ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "run-learn-real-gap-e2e.txt",
+          "exit": "0",
+          "printed": 20,
+          "stdoutBytes": 2410,
+          "variant": "tests/learn/run-learn-real-gap-e2e.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-metrics.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "redteam-r3-metrics.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 1976,
+          "variant": "tests/learn/redteam-r3-metrics.mjs"
+        }
+      ]
+    },
+    {
+      "base": "redteam-r3-quality.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "redteam-r3-quality.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 2473,
+          "variant": "tests/learn/redteam-r3-quality.mjs"
+        }
+      ]
+    },
+    {
+      "base": "production-load-probe.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "exits": [
+        "2",
+        "verdict === 'NEW_CODE_LOADED' ? 0 : 3"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": []
+    },
+    {
+      "base": "mount-gate.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "exits": [
+        "2",
+        "verdict === 'PASS' ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "mount-gate-pass.txt",
+          "exit": "0",
+          "printed": 4,
+          "stdoutBytes": 1574,
+          "variant": "node tests/learn/mount-gate.mjs --plugin \"C:\\Users\\Administrator\\Deskt"
+        },
+        {
+          "log": "mount-gate.txt",
+          "exit": "2",
+          "printed": 0,
+          "stdoutBytes": 39,
+          "variant": "tests/learn/mount-gate.mjs"
+        }
+      ]
+    },
+    {
+      "base": "deploy-preflight.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "exits": [
+        "2",
+        "verdict === 'PASS' ? 0 : 1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "deploy-preflight-real.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 3759,
+          "variant": "node tests/learn/deploy-preflight.mjs --deploy learn.mjs,learn-core.mj"
+        },
+        {
+          "log": "deploy-preflight.txt",
+          "exit": "2",
+          "printed": 0,
+          "stdoutBytes": 0,
+          "variant": "tests/learn/deploy-preflight.mjs"
+        }
+      ]
+    },
+    {
+      "base": "run-learn-all-tests.mjs",
+      "kind": "runner",
+      "inCi": false,
+      "exits": [
+        "bad.length ? 1 : 0"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": []
+    },
+    {
+      "base": "_real-session-harness.mjs",
+      "kind": "helper",
+      "inCi": false,
+      "exits": [
+        "2"
+      ],
+      "throws": 2,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": []
+    },
+    {
+      "base": "test-learn-ac6-candidate-durability.mjs",
+      "kind": "gate",
+      "inCi": true,
+      "exits": [
+        "1"
+      ],
+      "throws": 2,
+      "failAgg": true,
+      "exitCodeVar": true,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-candidate-durability.txt",
+          "exit": "0",
+          "printed": 10,
+          "stdoutBytes": 752,
+          "variant": "tests/learn/test-learn-ac6-candidate-durability.mjs"
+        }
+      ]
+    },
+    {
+      "base": "test-learn-ac6-e2e-mutex.mjs",
+      "kind": "gate",
+      "inCi": false,
+      "exits": [
+        "fail === 0 ? 0 : 1"
+      ],
+      "throws": 3,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": true,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "test-learn-ac6-e2e-mutex.txt",
+          "exit": "0",
+          "printed": 11,
+          "stdoutBytes": 1471,
+          "variant": "tests/learn/test-learn-ac6-e2e-mutex.mjs"
+        }
+      ]
+    },
+    {
+      "base": "ac6-e2e-lock.mjs",
+      "kind": "helper",
+      "inCi": false,
+      "exits": [],
+      "throws": 2,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": false,
+      "isDataLike": false,
+      "runs": []
+    },
+    {
+      "base": "audit-merge-enforcement.mjs",
+      "kind": "tool",
+      "inCi": false,
+      "exits": [
+        "0",
+        "1"
+      ],
+      "throws": 0,
+      "failAgg": false,
+      "exitCodeVar": false,
+      "dynamicExit": false,
+      "canTurnRed": true,
+      "isDataLike": false,
+      "runs": [
+        {
+          "log": "audit-merge-enforcement.txt",
+          "exit": "0",
+          "printed": 0,
+          "stdoutBytes": 7075,
+          "variant": "tests/learn/audit-merge-enforcement.mjs"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total": 43,
+    "canTurnRed": 39,
+    "cannotTurnRed": 4,
+    "vacuousDataLike": 3
+  }
+}

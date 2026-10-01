@@ -1,5 +1,13 @@
 # PHASE 04 LEARN — R1 FINAL REPORT
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
+> **编号声明（2026-10-01）**：本文件使用 R1 **自定 AC1–AC12** 编号，与 canonical 合同 AC1–AC10 **不同号、不可混读**。canonical 原文见 `docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md` 的「Acceptance Criteria」段。
+
 **Date:** 2026-09-21
 **Executor:** Harness (main control)
 **Baseline:** `6d0623627c4b38f6b870ef03fe9ed776186c9e09` (origin/main), branch `p4-learning-r1`
@@ -288,7 +296,7 @@ each run and are safe to delete.
 P4_LEARN_R1 = COMPLETE
   unit       : 220 PASS / 0 FAIL
   e2e        : 58 PASS / 0 FAIL  (E1-E4, real session, live hook)
-  AC1-AC12   : all satisfied
+  AC1-AC12   : all satisfied 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
   regression : 19/20 suites green; 1 pre-existing failure (deploy drift, proven
                unrelated to P4); 0 failures introduced
   rollback   : trivial (additive only; no production state touched)

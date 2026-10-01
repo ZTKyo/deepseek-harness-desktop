@@ -1,0 +1,71 @@
+########## SUITE: tests/learn/test-learn-ac5-gap-veto.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.17
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+══════════ A. 否决语义（9 个分类全覆盖）══════════
+PASS  A1 hard-veto SHORT_WINDOW_RATE_LIMIT  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto NETWORK_TIMEOUT_5XX  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto PROVIDER_OVERLOADED  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto QUOTA_EXHAUSTED  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto AUTH_PERMISSION_FAILURE  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto MODEL_ROUTE_UNAVAILABLE  vetoed=true reason=HARD_VETO_CLASS
+PASS  A1 hard-veto CONTEXT_LIMIT  vetoed=true reason=HARD_VETO_CLASS
+PASS  A2 conditional-veto(no evidence) PROTOCOL_MISMATCH  vetoed=true reason=CONDITIONAL_VETO_NO_EVIDENCE
+PASS  A2 conditional-veto(no evidence) UNKNOWN_PROVIDER_FAILURE  vetoed=true reason=CONDITIONAL_VETO_NO_EVIDENCE
+PASS  A3 conditional-veto(with evidence) PROTOCOL_MISMATCH  vetoed=false reason=null
+PASS  A3 conditional-veto(with evidence) UNKNOWN_PROVIDER_FAILURE  vetoed=false reason=null
+PASS  A4 all 9 classes covered by veto sets  hard=7 cond=2 known=9
+
+══════════ B. fail-closed ══════════
+PASS  B1 missing record → vetoed
+PASS  B2 missing classification → vetoed
+PASS  B3 unknown classification → vetoed
+PASS  B4 taxonomy version mismatch → vetoed
+PASS  B5 non-object (array) → vetoed
+PASS  B6 empty-string classification → vetoed
+
+══════════ C. Gap 资格（4 项）══════════
+PASS  C1 all 4 satisfied → qualified  {"r":"qualified","c":2}
+PASS  C2 below repeat threshold → rejected  below repeat threshold (1/2)
+PASS  C3 mixed task type → rejected
+PASS  C4 mixed signature → rejected
+PASS  C5 missing capability deficiency → rejected
+PASS  C6 different capability deficiency → rejected
+PASS  C7 empty observations → rejected
+PASS  C8 one vetoed observation poisons whole group  qualified=false vetoedCount=1 reason=vetoed (1/2): HARD_VETO_CLASS
+PASS  C9 dedup key uses P2.6 signature verbatim  plugin-install::p|m|UNKNOWN_PROVIDER_FAILURE|-|4xx|v1
+PASS  C10 dedup key recomputes via authority when signature absent  t::p|m|X|-|4xx|v1
+
+══════════ D. 真实数据回放（生产 P2.6 证据流）══════════
+  证据流: C:\Users\Administrator\.dsh\p26-failure-classifier.log
+  记录数: 1298  (解析失败 0)
+  分类分布: {"NETWORK_TIMEOUT_5XX":628,"SHORT_WINDOW_RATE_LIMIT":609,"MODEL_ROUTE_UNAVAILABLE":39,"AUTH_PERMISSION_FAILURE":8,"QUOTA_EXHAUSTED":13,"UNKNOWN_PROVIDER_FAILURE":1}
+  否决原因: {"HARD_VETO_CLASS":1297,"CONDITIONAL_VETO_NO_EVIDENCE":1}
+  否决率  : 100.00%  (1298/1298)
+PASS  D1 evidence stream is non-trivial (>=100 real records)  n=1298
+PASS  D2 ★ real-data veto rate = 100%  vetoed=1298/1298 allowed=0 []
+PASS  D3 every real classification is a known taxonomy class  NETWORK_TIMEOUT_5XX,SHORT_WINDOW_RATE_LIMIT,MODEL_ROUTE_UNAVAILABLE,AUTH_PERMISSION_FAILURE,QUOTA_EXHAUSTED,UNKNOWN_PROVIDER_FAILURE
+
+══════════ E. 反证 R1（旧实现的误检案例）══════════
+PASS  E1 R1-false-positive now VETOED: Provider outage  cls=NETWORK_TIMEOUT_5XX reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Network timeout  cls=NETWORK_TIMEOUT_5XX reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Service unavailable  cls=NETWORK_TIMEOUT_5XX reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Rate limit  cls=SHORT_WINDOW_RATE_LIMIT reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Quota  cls=QUOTA_EXHAUSTED reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Auth  cls=AUTH_PERMISSION_FAILURE reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Model route  cls=MODEL_ROUTE_UNAVAILABLE reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Network reset  cls=NETWORK_TIMEOUT_5XX reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: DNS failure  cls=NETWORK_TIMEOUT_5XX reason=HARD_VETO_CLASS
+PASS  E1 R1-false-positive now VETOED: Context overflow  cls=CONTEXT_LIMIT reason=HARD_VETO_CLASS
+PASS  E2 bare text alone cannot qualify a gap  vetoed=true cls=UNKNOWN_PROVIDER_FAILURE
+PASS  E3 code-only failure classified & vetoed  cls=PROTOCOL_MISMATCH
+PASS  E4 null failure → vetoed (fail-closed)  cls=UNKNOWN_PROVIDER_FAILURE reason=CONDITIONAL_VETO_NO_EVIDENCE
+
+══════════ 汇总 ══════════
+THRESHOLD: REPEAT_THRESHOLD=2  TAXONOMY_VERSION=1
+44 pass, 0 fail
+
+########## ---- STDERR ----
+

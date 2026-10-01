@@ -1,5 +1,11 @@
 # P4 LEARN — 独立 Delta Review（Stage B）
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 - 生成时间：2026-09-21
 - 性质：**独立评审**，不修改任何实现代码
 - 被审对象：PR #90 / 分支 `p4-learning-r1` / HEAD `4cc0832eed575301ec7188bc11fb7896c36985a1`
@@ -38,7 +44,7 @@
 | PARTIAL | 1 | AC1 |
 | **FAIL** | 6 | **AC2、AC3、AC4、AC5、AC6、AC10** |
 
-**整体终裁：`PARTIAL`。**
+**整体终裁：`PARTIAL`。** 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 不是 `INCOMPLETE`（已交付物质量真实、真跑真过、无夸大完成度），
 也绝不是 `COMPLETE`（合同核心闭环整块未实现，且 AC5 行为与要求相反）。
 
@@ -118,7 +124,7 @@
 
 ## 6 给委派方的建议（不代为决策）
 
-1. **按合同验收必须判 `PARTIAL`**：核心缺口是「**自主研究闭环 + 验证门 + 失败分类 + Capability Gap → Candidate Skill 生命周期 + 4 次规定真实执行**」整块未实现。当前交付物实质是**带人工审批门的 per-session 经验候选库**，而非合同要求的自主学习系统。
+1. **按合同验收必须判 `PARTIAL`**：核心缺口是「**自主研究闭环 + 验证门 + 失败分类 + Capability Gap → Candidate Skill 生命周期 + 4 次规定真实执行**」整块未实现。当前交付物实质是**带人工审批门的 per-session 经验候选库**，而非合同要求的自主学习系统。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 2. **最高优先级补救（按性价比）**：
    - ① **区分「环境故障 vs 真实能力缺口」判定层**（当前行为与合同要求**相反**，风险最高）；
    - ② 把 `tests/learn/` 关键套件接入 `ci-level1.yml`（AC6 的 CI 部分，改动极小、风险低）；

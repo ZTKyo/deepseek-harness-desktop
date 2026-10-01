@@ -1,0 +1,54 @@
+﻿logs analysed: 44 | registry entries: 43 | registry entries never run: 4
+total printed assert-PASS lines: 1305 | printed assert-FAIL lines: 0
+
+suite                                            exit  kind            printed   reported     reconcile
+_ac10-registry-mutation-proof.mjs                0     mutation-proof  10P/0F    10P/0F       EQUAL
+_ac2-mutation-proof.mjs                          0     mutation-proof  10P/0F    10P/0F       EQUAL
+audit-merge-enforcement.mjs                      0     tool            0P/0F     —            EXIT-ONLY
+deploy-preflight.mjs                             0     tool            0P/0F     —            EXIT-ONLY
+deploy-preflight.mjs                             2     tool            0P/0F     —            EXIT-ONLY(nonzero)
+mount-gate.mjs                                   0     tool            4P/0F     —            NO-SUMMARY(exit is verdict)
+mount-gate.mjs                                   2     tool            0P/0F     —            EXIT-ONLY(nonzero)
+redteam-r3-contamination.mjs                     0     gate            9P/0F     9P/0F        EQUAL
+redteam-r3-injection-positions.mjs               0     gate            0P/0F     —            EXIT-ONLY
+redteam-r3-isolation.mjs                         0     gate            13P/0F    13P/0F       EQUAL
+redteam-r3-labels.mjs                            0     gate            0P/0F     —            EXIT-ONLY
+redteam-r3-metrics.mjs                           0     gate            0P/0F     —            EXIT-ONLY
+redteam-r3-probe.mjs                             0     gate            0P/0F     —            EXIT-ONLY
+redteam-r3-quality.mjs                           0     gate            0P/0F     —            EXIT-ONLY
+run-learn-contract-scenarios.mjs                 0     gate            36P/0F    36P/0F       EQUAL
+run-learn-contract-scenarios.mjs                 1     gate            14P/0F    —            NO-SUMMARY(exit is verdict)
+run-learn-real-e2e.mjs                           0     gate            65P/0F    65P/0F       EQUAL
+run-learn-real-gap-e2e.mjs                       0     gate            20P/0F    20P/0F       EQUAL
+test-learn-ac1-secret-families.mjs               0     gate            0P/0F     43P/0F       NO-LINES(aggregate only)
+test-learn-ac1-secret-families.mjs               0     gate            0P/0F     43P/0F       NO-LINES(aggregate only)
+test-learn-ac2-research-leg.mjs                  0     gate            27P/0F    27P/0F       EQUAL
+test-learn-ac2-research-leg.mjs                  0     gate            27P/0F    27P/0F       EQUAL
+test-learn-ac5-e2e.mjs                           0     gate            13P/0F    13P/0F       EQUAL
+test-learn-ac5-gap-veto.mjs                      0     gate            44P/0F    44P/0F       EQUAL
+test-learn-ac6-candidate-durability.mjs          0     gate            10P/0F    10P/0F       EQUAL
+test-learn-ac6-e2e-mutex.mjs                     0     gate            11P/0F    11P/0F       EQUAL
+test-learn-ac6-real-promotion-e2e.mjs            0     gate            46P/0F    27P/0F       EQUAL(+foreign lines)
+test-learn-b1-session-access.mjs                 0     gate            22P/0F    22P/0F       EQUAL
+test-learn-b2-verify-output-contract.mjs         0     gate            21P/0F    21P/0F       EQUAL
+test-learn-candidate-receipts.mjs                0     gate            33P/0F    33P/0F       EQUAL
+test-learn-candidate.mjs                         0     gate            40P/0F    40P/0F       EQUAL
+test-learn-core.mjs                              0     gate            505P/0F   505P/0F      EQUAL
+test-learn-plugin-contract.mjs                   0     gate            8P/0F     8P/0F        EQUAL
+test-learn-r2-b1-approval-gate.mjs               0     gate            19P/0F    19P/0F       EQUAL
+test-learn-r2-b2-bounds.mjs                      0     gate            45P/0F    45P/0F       EQUAL
+test-learn-r2-f2-store-min.mjs                   0     gate            19P/0F    19P/0F       EQUAL
+test-learn-r3-approval-forgery.mjs               0     gate            27P/0F    27P/0F       EQUAL
+test-learn-r3-fixes.mjs                          0     gate            30P/0F    30P/0F       EQUAL
+test-learn-r3-hardening.mjs                      0     gate            30P/0F    30P/0F       EQUAL
+test-learn-r3-secrets.mjs                        0     gate            65P/0F    65P/0F       EQUAL
+test-learn-real-topology-tool-events.mjs         0     gate            22P/0F    22P/0F       EQUAL
+test-learn-stage2-schema-and-negative-lock.mjs   0     gate            23P/0F    23P/0F       EQUAL
+test-learn-stage85-twins.mjs                     0     gate            22P/0F    22P/0F       EQUAL
+validate-gate-registry.mjs                       0     registry-gate   15P/0F    15P/0F       EQUAL
+
+never run:
+  - tests/learn/production-load-probe.mjs [tool]
+  - tests/learn/run-learn-all-tests.mjs [runner]
+  - tests/learn/_real-session-harness.mjs [helper]
+  - tests/learn/ac6-e2e-lock.mjs [helper]

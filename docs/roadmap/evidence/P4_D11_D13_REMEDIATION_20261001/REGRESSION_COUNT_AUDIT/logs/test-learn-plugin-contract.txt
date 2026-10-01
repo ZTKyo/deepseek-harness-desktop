@@ -1,0 +1,23 @@
+########## SUITE: tests/learn/test-learn-plugin-contract.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.18
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== 1. 源码静态检查：宿主契约 inject 声明 ===
+  PASS  C1 inject 以模块顶层 export const 声明（修复前必 FAIL）
+  PASS  C2 inject 声明出现在 apply 之前（顺序契约）
+  PASS  C3 name / apply 仍在（防止修 inject 时误删导出）
+  PASS  C4 apply() 确实使用 ctx.tools（证明 inject 是必需而非装饰）
+=== 2. 动态 import：运行时导出形状 ===
+  PASS  C5 运行时 inject 存在且含 tools（修复前必 FAIL）
+  PASS  C6 运行时 name === 'learn'
+  PASS  C7 运行时 apply 是函数且 arity >= 1
+  PASS  C8 运行时导出集合与静态检查一致（无隐藏导出面变化）
+
+=== 汇总 ===
+  PASS = 8  FAIL = 0
+  PASS LEARN plugin host-contract gate
+
+########## ---- STDERR ----
+

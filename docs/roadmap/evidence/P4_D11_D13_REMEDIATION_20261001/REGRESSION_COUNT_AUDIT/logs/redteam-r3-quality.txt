@@ -1,0 +1,68 @@
+########## SUITE: tests/learn/redteam-r3-quality.mjs
+########## EXIT: 0
+########## ELAPSED_S: 34.9
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+real session candidates: 532
+main real session: C:\Users\Administrator\.dsh\sessions\--C-Users-Administrator-Desktop-sdeepseek~0020harness--\session-a144fe3f-1042-4466-b70b-a10642fae037\session.jsonl.zstd
+surface nodes: 9465, events: 116496
+
+=== 1. 全量 digest（复现 769 口径） ===
+turnCount=5914 injectedSkipped=698 seqRange=8-5225209
+signals=3021  (R2 声明 769)
+kinds=["correction","resolution"]  resolved=false unresolvedFailureSeqs=0
+
+=== 2. signal 明细（每条：seq/role/kind/text） ===
+rows=3021
+role 分布: {"user":107,"assistant":2914}
+kind 分布: {"correction":1598,"resolution":1423}
+污染面(只标记): transient=497 temporaryState=1592 secretShape=1 injectionStripped=0
+
+=== 3. Duplicate 分析 ===
+raw signals          : 3021
+unique exact text    : 3020   (exact-dup groups=1, 冗余条数=1)
+unique normalized    : 3019   (norm-dup groups=2, 冗余条数=2)
+unique kind+norm     : 3019   (kind-norm-dup groups=2, 冗余条数=2)
+exact duplicate rate    : 0.0%
+normalized duplicate rate: 0.1%
+semantic(kind+norm) dup rate: 0.1%
+
+  top exact-dup 文本:
+    x2  "[execution-continuity] A recoverable provider/network interruption occ"
+
+=== 4. Candidate volume（按插件的窗口口径模拟） ===
+window=  8  windows=1183  signals/session= 3021  candidates/session=1183  sig/window: max=7 median=2 p95=5
+window= 16  windows= 591  signals/session= 3019  candidates/session=591  sig/window: max=12 median=5 p95=10
+window= 32  windows= 295  signals/session= 3014  candidates/session=295  sig/window: max=21 median=10 p95=18
+window= 64  windows= 147  signals/session= 2998  candidates/session=147  sig/window: max=42 median=19 p95=32
+
+=== 5. 分层抽样（stratified sampling） ===
+strata 数: 16
+     1  correction|cjk|medium|assistant|uniq
+     2  correction|cjk|short|assistant|uniq
+   175  correction|latin|long|assistant|uniq
+    20  correction|latin|medium|assistant|uniq
+  1283  correction|mixed|long|assistant|uniq
+    48  correction|mixed|long|user|uniq
+    65  correction|mixed|medium|assistant|uniq
+     4  correction|mixed|short|assistant|uniq
+     1  resolution|cjk|short|assistant|uniq
+    58  resolution|latin|long|assistant|uniq
+     2  resolution|latin|long|user|dup
+     5  resolution|latin|medium|assistant|uniq
+  1195  resolution|mixed|long|assistant|uniq
+    57  resolution|mixed|long|user|uniq
+    92  resolution|mixed|medium|assistant|uniq
+    13  resolution|mixed|short|assistant|uniq
+
+分层样本数: 75 (target=120, perStratum<=6)
+样本覆盖层数: 16 / 16
+
+=== 6. 导出样本集（供人工打标） ===
+written: C:\Users\ADMINI~1\AppData\Local\Temp\p4-r3-quality\r3_quality_sample.json  (75 rows)
+
+=== R3 quality measurement complete ===
+
+########## ---- STDERR ----
+

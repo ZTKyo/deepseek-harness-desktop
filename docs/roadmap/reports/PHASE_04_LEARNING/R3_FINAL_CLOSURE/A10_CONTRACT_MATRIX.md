@@ -1,5 +1,66 @@
 # A10 — P4 FINAL CONTRACT MATRIX（AC1–AC10 + 4 个 mandatory scenarios）
 
+> ## ⚠ 时效标注（2026-10-01 增补；**本文下方正文逐字保留历史原样，未作任何改写或删除**）
+>
+> **标记规范**：本次全部时效标注共用同一 token「**2026-10-01 时效标注**」，由 CI 门
+> `tests/roadmap/validate-p4-status-consistency.mjs` fail-closed 校验（任何历史文档缺标注即红灯）。
+>
+> 本文是 **2026-09-28 00:1x 的 R3 历史快照**。其中的结论在其写下时**属实**，但**不是当前状态**。
+> 本标注即为"更正留痕"，引用本文任何历史结论时**必须连同本标注一起引用**。
+>
+> ### 当前状态（唯一口径，基线 `main@63bf558`）
+> - **AC1–AC10 = 全 PASS**；整体判定字符串 = `VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW`。
+> - 权威来源：`docs/roadmap/CURRENT_STATUS.md` →「2026-09-30 P4 canonical 封条」段
+>   与同文件「2026-10-01 External Review remediation（D1–D13）」段。
+> - 本仓库对同一 audited baseline 只承认上述这一个 AC 状态；本文的旧结论仅作历史证据链，不作当前口径。
+>
+> ### 本文中已被取代的具体条目（逐条对应，行号为本文行号）
+> | 本文位置 | 历史结论（当时属实） | 取代事实 |
+> |---|---|---|
+> | §一 **AC6 行（L33）** | 裁决 `PASS`，但与本文件 §三 L55 自相矛盾 | 同一条目内两处口径不符，是 D1 的**文件内**矛盾；AC6 已于 2026-09-28 01:41 由真三腿 E2E 关闭（24P/0），2026-09-30 封条判 PASS |
+> | §三 **L55** | `AC6 / AC10 = PARTIAL` | **已被取代**：AC6 见上；AC10 已于 2026-09-30 由线上只读 GET 前后对照客观闭合（required contexts 三项 + `enforce_admins=true` + `strict=true`；PR #100 BLOCKED / PR #99 MERGED） |
+> | §三 **L58** | `场景 ③ 达成；② 半达成（合成）；④ 部分达成；① 未达成` | **已被取代**：按合同原文（「至少设计并执行」）4 个场景全部**已执行**；②④① 的"生产自然实例缺口"以"裁决 + 诚实边界"两列如实登记，不再表现为"未达成" |
+> | §三 **L60** | `按 A11 的判定条件，P4 ≠ VERIFIED` | **已被取代**：见「当前状态」 |
+> | §一 **AC1 行（L28）** | 「存量 2 命中待重启自愈清除」 | **已被取代且口径更正**：09-28 重启后归零；2026-10-01 复算确认该"2 命中"是**度量假阳性**（见下） |
+> | §一 **AC2 行（L29）/ §六 L149-154** | 「生产 profile 仍是旧插件副本 …… 生产运行时遥测尚不存在」 | **已被取代**：该部署已于 2026-09-30 封条前完成，并以运行时行为探针 `NEW_CODE_LOADED` 判装载 |
+>
+> **2026-10-01 D 修复（锚点取代手写行号）**：上表左列的行号式定位**作为历史文本逐字保留**
+> （D1 纪律：只标注、不改写），但它们**已不再指向所引原文** —— 实测本文件此后整体偏移 **+34 行**
+> （更正表自称的 §三 那处，实际已落在 §三 更靠后的位置；⚠ 本句刻意不复述那些失效数字，避免再造出新的行号指针）。
+> ⇒ **定位一律改用锚点**：`A10.currentStatus`（当前状态块）/ `A10.section1` / `A10.section3` /
+> `A10.ac6row`（§一 AC6 逐条行）/ `A10.superseded.ac6ac10`（§三 汇总行）；真实行号由
+> `node tools/check-doc-anchors.mjs` 当场算出（锚点注册表 = `docs/roadmap/P4_STATUS.json` → `docAnchors`）。
+> 门 `linePointerBans` 阻断**新写入**的行号式定位（历史行豁免，判据 = `git show HEAD:<file>` 的冻结文本；
+> 新行若同时给出锚点亦可——见 `tools/check-doc-anchors.mjs`）。
+>
+> ### 2026-10-01 追加更正（External Review D11 / D12）
+> 1. **D11（度量口径）**：本文 AC1 行的「存量 2 命中」经复算为**度量假阳性** ——
+>    插件自身的脱敏占位符 `[REDACTED:uri-credential]` 处在 `postgres://…@host` 形态中时，
+>    会被 `uri-credential` 家族正则**再次命中**（占位符含 `:`，形似 `user:pass@`）。
+>    剥掉 `[REDACTED:*]` 标记后命中 = 0、`containsSecret` = false ⇒ **真实密钥 = 0**。
+>    自 2026-10-01 起审计输出必须区分 **RAW MATCH / REDACTION PLACEHOLDER / REAL SECRET** 三个数。
+> 2. **D12（自愈作用域）**：本文所述"存量自愈迁移"的**作用域是"载入某个会话库时按需执行"**，
+>    **不批量扫掠历史库**（生产实测：重启后仅当前活动会话库被写入；3 个 `schemaVersion=1` 旧库
+>    与含标记的历史库 mtime 未变）。因此准确表述是「**当前已加载会话已自愈；历史库未扫掠**」。
+>    > **E 更正（2026-10-01，点值可复算；机制不变、口径收窄）**：上条的**机制成立**（自愈只在载入
+>    > 某个会话库时执行、不批量扫掠历史库），但其中三处表述**缺少限定、且一句过宽**，按 append-only
+>    > 纪律**保留原句并在此更正**：
+>    > ① 「3 个旧库」只有在**剔除索引文件**时才成立——同目录 `schemaVersion=1` 的文件**共 4 个**：
+>    > 3 个会话期旧库（mtime `2026-09-23 05:27–05:28+08:00`）＋ 全局已验库索引
+>    > `_global-verified.json`（mtime `2026-09-29 01:24:49+08:00`）；评审者复算得 4 = **类别歧义**，非漂移。
+>    > ② **删除过宽句**「重启后仅当前活动会话库被写入」：该索引 mtime **晚于** 09-28 重启边界（重启后确有
+>    > 写入），且它**不在**自愈路径上（`redactStore` 全仓**仅一处**调用点，作用于被载入的会话库）。
+>    > ③ 「含标记库 mtime 未变」降级为**逐文件 + 带时点**：封条时点那个含标记历史库 mtime 确未变，但测量
+>    > 当日含标记文件共 **5 个**、其中 **3 个是封条之后才被载入**的 `session-*` 会话库 ⇒ 不得作一般句。
+>    > ④ 上列计数均为 `2026-10-01 12:23:16+08:00` 的**点值**（目录随会话增长，非常量），且**时间戳一律
+>    > 标注时区**（本地 `+08:00` 与 UTC 差 8 小时，是"两份清单对不上"的另一来源）。
+>    > 复算：`node tools/learn-store-census.mjs`（只读、离线自检 14 断言、读不到即 fail-closed）；
+>    > 证据档 `docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/E_D12_STORE_CENSUS_20261001.md`。
+> 3. **F（D11 掩码机制的作用域，补记）**：评审的对抗性检查**通过**——掩码只会"**造出**"命中（把已脱敏文本
+>    再次命中），**不会删除**命中，故**未削弱**检测能力；其结论是：该掩码是**防误提交的回归门**，
+>    **不是**防恶意提交者的安全边界（恶意提交者可绕过任何工程门）。安全保证来自**真实密钥计数 = 0**
+>    与**逐次审计**，掩码只承担"防回归"。此句与 D11 口径并列存档，避免把工程门误读成安全边界。
+
 - 生成时间：2026-09-28 00:1x（本机）
 - 代码身份（**source == deployed**，四个插件逐一 SHA256 前 12 位一致）：
 
@@ -25,7 +86,7 @@
 
 | AC | 合同要求（逐字摘要） | 当前实现位置 | 本轮新鲜证据 | 裁决 |
 |---|---|---|---|---|
-| **AC1** | Experience compact、结构化、**无 Secret** | `learn-core.mjs` 家族模式表 + `redactSecrets`（7 处 @261,301,323,474,990,992…）；本轮新增 7 个家族（google/stripe/gitlab/huggingface/npm/pem/slack-webhook/uri-credential/generic-*）+ 载入自愈迁移 | 家族数 **19**；`test-learn-ac1-secret-families` **40 PASS/0 FAIL**（含 §5 自愈断言）；生产审计：会话库仍 **google=1、stripe=1**（旧进程写入的存量，修复后新写入为 0；同字节文件自愈证明已通过） | **PASS（代码+新写入）**；存量 2 命中待重启自愈清除 |
+| **AC1** | Experience compact、结构化、**无 Secret** | `learn-core.mjs` 家族模式表 + `redactSecrets`（7 处 @261,301,323,474,990,992…）；本轮新增 7 个家族（google/stripe/gitlab/huggingface/npm/pem/slack-webhook/uri-credential/generic-*）+ 载入自愈迁移 | 家族数 **19**；`test-learn-ac1-secret-families` **40 PASS/0 FAIL**（含 §5 自愈断言）；生产审计：会话库仍 **google=1、stripe=1**（旧进程写入的存量，修复后新写入为 0；同字节文件自愈证明已通过） | **PASS（代码+新写入）**；存量 2 命中待重启自愈清除 | 〔**⚠ 2026-10-01 时效标注：本行已过时** —— 已有 09-28 重启后归零；且该「2 命中」复算为**度量假阳性**、真实密钥 = 0；自愈作用域 = 按需（仅已加载会话），不扫掠历史库。见文首标注〕
 | **AC2** | 不会的问题**不第一时间失败/问用户**，低风险场景**会自主研究** | `learn-candidate.mjs:181 researchPlan`（定义）、`:116 MAX_RESEARCH_ATTEMPTS=3`、`learn-core.mjs:161 RESEARCH_BOUNDED_EXHAUSTED`；**2026-09-28 接线**：`learn.mjs` 研究腿 —— 工具输出契约新增 `researchDirective`，插件把 directive 交回**既有** agent 研究工具链执行（不新建第二套研究系统），有界失败落 `EXPERIENCE_LOOKUP_MISS` 遥测 | ① `test-learn-ac2-research-leg` **25 PASS / 0 FAIL**（真跑插件 execute 路径，非自证）；② **负控**：7 种「拆接线 / 假接线」突变**全部被抓住**（`_ac2-mutation-proof` **7 PASS / 0**  ⇒ 接线锁不是恒真）；③ **CI 内**：`ci-level2.yml` 已纳入该套件，真 CI 作业命令在隔离 commit `8211c184…` 上 `tests/learn/test-learn-ac2-research-leg.mjs (exit 0)`；④ **批准后发布链路**：`test-learn-b1-session-access` **22 PASS / 0**（真宿主 ApprovalService + 真人「允许一次」→ 批准 → 发布 → 进程重启后**另一会话仍可召回**，含拒绝/伪造/篡改负控） | **PASS（代码闭合 + CI 锁 + 负控）**。**注意**：生产 profile 仍是**旧插件副本**（`~/.dsh/profiles/web/learn.mjs` sha `6bdd3fe5…` ≠ 源 `bf5cfa6d…`；旧副本内 `researchDirective` = **0 命中**）⇒ **生产运行时遥测要等一次服务重启部署后才有**（部署 = 需用户在场的一次性动作，步骤见 `RUNBOOK.md`） |
 | **AC3** | 经验只有**验证成功后**进入 verified | `learn-core.mjs` verified 授予点（22 处 @126-141…）；`learn.mjs:757` | `test-learn-stage2-schema-and-negative-lock` 23 PASS、`test-learn-r2-b1-approval-gate` 19 PASS、`test-learn-b2-verify-output-contract` 21 PASS（全绿） | **PASS** |
 | **AC4** | 复用时做环境/version check | `learn-core.mjs` 适用性检查（24 处 @175,849-866…）、`learn.mjs` 6 处 | `run-learn-contract-scenarios` 36 PASS/0（场景②）；生产遥测 `RECALLED=1` | **PASS**（运行时证据偏薄：仅 1 次召回） |
@@ -52,12 +113,12 @@
 ## 三、A10 结论
 
 - **AC1 / AC3 / AC4 / AC5 / AC7 / AC8 / AC9 = PASS**（其中 AC5、AC1 有真实生产运行时/字节级证据）
-- **AC6 / AC10 = PARTIAL**（Transaction 腿**已由真 E2E 关闭**；**仍开：CI 内无真实 E2E 门 = AC10**）
+- **AC6 / AC10 = PARTIAL**（Transaction 腿**已由真 E2E 关闭**；**仍开：CI 内无真实 E2E 门 = AC10**） 〔**⚠ 2026-10-01 时效标注：本行已被取代** —— AC6 于 09-28 01:41 关闭、AC10 于 09-30 客观闭合，当前 AC6/AC10 = **PASS**。见文首标注〕
 - **AC2 = PASS（代码闭合 + CI 锁 + 负控）**（研究腿已接线：25P/0 + 突变 7/7 + CI 内 exit 0 + 批准后发布链路 22P/0）；
   **生产运行时遥测待部署**（生产 profile 仍跑旧副本 ⇒ 这不是"证据缺失被掩盖"，而是**已登记的待办动作**，见 §六）
-- **mandatory scenarios：③ 达成；② 半达成（合成）；④ 部分达成；① 未达成**
+- **mandatory scenarios：③ 达成；② 半达成（合成）；④ 部分达成；① 未达成** 〔**⚠ 2026-10-01 时效标注：本行已被取代** —— 按合同原文「至少设计并执行」，4 场景当前全部判**已执行**（生产自然实例缺口以"诚实边界"列登记）。见文首标注〕
 
-→ 按 A11 的判定条件，**P4 ≠ VERIFIED**。除 A8"真人审批不可达"这一结构性阻塞外，
+→ 按 A11 的判定条件，**P4 ≠ VERIFIED**。除 A8"真人审批不可达"这一结构性阻塞外，〔**⚠ 2026-10-01 时效标注：本判定已被取代** —— 当前判定字符串 = `VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW`（见文首标注与 `CURRENT_STATUS.md`）〕
 本轮又独立确认三个**合同级缺口**（AC2 研究腿、AC6 Transaction 腿、场景①/② 的真实性）。
 这些缺口**属于既有 P4 合同审查范畴**，本轮遵守"最小修复 + 只登记不扩范围"原则，
 **未擅自扩大改动**（B1/B2 最小修复范围外）。

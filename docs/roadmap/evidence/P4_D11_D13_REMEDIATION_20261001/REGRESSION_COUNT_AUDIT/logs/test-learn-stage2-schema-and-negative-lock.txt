@@ -1,0 +1,47 @@
+########## SUITE: tests/learn/test-learn-stage2-schema-and-negative-lock.mjs
+########## EXIT: 0
+########## ELAPSED_S: 1.98
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+══════ S. Ground Truth Schema Lock（真实会话：字段路径漂移 ⇒ 立即失败）
+  真实会话候选=12  含工具事实=12
+  tool/call   : 586 条（callId=586 name=586 arguments 存在=586 类型=string）
+  tool/result : 657 条（isError 布尔=657 callId 配对=657）
+  真实失败    : isError=true 29 条，带结构化 code 27 条，无 error 对象 2 条
+  真实拓扑    : tool/call 落在节点 seq 上 0 条；tool/result 0 条
+  观察上界外  : tool/call seq > max(nodeSeq) 1 条（按设计不提取）
+  ✓ S1 ★ 样本量下限：真实工具事实必须真的被读到（call=586 result=657 失败=29）
+  ✓ S2 ★ bring-up：tool/call 官方字段路径 100% 命中（callId / name / arguments）
+  ✓ S3 ★ bring-up：tool/result 官方字段路径 100% 命中（message.source.callId + content[].tool-result）
+  ✓ S4 ★ 结构事实：isError=true 绝大多数带结构化 error 对象（实测例外已记录，不靠文案判失败）
+  ✓ S5 结构不变量：工具成功（isError=false）不得携带结构化错误码
+  extractToolOutcomes 汇总：calls=585/585（真实，含上限 256）failures=29/29 successes=627 unresolved=15
+  ✓ S6 ★★ 核心（防静默 0 候选）：提取器必须逐会话识别全部真实工具事实
+  ✓ S7 ★★ 对照实验：把提取器真正读取的字段改名后必须归零（证明 S6 不是恒真式）
+  ✓ S8 ★ 真实拓扑：tool/call 与 tool/result 一律不落在节点 seq 上（历史死路径根因）
+
+══════ N. 负例锁（不得产出候选）与正例锁（必须产出候选）
+  ✓ N1 ★ 负例（网络超时/凭据/provider 中断/取消/调用方误用/无关工具失败）逐个不得成为能力候选
+  ✓ N2 ★ 负例：无结构化错误码的失败不得成为能力候选（fail-closed，且防签名塌缩）
+  ✓ N3 ★ 正例（防静默停学）：真实能力码必须仍可成为候选
+  ✓ N4 ★ 否决不静默：码级否决必须给出可读原因码（AC8 可观测性）
+  ✓ N5 ★ 名单卫生：否决表与真能力码互不重叠，且不可变
+  ✓ N6 ★ P2.6 域硬否决不变：provider 中断 / 网络超时 / 凭据失败仍被否决
+  ✓ N7 ★ 负例：工具成功不得产出能力候选（把"做得到"当成"做不到"）
+  ✓ N8 ★★ 负例（端到端）：网络超时 3 次不得产出能力候选
+  ✓ N8-b ★★ 否决不静默：必须在遥测里留下"被否决"的证据（防静默死路径）
+  ✓ N9 ★★ 负例（端到端）：凭据失败 + provider 中断 各达阈值 4 次不得产出候选
+  ✓ N9-b ★★ 否决不静默（多签名）：两个被否决的签名必须各自留痕
+  ✓ N9-c ★ 低于阈值的非能力失败：无候选但必须可见（不得全静默）
+  ✓ N10 ★★ 正例（端到端）：真实能力缺口重复达阈值必须产出候选
+  ✓ N10-b 签名含适配器版本 ⇒ 决策可追溯
+  ✓ N11 ★ 组级否决：混入一条非能力失败 ⇒ 整组不得成立（不得选择性忽略）
+
+════════════════════════════════════════════════════════════════════════
+STAGE 2 LOCK（Ground Truth Schema + 负例/正例）：23 PASS / 0 FAIL
+════════════════════════════════════════════════════════════════════════
+
+########## ---- STDERR ----
+

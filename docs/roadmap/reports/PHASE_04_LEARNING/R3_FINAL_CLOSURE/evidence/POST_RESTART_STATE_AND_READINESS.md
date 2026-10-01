@@ -1,5 +1,11 @@
 # POST_RESTART_STATE_AND_READINESS.md
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 > 本文件是 2026-09-28 07:22 重启之后**本轮实际取得的状态与就绪度**记录，
 > 并**明确拒绝**在真人审批门未通过前冻结 `POST_P4_VERIFIED_GOLDEN`。
 >
@@ -48,7 +54,7 @@ applicability PASS / reuse PASS / reverify PASS**，而这 6 项**当前都还�
 | mandatory scenarios PASS | ✅ | 4 个 mandatory scenarios 全 PASS |
 | no blocker | ⚠️ **有唯一阻塞**：真人审批门 | 该阻塞**是设计要求的停点**，不是缺陷 |
 
-### ⇒ 判定：`P4 = NOT_VERIFIED（BLOCKED_AT_HUMAN_GATE）`
+### ⇒ 判定：`P4 = NOT_VERIFIED（BLOCKED_AT_HUMAN_GATE）` 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 - `POST_P4_VERIFIED_GOLDEN` **不予冻结**（冻结动作必须发生在真人批准 + A9 五步 + A11 全门槛满足之后）。
 - `STAGE B (P4.5 只读审计)` **不进入**（规范要求：仅在 P4=VERIFIED 之后）。

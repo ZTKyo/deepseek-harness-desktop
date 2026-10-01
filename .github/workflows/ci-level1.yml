@@ -304,3 +304,147 @@ jobs:
           node plugins\supervisor-bridge-test.mjs
           if ($LASTEXITCODE -ne 0) { Write-Host "P275 SUPERVISOR CORE TEST FAIL"; exit 1 }
           Write-Host 'P2.75 supervisor core/tool-surface unit tests: PASS'
+
+      # ─── P4 EXTERNAL REVIEW D1 GATES (2026-10-01) ─────────────────────────────
+      # D1 turned "one current status per audited baseline" into two machine
+      # checks instead of a prose promise:
+      #   (a) parity -- the roadmap status index (docs/roadmap/P4_STATUS.json)
+      #       must agree with the authority document in BOTH directions, every
+      #       registered historical document must carry the staleness marker,
+      #       and no unregistered document may repeat a superseded headline;
+      #   (b) verbatim history -- for every registered document, each non-empty
+      #       line of the HEAD revision must still be a strict PREFIX of a
+      #       working-tree line ("annotate, never rewrite").
+      # Both are pure node, repo-relative and read-only (no network, no creds).
+      # Authority on conflict: docs/roadmap/CURRENT_STATUS.md.
+      #
+      # NOTE (D4, recorded not fixed): tests/roadmap is NOT listed in the
+      # ci-level3 `paths:` filter, and plugins/*.mjs only matches one level.
+      # A pull request touching ONLY such files would never start L3, so the
+      # required context "DSH boot + readiness smoke" would never be reported.
+      # See docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/
+      # D3_D4_MERGE_GATE_GOVERNANCE_20261001.md.
+      - name: P4 roadmap status parity gate (D1)
+        shell: pwsh
+        run: |
+          node tests\roadmap\validate-p4-status-consistency.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "P4 STATUS CONSISTENCY FAIL"; exit 1 }
+
+      - name: P4 history preservation gate (D1)
+        shell: pwsh
+        run: |
+          node tests\roadmap\verify-history-preserved.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "HISTORY PRESERVATION FAIL"; exit 1 }
+
+      - name: Finding A controls (per-AC verdict consistency must be enforceable, not decorative)
+        shell: pwsh
+        run: |
+          # Finding A: the per-AC status rows were only a prose promise. This control runs the
+          # REAL parity gate against a throwaway copy of the tree and asserts 11 cases:
+          # a legitimate synchronised change stays GREEN (A0/A7) while ten real tamperings
+          # (index/authority disagree, missing AC row, unknown AC key, illegal verdict token,
+          # summary still claiming all-PASS) each turn it RED on the *specific* numbered check.
+          # The copy is `git init`-ed with one commit on purpose: the anchor gate proves what is
+          # history via `git show HEAD:<file>`, and without a HEAD the baseline would be red for
+          # an unrelated reason — every RED case would then pass for the wrong reason (false green).
+          node tests\roadmap\test-p4-status-per-ac-consistency.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING A PER-AC CONTROLS FAIL"; exit 1 }
+
+      - name: Finding A controls EOL matrix (a runner tree is CRLF; prove the LF checkout too)
+        shell: pwsh
+        run: |
+          # Real CI incident (2026-10-01, this workflow): the step above passed on the developer
+          # tree and FAILED on the runner — `A3a: expected pattern not found in
+          # docs\roadmap\P4_STATUS.json`. Cause: the repo's blobs are LF but this job runs on
+          # windows-latest, where the checkout comes out CRLF, and one mutation needle contained a
+          # literal `\n`, so it only matched an LF tree. A control that is green on ONE checkout
+          # style is not proven. `run-control-in-eol.mjs` rebuilds a clean converted checkout
+          # (tracked files only + one real commit) and runs the same suite there, so the opposite
+          # style is exercised on every CI run instead of only by hand.
+          git ls-files --eol docs/roadmap/P4_STATUS.json   # evidence: the real EOL style of this checkout
+          node tools\run-control-in-eol.mjs tests/roadmap/test-p4-status-per-ac-consistency.mjs lf
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING A EOL MATRIX (LF) FAIL"; exit 1 }
+
+      - name: Finding B controls (release-artifact verdict must depend on content, not on the checkout)
+        shell: pwsh
+        run: |
+          # Finding B (R1 external review, reproduced on one commit): the release-artifact
+          # verifier answered IDENTICAL in an LF checkout and DRIFT in a CRLF checkout. This
+          # control runs the REAL verifier against byte-controlled variants of the REAL artifact
+          # in a throwaway copy: LF/CRLF/CR/mixed/cross-file EOL variants must all exit 0, while
+          # nine real content drifts (body, deleted section, non-EOL whitespace, stale/missing/
+          # malformed/self-conflicting header hashes, extra trailing newline) must exit 1.
+          node tests\roadmap\test-release-artifact-verifier.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING B RELEASE-ARTIFACT CONTROLS FAIL"; exit 1 }
+
+      - name: P4 document anchor gate (D - hand-written line pointers must not come back)
+        shell: pwsh
+        run: |
+          # Finding D: a hand-written pointer like `L33` drifts when the document changes
+          # (measured: +34 lines) and nothing notices. Line numbers are derived data.
+          # This gate resolves every registered anchor (fail-closed if one disappears) and
+          # rejects NEW hand-written line pointers inside the registered ban blocks
+          # (append-only history lines are exempt, judged against `git show HEAD:<file>`).
+          node tools\check-doc-anchors.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "DOC ANCHOR GATE FAIL"; exit 1 }
+          # Scope is reported, not hidden: the census is heuristic and informational only.
+          node tools\check-doc-anchors.mjs --census
+
+      - name: P4 document anchor gate NEGATIVE CONTROL (the ban must be able to turn red)
+        shell: pwsh
+        run: |
+          # A gate that can never fail is decoration. This test builds a throwaway fixture
+          # plus a throwaway registry in a temp dir (it never touches repo documents) and
+          # asserts three cases: bare new line pointer => RED, anchor-bearing => GREEN,
+          # pointer outside the banned block => not flagged.
+          node tests\roadmap\test-anchor-gate-negative-control.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "ANCHOR GATE NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Finding E NEGATIVE CONTROL (the "point value, not a constant" rule must be able to turn red)
+        shell: pwsh
+        run: |
+          # External Review Finding E was about an unqualified number, so the fix is a written
+          # qualification plus an assertion (validator H2/H5). This control proves those two
+          # assertions are falsifiable WITHOUT touching repo files: it copies the tree to a temp
+          # mirror (git init + one commit so the anchor gate's frozen-line exemption still works),
+          # checks the mirror baseline is green, then injects the E defect class twice
+          # (drop the "not a constant" qualifier; falsify the census fixture expectation) and
+          # requires H5 / H2 to flip PASS -> FAIL, then restore and require them green again.
+          node tests\roadmap\test-finding-e-negative-control.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING E NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Finding C NEGATIVE CONTROL (the question answered with 43) must be able to turn red
+        shell: pwsh
+        run: |
+          # External Review Finding C was: the authority document's self-reported numbers
+          # (43 assertions / 1420 lines / 55 exemptions) were stale AND no gate pinned them.
+          # The fix (validator I1/I2/I3) makes the numbers machine-recomputed. This control proves
+          # those assertions are falsifiable WITHOUT touching repo files: it mirrors the tree to a
+          # temp dir (git init + one commit), requires a green baseline, then injects three defect
+          # forms one at a time - stale assertion count (I2), stale HEAD-line count (I3), and the
+          # declaration line deleted outright (I1 fail-closed) - and requires the matching
+          # assertion to flip PASS -> FAIL, then restore and require green again.
+          node tests\roadmap\test-finding-c-number-pinning.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "FINDING C NEGATIVE CONTROL FAIL"; exit 1 }
+
+      - name: Release artifact integrity (named copy must equal the authoritative body)
+        shell: pwsh
+        run: |
+          # External Review Finding G: this verifier was the ONLY credential behind the
+          # "release artifact is identical" claim, yet no workflow invoked it - the claim was
+          # local-only. It is read-only and sub-second, so it belongs in the required gate.
+          # Verdict is EOL-normalised (Finding B): the same content judged IDENTICAL on LF and
+          # CRLF checkouts; real content drift still reports DRIFT and exits 1.
+          node tools\verify-release-artifact.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "RELEASE ARTIFACT DRIFT"; exit 1 }
+
+      - name: Release artifact verifier NEGATIVE CONTROL (the verdict must be able to turn red)
+        shell: pwsh
+        run: |
+          # Finding G, control half: the verifier must be falsifiable, and it must NOT be
+          # falsifiable by line-ending configuration alone (that was Finding B's blocker).
+          # The control runs against temp copies only: body drift => DRIFT/exit 1,
+          # stale header hash => DRIFT/exit 1, LF vs CRLF of identical content => IDENTICAL/exit 0,
+          # restore => IDENTICAL/exit 0.
+          node tests\roadmap\test-release-artifact-verifier.mjs
+          if ($LASTEXITCODE -ne 0) { Write-Host "RELEASE ARTIFACT VERIFIER CONTROL FAIL"; exit 1 }

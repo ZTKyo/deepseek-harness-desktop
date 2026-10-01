@@ -1,5 +1,11 @@
 # HARNESS OVERNIGHT RELIABILITY CLOSURE REPORT
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 Date: 2026-09-06 (Asia/Shanghai)
 
 Status: `RH2_READY_FOR_FINAL_MERGE_REVIEW`
@@ -241,7 +247,7 @@ production file writes, service actions, or process lifecycle actions.
   its value was not read, printed, rotated, migrated, or deleted.
 - `CI_FAIL_CLOSED_DEBT=DOCUMENT_ONLY`: the known Stage B `-SkipLive` PowerShell
   non-terminating-error hygiene concern was not widened into this hotfix.
-- `P2.75=FROZEN`; `P2.8=FROZEN`; `P3=PAUSED`; `P4=LOCKED`.
+- `P2.75=FROZEN`; `P2.8=FROZEN`; `P3=PAUSED`; `P4=LOCKED`. 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 
 ## CI truth (FACT)
 

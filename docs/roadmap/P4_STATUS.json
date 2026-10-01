@@ -1,0 +1,291 @@
+{
+  "version": 1,
+  "_purpose": "P4 状态一致性 PARITY INDEX（不是权威面）。权威面 = authorityRequirements.authorityDoc。本文件只供 tests/roadmap/validate-p4-status-consistency.mjs 做 fail-closed 校验，防止 P4 判定与逐条 AC 状态在同一 commit tree 内再次出现互相矛盾的声明。",
+  "_remediation": "P4 External Review remediation, D1（2026-10-01）",
+  "_r2Remediation": "P4 R2（2026-10-01）闭环 R1 外部评审 Finding A：本索引的 acVerdicts 现在必须与权威文档（authorityRequirements.authorityDoc）中由 acVerdictTableHeading 定位的**逐条 AC 裁决表**完全相等（校验器断言 B4–B9，fail-closed）。权威表位于另一文件、由人工维护、绝不由本索引生成 ⇒ 两侧是互相独立的声明，不构成同源自证；校验器不硬编码「AC 恒为 PASS」，只比较裁决 token 并由解析结果派生汇总句与 P4 判定的一致性。同轮 R2 另闭环 Finding B（发布件哈希判据 = CANONICAL_BODY_SHA256，行尾风格不参与判定；见发布件注释头与 tools/verify-release-artifact.mjs）、Finding C（权威文档自述数字陈旧，**且当时仓库内没有任何门钉住这些数字**：原自述 43 断言 / 1420 行 / 55 豁免 vs 门实测 45/1934/59。处置＝① 权威文档改为**唯一一行机器可核数字口径行**；② 校验器新增 I1–I3 当场重算并逐字比对——断言数 = 该门**运行时**断言总数（不是 check() 调用点个数），历史文档数 / HEAD 行数 / 表格分隔行豁免数 = verify-history-preserved.mjs **当场跑出来**的三个数（不读缓存、不读历史报告），任一侧单独改动而另一侧未改即变红；③ 负控 tests/roadmap/test-finding-c-number-pinning.mjs（临时副本差分，17 断言，已接线 ci-level1）证明 I1/I2/I3 可证伪；④ 历史自述值按 D1「只标注不改写」纪律保留为记录、不参与比对。更正说明：本轮草稿曾把 Finding C 的整改写成「校验器 C1–C8」，实为误记——C1–C8 是权威文档 canonical 字符串与单一口径行的平价断言，与「钉住数字」无关）与 Finding D（文档定位弃用手写行号、改用锚点：docAnchors/linePointerBans + tools/check-doc-anchors.mjs + 负控测试，校验器 G1–G7）与 Finding E（D12 自愈作用域表述收窄为「类别 + 时点 + 时区」三重限定的**点值**口径：`schemaVersion=1` 共 4 个文件 = 3 个会话期旧库 + 1 个全局已验库索引 `_global-verified.json`；删除过宽句「重启后仅当前活动会话库被写入」；「含标记库 mtime 未变」降级为逐文件+带时点；新增只读普查工具 tools/learn-store-census.mjs（含 14 断言离线自检与 fail-closed）与证据档 E_D12_STORE_CENSUS_20261001.md，校验器 H1–H7，负控 tests/roadmap/test-finding-e-negative-control.mjs（临时副本差分，11 断言，已接线 ci-level1））。同轮补记 Finding F（D11 掩码 = 防回归工程门，不是防恶意提交者的安全边界；安全保证来自真实密钥计数=0 与逐次审计）。收官加固（同轮收口）：① 发现并修复**负控自身**的环境缺陷——Finding A 的 tests/roadmap/test-p4-status-per-ac-consistency.mjs 在复制树时跳过 .git，锚点门的 `git show HEAD:<file>` 因此无法判定「冻结历史行」，副本基线恒红 ⇒ 两个「应保持绿」的用例必然失败，更严重的是其余「应为红」的用例会**因错误原因通过（假绿）**；修法＝副本内 `git init` + 一次提交，并把「基线必须为绿」提升为显式断言（副本红即 exit 1）。② 补齐**归属**：A/B 两个控制此前未被任何 workflow 调用（tests/roadmap 亦不在 ci-level3 的 paths 过滤内，即 D4 已知缺口），现二者与本控制一并接线 ci-level1；校验器 H7 由「只查 E 控制」泛化为「五个控制套件都必须存在且被某条 workflow 真实调用」（扫全部 workflow，不绑定具体航道、允许后续迁移）。③ E 负控新增注入 C，证明 H7 本身可证伪（删掉接线行 ⇒ H7 PASS→FAIL，还原后回绿），负控断言数由 11 增至 14（基线 2 + A 4 + B 4 + C 3 + 零副作用 1）。④ Finding C 的数字钉住负控 tests/roadmap/test-finding-c-number-pinning.mjs 上线（17 断言：基线 3 + 注入 A 4 + 注入 B 4 + 注入 C 4 + 零副作用 1），H7 清单同步由四个控制扩到五个控制。**R2 收口追加（2026-10-01）**：⑤ Finding G 闭环 —— 评审指出「交付物校验器写了、却没有任何航道会跑它」：`tools/verify-release-artifact.mjs` 与其负控、以及 A/B/C/E 四套控制**全部接入** required workflow `ci-level1.yml`；H7 由「存在」泛化为「存在**且**被某 workflow 真实调用」（扫全部 workflow，不绑定航道）。⑥ 口径更正（L23）—— 评审记录里「L23 指针失效」这句话的**行号部分只在旧修订成立**：该行在 `main@63bf558`（加时效标注前）为第 23 行、在本轮评审对象 `74adf93`（加 6 行标注后）为第 29 行 ⇒ 该行号已停止使用，定位一律用锚点 `AC6.a10pointer`；而「指针失效 ⇒ 结论无从复核」这一**更强读法不可复现**（所引原文与取代事实都能按锚点定位）——性质是 D 的「行号式定位不可靠」，不是结论丢失。更正只改**读法**、不改任何裁决；完整登记见 `EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md` §21。⑦ 证据档 `evidence/C_NUMBER_PINNING_20261001.md` 与锚点 `doc.cNumberPinning` 同步登记；权威文档新增 §21 附录（R2 逐条处置表 + 四个基线对账表 + L23 口径更正 + 复验台账 + 未覆盖边界 + 改动清单），并在该文档的 D1 汇总行与 §5 判定句行尾各加挂一处「R2 数字口径更正」标注（append-only：原文仍是该行严格前缀）。",
+  "auditedBaseline": "63bf5585c64742169c8b66ddfc2938e7de936343",
+  "authorityRequirements": {
+    "authorityDoc": "docs/roadmap/CURRENT_STATUS.md",
+    "p4Status": "VERIFIED (ENGINEERING-COMPLETE) / AWAITING EXTERNAL REVIEW",
+    "canonicalSealHeading": "## 2026-09-30 P4 canonical 封条",
+    "remediationSectionMarker": "2026-10-01 External Review remediation",
+    "overviewRowPrefix": "| 04 |",
+    "acStatusSentence": "AC1–AC10 全部 PASS",
+    "acVerdictTableHeading": "| AC | 合同要求（逐字摘要） | 当前状态 | 仓库内可复算的当前证据 |"
+  },
+  "stalenessMarkerToken": "2026-10-01 时效标注",
+  "sweepExemptDocs": [
+    {
+      "path": "docs/roadmap/CURRENT_STATUS.md",
+      "reason": "权威面本体：按设计逐字保留 2026-09-23 回滚记录与旧判定原文（历史不得删除），其自身一致性由本校验器 C1–C8 断言保证。"
+    }
+  ],
+  "acVerdictVocabulary": ["PASS", "PARTIAL", "FAIL"],
+  "acVerdicts": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS",
+    "AC8": "PASS",
+    "AC9": "PASS",
+    "AC10": "PASS"
+  },
+  "postP4State": {
+    "postP4VerifiedGoldenFrozen": false,
+    "p4ProductionActivated": false,
+    "phase05Started": false,
+    "p4_5Started": false
+  },
+  "supersededDocs": [
+    {
+      "path": "RELIABILITY_HOTFIX_RH2_R1_REPORT.md",
+      "staleStrings": ["P4 = LOCKED"],
+      "note": "RH2 热修报告（仓库根）：其 `P4 = LOCKED` 属封条前历史口径，已加时效标注。"
+    },
+    {
+      "path": "RELIABILITY_RH2_R11_OVERNIGHT_REPORT.md",
+      "staleStrings": ["P4=LOCKED"],
+      "note": "RH2 R11 隔夜报告（仓库根）：同上。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "staleStrings": ["AC6 / AC10 = PARTIAL", "P4 ≠ VERIFIED"],
+      "note": "C1：同一文件内 AC6 逐条行（裁决 PASS）与 §三 汇总行（`AC6 / AC10 = PARTIAL`）自相矛盾；根因=2026-09-28 01:41 AC6 关闭只改了逐条行、漏改汇总行。定位改用锚点 `A10.ac6row` / `A10.superseded.ac6ac10` —— 行号是派生数据，由 tools/check-doc-anchors.mjs 当场算出，不再手写（D 修复）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/P4_FINAL_VERDICT.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "C2 最严重实例：被取代的判定就是本文件的**标题行本身**（故无需手写行号：它按定义就是第 1 行标题）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R2/RELEASE_EVIDENCE_INDEX.md",
+      "staleStrings": ["NOT VERIFIED / ROLLED BACK / AWAITING REDESIGN"],
+      "note": "C3 指向失效的让位声明：本行把「不因本文件改变」让位给的 CURRENT_STATUS P4 行旧值逐字抄下，让位目标更新后本行成为残留。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC2_RESEARCH_LEG_CLOSURE.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "下游继承被取代总判定。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "C5：本文件「缺口原文（关闭前）」表把 `A10_CONTRACT_MATRIX.md:33` 引为裁决 PARTIAL，而 A10 该处自 2026-09-28 起已是 PASS ⇒ 该指针是**行号式**定位、A10 自身此后整体偏移，故不再落在所引裁决行上（失效说明已在同处行尾给出；性质＝D 的行号定位不可靠，不是结论丢失）。〔2026-10-01 R2 口径更正：评审记录里「L23」这一行号**只在旧修订成立** —— `main@63bf558`（加时效标注前）为第 23 行，评审对象 `74adf93`（加 6 行标注后）为第 29 行；该行号已停止使用，定位一律用锚点 `AC6.a10pointer`。而「指针失效 ⇒ 结论无从复核」这一更强读法**不可复现**：所引原文与取代事实都能按锚点定位。只更正读法，不改任何裁决；完整登记见 EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md §21.4。〕定位改用锚点 `AC6.gapSection` / `AC6.a10pointer`，不再用行号（D 修复）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC10_GATE_REGISTRY_AND_REAL_E2E_IN_CI.md",
+      "staleStrings": ["CI 内无真实 E2E 门"],
+      "note": "AC10 已于 2026-09-30 客观闭合（真实 E2E 进入必需门）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/PRE_DEPLOY_PREFLIGHT.md",
+      "staleStrings": ["P4 ≠ VERIFIED"],
+      "note": "部署前预检的旧口径。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/POST_RESTART_STATE_AND_READINESS.md",
+      "staleStrings": ["P4 = NOT_VERIFIED"],
+      "note": "重启后就绪度证据（历史实证，保留原样 + 标注）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/POST_RESTART_LOAD_AND_REGRESSION.md",
+      "staleStrings": ["P4 = VERIFIED"],
+      "note": "STAGE B 前置条件表述（历史实证，保留原样 + 标注）。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/CONTRACT_RECONCILIATION_R1.md",
+      "staleStrings": ["合同口径结论", "PARTIAL"],
+      "note": "R1 期合同对齐（历史口径）；本文件 §「Acceptance Criteria」仍是 canonical 合同 AC1–AC10 逐字原文，未过时。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/INDEPENDENT_DELTA_REVIEW_R1.md",
+      "staleStrings": ["整体终裁", "PARTIAL"],
+      "note": "独立增量评审旧终裁。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md",
+      "staleStrings": ["AC1-AC12", "all satisfied"],
+      "note": "REPORT_R1 使用 R1 自定 AC1–AC12（与合同 AC1–AC10 同号不同义）。"
+    }
+  ],
+  "numberingDisambiguated": [
+    {
+      "path": "tests/learn/test-learn-core.mjs",
+      "requiredToken": "AC 编号声明",
+      "note": "D8：本文件注释里的 (ACn) 指向 R1 自定 AC1–AC12，不是合同 AC1–AC10。"
+    },
+    {
+      "path": "docs/roadmap/reports/PHASE_04_LEARNING/REPORT_R1.md",
+      "requiredToken": "编号声明（2026-10-01）",
+      "note": "D8：自定编号表本身必须声明其编号体系。"
+    }
+  ],
+  "_docAnchorPurpose": "D（2026-10-01 External Review R1）：文档里的手写行号指针会随改动整体偏移（实测 A10 更正表 +34）且无门可察。行号=派生数据 ⇒ 不再手写，改由 tools/check-doc-anchors.mjs 按「文档+标题/唯一文本/代码标识」当场解析并打印。本数组是锚点注册表，section G 断言其全部解析成功。",
+  "docAnchors": [
+    {
+      "id": "A10.currentStatus",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "heading",
+      "value": "### 当前状态（唯一口径，基线 `main@63bf558`）",
+      "note": "取代手写『当前状态 = L11』：更正表里『见「当前状态」』现在解析到此标题。"
+    },
+    {
+      "id": "A10.section1",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "heading",
+      "value": "## 一、AC1–AC10（canonical）",
+      "note": "取代手写『§一 AC6 行（L33）』里的 §一 定位。"
+    },
+    {
+      "id": "A10.section3",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "heading",
+      "value": "## 三、A10 结论",
+      "note": "取代手写『§三 L55 / L58 / L60』里的 §三 定位。"
+    },
+    {
+      "id": "A10.ac6row",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "line",
+      "value": "| **AC6** | Candidate **复用现有 CI/Transaction**",
+      "note": "§一 里 AC6 逐条行的唯一文本锚点（旧写法 L33 整体偏移 +34）。"
+    },
+    {
+      "id": "A10.superseded.ac6ac10",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "line",
+      "value": "**AC6 / AC10 = PARTIAL**（Transaction 腿**已由真 E2E 关闭**",
+      "note": "§三 汇总行的唯一文本锚点（旧写法 §三 L55）。"
+    },
+    {
+      "id": "AC6.gapSection",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md",
+      "kind": "heading",
+      "value": "## 2. 缺口原文（关闭前）",
+      "note": "取代『L23 指向 A10_CONTRACT_MATRIX.md:33』的行号部分：缺口原文表位置由本锚点确定。"
+    },
+    {
+      "id": "AC6.a10pointer",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md",
+      "kind": "line",
+      "value": "| `A10_CONTRACT_MATRIX.md:33` | 裁决 **PARTIAL**",
+      "note": "被引指针的**原文**保留不改（历史不得删改），但它只是历史文本、不再是有效行号引用；失效说明紧随其后。"
+    },
+    {
+      "id": "STATUS.d1index",
+      "file": "docs/roadmap/CURRENT_STATUS.md",
+      "kind": "line",
+      "value": "**② D1 历史文档时效标注索引（矛盾以标注消解，不删不改历史）**",
+      "note": "D1 索引块自身的锚点；索引里对各历史文档的定位一律改为锚点式引用。"
+    },
+    {
+      "id": "R1.d12section",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/EXTERNAL_REVIEW_REMEDIATION_CLOSURE_R1.md",
+      "kind": "heading",
+      "value": "## 8. D12 修复：脱敏自愈范围的表述与实现一致",
+      "note": "E：D12 自愈范围的表述在此；措辞按实测范围收敛（不加宽、不缩窄）。"
+    },
+    {
+      "id": "code.learn.loadBoundaryHeal",
+      "file": "plugins/learn.mjs",
+      "kind": "code",
+      "value": "载入边界自愈",
+      "note": "E：自愈发生的**代码位置**（loadStore 载入边界）——机制锚点，取代会漂移的行号。"
+    },
+    {
+      "id": "code.learn.redactToken",
+      "file": "plugins/learn.mjs",
+      "kind": "code",
+      "value": "STORE_REDACTED sid=",
+      "note": "E：自愈落盘的诊断 token（可 grep 复核；脱敏只改预置的敏感字段）。"
+    },
+    {
+      "id": "code.audit.summarize",
+      "file": "tests/learn/audit-merge-enforcement.mjs",
+      "kind": "code",
+      "value": "function summarize(f) {",
+      "note": "G：结论句派生的唯一入口（所有措辞都由它一处生成）。"
+    },
+    {
+      "id": "code.audit.selfTest",
+      "file": "tests/learn/audit-merge-enforcement.mjs",
+      "kind": "code",
+      "value": "G3 R1 conflicting sentence can no longer be produced",
+      "note": "G：R1 冲突句的回归锁（离线负控断言）。"
+    },
+    {
+      "id": "STATUS.eCorrection",
+      "file": "docs/roadmap/CURRENT_STATUS.md",
+      "kind": "line",
+      "value": "E 更正（External Review Finding E",
+      "note": "E：D12 自愈作用域的**口径更正块**（类别 + 时点/时区 + 点值非常量三点限定）；取代易漂移的行号。"
+    },
+    {
+      "id": "STATUS.fScope",
+      "file": "docs/roadmap/CURRENT_STATUS.md",
+      "kind": "line",
+      "value": "F 补记（External Review Finding F",
+      "note": "F：D11 掩码的**作用域固定句**（防误提交回归门 ≠ 防恶意提交者安全边界）。"
+    },
+    {
+      "id": "A10.eCorrection",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "kind": "line",
+      "value": "E 更正（2026-10-01，点值可复算",
+      "note": "E：A10 侧的同源更正（append-only：原句保留，更正另起一块）。"
+    },
+    {
+      "id": "code.census.selfTest",
+      "file": "tools/learn-store-census.mjs",
+      "kind": "code",
+      "value": "function selfTest()",
+      "note": "E：普查工具自身的**可证伪性入口**（离线 fixture 自检；与生产的只读普查共用同一 bucket 逻辑）。"
+    },
+    {
+      "id": "doc.eCensusEvidence",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/E_D12_STORE_CENSUS_20261001.md",
+      "kind": "heading",
+      "value": "D12「自愈作用域」表述更正",
+      "note": "E：证据档唯一入口（含复算命令、原始清单、负控与未覆盖边界）。"
+    },
+    {
+      "id": "doc.r2ControlHardening",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/R2_CONTROL_HARDENING_20261001.md",
+      "kind": "heading",
+      "value": "R2 收官加固（2026-10-01）",
+      "note": "收官加固：负控环境缺陷（副本非 git ⇒ 基线恒红 ⇒ 应为红的用例因错误原因通过＝假绿）与控制「无 CI 归属」两条发现的原始输出、修法与未覆盖边界。"
+    },
+    {
+      "id": "doc.cNumberPinning",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/evidence/C_NUMBER_PINNING_20261001.md",
+      "kind": "heading",
+      "value": "Finding C 证据",
+      "note": "C：数字钉住的证据档 —— 四个基线的对账表（43/1420/55 旧自述 → 45/1800/59 本报告作者期 → 45/1934/59 评审实测 → 90/1961/59 当前）、I1–I3 的当场重算原始输出、17 断言负控、未覆盖边界（本机制只钉四个数字；两侧同时被改成同一错值的对抗性篡改不在威胁模型内），并记录一次**本机制当场抓住自己造成的漂移**（新增本锚点 ⇒ 运行时断言总数 89→90 ⇒ I2 立刻红，更正声明值后回绿）。"
+    }
+  ],
+  "_linePointerBanPurpose": "D 回归锁：下列区块/行**不得再出现手写行号指针**（命中即 FAIL）。三段式判据：命中 banPattern 且不是 git HEAD 的冻结文本（append-only 历史豁免）且未同时给出锚点 ⇒ FAIL。锁的是根因，不只是修一次。可证伪性由负控测试证明：tests/roadmap/test-anchor-gate-negative-control.mjs（3/3，裸行号必红 / 带锚点必绿 / 区块外不误杀），并在校验器 §G 的 G7 中断言；专档 evidence/D_DOC_ANCHORS_20261001.md。",
+  "linePointerBans": [
+    {
+      "id": "ban.A10.banner",
+      "file": "docs/roadmap/reports/PHASE_04_LEARNING/R3_FINAL_CLOSURE/A10_CONTRACT_MATRIX.md",
+      "fromHeading": "### 当前状态（唯一口径，基线 `main@63bf558`）",
+      "toHeading": "## 一、AC1–AC10（canonical）",
+      "banPattern": "\\bL\\d{2,3}\\b",
+      "frozenExempt": true,
+      "requireAnchorPattern": "锚点|`[A-Za-z][A-Za-z0-9_]*\\.[A-Za-z]",
+      "note": "A10 更正表曾整体 +34 偏移（实测）。历史行按 append-only 豁免；**新写入**的行号指针必须同时给出锚点，否则 FAIL。"
+    },
+    {
+      "id": "ban.STATUS.d1row",
+      "file": "docs/roadmap/CURRENT_STATUS.md",
+      "containing": "| 4 | `…/R3_FINAL_CLOSURE/AC6_REAL_PROMOTION_CLOSURE.md` |",
+      "banPattern": "`L\\d{2,3}`|:\\d{2}\\b",
+      "frozenExempt": true,
+      "requireAnchorPattern": "锚点|`[A-Za-z][A-Za-z0-9_]*\\.[A-Za-z]",
+      "note": "D1 索引第 4 行曾写 L23 指向 A10:33（指针失效）。该行号仅作历史描述保留；锚点引用必须同处给出。"
+    }
+  ]
+}

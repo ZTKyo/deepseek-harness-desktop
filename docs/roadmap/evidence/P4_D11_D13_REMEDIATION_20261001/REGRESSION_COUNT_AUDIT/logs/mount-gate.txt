@@ -1,0 +1,10 @@
+########## SUITE: tests/learn/mount-gate.mjs
+########## EXIT: 2
+########## ELAPSED_S: 0.96
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+ENV_ERROR: 缺少 --plugin <learn.mjs 绝对路径>
+
+########## ---- STDERR ----
+

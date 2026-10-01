@@ -1,0 +1,73 @@
+﻿registry entries      : 43
+really wired in CI    : 23
+registered but NOT run by any CI lane : 20
+registry<->CI mismatch: 0
+tests/learn files referenced by CI but absent from registry: 0
+
+
+--- wired in CI (workflow:line) ---
+  test-learn-plugin-contract.mjs                 [gate]  ci-level2.yml:L142
+  test-learn-core.mjs                            [gate]  ci-level2.yml:L188
+  test-learn-candidate.mjs                       [gate]  ci-level2.yml:L189
+  test-learn-ac5-e2e.mjs                         [gate]  ci-level2.yml:L191
+  test-learn-stage85-twins.mjs                   [gate]  ci-level2.yml:L192
+  test-learn-real-topology-tool-events.mjs       [gate]  ci-level2.yml:L193
+  test-learn-candidate-receipts.mjs              [gate]  ci-level2.yml:L194
+  test-learn-ac2-research-leg.mjs                [gate]  ci-level2.yml:L195
+  test-learn-r3-fixes.mjs                        [gate]  ci-level2.yml:L196
+  test-learn-r3-hardening.mjs                    [gate]  ci-level2.yml:L197
+  test-learn-r3-secrets.mjs                      [gate]  ci-level2.yml:L198
+  redteam-r3-contamination.mjs                   [gate]  ci-level2.yml:L199
+  redteam-r3-isolation.mjs                       [gate]  ci-level2.yml:L200
+  redteam-r3-labels.mjs                          [gate]  ci-level2.yml:L201
+  redteam-r3-probe.mjs                           [gate]  ci-level2.yml:L202
+  test-learn-b2-verify-output-contract.mjs       [gate]  ci-level2.yml:L203
+  test-learn-r2-f2-store-min.mjs                 [gate]  ci-level2.yml:L204
+  redteam-r3-injection-positions.mjs             [gate]  ci-level2.yml:L205
+  test-learn-ac6-real-promotion-e2e.mjs          [gate]  ci-level3.yml:L597
+  _ac2-mutation-proof.mjs                        [mutation-proof]  ci-level2.yml:L225
+  validate-gate-registry.mjs                     [registry-gate]  ci-level1.yml:L125
+  _ac10-registry-mutation-proof.mjs              [mutation-proof]  ci-level1.yml:L139
+  test-learn-ac6-candidate-durability.mjs        [gate]  ci-level2.yml:L190
+
+--- NOT run by CI (must carry requires + exclusionReason + localCommand) ---
+  test-learn-b1-session-access.mjs               [gate] excluded-with-reason=true
+      requires: 宿主**已安装**的 @deepseek-ai/dsh 包（mkHostApproval → resolveHarnessPackage 需要 cordis + dsh-user-
+  test-learn-ac1-secret-families.mjs             [gate] excluded-with-reason=true
+      requires: 已部署的 profile：$USERPROFILE\.dsh\profiles\web\learn-core.mjs（测试直接 import 生产部署字节）
+  test-learn-ac5-gap-veto.mjs                    [gate] excluded-with-reason=true
+      requires: 生产 P2.6 遥测 $USERPROFILE\.dsh\p26-failure-classifier.log（D1『evidence stream present』读它）
+  test-learn-r2-b1-approval-gate.mjs             [gate] excluded-with-reason=true
+      requires: 真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR 指向播种语料）,宿主批准事实（approval ledger）
+  test-learn-r2-b2-bounds.mjs                    [gate] excluded-with-reason=true
+      requires: 真实会话语料 ~/.dsh/sessions（或 DSH_SESSIONS_DIR）
+  test-learn-r3-approval-forgery.mjs             [gate] excluded-with-reason=true
+      requires: 真实会话候选（machine-checkable 证据面）
+  test-learn-stage2-schema-and-negative-lock.mjs [gate] excluded-with-reason=true
+      requires: 真实会话语料（S1/S6/S7 需要真实 tool/result 事实）
+  run-learn-contract-scenarios.mjs               [gate] excluded-with-reason=true
+      requires: ≥2 个真实会话文件
+  run-learn-real-e2e.mjs                         [gate] excluded-with-reason=true
+      requires: 真实会话文件（默认 ~/.dsh/sessions，可 DSH_SESSIONS_DIR）
+  run-learn-real-gap-e2e.mjs                     [gate] excluded-with-reason=true
+      requires: 真实会话语料中确实含『重复未解决工具失败』（≥2 次同签名）
+  redteam-r3-metrics.mjs                         [gate] excluded-with-reason=true
+      requires: 外部审计产物 $USERPROFILE\Desktop\sdeepseek harness\_r3\r3_quality_sample.json（R3 抽样人工评审结果，不在仓内）
+  redteam-r3-quality.mjs                         [gate] excluded-with-reason=true
+      requires: 真实会话语料（candidates ≥1，取体积最大者）
+  production-load-probe.mjs                      [tool] excluded-with-reason=true
+      requires: 活的**生产**服务（127.0.0.1:3080）+ 已部署且已装载的 learn.mjs + 真实模型凭据（会发起一次真实对话）
+  mount-gate.mjs                                 [tool] excluded-with-reason=true
+      requires: 显式参数 --plugin <abs path>；已安装的 dsh 包（lib/bin.js）
+  deploy-preflight.mjs                           [tool] excluded-with-reason=true
+      requires: 显式参数 --deploy <file1,file2,...>（禁止『全部同步』）
+  run-learn-all-tests.mjs                        [runner] excluded-with-reason=true
+      requires: 本机完整环境（真实会话语料 + 已部署 profile + 生产遥测）——它把全部床子（含数据依赖门）跑一遍
+  _real-session-harness.mjs                      [helper] excluded-with-reason=true
+      requires: 
+  test-learn-ac6-e2e-mutex.mjs                   [gate] excluded-with-reason=true
+      requires: 独占运行：该门自身会取 AC6 跨 worktree 互斥锁并驱动真实 E2E（真 worktree + 隔离宿主 3099）
+  ac6-e2e-lock.mjs                               [helper] excluded-with-reason=true
+      requires: 
+  audit-merge-enforcement.mjs                    [tool] excluded-with-reason=true
+      requires: gh CLI 已登录，且对该仓库有 admin 级**只读**权限（`GET /repos/{owner}/{repo}/branches/main/protection` 需要 

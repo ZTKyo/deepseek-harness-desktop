@@ -1,5 +1,11 @@
 # 生产部署前预检（PRE-DEPLOY PRE-FLIGHT）—— P4 AC2 研究腿
 
+> **⚠ 2026-10-01 时效标注（P4 External Review remediation, D1）**
+> 本文是 2026-09-30 canonical 封条**之前**的历史快照；审计基线 `main@63bf5585c64742169c8b66ddfc2938e7de936343`。
+> 文内 `P4 ≠ VERIFIED` / `AC6 = PARTIAL` / `AC10 = PARTIAL` 等判定**已被取代**。
+> **当前唯一权威口径**见 `docs/roadmap/CURRENT_STATUS.md` 的「2026-10-01 External Review remediation」段。
+> 本文下方正文**逐字保留历史原样**，未作任何改写或删除。
+
 **日期**：2026-09-28 ｜ **分支**：`p4-final-b1b2-fix` ｜ **性质**：只读生产 + 临时目录挂载判定（**未部署、未重启、未改 yml**）
 **一句话**：把"部署完成后的生产应该长什么样"在**真实 loader** 上先挂一次 —— 结论 **PASS**，且证明
 **只部署那 3 个文件是"最小必要集"**（只部署 `learn.mjs` 会直接把生产 boot 打崩，已实证）。
@@ -102,7 +108,7 @@ node tests/learn/deploy-preflight.mjs --deploy learn.mjs --port 3096 --slug nc1
 
 - **PASS 的含义**：按 RUNBOOK 配方（3 文件）部署，挂载期**不会崩**、工具面仍恰好 6 个、生产当前进程不受影响。
 - **PASS 不等于已部署**：生产 profile 仍是旧副本 ⇒ **AC2 生产运行时遥测仍不存在**；`A8 真人审批门` 仍开；
-  **`P4 ≠ VERIFIED` 不变**。部署属"改生产挂载位"，**待用户同意**后执行。
+  **`P4 ≠ VERIFIED` 不变**。部署属"改生产挂载位"，**待用户同意**后执行。 〔⚠ 2026-10-01 时效标注：本行判定已过时，见 docs/roadmap/CURRENT_STATUS.md「2026-10-01 External Review remediation」段〕
 - **不部署 `failure-classifier-core.mjs`** 是**刻意的范围决定**（P2.6 范围外）；其差异已在预检里标为
   `STALE_BY_DESIGN` 并附最近提交，后续任一工作流要推它时按各自流程走。
 - 预检**未覆盖**：`--keep` 之外的运行期行为（部署后的真实遥测、watcher 拾取时延）—— 那些要在部署后按

@@ -1,0 +1,45 @@
+########## SUITE: tests/learn/test-learn-stage85-twins.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.27
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+
+=== U 组：能力缺口适配器单元语义 ===
+  PASS  U1 失败起源域**全覆盖**：8 个已知 origin 被 LEARNABLE ∪ NON_LEARNABLE 穷尽划分
+  PASS  U2 ★ 零关键词：结构化事实里的**自由文本**不得影响起源判定
+  PASS  U3 ★ 变体免疫：同 (tool, code) 在文案/参数/长度剧烈变化下签名恒定
+  PASS  U4 fail-closed：空/畸形观测一律不可学，且给出可读原因
+  PASS  U5 非失败事实（isError!==true）永不成为缺口证据
+  PASS  U6 ★ 回归：工具失败**不得**因为"不是 provider 分类失败的第九类"而被否决
+
+=== T1 POSITIVE 1：真实能力缺口（首次仅证据 → 重复达阈值 → 候选） ===
+  PASS  T1-a 首见会话只记水位，不产出候选（基线）
+  PASS  T1-b ★ 首次失败只记录**证据**，候选 = NONE（未达重复阈值）
+  PASS  T1-c ★★ 重复达阈值 → 建立候选（真能力缺口可被表达）
+  PASS  T1-d 候选**绝不**自动晋升（合同：PROMOTED 必须人工批准）
+  PASS  T1-e Stable 性：同一缺口重复观测**不**产生新候选（签名稳定、幂等）
+
+=== T2 POSITIVE 2：失败后被**成功解决** ⇒ 失败必须解除、不得成为缺口/经验 ===
+  PASS  T2-a 前置：两次未解决失败本已达到阈值（对照组条件成立）
+  PASS  T2-b ★★ 成功解除了能力缺口：不得留有**活跃**候选（终态候选必须被撤销）
+  PASS  T2-c ★ 失败本身不得成为可召回经验：所有经验必须停在 PROPOSED
+  PASS  T2-d 两条管道不串味：能力缺口候选 ≠ 经验（字段面与存储各自独立）
+
+=== T3 NEGATIVE 1：伪能力缺口 ⇒ 永不成为能力缺口 ===
+  PASS  T3-a ★★ provider/网络/环境失败**永不**成为能力缺口
+  PASS  T3-b ★ 这些失败必须仍被 P2.6 硬否决（AC5 既有语义未被削弱）
+  PASS  T3-c ★ fail-closed：起源不可判定时宁可漏学，不可误学
+  PASS  T3-d 环境类事实即使显式声明为 capability 观测也必须被拒
+
+=== T4 NEGATIVE 2：噪声/瞬时失败 ⇒ 不得产出永久伪缺口 ===
+  PASS  T4-a ★★ 重试即成功的瞬时错误 ⇒ 无（活跃）候选（不得成为永久伪缺口）
+  PASS  T4-b ★ 瞬时噪声必须被**显式解除**，不得留下悬空证据或永久伪缺口
+  PASS  T4-c ★ 对照（孪生不对称性）：同一错误码若**永不解决**，则必须成为缺口
+
+=== 汇总 ===
+THRESHOLD: REPEAT_THRESHOLD=2  ADAPTER_VERSION=2
+22 pass, 0 fail
+
+########## ---- STDERR ----
+

@@ -1,0 +1,69 @@
+########## SUITE: tests/learn/run-learn-real-gap-e2e.mjs
+########## EXIT: 0
+########## ELAPSED_S: 5.56
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+==============================================================================
+P4 LEARN R2 · AC5 能力缺口 · 真实会话闭环 E2E
+==============================================================================
+
+=== G0 真实会话发现：在磁盘真实数据上找"真实重复未解决工具失败" ===
+  · 候选真实会话（>500KB）: 130 个   来源: C:\Users\Administrator\.dsh\sessions
+  · 已扫描: 40 个真实会话
+  · 真实拓扑自检: 工具事件合计 5239 个，其中落在 surface 节点 seq 上 = 0
+  · 结构化事实: 工具失败 45 条 → 未解决 22 条
+  PASS  ★ 真实拓扑自检：工具事件与 surface 节点 seq 零交集（全库范围）
+  PASS  真实会话确实含有工具失败事实（非空数据）
+  PASS  ★ 存在含"真实重复未解决工具失败"的真实会话（≥2 次同签名）
+  · 选定会话: session.jsonl.zstd  size=0.5MB  nodes=42
+  · 选定签名: tool:glob::tool|glob|SEARCH_FAILED|v2  真实出现 7 次  seqs=[790,792,1004,1207,1731,11072,14779]
+
+=== G1 出处独立复核：签名对应的"真实事件事实"逐条回读原事件 ===
+  PASS  每一条证据 seq 都指向真实的 tool/result 事件
+  PASS  ★ 每条原始事件的 content.isError === true（官方事实，非推断）
+  PASS  ★ 每条原始事件都带同一个结构化 errorCode（同底层能力）
+  PASS  证据 seq 全部落在节点 seq 之外（再次确认非节点伪造）
+
+=== G2 真实闭环：按真实生长方式驱动真实插件 ⇒ 产出候选 ===
+  · stateDir: C:\Users\ADMINI~1\AppData\Local\Temp\p4-realgap-Vq8Sve
+  · sessionId: 4c1af886-a8b9-4973-8677-6de6aea19342
+  · 驱动完成: steps=1 stopped=true 用时=0.0s
+  · 遥测条数=6
+  · CAPABILITY-GAP 遥测 1 条，示例: [learn] CAPABILITY-GAP-QUALIFIED sid=4c1af886-a8b9-4973-8677-6de6aea19342 id=cand_849491e1 origin=tool taskType=tool:glob observations=5 (state=PROPOSED, not promoted)
+  PASS  ★ 真实会话上能力缺口路径是活的（出现 CAPABILITY-GAP 遥测）
+  PASS  ★ 产出候选（真实会话，非合成）
+  · 候选: id=cand_849491e1 kind=NEW_SKILL state=PROPOSED obs=5
+  ·       dedupKey=tool:glob::tool|glob|SEARCH_FAILED|v2
+  ·       taskType=tool:glob sig=tool|glob|SEARCH_FAILED|v2
+  PASS  ★ 候选 dedupKey 派生自真实 (tool,errorCode) 签名
+  PASS  候选 origin/taskType 为 tool 域
+  PASS  候选状态为 PROPOSED（绝不自动激活）
+  PASS  观测计数 ≥ 真实重复阈值（真实出现次数）
+  PASS  候选 kind 属于合法枚举
+
+=== G3 幂等：重复驱动同一真实会话不重复建候选、不复活 ===
+  PASS  候选数量不因重复驱动而增长
+  PASS  候选 id / dedupKey 稳定（确定性派生）
+
+=== G4 隔离：真实闭环的候选不污染稳定经验库 ===
+  PASS  能力缺口候选未直接写入稳定库（Stable 不被绕过）
+
+=== G5 真实数据上的否决面：合格/被否决签名在全库真实数据上的分布 ===
+  · 全库达标签名（生产观测形状）: tool 域合格 3 个 / 被否决 2 个
+  · 否决原因样本: vetoed (2/2): MISSING_ERROR_CODE
+  PASS  ★ 真实数据上合格签名可被生产资格判定接受（≥1）
+  PASS  合格签名数不超过达标签名总数（无膨胀）
+  PASS  候选库中无"空签名"泄漏（否决面未被绕过）
+
+=== G6 清理 ===
+  · 已删除临时状态目录 C:\Users\ADMINI~1\AppData\Local\Temp\p4-realgap-Vq8Sve
+
+==============================================================================
+P4 LEARN R2 REAL-GAP E2E: 20 PASS / 0 FAIL
+真实会话: session.jsonl.zstd  (nodes=42)
+真实签名: tool:glob::tool|glob|SEARCH_FAILED|v2  ×7
+==============================================================================
+
+########## ---- STDERR ----
+

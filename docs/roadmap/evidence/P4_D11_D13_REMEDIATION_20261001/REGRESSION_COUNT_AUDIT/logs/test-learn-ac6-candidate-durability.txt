@@ -1,0 +1,30 @@
+########## SUITE: tests/learn/test-learn-ac6-candidate-durability.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.31
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== AC6 Tier-1：待人工审批条目的容量持久性（正向 / 负控 / 反焊死）===
+
+--- ① 正向：真路径 propose() 在库满时保住待审批条目 ---
+  PASS  P1 前置：夹具确实已满，且待审批条目是最旧的一条
+  PASS  P2 ★ 真路径：库满 → propose 新条目后，待审批 VERIFIED_EXPERIENCE 仍在库中
+  PASS  P3 待审批的 PROPOSED 同样受保护（两种待人工处置状态都覆盖）
+  PASS  P4 确定性：同输入 → 同输出（逐字节一致）
+  PASS  P5 修复后的库仍通过 validateStore（不得产出畸形库）
+
+--- ② 负控：证明"旧规则真的会丢掉待审批条目"（本测试能失败）---
+        INFO 旧实现淘汰了 exp-ae2b7e5a（VERIFIED_EXPERIENCE，createdAt=1000）⇒ 缺陷可复现
+  PASS  N1 ★ 旧实现（逐字复刻）在**同一输入**下丢掉了待审批条目
+  PASS  N2 旧的"createdAt=0 兜底分支"也不区分 state（第二条独立负控）
+
+--- ③ 反"焊死"：容量必须绝对有界（合法路径仍然通过）---
+  PASS  A1 全库皆待审批时，写入仍必须淘汰（不得变成"永不淘汰"）
+  PASS  A2 连续写入 60 次（全待审批库）后仍恒 ≤ MAX_EXPERIENCES
+  PASS  A3 既有不变量未被削弱：R-6（H2.15 场景）仍淘汰"最旧一条"且恰好 1 条
+
+============================================================
+RESULT: 10 PASS / 0 FAIL
+
+########## ---- STDERR ----
+

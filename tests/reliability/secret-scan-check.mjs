@@ -18,6 +18,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const repo = process.argv[2] || process.cwd();
+// P4 External Review remediation — D11 (2026-10-01): redaction-aware counting.
+// The redaction pipeline's OWN output token `[REDACTED:<family>]` can be
+// re-matched by a family pattern (measured: the uri-credential pattern matches
+// its own marker inside `postgres://[REDACTED:uri-credential]@host`). Counting it
+// as a secret makes the gate permanently red for a file that is already clean.
+//
+// Discipline: fragment-level only (never a whole-line skip), no family removed,
+// no pattern weakened, and the marker alternation is restricted to the REAL
+// family names — a hand-written `[REDACTED:sk-…]` therefore cannot mask a key.
+//
+// MARKER_FAMILIES is kept OUTSIDE the PATTERNS block on purpose: the family-parity
+// assertion in tests/learn/test-learn-r3-secrets.mjs section I3 slices the source
+// between the PATTERNS array literal and its closing bracket and parses
+// `name: '…'` entries strictly inside it, so the scan family set below stays
+// byte-for-byte what that assertion expects. (This comment deliberately avoids
+// spelling that literal out — doing so would shift the slice and break I2/I3.)
+// The extra generic/uri names here exist only to RECOGNISE runtime markers.
+const MARKER_FAMILIES = [
+  'notion', 'openai', 'openrouter', 'slack', 'github', 'jwt', 'anthropic',
+  'telegram', 'aws', 'google', 'stripe', 'gitlab', 'huggingface', 'npm',
+  'pem-private-key', 'slack-webhook', 'uri-credential',
+  'generic-assignment', 'generic-bearer',
+];
+const MARKER_RE = new RegExp('\\[REDACTED:(?:' + MARKER_FAMILIES.join('|') + ')\\]', 'g');
+function maskMarkers(s) { return s.replace(MARKER_RE, ''); }
+
 const PATTERNS = [
   { name: 'notion', re: /ntn_[A-Za-z0-9]{16,}/ },
   { name: 'openai', re: /\bsk-[A-Za-z0-9]{20,}\b/ },
@@ -68,7 +94,9 @@ function walk(dir, depth = 0) {
   return out;
 }
 
-let hits = 0;
+let hits = 0;            // REAL SECRET (the only number that may gate the build)
+let rawHits = 0;         // pre-fix口径: pattern hits before marker awareness
+let placeholderHits = 0; // hits that exist only because of the program's own marker
 const files = walk(repo);
 for (const fp of files) {
   // skip binaries
@@ -89,14 +117,26 @@ for (const fp of files) {
     }
     // blank out ${ENV} template references (keep the rest of the line scannable)
     probe = probe.replace(/\$\{[A-Za-z_][A-Za-z0-9_.]*\}/g, '');
+    // D11: same fragment-level treatment for this program's own redaction markers.
+    const probeReal = maskMarkers(probe);
     for (const p of PATTERNS) {
-      if (p.re.test(probe)) {
+      if (!p.re.test(probe)) continue;
+      rawHits++;
+      if (p.re.test(probeReal)) {
         hits++;
         console.log(`SECRET ${p.name} @ ${path.relative(repo, fp)}:${i + 1}: ${line.trim().substring(0, 80)}`);
+      } else {
+        placeholderHits++;
       }
     }
   }
 }
+
+// D11 output contract: three separate numbers. Only REAL SECRET may be quoted
+// as a leak finding; RAW MATCH alone is NOT a leak statement.
+console.log(`\nRAW MATCH              = ${rawHits}`);
+console.log(`REDACTION PLACEHOLDER  = ${placeholderHits}`);
+console.log(`REAL SECRET            = ${hits}`);
 
 if (hits > 0) {
   console.log(`\nSECRET SCAN FAILED (${hits} hits)`);

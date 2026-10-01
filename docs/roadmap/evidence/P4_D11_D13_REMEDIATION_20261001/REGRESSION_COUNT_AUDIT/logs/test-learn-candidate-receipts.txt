@@ -1,0 +1,53 @@
+########## SUITE: tests/learn/test-learn-candidate-receipts.mjs
+########## EXIT: 0
+########## ELAPSED_S: 0.23
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+=== AC6 验收：候选晋升必须真走既有 Git / CI / Transaction ===
+
+=== A 组：收据门是**必备**的（缺腿即拒绝，且留痕）===
+  PASS  A1 ★ 无收据 ⇒ 拒绝晋升（AC6 主断言）
+  PASS  A2 ★ 拒绝后候选状态**不变**（仍在 CANARY，未被误推进）
+  PASS  A3 ★ 拒绝必须留痕（CANDIDATE_PROMOTION_DENIED，不留静默死路径）
+  PASS  A4 只给一格收据（git）⇒ 仍拒绝，缺失腿精确=
+=== B 组：逐腿 mutation —— 每腿都必须被独立校验（不是装饰）===
+  PASS  B1 git 腿：对象名非 40 位 hex ⇒ 拒绝
+  PASS  B2 git 腿：分支名与候选不一致（换成别人的分支）⇒ 拒绝
+  PASS  B3 git 腿：worktree 不在隔离环境（isolated=false）⇒ 拒绝
+  PASS  B4 git 腿：worktreePath 为空 ⇒ 拒绝（无法证明有真实隔离工作树）
+  PASS  B5 ci 腿：结论非 success ⇒ 拒绝（失败候选不得晋升 = AC6.3）
+  PASS  B6 ci 腿：headSha 与 git commit 不一致（旧绿报告顶新代码）⇒ 拒绝
+  PASS  B7 ci 腿：job 为空 ⇒ 拒绝
+  PASS  B8 transaction 腿：终态非 COMMITTED（如 ROLLED_BACK）⇒ 拒绝
+  PASS  B8b ★ dry-run 收据无法冒充真实事务（既有引擎 -DryRun ⇒ FAILED(dry)）
+  PASS  B8c transaction 腿：faultClass 非 none（如 verify_failed）⇒ 拒绝
+  PASS  B8d transaction 腿：rollbackResult 非 none（回滚过的事务）⇒ 拒绝
+  PASS  B8e transaction 腿：VERIFY 不来自引擎自己的 COMMIT_READY gate ⇒ 拒绝
+  PASS  B8f transaction 腿：journalPath 为空（无真实 journal 证据）⇒ 拒绝
+  PASS  B9 transaction 腿：label 与候选不一致 ⇒ 拒绝
+  PASS  B10 transaction 腿：transactionId 为空（无法回溯到 journal 记录）⇒ 拒绝
+  PASS  B11 transaction 腿：journalPath 为空（无真实 journal 证据）⇒ 拒绝
+=== C 组：AC6.1 —— 禁第二套 CI / Transaction / Git（来源白名单）===
+  PASS  C1 ★ 自造 CI runner ⇒ 拒绝
+  PASS  C2 ★ 自造 Transaction ⇒ 拒绝
+  PASS  C3 ★ 自造 Git 状态机 ⇒ 拒绝
+  PASS  C4 既有四层 CI 的其它层也放行（对照组：白名单不是只认一层）
+=== D 组：密钥红线 + 摘要入库 ===
+  PASS  D1 ★ 收据含密钥形状的值 ⇒ 拒绝（绝不入库）
+  PASS  D2 ★ 晋升成功 ⇒ 只存**有界摘要**，且不含收据原文/密钥
+  PASS  D3 ★ 晋升成功留双痕：CANDIDATE_RECEIPTS_ACCEPTED + CANDIDATE_PROMOTED
+  PASS  D4 sanitizeCandidate 对畸形 promotionReceipts fail-closed
+  PASS  D5 ★ P0-4：遥测措辞不得把「三腿自洽」说成「来源已核实」
+=== E 组：AC6「Stable 必须保持不变」+ 复用纪律（静态锁）===
+  PASS  E1 ★ 晋升动作**不写任何文件**：Stable 产物字节不变
+  PASS  E2 ★ 复用纪律静态锁：learn-candidate 零子进程 / 零网络 / 零定时器
+  PASS  E3 gate 是纯函数：同输入两次结果一致（可确定性复算）
+  PASS  E4 verifyPromotionReceipts 对垃圾输入不抛异常（fail-closed）
+
+=== 汇总 ===
+  AC6 receipts gate: 33 PASS / 0 FAIL
+  PASS AC6 candidate reuses existing Git/CI/Transaction via receipt gate
+
+########## ---- STDERR ----
+

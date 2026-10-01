@@ -1,0 +1,64 @@
+########## SUITE: run-learn-all-tests
+########## CMD: node tests/learn/run-learn-all-tests.mjs --timeout=600000
+########## EXIT: 1
+########## ELAPSED_S: 765.4
+########## TIMEOUT_FLAG: False
+########## CWD: C:\Users\Administrator\Desktop\sdeepseek harness\_p4rem-closure\regression-count-audit\wt
+########## ---- STDOUT ----
+==============================================================================
+P4 LEARN 全量回归：39 个套件
+==============================================================================
+  PASS  test-learn-core.mjs                           505P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-candidate.mjs                       40P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-plugin-contract.mjs                  8P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-ac5-e2e.mjs                         13P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-ac5-gap-veto.mjs                    44P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-stage85-twins.mjs                   22P/  0F  exit=   0  gated       0.3s
+  PASS  test-learn-real-topology-tool-events.mjs       22P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-stage2-schema-and-negative-lock.mjs   23P/  0F  exit=   0  gated       1.5s
+  PASS  run-learn-real-e2e.mjs                         65P/  0F  exit=   0  gated       407.1s
+  PASS  run-learn-real-gap-e2e.mjs                     20P/  0F  exit=   0  gated       5.1s
+  PASS  test-learn-r3-fixes.mjs                        30P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-r3-hardening.mjs                    30P/  0F  exit=   0  gated       0.5s
+  PASS  test-learn-r3-secrets.mjs                      65P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-r3-approval-forgery.mjs             27P/  0F  exit=   0  gated       1.7s
+  PASS  test-learn-r2-f2-store-min.mjs                 19P/  0F  exit=   0  gated       1.2s
+  PASS  redteam-r3-contamination.mjs                    9P/  0F  exit=   0  gated       5.2s
+  PASS  redteam-r3-injection-positions.mjs              0P/  0F  exit=   0  OBS         30.3s
+  PASS  redteam-r3-isolation.mjs                       13P/  0F  exit=   0  gated       0.3s
+  PASS  redteam-r3-labels.mjs                           0P/  0F  exit=   0  OBS         0.2s
+  PASS  redteam-r3-metrics.mjs                          0P/  0F  exit=   0  OBS         0.2s
+  PASS  redteam-r3-probe.mjs                            0P/  0F  exit=   0  OBS         0.2s
+  PASS  redteam-r3-quality.mjs                          0P/  0F  exit=   0  OBS         32.0s
+  FAIL  ac6-e2e-lock.mjs                                0P/  0F  exit=   0  NO-SUMMARY  0.2s
+        ↳ no PASS/FAIL summary found in any known format
+        ↳ 
+  FAIL  audit-merge-enforcement.mjs                     0P/  0F  exit=   0  NO-SUMMARY  6.4s
+        ↳ no PASS/FAIL summary found in any known format
+        ↳   直推 → main：**红门能到达 main**（6 条：workflow 不在 push→main 触发、且无 ruleset 强制 PR / 必需检查） |   绕过路径：关闭 |   ⇒ 结论：当前存在"红门能到达 main"的路径。缺口不在"门假"（门确实在跑、变异证明也证明它变红），而在**承载（required 列表）/绕过（enforce_admins、无 ruleset）**没堵住。
+  PASS  deploy-preflight.mjs                            1P/  0F  exit=   0  gated       27.6s
+  PASS  mount-gate.mjs                                  1P/  0F  exit=   0  gated       26.1s
+  PASS  production-load-probe.mjs                       1P/  0F  exit=   0  gated       21.4s
+  PASS  run-learn-contract-scenarios.mjs               36P/  0F  exit=   0  gated       87.7s
+  PASS  test-learn-ac1-secret-families.mjs             43P/  0F  exit=   0  gated       0.1s
+  PASS  test-learn-ac2-research-leg.mjs                27P/  0F  exit=   0  gated       0.6s
+  PASS  test-learn-ac6-candidate-durability.mjs        10P/  0F  exit=   0  gated       0.3s
+  PASS  test-learn-ac6-e2e-mutex.mjs                   11P/  0F  exit=   0  gated       2.8s
+  FAIL  test-learn-ac6-real-promotion-e2e.mjs           0P/  0F  exit=   0  NO-SUMMARY  98.4s
+        ↳ no PASS/FAIL summary found in any known format
+        ↳   runMode=local-replay（CI 腿 = 本地重放 ci-level2.yml 的 job 命令；非外部 GitHub run） |   PASS AC6 real promotion e2e (real git worktree/commit + ci-level2 job commands replayed in the isolated worktree + real transaction journal) |   report（归档；临时根已清理）: C:\Users\ADMINI~1\AppData\Local\Temp\ac6-real-e2e-reports\
+  PASS  test-learn-b1-session-access.mjs               22P/  0F  exit=   0  gated       0.8s
+  PASS  test-learn-b2-verify-output-contract.mjs       21P/  0F  exit=   0  gated       0.2s
+  PASS  test-learn-candidate-receipts.mjs              33P/  0F  exit=   0  gated       0.1s
+  PASS  test-learn-r2-b1-approval-gate.mjs             19P/  0F  exit=   0  gated       0.7s
+  PASS  test-learn-r2-b2-bounds.mjs                    45P/  0F  exit=   0  gated       4.4s
+  PASS  validate-gate-registry.mjs                     15P/  0F  exit=   0  gated       0.2s
+
+==============================================================================
+套件：36/39 全绿    （门槛套件 31 个 / 观测套件 5 个 / 环境前置未满足 0 个）
+门槛断言：1240 PASS / 0 FAIL   观测套件仅按退出码判定（无 pass/fail 门槛）
+失败套件：ac6-e2e-lock.mjs , audit-merge-enforcement.mjs , test-learn-ac6-real-promotion-e2e.mjs
+==============================================================================
+
+########## ---- STDERR ----
+

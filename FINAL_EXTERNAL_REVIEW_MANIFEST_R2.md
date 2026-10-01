@@ -65,6 +65,13 @@ git -c core.autocrlf=false worktree add --detach <tmpdir> 2592172699049b9c9f5311
   （判据 = `CANONICAL_BODY_SHA256`（EOL 归一化后的正文哈希）；原始字节哈希另列 `rawFileSha256`，仅作法证）。
   **Finding B 的口径修正**：裁决**不再**取决于检出的行尾风格，只取决于正文内容。
 
+> **口径纠错（送审前自查发现，主动记录，不藏）**：上表两行的 `sha256` **不是同一个值** ——
+> 权威报告 `F805CFA8…`、发布件 `81A904B8…`（发布件多一段 provenance 注释头）。**完全相同的是
+> 规范化（CRLF/CR → LF）后的正文**（`canonicalBodySha256` 两者同为 `F805CFA8…`）。
+> `tools/verify-release-artifact.mjs` 自身也打印 `raw-bytes match=NO — forensic only`。
+> ⇒ 本评审可主张的是 **"正文（EOL 归一化后）一致"**，**不是**"两份文件逐字节一致"。
+> 若在其它材料（含聊天摘要）里看到"字节级一致"的措辞，**以本处口径为准**。
+
 ---
 
 ## 3. 两个被评审的阻断项（A / B）及其**可伪证**证据
@@ -124,9 +131,32 @@ YAML 6/6 parse ok；`TOTAL: 8 checks  GREEN: 8  PROBLEM: 0`。
 | CI Level 2 - Windows Reliability State Machines | `36825276269` | **success** |
 | CI Level 3 - Harness Smoke (current version + sanitized profile) | `36825276249` | **success** |
 
+> 该 REVIEW_SHA 上**共 6 个 run = 两套**（首次 + 冻结后重跑：`36826690775` / `36826690827` /
+> `36826690726`），**两套结论全部 success，非成功 = 0**（独立经 GitHub API 复核）。
+> 冻结支线 `7cb59dd` 另有 3 个 run（`36826784674` / `36826784682` / `36826784760`），亦全部 success。
+
 Level 1 日志中与评审直接相关的 step 全为 success：Finding A controls、**Finding A controls EOL matrix**、
 Finding B controls、anchor gate（含负控）、Finding E / Finding C 负控、release artifact integrity（含负控）、
 D1 parity、D1 history。
+
+### 4.1 已知、未修、如实披露（送审前自查补记）
+
+以下四项**都不阻断评审**，且**都不改动评审对象**（若改动即成非 docs-only 提交 ⇒ REVIEW_SHA 会变，
+故本轮一律不动，仅披露）。请评审者**据此限定口径**，不要把它们当作未申报缺陷，也不要据此高估覆盖面。
+
+| # | 事实（已独立复核） | 为什么不修 | 建议判定 |
+|---|---|---|---|
+| 1 | `ci-level1.yml` 中 **B verifier 步骤出现两次**：`:377` 与 `:449`，**同一命令、同一 job** | 删除重复步骤属控制流改动（非 docs-only）⇒ 会改变评审对象 | **非阻断**：重复执行不改变结论，仅多花数秒；留待合并后治理轮去重 |
+| 2 | **EOL 矩阵只覆盖 Finding A 控制**：`:365` 用 `tools/run-control-in-eol.mjs … lf` 建 LF 第二环境；**E 控制（`:413`）与 C 控制（`:427`）各只有一次（CRLF 检出）运行** | 为 E/C 增加步骤同属工作流改动 | **非阻断**，但**不得**主张"E/C 也有 LF/CRLF 两套运行"；本文件中已无此主张 |
+| 3 | D1 行号封锁的**覆盖面边界**：`ban.STATUS.d1row` 的模式只拦 **2 位**行号指针（`foo.md:33` 命中；`learn-core.mjs:594` **不命中**，实测）。`check-doc-anchors.mjs` 另有 2–4 位普查正则，但**普查 ≠ 封锁** | 放宽模式属索引改动（非 docs-only）；且 D 档 §5/§7 已如实登记"只覆盖 2 个区块、318 处候选未逐个判定" | **非阻断**：本轮**不主张**"全仓已无行号指针"，只主张"两个封锁区块内新写入的 2 位指针必须带锚点" |
+| 4 | 门电池中 G2/G4/I3 依赖 `git show HEAD:`：在**无 `.git` 的纯解压目录**里必然变红（3 条 FAIL），`learn-store-census` 报 0 文档，`verify-history-preserved.mjs` exit 1 | 这是 **fail-closed（不假绿）**，不是缺陷 | **非阻断**：评审者请按 §1 的 `git fetch` + `git worktree add` 取得评审对象；纯解压目录**不是**受支持的评审环境 |
+
+被封锁模式原文（供核对）：
+
+```
+ban.STATUS.d1row.banPattern = "`L\d{2,3}`|:\d{2}\b"      // 只拦 2 位 \d{2}
+ban.A10.banner.banPattern   = "\bL\d{2,3}\b"             // L23 / L123 形式
+```
 
 ---
 

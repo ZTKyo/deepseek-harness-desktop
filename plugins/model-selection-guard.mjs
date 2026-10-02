@@ -25,6 +25,7 @@
 // 纯 ESM，零第三方依赖。
 
 import { decideRoute } from './model-selection-guard-core.mjs';
+import { pickAgentCreated, createBindingDiagnostics } from './event-shape-compat.mjs';
 
 export const name = 'model-selection-guard';
 export const inject = ['llm'];
@@ -52,9 +53,24 @@ function readDefaultSelection(ctx, config) {
 export function apply(ctx, config = {}) {
   const resolveModelInfo = (provider, model, signal) => ctx.llm.resolveModelInfo(provider, model, signal);
 
-  /** 为单个 agent 的 scoped 上下文注册 agent/request 校验监听器。 */
+  // S1 listener binding: dual-substrate shape tolerance + fail-safe diagnostics.
+  // Startup self-check proves the picker logic itself handles BOTH official dispatch forms; the
+  // first real agent/created then records which form the RUNNING substrate actually used, so a
+  // base switch can never silently disable this guard again (§4.4 / §5 of the P4.5 alignment task).
+  const shapes = createBindingDiagnostics({ plugin: 'model-selection-guard', logger: ctx.logger });
+  const selfTest = shapes.selfTest();
+
+  /** 为单个 agent 的 scoped 上下文注册 agent/request 校验监听器（同一 agent 只装一次）。 */
+  const guardedAgents = new WeakSet();
   const installGuardForAgent = (agent) => {
-    if (!agent || typeof agent.ctx?.on !== 'function') return;
+    if (!agent || typeof agent.ctx?.on !== 'function') {
+      // A recognised payload shape that still carries no usable agent is a substrate change, not a
+      // success: report it instead of returning silently.
+      if (agent) shapes.providerUnavailable('agent/created', 'payload carried no usable agent (agent.ctx.on missing)');
+      return;
+    }
+    if (guardedAgents.has(agent)) return; // no duplicate registration on repeated events
+    guardedAgents.add(agent);
     const dispose = agent.ctx.on('agent/request', async (payload, next) => {
       const proposedConfig = await next();
       if (!proposedConfig || typeof proposedConfig !== 'object') return proposedConfig;
@@ -74,15 +90,25 @@ export function apply(ctx, config = {}) {
     return dispose;
   };
 
-  // 全局 agent/created：agent 注册时向它的 scoped ctx 注入守卫
-  // （全局 ctx.events 上 emit，见 dsh-agent/lib/index.js:666-673）
-  // K2 fix: `agent/created` delivers its payload as ARGUMENT 0 (a wrapper `{ agent, source, signal }`);
-  // there is no third argument. The previous (carrier, _eventName, payload) signature therefore read
-  // undefined and the guard was silently never installed on any agent. Runtime-proven on the target
-  // substrate (see the K2 agent/created payload evidence).
-  const disposeCreated = ctx.on('agent/created', ({ agent }) => {
+  // 全局 agent/created：agent 注册时向它的 scoped ctx 注入守卫。
+  // `agent/created` delivers its payload as ARGUMENT 0 on 0.2.0-rc.2 (wrapper `{ agent, source, signal }`)
+  // and as the THIRD argument on 0.1.1 (carrier-first emit form). Accepting only one of the two is what
+  // silently inactivated the guard; the picker accepts both and reports the shape it matched.
+  const disposeCreated = ctx.on('agent/created', (...args) => {
+    let picked;
     try {
-      installGuardForAgent(agent);
+      picked = pickAgentCreated(args);
+    } catch (error) {
+      shapes.report('agent/created', 'picker-threw', false, []);
+      return;
+    }
+    if (!picked.agent) {
+      shapes.report('agent/created', picked.shape, false, picked.observed);
+      return;
+    }
+    shapes.report('agent/created', picked.shape, true);
+    try {
+      installGuardForAgent(picked.agent);
     } catch (error) {
       try { ctx.logger?.warn?.(`[model-selection-guard] install failed: ${String(error?.message ?? error)}`); } catch {}
     }
@@ -93,6 +119,9 @@ export function apply(ctx, config = {}) {
       installGuardForAgent,
       readDefaultSelection: () => readDefaultSelection(ctx, config),
       decideRoute,
+      pickAgentCreated,
+      bindingState: () => shapes.state(),
+      selfTest,
       dispose: () => { try { disposeCreated?.(); } catch {} },
     },
   };

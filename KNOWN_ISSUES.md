@@ -194,3 +194,28 @@ cordis.patch.yml.prod.before` 与 `_p4r2-evidence/prod-rollback-*/cordis.patch.y
 **规则**：给工具/程序消费的文本一律用
 `[System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))`（**无 BOM**）；
 读取侧对不可控输入统一 `.replace(/^\uFEFF/,'')` 兜底。（注意与既有铁律区分：`.ps1/.cmd` **必须** UTF-8 **带** BOM。）
+
+## 2026-10-02 监听器形态不匹配 = 静默失效（S1/S2，已修复待部署）
+
+**现象（对官方 base `0.2.0-rc.2` 的静态契约审计发现）**：三个插件的 `ctx.on(...)` 回调参数形态与目标 base
+不一致，而**注册成功、无报错、无日志**——只是永远看不到事件：
+
+- S1 `model-selection-guard.mjs` / S1' `context-memory.mjs`：`agent/created` 写成 0.1.1 载体形态
+  `(carrier, name, payload)`，官方 base 是 `(payload)` → `payload` 恒为 `undefined`，两个插件的
+  `agent/created` 分支永不执行。
+- S2 `execution-continuity.mjs`：`session/event` 写成 `(payload)`，官方 base 是 `(session, event)`
+  → **P0 可恢复类错误（turn/end error）的第二层兜底永不触发**，可恢复中断不会排队恢复。
+
+**规则**：`ctx.on` 绑定的正确性**不能**用「注册成功 / 进程起来了 / 日志没报错」证明；必须
+① 用官方 base 的签名表做**静态契约检查**，② 用**两种形态各自**的行为用例证明回调真的被触发。
+
+**修复**：新增共享形态选择器 `plugins/event-shape-compat.mjs`（多形态识别 + 未知形态显式
+`LISTENER_BINDING_FAILED` + 启动自检 + 诊断只带形态不带值），三个插件改为 `(...args) => pick…(args)`，
+**回调函数体一字未改**（降低 P0 判定逻辑的回归风险）。
+
+**证据**：`_p4_5-sandbox/evidence/session-compat/S1_S2_LISTENER_BINDING_REMEDIATION.md`
+（含 INERT 反证 / BOUND 双向用例 / FAIL-SAFE / 前后哈希 / 复现命令 / 回滚）；测试
+`tests/continuity/verify-s2-listener-binding.mjs`（24 PASS）、`plugins/model-selection-guard-test.mjs`（21 PASS）。
+
+**边界**：本修复已在**候选树**验证；生产插件改了必须重启服务才生效，故按阶段计划**批量延后部署**——
+在部署前，生产侧仍是旧字节（静态审计的生产列仍会显示这三条缺陷，属预期状态而非遗漏）。

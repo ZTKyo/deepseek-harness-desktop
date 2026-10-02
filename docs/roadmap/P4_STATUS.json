@@ -12,7 +12,27 @@
     "authorityBasis": "启动前置条件当场复核（三处权威字段全部取自本索引，不复抄派生字符串——Finding C/D 纪律）：authorityRequirements.p4Status（P4 收口权威判定字符串）、acVerdicts（逐条 AC 裁决全部 PASS，无 PARTIAL/FAIL）、p4Finalization（外部评审裁决 + main 树同一性）。三者复核一致 ⇒ 前置条件成立。",
     "note": "2026-10-02 经用户明确授权正式启动 P4.5（OFFICIAL BASE ALIGNMENT）。原状态 READY_TO_START / started=false 是该时点真实状态，按 D1「只标注不改写」保留于 _p4_5ReadinessHistory，未改写。P5 仍未开始（phase05Started=false）、GOLDEN 仍未冻结、P4 production 未激活。"
   },
-  "_p4_5ReadinessHistory": [
+  "p4_5Alignment": {
+    "state": "ALIGNMENT_CANDIDATE_READY",
+    "note": "权威面 = docs/roadmap/CURRENT_STATUS.md 的「2026-10-02 P4.5 阶段结论」段；本块仅为机器可读镜像。相位仍为 IN_PROGRESS（候选就绪 ≠ 相位完成），故 p4_5Readiness.state 未改、未放宽任何门。绝不为 PRODUCTION ALIGNED。",
+    "decision": "A_FULL_BASE_ALIGNMENT_CANDIDATE",
+    "frozenSha": "4a5f0b91ca091cab2ced5d2d865245398de8d2c3",
+    "branch": "p4_5-official-base-alignment",
+    "baseSha": "a09b62a",
+    "pr": 107,
+    "prState": "OPEN (never merged by this round)",
+    "ci": { "staticSecretSyntax": "pass", "bootReadinessSmoke": "pass", "reliabilityStateMachine": "pass" },
+    "gate5Frozen": { "ran": 36, "pass": 30, "fail": 0, "totalOwnPassLines": 1247, "totalFailLines": 0, "productionRedline": "1506 checked / 0 changed / PRODUCTION_UNTOUCHED" },
+    "independentReview": { "verdict": "APPROVED_CANDIDATE", "correctionRounds": 1, "artifact": "_p4_5-sandbox/evidence/review/P45_INDEPENDENT_REVIEW.md", "prCommentId": 5943846675 },
+    "notDone": [
+      "production fixes NOT deployed (2 LIVE silent failures remain in the production profile: model-selection-guard 3-arg listener, execution-continuity session/event single-arg listener)",
+      "K1 remaining 3 dispose sites deferred to P4.6 (not added to the frozen PR)",
+      "not merged to main",
+      "PHASE_05 not started"
+    ],
+    "boundaries": { "productionBaseChanged": false, "productionDshUpgraded": false, "productionProfileChanged": false, "realSessionDataMutated": false, "windowsReboot": false, "forcePush": false, "historyRewrite": false, "directMainPush": false, "phase05Started": false },
+    "postFreezeWorktreeNote": "frozen COMMIT is immutable and verified; the WORKTREE gained 1 non-candidate change after the freeze (tools/layers/k1-dispose-probe.mjs, a P4.6 probe), so an in-place gate-5 re-run yields ac6=FAIL(exit 2) by its own clean-tree precondition."
+  },  "_p4_5ReadinessHistory": [
     {
       "state": "READY_TO_START",
       "started": false,

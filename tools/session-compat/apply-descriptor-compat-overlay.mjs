@@ -12,6 +12,10 @@
 //     2. a `message` member carried on `user/message` (an older build stamped it; production's own
 //        read path returns event.data with no member allow-list, so it reads those sessions verbatim),
 //     3. the payload-semantics check tripping on that same carried member.
+//   Rules 1-3 are stage 1 (the v0->v1 codec). The carried member must ALSO survive the next edge of the
+//   same migration chain: the released v2 disposition for `user/message` lists no optional member, so the
+//   v2->v3 strict key check dies with "format v2 user/message at seq N data has unexpected member message"
+//   before any adapter can read the session. That is stage 2, and the reason this tool walks stages.
 //   This tool is the ONLY sanctioned way to apply it: it is idempotent, refuses any target outside an
 //   explicitly sandboxed root, never touches node_modules of the live service, and verifies its own
 //   work byte-for-byte before reporting success.
@@ -36,6 +40,7 @@
 //   node tools/session-compat/apply-descriptor-compat-overlay.mjs --install <dir> --rollback
 //   --install <dir>   a sandboxed install root (…/node_modules/…/lib/index.js is resolved under it)
 //   --target  <file>  the exact file to patch (still subject to the sandbox interlock)
+//   --stage   <id>    limit --install to one stage: v0-to-v1 | v2-to-v3 (default: every stage present)
 //   --dry-run         validate + report the diff, write nothing (also writes no ledger line)
 //   --check           verify only: exit 0 when all 6 rules are present and intact, 6 when not
 //   --rollback        restore the pristine backup over the target, byte-for-byte, and verify it
@@ -60,11 +65,13 @@ import { fileURLToPath } from 'node:url';
 
 const EXIT = { OK: 0, USAGE: 2, INTERLOCK: 3, ANCHOR: 4, ROLLBACK: 5, NOT_PATCHED: 6, NO_BACKUP: 7, LEDGER: 8 };
 
-export const PKG = '@deepseek-ai/dsh-session-format-v0-to-v1';
-export const LIB_REL = path.join('node_modules', ...PKG.split('/'), 'lib', 'index.js');
+// `let`: the engine below reads these bindings, and selectStage() rebinds them to the stage that is
+// about to run (see STAGES / selectStage). The initial values are and stay the audited v0->v1 stage.
+export let PKG = '@deepseek-ai/dsh-session-format-v0-to-v1';
+export let LIB_REL = path.join('node_modules', ...PKG.split('/'), 'lib', 'index.js');
 
 // Recorded, evidence-grade hashes for the two states this tool is expected to see.
-export const KNOWN = {
+export let KNOWN = {
   pristineSha256: '1b3bff6aaf28ca62a864cf97b9aa9aa45ab76de5e459f7881ba4bc8de73490b1',
   patchedSha256: 'c9bb15f34806a1c7dbd0f08bee431db1cef0e312acec08dddf4bdc4f8b9474f9',
 };
@@ -74,7 +81,7 @@ export const MARKER = '// COMPAT OVERLAY (P4.5):';
 // The overlay rule set. Anchors and inserted text are byte-exact (EOL is taken from the target file).
 // `\u2014` (em dash) and `\u2026` (ellipsis) are written as escapes so this file stays pure ASCII
 // while producing the exact bytes of the recorded overlay.
-export const RULES = [
+export let RULES = [
   {
     id: 'subagent-descriptor.v2-admitted-as-v3',
     why: 'a v2 subagent/descriptor is losslessly admissible as v3 (v3 only adds the optional agentReasoningEffort)',
@@ -158,14 +165,100 @@ export const RULES = [
   },
 ];
 
-export const INSERTED_LINES = RULES.reduce((n, r) => n + r.insert.length, 0);
+export let INSERTED_LINES = RULES.reduce((n, r) => n + r.insert.length, 0);
+
+/** One hash over a whole rule inventory (ids, anchors, every inserted line, in order). */
+export const fingerprintOf = (rules) => sha256(Buffer.from(JSON.stringify(rules.map((r) => [r.id, r.where, r.expectAnchorCount, r.anchor, r.insert])), 'utf8'));
 
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 
 /** One hash over the whole rule inventory (ids, anchors, every inserted line, in order).
  *  Any edit to the aligned comment text moves it, so the test suite can freeze the audited value
  *  and fail loudly if the port's inserted text ever drifts again (the 97d36fcf… defect). */
-export const RULE_FINGERPRINT = sha256(Buffer.from(JSON.stringify(RULES.map((r) => [r.id, r.where, r.expectAnchorCount, r.anchor, r.insert])), 'utf8'));
+export let RULE_FINGERPRINT = fingerprintOf(RULES);
+
+// ---------------------------------------------------------------------------------------------
+// Stage 2: v2 -> v3  (added 2026-10-02, from the 562-session read sweep of the frozen candidate)
+// ---------------------------------------------------------------------------------------------
+// Everything above is stage 1 (the audited v0->v1 overlay). One of the three historically-refused
+// shapes also has to survive the NEXT edge of the same migration chain, and the v2->v3 codec refuses
+// it for its own reason: the released v2 disposition for `user/message` lists no optional member, so a
+// payload that carries the legacy `message` member dies in the strict key check before any adapter can
+// read it ("format v2 user/message at seq N data has unexpected member message" - reproduced on live
+// session 9605af9c while every v0->v1-patched session next to it read clean).
+// The rule admits that ONE member at the single site the v2 table is consumed: the strict key check
+// receives `[...admitted.optional, "message"]` for that one event shape, so the migrated v3 event
+// carries the member verbatim exactly as production reads it. This is the minimal single-site form -
+// no member is ever withheld or re-attached. No allow-list is widened: every other unfamiliar member,
+// and any non-object value, still fails closed, which the canary asserts.
+export const PKG_V2_TO_V3 = '@deepseek-ai/dsh-session-format-v2-to-v3';
+export const KNOWN_V2_TO_V3 = {
+  pristineSha256: '0dc56fb447e9046fc25995bcd08dbac26e832eba6e9eb583ef49d26467c27cd7',
+  // pristine + the SINGLE-SITE admit rule (the withheld variant dfdd14c499a7e2cf... is NOT adopted).
+  patchedSha256: 'b19de7409fbf5b049ddeafec67c01c60615b0eaf2fb0f39149bd4f54a18ef1f9',
+};
+export const RULES_V2_TO_V3 = [
+  {
+    id: 'user-message.carry-legacy-member.v2toV3-admit',
+    why: 'the released v2 disposition for user/message lists no optional member, but an older build stamped the legacy message member onto those payloads; production reads them verbatim',
+    anchor: '\tkeys(data, admitted.required, admitted.optional, event.type + " data");',
+    where: 'replace',
+    expectAnchorCount: 1,
+    insert: [
+      '\t// COMPAT OVERLAY (P4.5): the released v2 disposition for user/message admits no optional members,',
+      '\t// but an older build stamped the `message` member onto one user/message payload (the member name',
+      '\t// this same table REQUIRES for tool/result). Admit exactly that one member, and only when it is a',
+      '\t// JSON object, so the migrated v3 event carries it verbatim exactly as production reads it; every',
+      '\t// other unfamiliar field, and any non-object value, still fails closed.',
+      '\tconst legacyAdmitted = event.type === "user/message" && isSessionFormatJsonObject(data["message"]) ? [...admitted.optional, "message"] : admitted.optional;',
+      '\tkeys(data, admitted.required, legacyAdmitted, event.type + " data");',
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------------------------
+// Stage registry + selection
+// ---------------------------------------------------------------------------------------------
+// The engine always reads the module-level bindings; selectStage() points them at the stage that is
+// about to run. The CLI is single-threaded and selects one stage (or walks them in chain order), so
+// no stage can ever observe another stage's rules, hashes or inserted text.
+export const STAGES = [
+  {
+    id: 'v0-to-v1',
+    pkg: PKG,
+    libRel: LIB_REL,
+    rules: RULES,
+    known: KNOWN,
+    fingerprint: RULE_FINGERPRINT,
+  },
+  {
+    id: 'v2-to-v3',
+    pkg: PKG_V2_TO_V3,
+    libRel: path.join('node_modules', ...PKG_V2_TO_V3.split('/'), 'lib', 'index.js'),
+    rules: RULES_V2_TO_V3,
+    known: KNOWN_V2_TO_V3,
+    fingerprint: fingerprintOf(RULES_V2_TO_V3),
+  },
+];
+
+export const stageById = (id) => STAGES.find((s) => s.id === id) || null;
+
+/** Point the engine at one stage: rules, hashes, package/library path and the frozen fingerprint. */
+export function selectStage(stage) {
+  PKG = stage.pkg;
+  LIB_REL = stage.libRel;
+  KNOWN = stage.known;
+  RULES = stage.rules;
+  INSERTED_LINES = RULES.reduce((n, r) => n + r.insert.length, 0);
+  RULE_FINGERPRINT = stage.fingerprint;
+}
+
+/** The stage a bare --target path belongs to (default: the audited v0->v1 stage). */
+export function stageForTarget(target) {
+  const p = path.resolve(target).split(path.sep).join('/');
+  for (const stage of STAGES) if (p.includes('/' + stage.pkg + '/')) return stage;
+  return STAGES[0];
+}
 
 // ---------------------------------------------------------------------------------------------
 // Append-only ledger
@@ -281,6 +374,8 @@ export function buildPatched(raw) {
   for (const { rule, at } of ordered) {
     const pos = rule.where === 'after' ? at + 1 : at;
     out = [...out.slice(0, pos), ...rule.insert, ...out.slice(pos)];
+    // 'replace': the inserted text supersedes the anchor line itself (single-site rules).
+    if (rule.where === 'replace') out.splice(at + rule.insert.length, 1);
     inserted.push({ id: rule.id, at, where: rule.where, lines: rule.insert.length });
   }
   const patched = out.join(eol);
@@ -582,5 +677,54 @@ export function run(argv) {
   return finish(EXIT.LEDGER);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Multi-stage entry point
+// ---------------------------------------------------------------------------------------------
+// `--install <dir>` applies/checks/rolls back EVERY stage whose package is present in that install, in
+// chain order (v0->v1, then v2->v3). A stage whose package is absent is skipped and cannot change the
+// exit code, so an install that only carries the v0->v1 codec behaves exactly as it did before stage 2
+// existed (one ledger line per stage, each naming its own target and rule ids). `--stage <id>` limits
+// the walk to one stage; `--target <file>` selects the stage that file belongs to.
+export function runAll(argv) {
+  const arg = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : null; };
+  const stageArg = arg('--stage');
+  const targetArg = arg('--target');
+  const installArg = arg('--install');
+  if (stageArg && !stageById(stageArg)) {
+    console.error('[overlay] unknown --stage ' + stageArg + ' (known: ' + STAGES.map((s) => s.id).join(', ') + ')');
+    return EXIT.USAGE;
+  }
+  if (targetArg) { selectStage(stageById(stageArg) || stageForTarget(targetArg)); return run(argv); }
+  if (!installArg) return run(argv); // run() reports the usage error itself
+  const abs = path.resolve(installArg);
+  const wanted = stageArg ? [stageById(stageArg)] : STAGES;
+  const present = wanted.filter((s) => fs.existsSync(path.join(abs, s.libRel)));
+  if (present.length <= 1) {
+    // Zero present stages: run the requested (or first) stage anyway so run() reports the missing target.
+    selectStage(present[0] || wanted[0]);
+    return run(argv);
+  }
+  const jsonPath = arg('--json');
+  const parts = [];
+  let code = EXIT.OK;
+  for (const stage of present) {
+    selectStage(stage);
+    const stageJson = jsonPath ? jsonPath + '.' + stage.id + '.json' : null;
+    const stageArgv = stageJson ? [...argv.filter((v, i) => v !== '--json' && argv[i - 1] !== '--json'), '--json', stageJson] : argv;
+    const stageCode = run(stageArgv);
+    if (stageJson && fs.existsSync(stageJson)) {
+      try { const parsed = JSON.parse(fs.readFileSync(stageJson, 'utf8')); parsed.stage = stage.id; parts.push(parsed); } catch (e) { console.error('[overlay] could not read the per-stage report: ' + e.message); }
+      fs.rmSync(stageJson, { force: true });
+    }
+    console.log('[overlay] stage ' + stage.id + ' :: exit ' + stageCode + ' :: ' + stage.pkg);
+    if (stageCode !== EXIT.OK) code = stageCode;
+  }
+  if (jsonPath && parts.length) {
+    const merged = { ...parts[0], targets: parts.map((p) => p.target), stages: parts };
+    try { fs.writeFileSync(jsonPath, JSON.stringify(merged, null, 1), 'utf8'); } catch (e) { console.error('[overlay] could not write --json report: ' + e.message); }
+  }
+  return code;
+}
+
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
-if (invokedDirectly) process.exit(run(process.argv.slice(2)));
+if (invokedDirectly) process.exit(runAll(process.argv.slice(2)));

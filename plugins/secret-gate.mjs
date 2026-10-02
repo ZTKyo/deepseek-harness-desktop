@@ -113,7 +113,7 @@ function apply(ctx) {
 						id: 'secret-gate-client',
 						url: '/plugins/secret-gate-client/client.js?rev=' + rev,
 						rev,
-						inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-runtime'],
+						inject: ['@deepseek-ai/dsh-client-connection'],
 						immediately: true,
 					});
 				}

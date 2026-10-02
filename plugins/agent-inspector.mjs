@@ -93,7 +93,7 @@ function apply(ctx) {
 						id: 'agent-inspector-client',
 						url: '/plugins/agent-inspector-client/client.js?rev=' + Date.now(),
 						rev: String(Date.now()),
-						inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-runtime'],
+						inject: ['@deepseek-ai/dsh-client-connection'],
 						immediately: true,
 					});
 				}

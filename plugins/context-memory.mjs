@@ -238,8 +238,11 @@ export function apply(ctx, config = {}) {
   };
   try { ctx.on('agent/request', observeRoute); } catch {}
   try {
-    ctx.on('agent/created', (_carrier, _eventName, payload) => {
-      const a = payload?.agent;
+    // K2 fix: `agent/created` delivers its payload as ARGUMENT 0 (a wrapper `{ agent, source, signal }`);
+    // there is no third argument, so the previous (carrier, _eventName, payload) signature read undefined
+    // and the per-agent route hook was never installed. Runtime-proven on the target substrate (K2 evidence).
+    ctx.on('agent/created', ({ agent }) => {
+      const a = agent;
       if (a?.ctx?.on && !installedAgents.has(a)) {
         try { installedAgents.add(a); a.ctx.on('agent/request', observeRoute); } catch {}
       }

@@ -76,9 +76,13 @@ export function apply(ctx, config = {}) {
 
   // 全局 agent/created：agent 注册时向它的 scoped ctx 注入守卫
   // （全局 ctx.events 上 emit，见 dsh-agent/lib/index.js:666-673）
-  const disposeCreated = ctx.on('agent/created', (carrier, _eventName, payload) => {
+  // K2 fix: `agent/created` delivers its payload as ARGUMENT 0 (a wrapper `{ agent, source, signal }`);
+  // there is no third argument. The previous (carrier, _eventName, payload) signature therefore read
+  // undefined and the guard was silently never installed on any agent. Runtime-proven on the target
+  // substrate (see the K2 agent/created payload evidence).
+  const disposeCreated = ctx.on('agent/created', ({ agent }) => {
     try {
-      installGuardForAgent(payload?.agent);
+      installGuardForAgent(agent);
     } catch (error) {
       try { ctx.logger?.warn?.(`[model-selection-guard] install failed: ${String(error?.message ?? error)}`); } catch {}
     }

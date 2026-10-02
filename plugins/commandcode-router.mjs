@@ -129,7 +129,11 @@ export function apply(ctx, config = {}) {
       } catch {}
       return originalFetch.call(this, input, init);
     };
-    ctx.on('dispose', () => { globalThis.fetch = originalFetch; });
+    // K1 repair (P4.5 A1): a 'dispose' listener registered inside apply(ctx) never fires on the
+    // cordis 4.0.4 substrate, so this global fetch wrap was permanent. ctx.effect() ties the
+    // cleanup to the fiber ("registered with an effect -> disposed with the plugin"), which the
+    // K1 probe observes restoring globalThis.fetch on fiber.dispose().
+    ctx.effect(() => () => { globalThis.fetch = originalFetch; });
     try { ctx.logger?.info?.('[commandcode-router] ZDR enabled: x-cmd-zdr:1 for api.commandcode.ai'); } catch {}
   }
 

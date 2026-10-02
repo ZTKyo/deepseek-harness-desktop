@@ -73,6 +73,11 @@ import {
   AUTONOMY_SCHEMA_VERSION,
   MAX_MILESTONES,
 } from "./autonomy-state-core.mjs";
+// S2 listener binding: dual-substrate event-shape tolerance + fail-safe diagnostics. The two
+// official bases deliver `session/event` / `agent/error` with different positional shapes; a
+// listener written for one form does NOT throw on the other, it silently reads undefined — which
+// is how the second-layer fallback below could be dead while every health signal looked green.
+import { pickSessionEvent, pickAgentError, createBindingDiagnostics } from "./event-shape-compat.mjs";
 // dsh-tools is available in the web host plane (secret-gate precedent) but NOT
 // when this file is imported from the repo (no node_modules up-tree). Soft
 // import: if resolution fails, the autonomy TOOL surface is disabled with a
@@ -1720,8 +1725,19 @@ export function apply(ctx, config = {}) {
     }
   });
 
+  // ── S2 listener binding (dual-substrate) ─────────────────────────────────
+  // Startup self-check of the picker logic + per-event binding state recorded from the FIRST real
+  // event, so the shape the RUNNING substrate actually uses is always visible in one log line, and a
+  // form that matches nothing is reported as LISTENER_BINDING_FAILED instead of silently doing nothing.
+  const shapes = createBindingDiagnostics({ plugin: "execution-continuity", logger: ctx.logger });
+  const shapeSelfTest = shapes.selfTest();
+
   // ── Hook 3: agent/error —— 记录 + P0 可恢复类做 session/event turn/end 的二层补位 ─────
-  const disposeAgentError = ctx.on("agent/error", ({ agent, turn, step, error }) => {
+  const disposeAgentError = ctx.on("agent/error", (...args) => {
+    const pickedError = pickAgentError(args);
+    if (!pickedError.payload) { shapes.report("agent/error", pickedError.shape, false, pickedError.observed); return; }
+    shapes.report("agent/error", pickedError.shape, true);
+    const { agent, turn, step, error } = pickedError.payload;
     try {
       const sid = agent?.session?.id;
       if (!sid) return;
@@ -1736,14 +1752,21 @@ export function apply(ctx, config = {}) {
   // 二层兜底：session/event 中 turn/end reason=error（agent/request 链未返回 retry 时的终态）。
   // 官方 llm-retry + openrouter-router 之后仍有未被上层 retry 的可恢复错误，最终以 turn/end error 出现。
   // execution-continuity 在 request-error 已接管的错误不再重复处理；此钩子只处理 request-error 未拦截的 recoverable turn error。
-  const disposeSessionTurnError = ctx.on("session/event", (payload) => {
+  const disposeSessionTurnError = ctx.on("session/event", (...args) => {
+    // Official 0.2.0-rc.2 shape: (session, event). 0.1.1 carrier-first shape also accepted.
+    // The previous single-parameter `(payload)` form read `payload.event` — undefined on BOTH
+    // substrates — so this entire second-layer fallback was inert (silent no-op).
+    const picked = pickSessionEvent(args);
+    if (!picked.event) { shapes.report("session/event", picked.shape, false, picked.observed); return; }
+    shapes.report("session/event", picked.shape, true);
+    const session = picked.session;
+    const ev = picked.event;
     try {
-      const ev = payload && payload.event;
-      if (!ev || ev.type !== "turn/end" || !ev.data || !ev.data.reason || ev.data.reason.kind !== "error") return;
+      if (ev.type !== "turn/end" || !ev.data || !ev.data.reason || ev.data.reason.kind !== "error") return;
       const err = ev.data.reason.error;
       const cls = classifyFailure({ code: String(err.code || ""), message: String(err.message || "") });
       if (cls.category !== CATEGORY.REASONING_PROTOCOL_ERROR && cls.category !== CATEGORY.CONTEXT_OVERFLOW) return;
-      const sid = payload.sessionId || payload.session?.id || (typeof payload.sessionId === "string" ? payload.sessionId : null);
+      const sid = session?.id || ev.sessionId || session?.sessionId || null;
       if (!sid) return;
       const it = store.ensure(sid);
       // 若刚由 request-error 处理过并置为 RETRYING / WAITING_PROVIDER，不再重复调度
@@ -2253,6 +2276,6 @@ export function apply(ctx, config = {}) {
       intents: Object.fromEntries(Object.entries(store.data.intents).map(([k, v]) => [k, { state: v.state, autoResume: v.autoResume, retryCount: v.retryCount, resumeRetryCount: v.resumeRetryCount || 0, fallbackCount: v.fallbackCount, contextRecoveryCount: v.contextRecoveryCount, lastFailure: v.lastFailure, lastFailureAt: v.lastFailureAt, failureClass: v.failureClass }])),
       breaker: breaker.diagnostics(),
     }),
-    _test: { store, apiRpc, classifyFailure, classifyResumeFailure, classifyGoalResumeDisposition, resumeGoalThenPrompt, recordResumeFailure, markResumeSuccess, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, rpcTimeoutMs, RESUME_FAILURE_RETRY_CAP, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy },
+    _test: { store, apiRpc, classifyFailure, classifyResumeFailure, classifyGoalResumeDisposition, resumeGoalThenPrompt, recordResumeFailure, markResumeSuccess, hasBudget, backoffDelay, compatibleFallback, modelSupports, hasPendingQuestion, checkUserWaitGate, CATEGORY, STATE, RECOVERABLE_STATES, getCompaction, compactionAvailable, enableAutoResume, rpcTimeoutMs, RESUME_FAILURE_RETRY_CAP, resumeAfterCtClean, runCtGate, ctGatedRecovery, resumeViaApi, composeResumeMessage, applyAutonomyPatch, autonomySnapshot, sanitizeAutonomy, upsertCriterionResult, deriveVerificationState, emptyAutonomy, pickSessionEvent, pickAgentError, bindingState: () => shapes.state(), shapeSelfTest },
   };
 }

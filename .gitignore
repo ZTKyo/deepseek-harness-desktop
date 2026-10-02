@@ -40,3 +40,6 @@ _backup-r3-*/
 
 # P4-R2 生产回滚备份（含生产 profile / 经验库副本，可能含密钥形状数据 → 永不入库）
 _p4r2-evidence/prod-rollback-*/
+
+# P4.5 scratch (probe worktrees / temp evidence)
+.p45-tmp/

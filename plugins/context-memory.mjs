@@ -39,6 +39,10 @@ import {
   validateStore,
   emptyObs,
 } from './context-memory-core.mjs';
+// Dual-substrate event binding: `agent/created` is delivered with a different positional shape on
+// 0.1.1 (carrier-first) vs 0.2.0-rc.2 (payload-arg0). The picker accepts both and makes an unknown
+// shape a visible LISTENER_BINDING_FAILED instead of a silent no-op (rollback-safe either way).
+import { pickAgentCreated, createBindingDiagnostics } from './event-shape-compat.mjs';
 
 export const name = 'context-memory';
 
@@ -83,6 +87,8 @@ export function apply(ctx, config = {}) {
   const stores = new Map();      // sid -> store
   const routes = new Map();      // sid -> last {provider,model}
   const installedAgents = new WeakSet();
+  const shapes = createBindingDiagnostics({ plugin: 'context-memory', logger: ctx.logger });
+  const shapeSelfTest = shapes.selfTest();
 
   // ── store 持久化（原子写 tmp+rename，IntentStore 同款）──
   function emptyStore(sid) {
@@ -238,8 +244,15 @@ export function apply(ctx, config = {}) {
   };
   try { ctx.on('agent/request', observeRoute); } catch {}
   try {
-    ctx.on('agent/created', (_carrier, _eventName, payload) => {
-      const a = payload?.agent;
+    // `agent/created` delivers its payload as ARGUMENT 0 on 0.2.0-rc.2 (wrapper `{ agent, source, signal }`)
+    // and as the THIRD argument on 0.1.1 (carrier-first emit form). Binding to only one form is what
+    // silently inactivated this hook; the shared picker accepts both and reports the shape it matched,
+    // so an unknown substrate shape is a visible LISTENER_BINDING_FAILED rather than a silent no-op.
+    ctx.on('agent/created', (...args) => {
+      const picked = pickAgentCreated(args);
+      if (!picked.agent) { shapes.report('agent/created', picked.shape, false, picked.observed); return; }
+      shapes.report('agent/created', picked.shape, true);
+      const a = picked.agent;
       if (a?.ctx?.on && !installedAgents.has(a)) {
         try { installedAgents.add(a); a.ctx.on('agent/request', observeRoute); } catch {}
       }

@@ -290,7 +290,16 @@ const post = idx.postP4State || {};
 check('F1 POST_P4_VERIFIED_GOLDEN not frozen', post.postP4VerifiedGoldenFrozen === false, String(post.postP4VerifiedGoldenFrozen));
 check('F2 P4 production not activated', post.p4ProductionActivated === false, String(post.p4ProductionActivated));
 check('F3 PHASE_05 not started', post.phase05Started === false, String(post.phase05Started));
-check('F4 PHASE_04.5 not started', post.p4_5Started === false, String(post.p4_5Started));
+// F4（2026-10-02 相位推进，用户明确授权启动 P4.5）：本条原断言 PHASE_04.5 未开始——那是 P4 收口时点的
+// 相位不变量，已在其收口时验证；P4.5 正式启动后该断言必然失败，且失败原因与判定正确性无关。
+// 改为**相位一致性**断言（收紧而非放宽）：索引自报 started 必须与 p4_5Readiness.started 一致、state 必须属于
+// 合法相位集合、且 P5 必须继续锁死（F3 未动）。历史相位状态保留在 _p4_5ReadinessHistory。
+const readiness = idx.p4_5Readiness || {};
+check('F4 PHASE_04.5 phase-consistent (readiness self-report matches postP4State; P5 stays locked)',
+  readiness.started === post.p4_5Started
+    && (readiness.state === 'IN_PROGRESS' || readiness.state === 'READY_TO_START')
+    && post.phase05Started === false,
+  `readiness.started=${readiness.started} postP4State.p4_5Started=${post.p4_5Started} state=${readiness.state} phase05Started=${post.phase05Started}`);
 
 // ── G. stable document anchors (D: hand-written line numbers drift, anchors do not) ─
 // Finding D：文档里的手写行号指针会随改动整体偏移（实测 A10 更正表 +34）且无门可察。

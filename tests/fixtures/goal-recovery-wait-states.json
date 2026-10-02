@@ -1,0 +1,11 @@
+{
+  "s1": [
+    { "type": "turn/start", "data": { "turn": 1 } },
+    { "type": "assistant/message", "data": { "turn": 1, "message": { "content": [ { "type": "text", "text": "working on it" } ] } } },
+    { "type": "tool/result", "data": { "turn": 1 } },
+    { "type": "turn/end", "data": { "turn": 1, "reason": "completed" } }
+  ],
+  "s-asked": [
+    { "type": "assistant/message", "data": { "turn": 5, "message": { "content": [ { "type": "tool-call", "id": "call-9", "name": "ask_user_question" } ] } } }
+  ]
+}

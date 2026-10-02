@@ -1040,6 +1040,8 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
         `P4 = CONTRACT VERIFIED / GOAL COMPLETED (R2 EXTERNAL REVIEW APPROVED)`；**AC1–AC10 全部 PASS**（逐条证据见 ① 表，本身未变）；
         `POST_P4_VERIFIED_GOLDEN` **仍未冻结**；`P4_PRODUCTION_ACTIVATED = NO`；`PHASE_05_STARTED = NO`；
         **`P4.5 = READY_TO_START`（就绪，但"未开始"：`p4_5Started` 保持 `false`）**。
+        〔2026-10-02 追加标注：本行是**该时点**的真实状态，按 D1「只标注不改写」保留；**当前口径**已变为
+        `P4.5 = IN_PROGRESS`（经用户明确授权正式启动 P4.5 OFFICIAL BASE ALIGNMENT），见本文件 P4.5 正式启动条目。〕
       - **诚实保留（不因收口而被隐去）**：
         ① D3/D4 的 GitHub 架构缺口**本轮未修**：`node tests/learn/audit-merge-enforcement.mjs --strict` 仍
         **exit 1**（未洗绿：未加 exit-0 硬编码、未删规则、未把红灯包成"总是成功"），根因分类与最小蓝图见 ⑦；
@@ -1058,3 +1060,85 @@ P3 AUTONOMY 首个 Goal 须由真实 ChatGPT Supervisor 经 Client Binding dispa
       - **边界**：本条目只做治理/口径收口——**未**改任何 learning 插件字节、**未**改 `cordis.patch.yml`、
         **未**动生产凭据、**未**重启服务、**未**改任何 GitHub 规则/workflow 触发、**未** create/close PR 之外的仓库动作、
         **未**启动 P4.5 或 P5、**未**冻结 GOLDEN。
+
+
+## 2026-10-02 P4.5 正式启动：OFFICIAL BASE ALIGNMENT（用户明确授权；无人值守；仅隔离环境）
+
+- **启动前置条件（当场复核，不靠记忆；若 P4 权威冲突则只做隔离技术准备、不得伪造启动）**：
+  `docs/roadmap/P4_STATUS.json` 的 `authorityRequirements.p4Status` =
+  `CONTRACT VERIFIED / GOAL COMPLETED (R2 EXTERNAL REVIEW APPROVED)`；`acVerdicts` = AC1–AC10 全部 `PASS`；
+  `p4Finalization.verdict` = `APPROVED`、`mainTreeIdenticalToReviewedTree` = `true`。前置条件成立 ⇒ 正式启动 P4.5。
+- **用户授权范围（逐条登记，防止越权）**：fresh 查询官方发布（GitHub releases/tags、npm dist-tags、source、tests）；
+  创建隔离 worktree 与隔离安装目录；把多个官方候选版本装进隔离目录；复制历史 Session 到隔离测试目录；
+  建立 Session manifest 与 compatibility harness；修改本项目兼容层/adapters/overlays 与测试、CI；
+  修改 dependency pin/lock/override；新增 compatibility canary 与 migration tooling；创建 commit；
+  push 非保护分支；创建 PR；等待 CI（同一阻塞点最多两轮自动修正）；更新 P4.5 roadmap/evidence/status；
+  创建 rollback / migration plan。上述**低风险隔离动作不再逐次询问用户**。
+- **硬边界（本轮任何时刻必须为真，最终报告逐项复核）**：`PRODUCTION_BASE_CHANGED = NO`、
+  `PRODUCTION_DSH_UPGRADED = NO`、`PRODUCTION_PROFILE_CHANGED = NO`、`REAL_SESSION_DATA_MUTATED = NO`、
+  `WINDOWS_REBOOT = NO`、`FORCE_PUSH = NO`、`HISTORY_REWRITE = NO`、`DIRECT_MAIN_PUSH = NO`、
+  `PHASE_05_STARTED = NO`。禁止覆盖生产 `~/.dsh` 底座、禁止把新 DSH 装进生产安装目录、
+  禁止用真实 Session 做原地 migration、禁止删除 Session、禁止改生产 Global Experience Store、
+  禁止启动生产新底座、禁止把隔离沙盒端口指向生产 3080、禁止顺手重开 P4。
+- **治理面变更（仅状态登记，未触碰任何实现字节）**：`p4_5Readiness.state`：`READY_TO_START` → `IN_PROGRESS`；
+  `p4_5Readiness.started`：`false` → `true`（同时登记 `startedAt` / `startedAtUtc` / 授权依据）；
+  `postP4State.p4_5Started`：`false` → `true`；原状态按 D1「只标注不改写」移入 `_p4_5ReadinessHistory` 保留。
+  `postP4State` 其余锁**未**动：`postP4VerifiedGoldenFrozen` 仍为 `false`（GOLDEN 未冻结）、
+  `p4ProductionActivated` 仍为 `false`、`phase05Started` 仍为 `false`。
+- **门控同步（必须如实登记，不藏）**：`tests/roadmap/validate-p4-status-consistency.mjs` 的 F4 原断言
+  `post.p4_5Started === false`（P4 收口时点的相位不变量）。P4.5 正式启动后该断言必然失败，
+  且失败原因与判定正确性无关。修法 = 改为**相位一致性**断言：索引自报 `started` 必须与
+  `p4_5Readiness.started` 一致、`state` 必须属于合法相位集合、且 `phase05Started` 仍必须为 `false`。
+  该改动**收紧**一致性约束（自报与索引状态必须一致 + P5 仍锁死），**未**放宽 P4 的契约判定，
+  **未**触碰任何实现/learning 插件字节。
+- **本轮明确不做**：不替换生产 Base、不升级生产官方版本、不迁移真实 Session 数据、不启动 P5、
+  不冻结 GOLDEN、不把任何改变生产 Base 语义的改动合入 `main`（PR 默认留开、由用户决定）。
+
+
+## 2026-10-02 P4.5 阶段结论：ALIGNMENT_CANDIDATE_READY（候选已冻结、PR 已开、CI 全绿、独立复核完成）
+
+- **状态**：`P4.5 = ALIGNMENT_CANDIDATE_READY`（**不是** `PRODUCTION ALIGNED`；生产底座一个字节未动）。
+  相位本身仍进行中：`p4_5Readiness.state = IN_PROGRESS`、`postP4State.p4_5Started = true`
+  —— 机器可读索引的合法相位集合只含 `READY_TO_START / IN_PROGRESS`，本次属**同一相位内的进度推进**，
+  故**未改相位字段、未放宽任何门**；机器可读镜像登记在 `P4_STATUS.json` 的 `p4_5Alignment`。
+- **决策**：A = FULL BASE ALIGNMENT CANDIDATE（在隔离环境中实现并验证）。
+- **候选冻结（不可变快照）**：`4a5f0b91ca091cab2ced5d2d865245398de8d2c3`，分支 `p4_5-official-base-alignment`
+  （非保护分支），基线 `a09b62a`；冻结清单 `_p4_5-sandbox/evidence/freeze/P45_FREEZE.json`（含 10 份 artifact 的 sha256）。
+- **PR**：#107（`github.com/ZTKyo/deepseek-harness-desktop/pull/107`），**默认留开、未合并**；
+  **候选提交**入册 12 文件（7 改 + 5 新增）；**PR 合计 16 文件**（另含 P4.5 START 提交 `a09b62a` 登记的 4 个文件，如 `docs/roadmap/P4_STATUS.json`、`docs/roadmap/CURRENT_STATUS.md`）。
+  冻结后分支**零新增提交**：PR 头 SHA = 本地 HEAD = origin 分支 = 冻结 SHA `4a5f0b91`（`git diff 4a5f0b91 origin/p4_5-official-base-alignment` 为空）。
+  **CI 3/3 pass**：`Static + secret + syntax gate`（3m36s）、
+  `DSH boot + readiness smoke`（10m29s）、`Reliability state machine tests`（7m24s）。
+- **权威回归（冻结提交、干净树）**：`P45_GATE5_FROZEN.json` — `ran=36 / PASS=30 / FAIL=0 /
+  EXIT0_BUT_FAIL_LINES=0 / TIMEOUT_OR_KILLED=0 / MISSING_SUITE=0 / totalOwnPassLines=1247 / totalFailLines=0`；
+  生产红线 `checked=1506 / changedCount=0 → PRODUCTION_UNTOUCHED`。
+- **独立只读复核**（第三方 subagent；结论归档 `_p4_5-sandbox/evidence/review/P45_INDEPENDENT_REVIEW.md`）：
+  结论 **APPROVED_CANDIDATE**（原文"PR 主体数字成立，未发现产品缺陷"）。复核方把冻结树**整份镜像**后复跑官方 runner，
+  与 `P45_GATE5_FINAL.json` **逐套件 36/36 行完全一致**，与 `P45_GATE5_FROZEN.json` 只差 ac6 一行
+  （当时工作树带未提交改动，触发 ac6 自带"干净树"前置条件 exit 2，**非回归**）。
+  复核提出的修正**已全部采纳并改写进 PR**：撤回 1 处无据说法（"记录 56 / 复跑 65 / 68"在产物中并不存在，
+  产物记录 `passLines=65 / baselinePass=65 / countsMatchBaseline=true`）；修正 `VACUOUS_SUSPECT` 口径
+  （6 个中 5 个是 exit-only 且都有真实 `process.exit(1)` 失败路径，1 个为 self-report 假阳性）；
+  补登覆盖边界（`tests/session-compat`、`tests/goal-recovery` **不在** 43 条 registry 内，gate-5 对其零覆盖）。
+  ⇒ **修正轮次 = 1**（已达约定上限，未再开第二轮）。
+- **本阶段明确未做（留待用户决定，均属生产或后续相位）**：
+  ① **未部署任何生产修复**。K2 审计发现生产 `~/.dsh/profiles/web` 存在 **2 处 LIVE 静默失效**：
+  `model-selection-guard.mjs` 的 3 参监听使 `payload` 恒 `undefined` ⇒ **按 agent 路由守卫从未在生产安装**（无错无日志）；
+  `execution-continuity.mjs` 的 `session/event` 单参监听使 `payload.event` 恒 `undefined` ⇒ **"二层兜底"从未执行**。
+  修它 = 改生产 profile 且需重启服务，按纪律须攒批并提前告知用户。另 2 处为**未挂载**的休眠文件，不影响生产。
+  ② 未把 K1 类缺陷其余 3 处（`agent-inspector.mjs`、`agentrouter-wire.mjs`、`ask-telegram.mjs` 的
+  `ctx.on('dispose')` 写法）并入**已冻结**的 PR —— 记为 **P4.6 跟进项**，以免作废已评审/已 CI 的冻结 SHA。
+  ③ 未合入 `main`、未替换生产 Base、未升级生产官方版本、未迁移真实 Session、未启动 P5、未冻结 GOLDEN。
+- **硬边界复核（逐项成立）**：`PRODUCTION_BASE_CHANGED = NO`（红线 1506 文件 0 变化 + 生产 3080 监听进程
+  与冻结前**同一 pid**）、`PRODUCTION_DSH_UPGRADED = NO`、`PRODUCTION_PROFILE_CHANGED = NO`、
+  `REAL_SESSION_DATA_MUTATED = NO`、`WINDOWS_REBOOT = NO`、`FORCE_PUSH = NO`、`HISTORY_REWRITE = NO`、
+  `DIRECT_MAIN_PUSH = NO`、`PHASE_05_STARTED = NO`。
+- **冻结完整性的一处如实披露（复核 P1）**：冻结**提交**不可变且已验证；但**工作树**在冻结后被并发 worker
+  改动了 1 个**非候选**文件（`tools/layers/k1-dispose-probe.mjs`，属 P4.6 探针工作），因此**原地复跑 gate-5
+  会得到 ac6=FAIL(exit 2)**（ac6 自带干净树前置条件所致，非产品回归）。⇒ 复核/复跑请用整份镜像或干净树；
+  对外表述应为"**提交快照 SHA 冻结**"，不是"工作树冻结"。证据链另有一处已登记加固项：
+  `evidence/regression/logs-candidate/` 为固定日志名，FINAL 那次唯一 FAIL 的原始日志已被 FROZEN 覆盖
+  （该 FAIL 的原因已由复核方独立复现，结论不受影响）。
+- **下一步（需用户决定）**：① 是否合并 PR #107；② 是否修并部署生产那 2 处 LIVE 静默失效
+  （需一次服务重启，按纪律提前告知）；③ 是否执行 P4.6 跟进项（K1 五站点统一并实证、两个新套件入 registry、
+  regression 日志按 run-id 分目录、session-compat A23 夹具与 interlock 的路径前缀比较）。
